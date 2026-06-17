@@ -1,0 +1,427 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * (C) Copyright 2025 Rockchip Electronics Co., Ltd
+ */
+
+#include "rockchip-u-boot.dtsi"
+
+/ {
+	aliases {
+		mmc0 = &sdhci;
+		mmc1 = &sdmmc;
+	};
+
+	chosen {
+		u-boot,spl-boot-order = &sdmmc, &spi_nand, &spi_nor, "same-as-spl";
+	};
+
+	adc-keys {
+		compatible = "adc-keys";
+		io-channels = <&saradc 1>;
+		io-channel-names = "buttons";
+		keyup-threshold-microvolt = <1800000>;
+		bootph-all;
+		status = "okay";
+
+		volumeup-key {
+			bootph-all;
+			linux,code = <KEY_VOLUMEUP>;
+			label = "volume up";
+			press-threshold-microvolt = <1750>;
+		};
+	};
+
+	dmc {
+		compatible = "rockchip,rk3576-dmc";
+		bootph-all;
+	};
+
+	sata0: sata@2a240000 {
+		compatible = "rockchip,rk-ahci", "snps,dwc-ahci";
+		reg = <0 0x2a240000 0 0x1000>;
+		clocks = <&cru ACLK_SATA0>, <&cru CLK_PMALIVE0>,
+			 <&cru CLK_RXOOB0>;
+		clock-names = "sata", "pmalive", "rxoob";
+		interrupts = <GIC_SPI 262 IRQ_TYPE_LEVEL_HIGH>;
+		interrupt-names = "hostc";
+		power-domains = <&power RK3576_PD_SUBPHP>;
+		phys = <&combphy0_ps PHY_TYPE_SATA>;
+		phy-names = "sata-phy";
+		ports-implemented = <0x1>;
+		dma-coherent;
+		status = "disabled";
+	};
+
+	crypto: crypto@2a400000 {
+		compatible = "rockchip,crypto-v4";
+		reg = <0x0 0x2a400000 0x0 0x2000>;
+		interrupts = <GIC_SPI 177 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&cru ACLK_CRYPTO_NS>, <&cru HCLK_CRYPTO_NS>,
+			 <&cru CLK_PKA_CRYPTO_NS>;
+		clock-names = "aclk", "hclk", "pka";
+		resets = <&cru SRST_H_CRYPTO_NS>;
+		reset-names = "crypto-rst";
+		status = "disabled";
+	};
+
+	crypto_s: crypto_s@2a430000 {
+		compatible = "rockchip,crypto-v4";
+		reg = <0x0 0x2a430000 0x0 0x2000>;
+		secure;
+		interrupts = <GIC_SPI 178 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&cru ACLK_CRYPTO_NS>, <&cru HCLK_CRYPTO_NS>,
+			 <&cru CLK_PKA_CRYPTO_NS>;
+		clock-names = "aclk", "hclk", "pka";
+		resets = <&cru SRST_H_CRYPTO_NS>;
+		reset-names = "crypto-rst";
+		status = "disabled";
+	};
+
+	secure-otp@2a480000 {
+		bootph-all;
+		compatible = "rockchip,rk3576-secure-otp";
+		mask_addr = <0x2a4d0000>;
+		reg = <0x0 0x2a480000 0x0 0x10000>;
+	};
+};
+
+&hw_decompress {
+	bootph-all;
+	status = "okay";
+};
+
+&emmc_bus8 {
+	bootph-pre-ram;
+	bootph-some-ram;
+};
+
+&emmc_clk {
+	bootph-pre-ram;
+	bootph-some-ram;
+};
+
+&emmc_cmd {
+	bootph-pre-ram;
+	bootph-some-ram;
+};
+
+&emmc_rstnout {
+	bootph-pre-ram;
+	bootph-some-ram;
+};
+
+&emmc_strb {
+	bootph-pre-ram;
+	bootph-some-ram;
+};
+
+&pcfg_pull_up_drv_level_3 {
+	bootph-pre-ram;
+	bootph-some-ram;
+};
+
+&pmu1_grf {
+	bootph-all;
+};
+
+&sdhci {
+	bootph-pre-ram;
+	bootph-some-ram;
+};
+
+&sdmmc {
+	bootph-pre-ram;
+	bootph-some-ram;
+	u-boot,spl-fifo-mode;
+	bus-width = <4>;
+	status = "okay";
+};
+
+&sdmmc0_bus4 {
+	bootph-pre-ram;
+	bootph-some-ram;
+	status = "okay";
+};
+
+&sdmmc0_clk {
+	bootph-pre-ram;
+	bootph-some-ram;
+	status = "okay";
+};
+
+&sdmmc0_cmd {
+	bootph-pre-ram;
+	bootph-some-ram;
+	status = "okay";
+};
+
+&sdmmc0_det {
+	bootph-pre-ram;
+	bootph-some-ram;
+	status = "okay";
+};
+
+&sdmmc0_pwren {
+	bootph-pre-ram;
+	bootph-some-ram;
+	status = "okay";
+};
+
+&xin24m {
+	bootph-all;
+};
+
+&optee {
+	bootph-all;
+	status = "okay";
+};
+//-=--------------------------------------
+
+&firmware {
+	bootph-all;
+};
+
+&gpio0 {
+	bootph-all;
+	status = "okay";
+};
+
+&gpio1 {
+	bootph-all;
+	status = "okay";
+};
+
+&gpio2 {
+	bootph-all;
+	status = "okay";
+};
+
+&gpio3 {
+	bootph-all;
+	status = "okay";
+};
+
+&gpio4 {
+	bootph-all;
+	status = "okay";
+};
+
+&scmi {
+	bootph-all;
+};
+
+&scmi_clk {
+	bootph-all;
+};
+
+&scmi_shmem {
+	bootph-all;
+};
+
+&sys_grf {
+	bootph-all;
+	status = "okay";
+};
+
+&ioc_grf {
+	bootph-all;
+	status = "okay";
+};
+
+&cru {
+	bootph-all;
+	status = "okay";
+};
+
+&psci {
+	bootph-all;
+	status = "okay";
+};
+
+&uart0 {
+	bootph-all;
+	status = "okay";
+};
+
+&crypto {
+	bootph-all;
+	status = "okay";
+};
+
+&crypto_s {
+	bootph-all;
+	status = "okay";
+};
+
+#if 0
+&hw_decompress {
+	bootph-all;
+	status = "okay";
+};
+#endif
+
+&rng {
+	bootph-all;
+	status = "okay";
+};
+
+&saradc {
+	bootph-all;
+	status = "okay";
+};
+
+&sdhci {
+	bus-width = <8>;
+	bootph-all;
+	mmc-hs400-1_8v;
+	mmc-hs400-enhanced-strobe;
+	non-removable;
+	status = "okay";
+};
+
+#if 0
+&sdmmc {
+	bus-width = <4>;
+	bootph-all;
+	status = "okay";
+};
+
+&sdmmc0 {
+	bootph-all;
+};
+
+&sdmmc0_bus4 {
+	bootph-all;
+};
+
+&sdmmc0_clk {
+	bootph-all;
+};
+
+&sdmmc0_cmd {
+	bootph-all;
+};
+
+&sdmmc0_det {
+	bootph-all;
+};
+
+&sdmmc0_pwren {
+	bootph-all;
+};
+#endif
+
+&sfc0 {
+	bootph-all;
+	status = "okay";
+
+	#address-cells = <1>;
+	#size-cells = <0>;
+	spi_nand: flash@0 {
+		bootph-all;
+		compatible = "spi-nand";
+		reg = <0>;
+		spi-tx-bus-width = <1>;
+		spi-rx-bus-width = <4>;
+		spi-max-frequency = <80000000>;
+	};
+
+	spi_nor: flash@1 {
+		bootph-all;
+		compatible = "jedec,spi-nor";
+		label = "sfc_nor";
+		reg = <0>;
+		spi-tx-bus-width = <1>;
+		spi-rx-bus-width = <4>;
+		spi-max-frequency = <80000000>;
+	};
+};
+
+&pinctrl {
+	bootph-all;
+};
+
+&pcfg_pull_up_drv_level_2 {
+	bootph-all;
+};
+
+&pcfg_pull_up {
+	bootph-all;
+};
+
+&pcfg_pull_none {
+	bootph-all;
+};
+
+&php_grf {
+	bootph-all;
+	status = "okay";
+};
+
+&pipe_phy0_grf {
+	bootph-all;
+	status = "okay";
+};
+
+&pipe_phy1_grf {
+	bootph-all;
+	status = "okay";
+};
+
+&usbdpphy_grf {
+	bootph-all;
+};
+
+&usbdp_phy {
+	bootph-all;
+	status = "okay";
+};
+
+&usb_grf {
+	bootph-all;
+};
+
+&usb2phy_grf {
+	bootph-all;
+};
+
+
+&u2phy0 {
+	bootph-all;
+	status = "okay";
+};
+
+&u2phy0_otg {
+	bootph-all;
+	status = "okay";
+};
+
+&ufs {
+	bootph-all;
+	status = "okay";
+};
+
+&vo1_grf {
+	bootph-all;
+	status = "okay";
+};
+
+&pipe_phy0_grf {
+	bootph-all;
+	status = "okay";
+};
+
+&php_grf {
+	bootph-all;
+	status = "okay";
+};
+
+&combphy0_ps {
+	bootph-all;
+	status = "okay";
+};
+
+&sata0 {
+	bootph-all;
+	status = "okay";
+};

@@ -1,0 +1,4 @@
+# /etc/udev/rules.d/90-input-touch-rockchip.rules
+ATTRS{name}=="himax-touch-dsi0", ENV{WL_OUTPUT}="DSI-1"
+ATTRS{name}=="himax-touch-dsi1", ENV{WL_OUTPUT}="DSI-2"
+ATTRS{name}=="ILI210x Touchscreen", ENV{WL_OUTPUT}="DP-1"

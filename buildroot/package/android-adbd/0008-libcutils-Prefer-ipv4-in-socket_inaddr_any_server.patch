@@ -1,0 +1,82 @@
+From 52aee8548e758355860fea539ca1e423a3886fdc Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Wed, 24 Sep 2025 16:07:23 +0800
+Subject: [PATCH 08/10] libcutils: Prefer ipv4 in socket_inaddr_any_server()
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ libcutils/socket_inaddr_any_server_unix.cpp | 48 +++++++++++++++++----
+ 1 file changed, 40 insertions(+), 8 deletions(-)
+
+diff --git a/libcutils/socket_inaddr_any_server_unix.cpp b/libcutils/socket_inaddr_any_server_unix.cpp
+index 27c5333..c63a416 100644
+--- a/libcutils/socket_inaddr_any_server_unix.cpp
++++ b/libcutils/socket_inaddr_any_server_unix.cpp
+@@ -29,24 +29,56 @@
+ 
+ #define LISTEN_BACKLOG 4
+ 
++static sockaddr* any_addr4(sockaddr_storage* addr, socklen_t* addrlen, int port) {
++    struct sockaddr_in* addr4 = reinterpret_cast<sockaddr_in*>(addr);
++    *addrlen = sizeof(*addr4);
++
++    addr4->sin_family = AF_INET;
++    addr4->sin_addr.s_addr = htonl(INADDR_ANY);
++    addr4->sin_port = htons(port);
++    return reinterpret_cast<sockaddr*>(addr);
++}
++
++static sockaddr* any_addr6(sockaddr_storage* addr, socklen_t* addrlen, int port) {
++    struct sockaddr_in6* addr6 = reinterpret_cast<sockaddr_in6*>(addr);
++    *addrlen = sizeof(*addr6);
++
++    addr6->sin6_family = AF_INET6;
++    addr6->sin6_addr = in6addr_any;
++    addr6->sin6_port = htons(port);
++    return reinterpret_cast<sockaddr*>(addr);
++}
++
+ /* open listen() port on any interface */
+ int socket_inaddr_any_server(int port, int type)
+ {
+-    struct sockaddr_in6 addr;
++    struct sockaddr_storage addr_storage = {};
++    socklen_t addrlen = sizeof(addr_storage);
++    sockaddr* addr;
+     int s, n;
++    bool ipv6 = 0;
+ 
+-    memset(&addr, 0, sizeof(addr));
+-    addr.sin6_family = AF_INET6;
+-    addr.sin6_port = htons(port);
+-    addr.sin6_addr = in6addr_any;
++retry:
++    errno = 0;
+ 
+-    s = socket(AF_INET6, type, 0);
+-    if (s < 0) return -1;
++    s = socket(ipv6 ? AF_INET6 : AF_INET, type, 0);
++    if (s < 0) {
++        // Try IPv4 first, use IPv6 as a fallback.
++        if (!ipv6) {
++            ipv6 = 1;
++            goto retry;
++        }
++
++        return -1;
++    }
+ 
+     n = 1;
+     setsockopt(s, SOL_SOCKET, SO_REUSEADDR, (const char *) &n, sizeof(n));
+ 
+-    if (bind(s, (struct sockaddr *) &addr, sizeof(addr)) < 0) {
++    memset(&addr_storage, 0, addrlen);
++    addr = (ipv6 ? any_addr6 : any_addr4)(&addr_storage, &addrlen, port);
++
++    if (bind(s, addr, addrlen) < 0) {
+         close(s);
+         return -1;
+     }
+-- 
+2.39.5
+

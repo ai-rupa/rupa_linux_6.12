@@ -1,0 +1,156 @@
+#
+
+comment "Rootfs system depends on linux kernel"
+	depends on !RK_KERNEL
+
+menuconfig RK_ROOTFS
+	bool "Rootfs (Buildroot|Debian|Yocto)"
+	depends on RK_KERNEL
+	default y if !RK_AMP
+
+if RK_ROOTFS
+
+source "Config.in.buildroot"
+source "Config.in.yocto"
+source "Config.in.debian"
+
+config RK_ROOTFS_SYSTEM
+	string
+	default "buildroot" if RK_ROOTFS_SYSTEM_BUILDROOT
+	default "debian" if RK_ROOTFS_SYSTEM_DEBIAN
+	default "yocto" if RK_ROOTFS_SYSTEM_YOCTO
+
+choice
+	prompt "default rootfs system"
+	help
+	  Default rootfs system.
+
+config RK_ROOTFS_SYSTEM_BUILDROOT
+	bool "Buildroot"
+	depends on RK_BUILDROOT
+
+config RK_ROOTFS_SYSTEM_DEBIAN
+	bool "Debian"
+	depends on RK_DEBIAN
+
+config RK_ROOTFS_SYSTEM_YOCTO
+	bool "Yocto"
+	depends on RK_YOCTO
+
+endchoice # default rootfs
+
+config RK_ROOTFS_CONSOLE_LOGIN
+	bool "require login on serial console"
+
+config RK_ROOTFS_INITRD
+	bool "init ramfs/ramdisk"
+	# Based on kernel/init/do_mounts_rd.c identify_ramdisk_image()
+	depends on RK_ROOTFS_EXT2 || RK_ROOTFS_SQUASHFS || RK_ROOTFS_ROMFS || \
+		RK_ROOTFS_CPIO || RK_ROOTFS_CPIO_GZ
+
+config RK_ROOTFS_RO
+	bool "readonly"
+	depends on !RK_ROOTFS_INITRD && !RK_ROOTFS_SQUASHFS && !RK_ROOTFS_EROFS
+
+config RK_ROOTFS_TYPE
+	string
+	default "ext2" if RK_ROOTFS_EXT2
+	default "ext4" if RK_ROOTFS_EXT4
+	default "squashfs" if RK_ROOTFS_SQUASHFS
+	default "btrfs" if RK_ROOTFS_BTRFS
+	default "f2fs" if RK_ROOTFS_F2FS
+	default "ubi" if RK_ROOTFS_UBI
+	default "erofs" if RK_ROOTFS_EROFS
+	default "romfs" if RK_ROOTFS_ROMFS
+	default "cpio" if RK_ROOTFS_CPIO
+
+choice
+	prompt "filesystem type"
+	default RK_ROOTFS_EXT4
+
+config RK_ROOTFS_EXT4
+	bool "ext4"
+
+if RK_ROOTFS_SYSTEM_BUILDROOT
+
+config RK_ROOTFS_EXT2
+	bool "ext2"
+
+config RK_ROOTFS_SQUASHFS
+	bool "squashfs"
+
+config RK_ROOTFS_BTRFS
+	bool "btrfs"
+
+config RK_ROOTFS_F2FS
+	bool "f2fs"
+
+config RK_ROOTFS_UBI
+	bool "ubi"
+	select RK_UBI
+
+config RK_ROOTFS_EROFS
+	bool "erofs"
+
+config RK_ROOTFS_ROMFS
+	bool "romfs"
+	select RK_ROOTFS_INITRD
+
+config RK_ROOTFS_CPIO
+	bool "cpio"
+	select RK_ROOTFS_INITRD
+
+endif # buildroot
+
+endchoice # fstype
+
+config RK_ROOTFS_COMPRESSED
+	string
+	default "gz" if RK_ROOTFS_COMPRESSED_GZ
+	default "xz" if RK_ROOTFS_COMPRESSED_XZ
+	default "bz" if RK_ROOTFS_COMPRESSED_BZ
+	default "bz2" if RK_ROOTFS_COMPRESSED_BZ2
+	default "lz4" if RK_ROOTFS_COMPRESSED_LZ4
+	default "lzo" if RK_ROOTFS_COMPRESSED_LZO
+	default "zstd" if RK_ROOTFS_COMPRESSED_ZSTD
+
+choice
+	prompt "filesystem compressed"
+	depends on RK_ROOTFS_EROFS || RK_ROOTFS_ROMFS || RK_ROOTFS_CPIO
+
+config RK_ROOTFS_COMPRESSED_NONE
+	bool "none"
+
+config RK_ROOTFS_COMPRESSED_GZ
+	bool "gz"
+
+config RK_ROOTFS_COMPRESSED_XZ
+	bool "xz"
+
+config RK_ROOTFS_COMPRESSED_BZ
+	bool "bz"
+
+config RK_ROOTFS_COMPRESSED_BZ2
+	bool "bz2"
+
+config RK_ROOTFS_COMPRESSED_LZ4
+	bool "lz4"
+
+config RK_ROOTFS_COMPRESSED_LZO
+	bool "lzo"
+
+config RK_ROOTFS_COMPRESSED_ZSTD
+	bool "zstd"
+
+endchoice # compressed
+
+config RK_ROOTFS_IMG
+	string
+	default "rootfs.${RK_ROOTFS_TYPE}.${RK_ROOTFS_COMPRESSED}" \
+		if RK_ROOTFS_COMPRESSED != ""
+	default "rootfs.${RK_ROOTFS_TYPE}"
+
+source "post/Config.in.rootfs"
+
+endif # Rootfs
+endmenuconfig # Rootfs

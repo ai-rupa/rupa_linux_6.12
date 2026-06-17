@@ -1,0 +1,9 @@
+#include "chips/rk3576_aarch64.config"
+#include "base/security-ramdisk.config"
+#include "tee_aarch64_v2.config"
+BR2_ROOTFS_OVERLAY+="../external/gpu_pv_ko/for_buildroot/fs-overlay-gpu-pv"
+BR2_PACKAGE_BUSYBOX_CONFIG_FRAGMENT_FILES="../external/gpu_pv_ko/for_buildroot/fs-overlay-gpu-pv/busybox.fragment"
+
+BR2_PACKAGE_RECOVERY=y
+BR2_PACKAGE_RECOVERY_UPDATEENGINEBIN=y
+

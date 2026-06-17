@@ -1,0 +1,5 @@
+export USB_FUNCS="adb"
+export USB_VENDOR_ID="0x2207"
+export USB_FW_VERSION="0x0310"
+export USB_MANUFACTURER="Rockchip"
+export USB_PRODUCT="rk3xxx"

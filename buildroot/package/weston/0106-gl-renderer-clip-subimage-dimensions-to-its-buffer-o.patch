@@ -1,0 +1,59 @@
+From 5a3333fb56b9e09fbe28d5484dad50010aae294d Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Th=C3=A9o=20Maillart?= <tmaillart@freebox.fr>
+Date: Mon, 17 Feb 2025 11:16:22 +0100
+Subject: [PATCH 106/106] gl-renderer: clip subimage dimensions to its buffer
+ ones
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+A window freeze can occur in specific use cases like when using a kiosk
+shell. It scales surfaces to fit the compositor size and the transformation
+to buffer space can, in some cases, round the size one pixel higher than
+the texture size, making glTexSubImage2D() refuse the size argument and
+generate a GL_INVALID_VALUE without updating the texture.
+This commit ensures the GL renderer doesn't exceed the texture size.
+
+Here is how the issue was reproduced:
+	$ weston --renderer=gl --backend=wayland --width=1920 --height=1080 --shell=kiosk
+	$ gst-launch-1.0 videotestsrc ! video/x-raw,height=590,width=500 ! waylandsink display=wayland-1
+
+Signed-off-by: Théo Maillart <tmaillart@freebox.fr>
+
+Conflicts:
+	libweston/renderer-gl/gl-renderer.c
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ libweston/renderer-gl/gl-renderer.c | 7 +++++--
+ 1 file changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/libweston/renderer-gl/gl-renderer.c b/libweston/renderer-gl/gl-renderer.c
+index c3c51bcee..53f258d18 100644
+--- a/libweston/renderer-gl/gl-renderer.c
++++ b/libweston/renderer-gl/gl-renderer.c
+@@ -2651,7 +2651,10 @@ gl_renderer_flush_damage(struct weston_paint_node *pnode)
+ 		for (j = 0; j < gb->num_textures; j++) {
+ 			int hsub = pixel_format_hsub(buffer->pixel_format, j);
+ 			int vsub = pixel_format_vsub(buffer->pixel_format, j);
++			int width = r.x2 - r.x1, height = r.y2 - r.y1;
+ 
++			width  = MIN(width,  buffer->width);
++			height = MIN(height, buffer->height);
+ 			glBindTexture(GL_TEXTURE_2D, gb->textures[j]);
+ 			glPixelStorei(GL_UNPACK_ROW_LENGTH_EXT,
+ 				      gb->pitch / hsub);
+@@ -2660,8 +2663,8 @@ gl_renderer_flush_damage(struct weston_paint_node *pnode)
+ 			glTexSubImage2D(GL_TEXTURE_2D, 0,
+ 					r.x1 / hsub,
+ 					r.y1 / vsub,
+-					(r.x2 - r.x1) / hsub,
+-					(r.y2 - r.y1) / vsub,
++					width / hsub,
++					height / vsub,
+ 					gl_format_from_internal(gb->gl_format[j]),
+ 					gb->gl_pixel_type,
+ 					data + gb->offset[j]);
+-- 
+2.39.5
+

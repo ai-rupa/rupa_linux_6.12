@@ -1,0 +1,9 @@
+config BR2_PACKAGE_CATKIN_PKG
+	bool "catkin_pkg"
+	depends on BR2_PACKAGE_PYTHON3
+	help
+	  Library for working with catkin packages.
+	  This package provides tools for working with catkin packages.
+	  This is a host package needed for building ROS2 packages.
+
+	  https://github.com/ros-infrastructure/catkin_pkg

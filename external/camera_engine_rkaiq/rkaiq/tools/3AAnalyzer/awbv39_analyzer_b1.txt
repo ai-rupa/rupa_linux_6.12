@@ -1,0 +1,5 @@
+#B1P1:    res_wbgn (rggb):(#B1P2) 
+     prob_total(#B1P3),dis(#B1P4),lv(#B1P5),wpnum(#B1P6),lgtSrcWgt(#B1P9)
+     prefwbgn(rggb):(#B1P7),prefWgt(#B1P8)
+     nor_wbgn:(#B1P10) wpnum(#B1P11)
+     big_wbgn:(#B1P12) wpnum(#B1P13),bigWp_wgt(#B1P14)

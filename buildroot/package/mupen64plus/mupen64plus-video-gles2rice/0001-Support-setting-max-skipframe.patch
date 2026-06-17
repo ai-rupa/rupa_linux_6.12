@@ -1,0 +1,57 @@
+From f98e5ee5fdf7439b2c767af035a4a078025f4bd5 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Fri, 8 Aug 2025 18:31:38 +0800
+Subject: [PATCH 1/2] Support setting max skipframe
+
+Set env MUPEN64PLUS_RICE_MAX_SKIPFRAME=4 to enable.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ src/RSP_Parser.cpp | 11 ++++++++---
+ 1 file changed, 8 insertions(+), 3 deletions(-)
+
+diff --git a/src/RSP_Parser.cpp b/src/RSP_Parser.cpp
+index c92943c..f9e40a3 100644
+--- a/src/RSP_Parser.cpp
++++ b/src/RSP_Parser.cpp
+@@ -803,22 +803,26 @@ void DLParser_Process(OSTask * pTask)
+     }
+ 
+     status.bScreenIsDrawn = true;
+-/*    if( options.bSkipFrame )
++    if( options.bSkipFrame )
+     {
++        static int max_skip =
++            atoi(getenv("MUPEN64PLUS_RICE_MAX_SKIPFRAME") ?: "1") + 1;
++
+         skipframe++;
+-        if(skipframe%2)
++        if(skipframe%max_skip)
+         {
+             TriggerDPInterrupt();
+             TriggerSPInterrupt();
+             return;
+         }
+     }
+-*/
++
+     if( currentRomOptions.N64RenderToTextureEmuType != TXT_BUF_NONE && defaultRomOptions.bSaveVRAM )
+     {
+         g_pFrameBufferManager->CheckRenderTextureCRCInRDRAM();
+     }
+ 
++#if 0
+     unsigned int newtick=0;
+     static int count = 0;
+     if( options.bSkipFrame )
+@@ -850,6 +854,7 @@ void DLParser_Process(OSTask * pTask)
+         oldtick=newtick;
+         numvi=0;
+     }
++#endif
+ 
+     g_pOSTask = pTask;
+     
+-- 
+2.20.1
+

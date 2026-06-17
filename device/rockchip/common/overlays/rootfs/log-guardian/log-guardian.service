@@ -1,0 +1,12 @@
+[Unit]
+Description=Truncate log files when no space left on device
+After=local-fs.target
+
+[Service]
+Type=simple
+RemainAfterExit=yes
+ExecStart=/usr/bin/log-guardian
+ExecStop=/usr/bin/log-guardian --quit
+
+[Install]
+WantedBy=multi-user.target

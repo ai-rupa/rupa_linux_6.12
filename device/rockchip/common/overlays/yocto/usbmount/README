@@ -1,0 +1,4 @@
+usbmount (https://wiki.debian.org/usbmount)
+
+Prebuilt from Rockchip buildroot 2024 SDK(rockchip_rk3588_defconfig):
+7252fb6c93c usbmount: Use SUBSYSTEMS for reliable USB detection

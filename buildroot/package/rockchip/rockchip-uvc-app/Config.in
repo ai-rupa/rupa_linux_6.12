@@ -1,0 +1,27 @@
+config BR2_PACKAGE_ROCKCHIP_UVC_APP
+	bool "rockchip uvc app"
+	select BR2_PACKAGE_LIBDRM
+	select BR2_PACKAGE_ROCKIT
+	select BR2_PACKAGE_CAMERA_ENGINE
+
+if BR2_PACKAGE_ROCKCHIP_UVC_APP
+
+choice
+	prompt "Build profile"
+	default BR2_PACKAGE_ROCKCHIP_UVC_APP_TYPE_4K
+	help
+	  Select the UVC app profile.
+
+config BR2_PACKAGE_ROCKCHIP_UVC_APP_TYPE_4K
+	bool "4K"
+	help
+	  Build for 4K mode.
+
+config BR2_PACKAGE_ROCKCHIP_UVC_APP_TYPE_WINHELLO
+	bool "WinHello"
+	help
+	  Build for Windows Hello face recognition mode.
+
+endchoice
+
+endif

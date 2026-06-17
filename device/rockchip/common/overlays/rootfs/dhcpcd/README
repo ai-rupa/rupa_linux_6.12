@@ -1,0 +1,5 @@
+DHCPCD boot services
+==========
+
+From Rockchip buildroot 2024 SDK:
+6dcfd50489d pulseaudio: Disable padsp on 32-bit non-i386 architectures

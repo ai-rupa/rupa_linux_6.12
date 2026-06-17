@@ -1,0 +1,56 @@
+/*
+ * Copyright (C) 2022 Rockchip Electronics Co., Ltd
+ *
+ * SPDX-License-Identifier: GPL-2.0
+ */
+
+/dts-v1/;
+/ {
+	description = "FIT source file for Linux";
+	#address-cells = <1>;
+
+	images {
+		fdt {
+			data = /incbin/("@KERNEL_DTB@");
+			type = "flat_dt";
+			arch = "arm64";
+			compression = "none";
+			load  = <0x47fbf000>;
+			hash {
+				algo = "sha256";
+				uboot-ignore = <0>;
+			};
+		};
+
+		kernel {
+			data = /incbin/("@KERNEL_IMG@");
+			compression = "gzip";
+			type = "kernel";
+			arch = "arm64";
+			os = "linux";
+			comp = <@KERNEL_C@>;
+			entry = <0x40200000>;
+			load  = <0x40200000>;
+			hash {
+				algo = "sha256";
+				uboot-ignore = <0>;
+			};
+		};
+	};
+
+	configurations {
+		default = "conf";
+		conf {
+			description = "Boot Linux kernel with FDT blob and no ramdisk";
+			rollback-index = <0x0>;
+			fdt = "fdt";
+			kernel = "kernel";
+			signature {
+				algo = "sha256,rsa2048";
+				padding = "pss";
+				key-name-hint = "dev";
+				sign-images = "fdt", "kernel";
+			};
+		};
+	};
+};

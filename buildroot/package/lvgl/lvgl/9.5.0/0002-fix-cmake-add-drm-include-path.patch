@@ -1,0 +1,27 @@
+From d826540a8cdf76fff98e2c5abcc1b8270604eb01 Mon Sep 17 00:00:00 2001
+From: Jiajian Wu <jair.wu@rock-chips.com>
+Date: Thu, 24 Oct 2024 19:11:20 +0800
+Subject: [PATCH 02/11] fix(cmake): add drm include path
+
+Signed-off-by: Jiajian Wu <jair.wu@rock-chips.com>
+---
+ env_support/cmake/os_desktop.cmake | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/env_support/cmake/os_desktop.cmake b/env_support/cmake/os_desktop.cmake
+index bbe1c84bc..d21a0103b 100644
+--- a/env_support/cmake/os_desktop.cmake
++++ b/env_support/cmake/os_desktop.cmake
+@@ -212,7 +212,8 @@ endif()
+ # Set the configuration inc dir for all targets created in this CMakeLists.txt
+ # CMAKE_CURRENT_SOURCE_DIR is necessary because the assets include lvgl/lvgl.h ...
+ include_directories(${CONF_INC_DIR} ${LVGL_ROOT_DIR}
+-    ${CMAKE_SYSROOT}/usr/include/freetype2)
++    ${CMAKE_SYSROOT}/usr/include/freetype2
++    ${CMAKE_SYSROOT}/usr/include/libdrm)
+ 
+ target_include_directories(lvgl SYSTEM PUBLIC ${LVGL_ROOT_DIR} ${CONF_INC_DIR} ${CMAKE_CURRENT_BINARY_DIR})
+ 
+-- 
+2.34.1
+

@@ -1,0 +1,4 @@
+config BR2_PACKAGE_RKNNSTREAM
+    bool "rknnstream"
+    select BR2_PACKAGE_ROCKCHIP_OSAL
+    select BR2_PACKAGE_ROCKX

@@ -1,0 +1,7 @@
+config BR2_PACKAGE_SIMPLE_MTPFS
+	bool "simple-mtpfs"
+	select BR2_PACKAGE_LIBMTP
+	help
+	  Simple MTP fuse filesystem driver.
+
+	  https://github.com/phatina/simple-mtpfs

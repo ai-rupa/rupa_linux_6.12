@@ -1,0 +1,13 @@
+CPPTOML_VERSION = v0.1.1
+CPPTOML_SITE = https://github.com/skystrife/cpptoml.git
+CPPTOML_SITE_METHOD = git
+CPPTOML_LICENSE = MIT
+CPPTOML_LICENSE_FILES = LICENSE
+CPPTOML_INSTALL_STAGING = YES
+CPPTOML_CONF_OPTS = -DCPPTOML_BUILD_EXAMPLES=OFF
+CPPTOML_INSTALL_TARGET = NO
+# cpptoml is header only
+#define CPPTOML_INSTALL_STAGING_CMDS
+#    $(INSTALL) -D -m 0644 $(@D)/include/cpptoml.h $(STAGING_DIR)/usr/include/
+#endef
+$(eval $(cmake-package))

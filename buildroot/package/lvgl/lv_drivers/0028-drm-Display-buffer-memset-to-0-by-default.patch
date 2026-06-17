@@ -1,0 +1,33 @@
+From 9f537c4a14252c99178a665961a13ecda22920ca Mon Sep 17 00:00:00 2001
+From: Jiajian Wu <jair.wu@rock-chips.com>
+Date: Mon, 14 Apr 2025 17:51:16 +0800
+Subject: [PATCH] drm: Display buffer memset to 0 by default
+
+Signed-off-by: Jiajian Wu <jair.wu@rock-chips.com>
+---
+ display/drm.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/display/drm.c b/display/drm.c
+index a01704ac5..1872ca059 100644
+--- a/display/drm.c
++++ b/display/drm.c
+@@ -143,6 +143,7 @@ static int bo_map(struct device *dev, struct drm_bo *bo)
+         bo->ptr = NULL;
+         return -1;
+     }
++    memset(bo->ptr, 0, bo->size);
+ 
+     return 0;
+ }
+@@ -1250,6 +1251,7 @@ void disp_init(int hor_res, int ver_res)
+     c_RkRgaInit();
+ #else
+     drm_buff = malloc(buf_w * buf_h * (LV_COLOR_DEPTH >> 3));
++    memset(drm_buff, 0, buf_w * buf_h * (LV_COLOR_DEPTH >> 3));
+     lcd_sw = lcd_w;
+ #endif
+     vop_buf[0] = malloc_drm_bo(lcd_w, lcd_h, format);
+-- 
+2.25.1
+

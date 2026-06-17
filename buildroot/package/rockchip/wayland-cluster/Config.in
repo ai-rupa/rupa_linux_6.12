@@ -1,0 +1,17 @@
+config BR2_PACKAGE_WAYLAND_CLUSTER
+	bool "wayland-cluster"
+	select BR2_PACKAGE_STB
+	select BR2_PACKAGE_CAIRO
+	select BR2_PACKAGE_FONTCONFIG
+	select BR2_PACKAGE_ROCKCHIP_RGA
+	depends on BR2_PACKAGE_HAS_LIBEGL
+	depends on BR2_PACKAGE_WAYLAND
+	select BR2_PACKAGE_WAYLAND_PROTOCOLS if BR2_PACKAGE_WAYLAND
+	help
+	  Cluster Demo application based on wayland
+
+config BR2_PACKAGE_CLUSTER_ERPC
+	bool "wayland-cluster-with-erpc"
+	select BR2_PACKAGE_ROCKCHIP_ERPC
+	help
+		Cluster Demo application with erpc can show erpc client image.

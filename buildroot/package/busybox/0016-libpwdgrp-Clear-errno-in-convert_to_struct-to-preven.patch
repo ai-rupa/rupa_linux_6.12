@@ -1,0 +1,32 @@
+From 6a714c95a081b4e8084300282fcae48675ff2637 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Mon, 16 Mar 2026 18:32:54 +0800
+Subject: [PATCH 16/16] libpwdgrp: Clear errno in convert_to_struct to prevent
+ false error detection
+
+Fix spurious authentication (e.g., login) failures when USE_BB_SHADOW
+is enabled. The convert_to_struct function incorrectly treated a
+pre-existing global errno as its own error.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ libpwdgrp/pwd_grp.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/libpwdgrp/pwd_grp.c b/libpwdgrp/pwd_grp.c
+index 10debbc..7adfa15 100644
+--- a/libpwdgrp/pwd_grp.c
++++ b/libpwdgrp/pwd_grp.c
+@@ -265,6 +265,9 @@ static void *convert_to_struct(struct passdb *db,
+ 	const char *def = db->def;
+ 	const uint8_t *off = db->off;
+ 
++	/* HACK: Clear errno to avoid false positives from previous calls */
++	errno = 0;
++
+ 	/* For consistency, zero out all fields */
+ 	memset(result, 0, db->size_of);
+ 
+-- 
+2.39.5
+

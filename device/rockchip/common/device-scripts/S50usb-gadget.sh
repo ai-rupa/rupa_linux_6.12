@@ -1,0 +1,1 @@
+../overlays/rootfs/usb-gadget/S50usb-gadget.sh

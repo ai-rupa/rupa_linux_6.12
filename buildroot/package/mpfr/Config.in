@@ -1,0 +1,16 @@
+config BR2_PACKAGE_MPFR
+	bool "mpfr"
+	select BR2_PACKAGE_GMP
+	help
+	  C library for multiple-precision floating-point computations
+	  with exact rounding.
+
+	  http://www.mpfr.org/
+
+if BR2_PACKAGE_MPFR
+
+config BR2_PACKAGE_MPFR_STATIC
+	bool "Enable static"
+	default y if BR2_STATIC_LIBS
+
+endif

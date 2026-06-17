@@ -1,0 +1,13 @@
+# pto标定文件
+
+p w8378 h4189 f2 v360 u0 n"JPEG g0 q95"
+m g0 i0
+
+i n"camera_0.jpg" w1920 h1080 f0   v95.12   r-90.0   p-0.3  y-148.5    a0 b0 c0 d0 e0 g0 t0
+i n"camera_1.jpg" w1920 h1080 f0   v95.24   r90.0    p0.15  y-104.0    a0 b0 c0 d0 e0 g0 t0
+i n"camera_2.jpg" w1920 h1080 f0   v95.16   r-90.0   p0.45  y-58.5     a0 b0 c0 d0 e0 g0 t0
+i n"camera_3.jpg" w1920 h1080 f0   v95.29   r91.5    p0.30  y-13.0     a0 b0 c0 d0 e0 g0 t0
+i n"camera_4.jpg" w1920 h1080 f0   v95.26   r-87.5   p-0.7  y30.0      a0 b0 c0 d0 e0 g0 t0
+i n"camera_5.jpg" w1920 h1080 f0   v95.53   r92.0    p-1.9  y76.0      a0 b0 c0 d0 e0 g0 t0
+i n"camera_6.jpg" w1920 h1080 f0   v95.53   r-89.5   p-2.6  y120.5     a0 b0 c0 d0 e0 g0 t0
+i n"camera_7.jpg" w1920 h1080 f0   v95.53   r92.0    p-3.0  y166.5     a0 b0 c0 d0 e0 g0 t0

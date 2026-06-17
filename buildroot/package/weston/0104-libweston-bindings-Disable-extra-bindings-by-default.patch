@@ -1,0 +1,71 @@
+From dc9ea2336ae35b016a8308aaeaca7a59b768216f Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Mon, 3 Mar 2025 12:20:21 +0800
+Subject: [PATCH 104/105] libweston: bindings: Disable extra bindings by
+ default
+
+Set env WESTON_MOD_BINDING WESTON_KEY_BINDING WESTON_DEBUG_BINDING to
+enable.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ libweston/bindings.c        | 11 +++++++++++
+ libweston/pixman-renderer.c |  4 +++-
+ 2 files changed, 14 insertions(+), 1 deletion(-)
+
+diff --git a/libweston/bindings.c b/libweston/bindings.c
+index 4d2ad94..3392efe 100644
+--- a/libweston/bindings.c
++++ b/libweston/bindings.c
+@@ -52,6 +52,9 @@ weston_compositor_add_binding(struct weston_compositor *compositor,
+ {
+ 	struct weston_binding *binding;
+ 
++	if (!getenv("WESTON_MOD_BINDING") && modifier)
++		return NULL;
++
+ 	binding = malloc(sizeof *binding);
+ 	if (binding == NULL)
+ 		return NULL;
+@@ -75,6 +78,9 @@ weston_compositor_add_key_binding(struct weston_compositor *compositor,
+ {
+ 	struct weston_binding *binding;
+ 
++	if (!getenv("WESTON_KEY_BINDING"))
++		return NULL;
++
+ 	binding = weston_compositor_add_binding(compositor, key, 0, 0,
+ 						modifier, handler, data);
+ 	if (binding == NULL)
+@@ -186,8 +192,13 @@ weston_compositor_add_debug_binding(struct weston_compositor *compositor,
+ {
+ 	struct weston_binding *binding;
+ 
++	if (!getenv("WESTON_DEBUG_BINDING"))
++		return NULL;
++
+ 	binding = weston_compositor_add_binding(compositor, key, 0, 0, 0,
+ 						handler, data);
++	if (binding == NULL)
++		return NULL;
+ 
+ 	wl_list_insert(compositor->debug_binding_list.prev, &binding->link);
+ 
+diff --git a/libweston/pixman-renderer.c b/libweston/pixman-renderer.c
+index da0f765..775f445 100644
+--- a/libweston/pixman-renderer.c
++++ b/libweston/pixman-renderer.c
+@@ -1287,7 +1287,9 @@ pixman_renderer_destroy(struct weston_compositor *ec)
+ #endif
+ 
+ 	wl_signal_emit(&pr->destroy_signal, pr);
+-	weston_binding_destroy(pr->debug_binding);
++
++	if (pr->debug_binding)
++		weston_binding_destroy(pr->debug_binding);
+ 
+ 	weston_drm_format_array_fini(&pr->supported_formats);
+ 
+-- 
+2.39.5
+

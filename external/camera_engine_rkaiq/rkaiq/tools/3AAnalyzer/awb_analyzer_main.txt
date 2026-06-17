@@ -1,0 +1,22 @@
+Rockchip AWB Analyzer v1.0
+
+----------------------------------------------#P1th calculate wbgain----------------------------------------------
+mode:#P37   
+global CCT:#P2,CCRI:#P3,valid:#P4 wbgain_s6(after damping)(rggb):(#P5) 
+awbConverged(#P6) ,LVValue(#P7), WPType(#P8),df(#P9)
+WPNo(normal,big):(#P10),vaild wp number in standard light(#P12), vaild wp number in extra light(#P13) 
+select white point range type (0-normal xy range,1-big xy range, 3-extra light) : #P15
+runInterval(#P16),tolerance(#P17) 
+wbGainSgc for WPType1(rggb):(#P18) ,wbWeightSgc(#P19), sgcGainEqu2Tem(#P20)
+wbGainSpa for WPType1(rggb):(#P21) ,wbWeightSpa(#P22), spaGainEqu2Tem(#P23) 
+wbGainTep for WPType1(rggb):(#P24)
+wbGainType1(rggb):(#P25)
+wbGainType3(rggb):(#P26), weight of wbGainType3: #P29
+wbgain_s1        :(#P27) is updated (#P28)
+wbgain_s3  (wbgainclip)   :(#P31) 
+wbgain_s4  (wbgainAdjust) :(#P32) 
+wbgain_s5  (wbgainOffest) :(#P33) 
+hdrFrameChoose : #P34
+select algorithm method based on stat_mode 0 (0-wp,1-gw) : #P35
+WpNoHist: #P36
+#B1

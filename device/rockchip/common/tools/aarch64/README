@@ -1,0 +1,18 @@
+Prebuilt tools (static linked)
+==============================
+
+Prebuilt from Rockchip buildroot 2025 SDK with kernel 6.1:
+1615bae616 busybox: Fix spurious auth failures when USE_BB_SHADOW is enabled
+
+Using rockchip_tools_{arm32,arm64,riscv64}_defconfig.
+
+For building kmsgrab:
+1/ ./build.sh shell
+2/ source ./buildroot/output/$RK_BUILDROOT_CFG/host/environment-setup
+3/ $CC $RK_DATA_DIR/kmsgrab.c $(pkg-config --cflags --libs libdrm) -static -o kmsgrab
+
+External sources:
+1/ rkwifibt:
+6d52669 fix compile error
+2/ rktoolkit:
+bc1d85d vendor_storage: fixed hex string begin with 00, get wrong string length when read

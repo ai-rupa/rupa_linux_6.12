@@ -1,0 +1,26 @@
+From 241e80b313dd5320548f0f32ef7af833de532d3f Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Tue, 12 Aug 2025 12:50:08 +0800
+Subject: [PATCH 3/6] Fix compile error with soft float
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ Common/Math/math_util.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Common/Math/math_util.cpp b/Common/Math/math_util.cpp
+index 9b1a59a755..dddd417c3c 100644
+--- a/Common/Math/math_util.cpp
++++ b/Common/Math/math_util.cpp
+@@ -2,7 +2,7 @@
+ #include <stdlib.h>
+ 
+ // QNX can only use RunFast mode and it is already the default.
+-#if defined(__ARM_ARCH_7A__)
++#if defined(__ARM_ARCH_7A__) && defined(__ARM_FP) && (__ARM_FP > 0)
+ // Enables 'RunFast' VFP mode.
+ void EnableFZ() {
+ 	int x;
+-- 
+2.20.1
+

@@ -1,0 +1,35 @@
+config BR2_PACKAGE_PYTHON_EMPY
+	bool "python-empy"
+	help
+	  Empy is a system for embedding Python expressions and statements
+	  in template text; it takes an Empy source file, processes it, and
+	  produces output.
+
+	  This is accomplished via expansions, which are special signals to
+	  the Empy system and are set off by a special prefix (by default
+	  the at sign, '@'). Empy can expand arbitrary Python expressions
+	  and statements in this way, as well as a variety of special
+	  forms. Text that does not contain special forms is left
+	  undisturbed.
+
+	  https://github.com/alecthomas/empy
+
+if BR2_PACKAGE_PYTHON_EMPY
+
+choice
+	prompt "python-empy version"
+	default BR2_PACKAGE_PYTHON_EMPY_4_1
+
+config BR2_PACKAGE_PYTHON_EMPY_4_1
+	bool "python-empy v4.1"
+	help
+	  python-empy v4.1 for ROS2 Jazzy.
+
+config BR2_PACKAGE_PYTHON_EMPY_3_3_4
+	bool "python-empy v3.3.4"
+	help
+	  python-empy v3.3.4 for ROS2 Humble.
+
+endchoice
+
+endif

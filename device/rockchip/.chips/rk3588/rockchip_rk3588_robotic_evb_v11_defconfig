@@ -1,0 +1,2 @@
+RK_KERNEL_DTS_NAME="rk3588-robotic-evb-v11-linux"
+RK_KERNEL_CFG_FRAGMENTS="rk3588_robotic.config"

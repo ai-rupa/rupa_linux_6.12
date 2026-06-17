@@ -1,0 +1,55 @@
+From f07a1b7f0bcdd7fd339c1315234ce0126d8c4216 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Fri, 8 Aug 2025 18:38:33 +0800
+Subject: [PATCH 2/2] Support logging FPS
+
+Set env MUPEN64PLUS_RICE_LOG_FPS=1 to enable.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ src/OGLGraphicsContext.cpp | 29 +++++++++++++----------------
+ 1 file changed, 13 insertions(+), 16 deletions(-)
+
+diff --git a/src/OGLGraphicsContext.cpp b/src/OGLGraphicsContext.cpp
+index fffbd01..e3bb9dd 100755
+--- a/src/OGLGraphicsContext.cpp
++++ b/src/OGLGraphicsContext.cpp
+@@ -461,22 +461,19 @@ void COGLGraphicsContext::UpdateFrame(bool swaponly)
+        (*renderCallback)(status.bScreenIsDrawn);
+ 
+    CoreVideo_GL_SwapBuffers();
+-   
+-   /*if(options.bShowFPS)
+-     {
+-    static unsigned int lastTick=0;
+-    static int frames=0;
+-    unsigned int nowTick = SDL_GetTicks();
+-    frames++;
+-    if(lastTick + 5000 <= nowTick)
+-      {
+-         char caption[200];
+-         sprintf(caption, "%s v%i.%i.%i - %.3f VI/S", PLUGIN_NAME, VERSION_PRINTF_SPLIT(PLUGIN_VERSION), frames/5.0);
+-         CoreVideo_SetCaption(caption);
+-         frames = 0;
+-         lastTick = nowTick;
+-      }
+-     }*/
++
++    static int log_fps = !!getenv("MUPEN64PLUS_RICE_LOG_FPS");
++    if(log_fps) {
++        static unsigned int lastTick=0;
++        static int frames=0;
++        unsigned int nowTick = SDL_GetTicks();
++        frames++;
++        if(lastTick + 5000 <= nowTick) {
++            printf("[%s]: FPS: %6.1f\n", PLUGIN_NAME, frames/5.0);
++            frames = 0;
++            lastTick = nowTick;
++        }
++    }
+ 
+     glDepthMask(GL_TRUE);
+     OPENGL_CHECK_ERRORS;
+-- 
+2.20.1
+

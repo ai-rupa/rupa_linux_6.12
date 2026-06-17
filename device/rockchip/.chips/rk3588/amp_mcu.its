@@ -1,0 +1,78 @@
+/* SPDX-License-Identifier: BSD-3-Clause */
+/*
+ * Copyright (c) 2023 Rockchip Electronics Co., Ltd.
+ */
+
+/dts-v1/;
+/ {
+	description = "FIT source file for rockchip AMP";
+	#address-cells = <1>;
+
+	images {
+		mcu {
+			description  = "mcu";
+			data         = /incbin/("rtt.bin");
+			type         = "standalone";
+			compression  = "none";
+			arch         = "arm";
+			udelay       = <10000>;
+			load         = <0x07a00000>;
+			sram_start   = <0x00000000>;    // {pmu1_sgrf_soc_con10[15:0],16'h0}
+			dev_start    = <0xF0000000>;
+			exsram_start = <0x00000000>;    // {pmu1_sgrf_soc_con11[15:0],16'h0}
+			experi_start = <0x00000000>;    // {pmu1_sgrf_soc_con12[15:0],16'h0}
+			uc_start     = <0x07C00000>;    // {pmu1_sgrf_soc_con8[3:0],pmu1_sgrf_soc_con6[15:0],12'h0}
+			uc_end       = <0xFEE00000>;    // {pmu1_sgrf_soc_con8[7:4],pmu1_sgrf_soc_con7[15:0],12'h0}
+
+			cpu          = <0>;
+			compile {
+				size         = <0x00200000>;
+				sys          = "rtt";    // "hal" or "rtt"
+				rtt_config   = "board/evb/defconfig"
+				core         = "mcu";    // "mcu" or "ap"
+				rtt_exec     = "prebuilts/gcc/linux-x86/arm/gcc-arm-none-eabi-10-2020-q4-major-x86_64-linux/bin/"
+				cc           = "prebuilts/gcc/linux-x86/arm/gcc-arm-none-eabi-10-2020-q4-major-x86_64-linux/bin/arm-none-eabi-"
+			};
+
+			hash {
+				algo = "sha256";
+			};
+		};
+	};
+
+	share {
+		rpmsg_base      = <0x07c00000>;
+		rpmsg_size      = <0x00600000>;
+	};
+
+	configurations {
+		default = "conf";
+		conf {
+			description = "Rockchip AMP images";
+			rollback-index = <0x0>;
+			loadables = "mcu";
+
+			signature {
+				algo = "sha256,rsa2048";
+				padding = "pss";
+				key-name-hint = "dev";
+				sign-images = "loadables";
+			};
+
+			/* - run linux on cpu0
+			 * - it is brought up by amp(that run on U-Boot)
+			 * - it is boot entry depends on U-Boot
+			 */
+			linux {
+				description  = "linux-os";
+				arch         = "arm64";
+				cpu          = <0x000>;
+				thumb        = <0>;
+				hyp          = <0>;
+				udelay       = <0>;
+				load         = <0x02000000>;
+				load_c       = <0x05480000>;
+			};
+		};
+	};
+};

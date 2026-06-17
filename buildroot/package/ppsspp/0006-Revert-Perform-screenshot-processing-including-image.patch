@@ -1,0 +1,426 @@
+From 2865d5de4c7f545293f002fd235df2c4f1e5531e Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Tue, 12 Aug 2025 13:10:31 +0800
+Subject: [PATCH 6/6] Revert "Perform screenshot processing (including image
+ encode) on background tasks"
+
+This reverts commit b421c0791f64470ab141684b7e86d619260c8a7f.
+---
+ Common/Thread/Promise.h        | 16 ------------
+ Core/SaveState.cpp             | 40 +++++++++-------------------
+ Core/Screenshot.cpp            | 33 +++++++----------------
+ Core/Screenshot.h              | 15 +----------
+ GPU/Common/GPUDebugInterface.h |  2 +-
+ GPU/Software/SoftGpu.cpp       | 11 ++++----
+ UI/NativeApp.cpp               | 48 +++++++++++++++++-----------------
+ UI/ReportScreen.cpp            | 19 +++++++-------
+ 8 files changed, 63 insertions(+), 121 deletions(-)
+
+diff --git a/Common/Thread/Promise.h b/Common/Thread/Promise.h
+index 9a98ac1cab..e16a4dc296 100644
+--- a/Common/Thread/Promise.h
++++ b/Common/Thread/Promise.h
+@@ -7,22 +7,6 @@
+ #include "Common/Thread/Channel.h"
+ #include "Common/Thread/ThreadManager.h"
+ 
+-// Nobody needs to wait for this (except threadpool shutdown).
+-template<class T>
+-class IndependentTask : public Task {
+-public:
+-	IndependentTask(TaskType type, TaskPriority prio, T func) : func_(std::move(func)), type_(type), prio_(prio) {}
+-	TaskType Type() const override { return type_; }
+-	TaskPriority Priority() const override { return prio_; }
+-	void Run() override {
+-		func_();
+-	}
+-private:
+-	T func_;
+-	TaskType type_;
+-	TaskPriority prio_;
+-};
+-
+ template<class T>
+ class PromiseTask : public Task {
+ public:
+diff --git a/Core/SaveState.cpp b/Core/SaveState.cpp
+index f70098d4d5..2a775aea52 100644
+--- a/Core/SaveState.cpp
++++ b/Core/SaveState.cpp
+@@ -466,7 +466,8 @@ double g_lastSaveTime = -1.0;
+ 		Enqueue(Operation(SAVESTATE_SAVE_SCREENSHOT, filename, -1, nullptr));
+ 	}
+ 
+-	bool CanRewind() {
++	bool CanRewind()
++	{
+ 		return !rewindStates.Empty();
+ 	}
+ 
+@@ -957,9 +958,11 @@ double g_lastSaveTime = -1.0;
+ 
+ 		bool readbackImage = false;
+ 
+-		for (const auto &op : operations) {
++		for (size_t i = 0, n = operations.size(); i < n; ++i) {
++			Operation &op = operations[i];
+ 			CChunkFileReader::Error result;
+ 			Status callbackResult;
++			bool tempResult;
+ 			std::string callbackMessage;
+ 			std::string title;
+ 
+@@ -1045,8 +1048,7 @@ double g_lastSaveTime = -1.0;
+ 				break;
+ 
+ 			case SAVESTATE_VERIFY:
+-			{
+-				int tempResult = CChunkFileReader::Verify(state) == CChunkFileReader::ERROR_NONE;
++				tempResult = CChunkFileReader::Verify(state) == CChunkFileReader::ERROR_NONE;
+ 				callbackResult = tempResult ? Status::SUCCESS : Status::FAILURE;
+ 				if (tempResult) {
+ 					INFO_LOG(Log::SaveState, "Verified save state system");
+@@ -1054,7 +1056,6 @@ double g_lastSaveTime = -1.0;
+ 					ERROR_LOG(Log::SaveState, "Save state system verification failed");
+ 				}
+ 				break;
+-			}
+ 
+ 			case SAVESTATE_REWIND:
+ 				INFO_LOG(Log::SaveState, "Rewinding to recent savestate snapshot");
+@@ -1084,36 +1085,19 @@ double g_lastSaveTime = -1.0;
+ 
+ 			case SAVESTATE_SAVE_SCREENSHOT:
+ 			{
+-				_dbg_assert_(!op.callback);
+-
+ 				int maxResMultiplier = 2;
+-				ScreenshotResult tempResult = TakeGameScreenshot(nullptr, op.filename, ScreenshotFormat::JPG, SCREENSHOT_DISPLAY, maxResMultiplier, [](bool success) {
+-					if (success) {
+-						screenshotFailures = 0;
+-					}
+-				});
+-				
+-				switch (tempResult) {
+-				case ScreenshotResult::ScreenshotNotPossible:
+-					// Try again soon, for a short while.
+-					callbackResult = Status::FAILURE;
++				tempResult = TakeGameScreenshot(nullptr, op.filename, ScreenshotFormat::JPG, SCREENSHOT_DISPLAY, maxResMultiplier);
++				callbackResult = tempResult ? Status::SUCCESS : Status::FAILURE;
++				if (!tempResult) {
+ 					WARN_LOG(Log::SaveState, "Failed to take a screenshot for the savestate! (%s) The savestate will lack an icon.", op.filename.c_str());
+ 					if (coreState != CORE_STEPPING_CPU && screenshotFailures++ < SCREENSHOT_FAILURE_RETRIES) {
+ 						// Requeue for next frame (if we were stepping, no point, will just spam errors quickly).
+ 						SaveScreenshot(op.filename);
+ 					}
+-					break;
+-				case ScreenshotResult::DelayedResult:
+-				case ScreenshotResult::Success:
+-					// We might not know if the file write succeeded yet though.
+-					callbackResult = Status::SUCCESS;
+-					readbackImage = true;
+-					break;
+-				case ScreenshotResult::FailedToWriteFile:
+-					// Can't reach here when we pass in a callback to TakeGameScreenshot.
+-					callbackResult = Status::SUCCESS;
+-					break;
++				} else {
++					screenshotFailures = 0;
+ 				}
++				readbackImage = true;
+ 				break;
+ 			}
+ 			default:
+diff --git a/Core/Screenshot.cpp b/Core/Screenshot.cpp
+index 781007450c..aaa17e41ac 100644
+--- a/Core/Screenshot.cpp
++++ b/Core/Screenshot.cpp
+@@ -26,10 +26,7 @@
+ #include "Common/File/FileUtil.h"
+ #include "Common/File/Path.h"
+ #include "Common/Log.h"
+-#include "Common/System/System.h"
+ #include "Common/System/Display.h"
+-#include "Common/System/NativeApp.h"
+-#include "Common/Thread/Promise.h"
+ #include "Core/Screenshot.h"
+ #include "Core/System.h"
+ #include "GPU/Common/GPUDebugInterface.h"
+@@ -331,7 +328,7 @@ static GPUDebugBuffer ApplyRotation(const GPUDebugBuffer &buf, DisplayRotation r
+ 	return rotated;
+ }
+ 
+-ScreenshotResult TakeGameScreenshot(Draw::DrawContext *draw, const Path &filename, ScreenshotFormat fmt, ScreenshotType type, int maxRes, std::function<void(bool success)> callback) {
++bool TakeGameScreenshot(Draw::DrawContext *draw, const Path &filename, ScreenshotFormat fmt, ScreenshotType type, int maxRes) {
+ 	GPUDebugBuffer buf;
+ 	u32 w = (u32)-1;
+ 	u32 h = (u32)-1;
+@@ -339,10 +336,10 @@ ScreenshotResult TakeGameScreenshot(Draw::DrawContext *draw, const Path &filenam
+ 	if (type == SCREENSHOT_DISPLAY || type == SCREENSHOT_RENDER) {
+ 		if (!gpuDebug) {
+ 			ERROR_LOG(Log::System, "Can't take screenshots when GPU not running");
+-			return ScreenshotResult::ScreenshotNotPossible;
++			return false;
+ 		}
+ 		if (!gpuDebug->GetCurrentFramebuffer(buf, type == SCREENSHOT_RENDER ? GPU_DBG_FRAMEBUF_RENDER : GPU_DBG_FRAMEBUF_DISPLAY, maxRes)) {
+-			return ScreenshotResult::ScreenshotNotPossible;
++			return false;
+ 		}
+ 		w = maxRes > 0 ? 480 * maxRes : PSP_CoreParameter().renderWidth;
+ 		h = maxRes > 0 ? 272 * maxRes : PSP_CoreParameter().renderHeight;
+@@ -350,35 +347,25 @@ ScreenshotResult TakeGameScreenshot(Draw::DrawContext *draw, const Path &filenam
+ 		_dbg_assert_(draw);
+ 		GPUDebugBuffer temp;
+ 		if (!::GetOutputFramebuffer(draw, temp)) {
+-			return ScreenshotResult::ScreenshotNotPossible;
++			return false;
+ 		}
+ 		buf = ApplyRotation(temp, g_display.rotation);
+ 	} else {
+ 		_dbg_assert_(draw);
+ 		if (!GetOutputFramebuffer(draw, buf)) {
+-			return ScreenshotResult::ScreenshotNotPossible;
++			return false;
+ 		}
+ 	}
+ 
+-	if (callback) {
+-		g_threadManager.EnqueueTask(new IndependentTask(TaskType::CPU_COMPUTE, TaskPriority::LOW,
+-			[buf = std::move(buf), callback = std::move(callback), filename, fmt, w, h]() {
+-			u8 *flipbuffer = nullptr;
+-			u32 width = w, height = h;
+-			const u8 *buffer = ConvertBufferToScreenshot(buf, false, flipbuffer, width, height);
+-			bool success = Save888RGBScreenshot(filename, fmt, buffer, width, height);
+-			delete[] flipbuffer;
+-			System_RunOnMainThread([success, callback = std::move(callback)]() {
+-				callback(success);
+-			});
+-		}));
+-		return ScreenshotResult::DelayedResult;
+-	}
+ 	u8 *flipbuffer = nullptr;
+ 	const u8 *buffer = ConvertBufferToScreenshot(buf, false, flipbuffer, w, h);
++	if (!buffer) {
++		return false;
++	}
++
+ 	bool success = Save888RGBScreenshot(filename, fmt, buffer, w, h);
+ 	delete[] flipbuffer;
+-	return success ? ScreenshotResult::Success : ScreenshotResult::FailedToWriteFile;
++	return true;
+ }
+ 
+ bool Save888RGBScreenshot(const Path &filename, ScreenshotFormat fmt, const u8 *bufferRGB888, int w, int h) {
+diff --git a/Core/Screenshot.h b/Core/Screenshot.h
+index 40d8cd6b7b..6e15c0bba2 100644
+--- a/Core/Screenshot.h
++++ b/Core/Screenshot.h
+@@ -19,8 +19,6 @@
+ 
+ #include "Common/File/Path.h"
+ 
+-#include <functional>
+-
+ struct GPUDebugBuffer;
+ namespace Draw {
+ class DrawContext;
+@@ -31,8 +29,6 @@ enum class ScreenshotFormat {
+ 	JPG,
+ };
+ 
+-// NOTE: The first two may need rotation, depending on the backend and screen orientation.
+-// This is handled internally in TakeGameScreenshot().
+ enum ScreenshotType {
+ 	// What's being show on screen (e.g. including FPS, etc.)
+ 	SCREENSHOT_OUTPUT,
+@@ -42,19 +38,10 @@ enum ScreenshotType {
+ 	SCREENSHOT_RENDER,
+ };
+ 
+-enum class ScreenshotResult {
+-	ScreenshotNotPossible,
+-	DelayedResult,  // This specifies that the actual result is one of the two below and will arrive in the callback.
+-	// These result can be delayed and arrive in the callback, if one is specified.
+-	FailedToWriteFile,
+-	Success,
+-};
+-
+ const u8 *ConvertBufferToScreenshot(const GPUDebugBuffer &buf, bool alpha, u8 *&temp, u32 &w, u32 &h);
+ 
+ // Can only be used while in game.
+-// If the callback is passed in, the saving action happens on a background thread.
+-ScreenshotResult TakeGameScreenshot(Draw::DrawContext *draw, const Path &filename, ScreenshotFormat fmt, ScreenshotType type, int maxRes = -1, std::function<void(bool success)> callback = nullptr);
++bool TakeGameScreenshot(Draw::DrawContext *draw, const Path &filename, ScreenshotFormat fmt, ScreenshotType type, int maxRes = -1);
+ 
+ bool Save888RGBScreenshot(const Path &filename, ScreenshotFormat fmt, const u8 *bufferRGB888, int w, int h);
+ bool Save8888RGBAScreenshot(const Path &filename, const u8 *bufferRGBA8888, int w, int h);
+diff --git a/GPU/Common/GPUDebugInterface.h b/GPU/Common/GPUDebugInterface.h
+index 1a87c4270b..2b3e437cfa 100644
+--- a/GPU/Common/GPUDebugInterface.h
++++ b/GPU/Common/GPUDebugInterface.h
+@@ -156,7 +156,7 @@ struct GPUDebugBuffer {
+ 	u32 GetRawPixel(int x, int y) const;
+ 	void SetRawPixel(int x, int y, u32 c);
+ 
+-	u8 *GetData() {
++	u8 *GetDataWrite() {
+ 		return data_;
+ 	}
+ 
+diff --git a/GPU/Software/SoftGpu.cpp b/GPU/Software/SoftGpu.cpp
+index b95f80b21f..97e1dbdf83 100644
+--- a/GPU/Software/SoftGpu.cpp
++++ b/GPU/Software/SoftGpu.cpp
+@@ -1383,7 +1383,7 @@ bool SoftGPU::GetCurrentFramebuffer(GPUDebugBuffer &buffer, GPUDebugFramebufferT
+ 	buffer.Allocate(size.x, size.y, fmt);
+ 
+ 	const int depth = fmt == GE_FORMAT_8888 ? 4 : 2;
+-	u8 *dst = buffer.GetData();
++	u8 *dst = buffer.GetDataWrite();
+ 	const int byteWidth = size.x * depth;
+ 	for (int16_t y = 0; y < size.y; ++y) {
+ 		memcpy(dst, src, byteWidth);
+@@ -1403,7 +1403,7 @@ bool SoftGPU::GetCurrentDepthbuffer(GPUDebugBuffer &buffer) {
+ 
+ 	const int depth = 2;
+ 	const u8 *src = depthbuf.data;
+-	u8 *dst = buffer.GetData();
++	u8 *dst = buffer.GetDataWrite();
+ 	for (int16_t y = 0; y < size.y; ++y) {
+ 		memcpy(dst, src, size.x * depth);
+ 		dst += size.x * depth;
+@@ -1429,7 +1429,7 @@ bool SoftGPU::GetCurrentStencilbuffer(GPUDebugBuffer &buffer) {
+ 	DrawingCoords size = GetTargetSize(gstate.FrameBufStride());
+ 	buffer.Allocate(size.x, size.y, GPU_DBG_FORMAT_8BIT);
+ 
+-	u8 *row = buffer.GetData();
++	u8 *row = buffer.GetDataWrite();
+ 	for (int16_t y = 0; y < size.y; ++y) {
+ 		for (int16_t x = 0; x < size.x; ++x) {
+ 			row[x] = GetPixelStencil(gstate.FrameBufFormat(), gstate.FrameBufStride(), x, y);
+@@ -1444,12 +1444,13 @@ bool SoftGPU::GetCurrentTexture(GPUDebugBuffer &buffer, int level, bool *isFrame
+ 	return Rasterizer::GetCurrentTexture(buffer, level);
+ }
+ 
+-bool SoftGPU::GetCurrentClut(GPUDebugBuffer &buffer) {
++bool SoftGPU::GetCurrentClut(GPUDebugBuffer &buffer)
++{
+ 	const u32 bpp = gstate.getClutPaletteFormat() == GE_CMODE_32BIT_ABGR8888 ? 4 : 2;
+ 	const u32 pixels = 1024 / bpp;
+ 
+ 	buffer.Allocate(pixels, 1, (GEBufferFormat)gstate.getClutPaletteFormat());
+-	memcpy(buffer.GetData(), clut, 1024);
++	memcpy(buffer.GetDataWrite(), clut, 1024);
+ 	return true;
+ }
+ 
+diff --git a/UI/NativeApp.cpp b/UI/NativeApp.cpp
+index 78304e75ed..39240cbaf9 100644
+--- a/UI/NativeApp.cpp
++++ b/UI/NativeApp.cpp
+@@ -995,14 +995,12 @@ static void TakeScreenshot(Draw::DrawContext *draw) {
+ 	}
+ 
+ 	// First, find a free filename.
++	int i = 0;
+ 
+-	const std::string gameId = g_paramSFO.GetDiscID();
++	std::string gameId = g_paramSFO.GetDiscID();
+ 
+ 	Path filename;
+-	int i = 0;
+-	// TODO: This is really potentially way too slow if there are a lot of images!
+-	
+-	for (int i = 0; i < 10000; i++) {
++	while (i < 10000){
+ 		if (g_Config.bScreenshotsAsPNG)
+ 			filename = path / StringFromFormat("%s_%05d.png", gameId.c_str(), i);
+ 		else
+@@ -1013,27 +1011,29 @@ static void TakeScreenshot(Draw::DrawContext *draw) {
+ 		i++;
+ 	}
+ 
+-	const ScreenshotType type = g_Config.iScreenshotMode == (int)ScreenshotMode::GameImage ? SCREENSHOT_DISPLAY : SCREENSHOT_OUTPUT;
++	ScreenshotType type = SCREENSHOT_OUTPUT;
++	if (g_Config.iScreenshotMode == (int)ScreenshotMode::GameImage) {
++		type = SCREENSHOT_DISPLAY;
++	}
+ 
+-	const ScreenshotResult result = TakeGameScreenshot(draw, filename, g_Config.bScreenshotsAsPNG ? ScreenshotFormat::PNG : ScreenshotFormat::JPG, type, -1, [filename](bool success) {
+-		if (success) {
+-			g_OSD.Show(OSDType::MESSAGE_FILE_LINK, filename.ToVisualString(), 0.0f, "screenshot_link");
+-			if (System_GetPropertyBool(SYSPROP_CAN_SHOW_FILE)) {
+-				g_OSD.SetClickCallback("screenshot_link", [](bool clicked, void *data) -> void {
+-					Path *path = reinterpret_cast<Path *>(data);
+-					if (clicked) {
+-						System_ShowFileInFolder(*path);
+-					} else {
+-						delete path;
+-					}
+-				}, new Path(filename));
+-			}
+-		} else {
+-			auto err = GetI18NCategory(I18NCat::ERRORS);
+-			g_OSD.Show(OSDType::MESSAGE_ERROR, err->T("Could not save screenshot file"));
+-			WARN_LOG(Log::System, "Failed to take screenshot.");
++	bool success = TakeGameScreenshot(draw, filename, g_Config.bScreenshotsAsPNG ? ScreenshotFormat::PNG : ScreenshotFormat::JPG, type);
++	if (success) {
++		g_OSD.Show(OSDType::MESSAGE_FILE_LINK, filename.ToVisualString(), 0.0f, "screenshot_link");
++		if (System_GetPropertyBool(SYSPROP_CAN_SHOW_FILE)) {
++			g_OSD.SetClickCallback("screenshot_link", [](bool clicked, void *data) -> void {
++				Path *path = reinterpret_cast<Path *>(data);
++				if (clicked) {
++					System_ShowFileInFolder(*path);
++				} else {
++					delete path;
++				}
++			}, new Path(filename));
+ 		}
+-	});
++	} else {
++		auto err = GetI18NCategory(I18NCat::ERRORS);
++		g_OSD.Show(OSDType::MESSAGE_ERROR, err->T("Could not save screenshot file"));
++		WARN_LOG(Log::System, "Failed to take screenshot.");
++	}
+ }
+ 
+ void CallbackPostRender(UIContext *dc, void *userdata) {
+diff --git a/UI/ReportScreen.cpp b/UI/ReportScreen.cpp
+index 7b5df8181f..425dc0ce2e 100644
+--- a/UI/ReportScreen.cpp
++++ b/UI/ReportScreen.cpp
+@@ -182,22 +182,21 @@ ScreenRenderFlags ReportScreen::render(ScreenRenderMode mode) {
+ 				File::CreateDir(path);
+ 			}
+ 			screenshotFilename_ = path / ".reporting.jpg";
+-			ScreenshotResult ignored = TakeGameScreenshot(screenManager()->getDrawContext(), screenshotFilename_, ScreenshotFormat::JPG, SCREENSHOT_RENDER, 4, [this](bool success) {
+-				if (success) {
+-					// Redo the views already, now with a screenshot included.
+-					RecreateViews();
+-				} else {
+-					// Good news (?), the views are good as-is without a screenshot.
+-					screenshotFilename_.clear();
+-				}
+-			});
++			if (TakeGameScreenshot(screenManager()->getDrawContext(), screenshotFilename_, ScreenshotFormat::JPG, SCREENSHOT_DISPLAY, 4)) {
++				// Redo the views already, now with a screenshot included.
++				RecreateViews();
++			} else {
++				// Good news (?), the views are good as-is without a screenshot.
++				screenshotFilename_.clear();
++			}
+ 			tookScreenshot_ = true;
+ 		}
+ 	}
+ 
+ 	// We take the screenshot first, then we start rendering.
+ 	// We are the only screen visible so this avoid starting and then trying to resume a backbuffer render pass.
+-	const ScreenRenderFlags flags = UIScreen::render(mode);
++	ScreenRenderFlags flags = UIScreen::render(mode);
++
+ 	return flags;
+ }
+ 
+-- 
+2.20.1
+

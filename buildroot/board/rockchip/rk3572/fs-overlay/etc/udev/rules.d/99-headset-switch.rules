@@ -1,0 +1,5 @@
+# headset plugged and extcon includes HEADPHONE=1
+SUBSYSTEM=="extcon", ATTR{name}=="rk730-es7210-sound", ACTION=="change", ENV{STATE}=="*HEADPHONE=1*", RUN+="/usr/bin/alsaucm -c rk730-es7210 set _verb HiFi set _enadev Headphones"
+
+# headset unplugged and extcon includes HEADPHONE=0
+SUBSYSTEM=="extcon", ATTR{name}=="rk730-es7210-sound", ACTION=="change", ENV{STATE}=="*HEADPHONE=0*", RUN+="/usr/bin/alsaucm -c rk730-es7210 set _verb HiFi set _enadev Speaker"

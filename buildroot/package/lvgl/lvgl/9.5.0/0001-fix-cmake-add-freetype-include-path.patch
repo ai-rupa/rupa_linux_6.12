@@ -1,0 +1,27 @@
+From 4b99e656e97d005ec47acbf5b4286a84975edb79 Mon Sep 17 00:00:00 2001
+From: Jiajian Wu <jair.wu@rock-chips.com>
+Date: Mon, 18 Mar 2024 15:40:06 +0800
+Subject: [PATCH 01/11] fix(cmake): add freetype include path
+
+Signed-off-by: Jiajian Wu <jair.wu@rock-chips.com>
+---
+ env_support/cmake/os_desktop.cmake | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/env_support/cmake/os_desktop.cmake b/env_support/cmake/os_desktop.cmake
+index a55ec8d55..bbe1c84bc 100644
+--- a/env_support/cmake/os_desktop.cmake
++++ b/env_support/cmake/os_desktop.cmake
+@@ -211,7 +211,8 @@ endif()
+ 
+ # Set the configuration inc dir for all targets created in this CMakeLists.txt
+ # CMAKE_CURRENT_SOURCE_DIR is necessary because the assets include lvgl/lvgl.h ...
+-include_directories(${CONF_INC_DIR} ${LVGL_ROOT_DIR})
++include_directories(${CONF_INC_DIR} ${LVGL_ROOT_DIR}
++    ${CMAKE_SYSROOT}/usr/include/freetype2)
+ 
+ target_include_directories(lvgl SYSTEM PUBLIC ${LVGL_ROOT_DIR} ${CONF_INC_DIR} ${CMAKE_CURRENT_BINARY_DIR})
+ 
+-- 
+2.34.1
+

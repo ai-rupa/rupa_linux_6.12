@@ -1,0 +1,30 @@
+#
+
+config RK_FASTBOOT_SUPPORTS
+	bool
+	default y if RK_CHIP_FAMILY = "rv1126b"
+
+comment "Fastboot is not supported for this chip"
+	depends on !RK_FASTBOOT_SUPPORTS
+
+menuconfig RK_FASTBOOT
+	bool "Fastboot(To optimize device boot speed)"
+	depends on RK_FASTBOOT_SUPPORTS
+	select RK_ROOTFS_EROFS
+	select RK_ROOTFS_COMPRESSED_GZ
+	help
+	  Reduce system boot time in SPL, Kernel stage, and skip U-Boot stage.
+
+if RK_FASTBOOT
+
+config RK_FASTBOOT_ROOTFS_ITS_NAME
+	string "rootfs(ramdisk) fit its file"
+	depends on RK_USE_FIT_IMG
+	default "fastboot-rootfs.its"
+
+config RK_FASTBOOT_ROOTFS_ITS
+	string
+	default "$RK_CHIP_DIR/$RK_FASTBOOT_ROOTFS_ITS_NAME"
+
+endif
+endmenuconfig #FASTBOOT

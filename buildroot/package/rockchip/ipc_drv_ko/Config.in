@@ -1,0 +1,5 @@
+config BR2_PACKAGE_IPC_DRV_KO
+	bool "ipc_drv_ko"
+	default n
+	help
+		ipc_drv_ko

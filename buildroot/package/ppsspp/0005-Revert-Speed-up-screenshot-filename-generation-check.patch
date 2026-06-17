@@ -1,0 +1,66 @@
+From 11947dcb7a76998029e73573b4b14734882d0b72 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Tue, 12 Aug 2025 13:07:28 +0800
+Subject: [PATCH 5/6] Revert "Speed up screenshot filename generation (checking
+ for existing files more efficiently)"
+
+This reverts commit 6a71cbee791313bef0f11dc433652c32b4909811.
+---
+ UI/NativeApp.cpp | 35 ++++++++++-------------------------
+ 1 file changed, 10 insertions(+), 25 deletions(-)
+
+diff --git a/UI/NativeApp.cpp b/UI/NativeApp.cpp
+index dba27333aa..78304e75ed 100644
+--- a/UI/NativeApp.cpp
++++ b/UI/NativeApp.cpp
+@@ -995,37 +995,22 @@ static void TakeScreenshot(Draw::DrawContext *draw) {
+ 	}
+ 
+ 	// First, find a free filename.
+-	//
+-	// NOTE: On Android, the old approach of checking filenames one by one doesn't scale.
+-	// So let's just grab the full file listing, and then find a name that's not in it.
+-	//
+-	// TODO: Also, we could do this on a thread too. Not sure if worth it.
+ 
+ 	const std::string gameId = g_paramSFO.GetDiscID();
+ 
+-	// TODO: Make something like IterateFileInDir instead.
+-	std::vector<File::FileInfo> files;
+-	const std::string prefix = gameId + "_";
+-	File::GetFilesInDir(path, &files, nullptr, 0, prefix);
+-	std::set<std::string> existingNames;
+-	for (auto &file : files) {
+-		existingNames.insert(file.name);
+-	}
+-
+ 	Path filename;
+ 	int i = 0;
+-	for (int i = 0; i < 20000; i++) {
+-		const std::string pngName = prefix + StringFromFormat("%05d.png", i);
+-		const std::string jpgName = prefix + StringFromFormat("%05d.jpg", i);
+-		if (existingNames.find(pngName) == existingNames.end() && existingNames.find(jpgName) == existingNames.end()) {
+-			filename = path / (g_Config.bScreenshotsAsPNG ? pngName : jpgName);
++	// TODO: This is really potentially way too slow if there are a lot of images!
++	
++	for (int i = 0; i < 10000; i++) {
++		if (g_Config.bScreenshotsAsPNG)
++			filename = path / StringFromFormat("%s_%05d.png", gameId.c_str(), i);
++		else
++			filename = path / StringFromFormat("%s_%05d.jpg", gameId.c_str(), i);
++		File::FileInfo info;
++		if (!File::Exists(filename))
+ 			break;
+-		}
+-	}
+-
+-	if (filename.empty()) {
+-		// Overwrite this one over and over.
+-		filename = path / (prefix + (g_Config.bScreenshotsAsPNG ? "20000.png" : "20000.jpg"));
++		i++;
+ 	}
+ 
+ 	const ScreenshotType type = g_Config.iScreenshotMode == (int)ScreenshotMode::GameImage ? SCREENSHOT_DISPLAY : SCREENSHOT_OUTPUT;
+-- 
+2.20.1
+

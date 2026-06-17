@@ -1,0 +1,29 @@
+From 1d31ccd9a8ab8027d39818c6d4184e8d3b4724c6 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Fri, 8 Aug 2025 18:14:47 +0800
+Subject: [PATCH 2/2] Support setting initial speed
+
+Set env MUPEN64PLUS_SPEED=90 to enable.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ src/main/main.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/src/main/main.c b/src/main/main.c
+index 5c32031..cd67b2a 100644
+--- a/src/main/main.c
++++ b/src/main/main.c
+@@ -1995,6 +1995,9 @@ m64p_error main_run(void)
+     g_EmulatorRunning = 1;
+     StateChanged(M64CORE_EMU_STATE, M64EMU_RUNNING);
+ 
++    /* HACK: Apply initial speed */
++    main_speedset(atoi(getenv("MUPEN64PLUS_SPEED") ?: "100"));
++
+     log_fps = getenv("MUPEN64PLUS_LOG_FPS") != NULL;
+ 
+     poweron_device(&g_dev);
+-- 
+2.20.1
+

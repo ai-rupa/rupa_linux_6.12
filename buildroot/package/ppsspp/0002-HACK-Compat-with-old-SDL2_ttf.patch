@@ -1,0 +1,31 @@
+From e0f3affa315761f6207fcd1783c4a74dd99171d7 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Tue, 12 Aug 2025 12:05:12 +0800
+Subject: [PATCH 2/6] HACK: Compat with old SDL2_ttf
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ CMakeLists.txt | 5 ++---
+ 1 file changed, 2 insertions(+), 3 deletions(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 04e170a5eb..5a317559ee 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -303,11 +303,10 @@ endif()
+ 
+ if(NOT LIBRETRO AND NOT IOS AND NOT MACOSX)
+ 	find_package(SDL2)
+-	find_package(SDL2_ttf)
+ 	find_package(Fontconfig)
+ 
+-	# TODO: this can be removed once CI supports newer SDL2_ttf
+-	if (NOT SDL2_ttf_FOUND)
++	# HACK: For old SDL2_ttf
++	if (TRUE)
+ 		find_package(PkgConfig)
+ 		if(PkgConfig_FOUND)
+ 			pkg_check_modules(SDL2_ttf_PKGCONFIG IMPORTED_TARGET SDL2_ttf)
+-- 
+2.20.1
+

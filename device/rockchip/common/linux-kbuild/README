@@ -1,0 +1,6 @@
+Rockchip prebuilt kbuild (static linked) and scripts
+
+Debian package files come from specific tag in:
+https://salsa.debian.org/kernel-team/linux
+
+Prebuilt in Debian bookworm armhf/aarch64 rootfs.

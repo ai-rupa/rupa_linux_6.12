@@ -1,0 +1,19 @@
+config BR2_PACKAGE_PCBA
+	bool "Rockchip pcba test"
+	help
+	  Rockchip pcba test.
+
+if BR2_PACKAGE_PCBA
+
+config BR2_PACKAGE_PCBA_SCREEN
+	bool "pcba with screen"
+	select BR2_PACKAGE_LIBDRM
+	select BR2_PACKAGE_LIBPNG
+	select BR2_PACKAGE_LIBPTHREAD_STUBS
+	select BR2_PACKAGE_LIBZIP
+	help
+	  Enable screen support for PCBA testing.
+	  Note: This will automatically enable the required graphics
+	  libraries (libdrm, libpng, libzip) and threading support.
+
+endif

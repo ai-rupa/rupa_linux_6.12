@@ -1,0 +1,35 @@
+From d14f50ebd734dfa55bddd87840f0fbda2d7a2e09 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Fri, 12 Dec 2025 18:33:28 +0800
+Subject: [PATCH 13/13] Support switching off VT
+
+Tested with:
+1/ FRECON_VT_OFF=2 FRECON_VT1=1 frecon --daemon
+2/ Ctrl + Alt + F2
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ input.c | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/input.c b/input.c
+index df645e5..37af5ad 100644
+--- a/input.c
++++ b/input.c
+@@ -210,6 +210,13 @@ static int input_special_key(struct input_key_event* ev)
+ 	    is_control_pressed(&input.kbd_state) &&
+ 	    !is_shift_pressed(&input.kbd_state) &&
+ 	    ev->value) {
++		const char *env = getenv("FRECON_VT_OFF");
++		int vt_off = env ? (unsigned)atoi(env) - 1 : term_num_terminals;
++		if (ev->code == KEY_F1 + vt_off) {
++			term_background(true);
++			term_set_current_to(NULL);
++			return 1;
++		}
+ 
+ 		if ((ev->code >= KEY_F1) && (ev->code < KEY_F1 + term_num_terminals)) {
+ 			term_switch_to(ev->code - KEY_F1);
+-- 
+2.39.5
+

@@ -1,0 +1,27 @@
+From 3e043f84b18287c970fd705adbfe5d5a914bacb0 Mon Sep 17 00:00:00 2001
+From: henryseo-lge <henry.seo@lge.com>
+Date: Sun, 28 Sep 2025 02:12:19 +0900
+Subject: [PATCH 18/46] perf(draw): do not refresh invisible object (#8657)
+
+---
+ src/core/lv_refr.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/src/core/lv_refr.c b/src/core/lv_refr.c
+index 55dd32643..ccdb42314 100644
+--- a/src/core/lv_refr.c
++++ b/src/core/lv_refr.c
+@@ -965,6 +965,10 @@ void refr_obj(lv_draw_ctx_t * draw_ctx, lv_obj_t * obj)
+ {
+     /*Do not refresh hidden objects*/
+     if(lv_obj_has_flag(obj, LV_OBJ_FLAG_HIDDEN)) return;
++
++    /*Do not refresh invisible objects */
++    if(lv_obj_get_style_opa(obj, LV_PART_MAIN) <= LV_OPA_MIN) return;
++
+     lv_layer_type_t layer_type = _lv_obj_get_layer_type(obj);
+     if(layer_type == LV_LAYER_TYPE_NONE) {
+         lv_obj_redraw(draw_ctx, obj);
+-- 
+2.34.1
+

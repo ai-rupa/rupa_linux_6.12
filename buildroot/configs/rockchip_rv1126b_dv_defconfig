@@ -1,0 +1,9 @@
+#include "rockchip_rv1126b_ipc_defconfig"
+#include "gui/lvgl/v8/lvgl_dv.config"
+BR2_GCC_ENABLE_OPENMP=y
+# BR2_PACKAGE_IPCWEB_BACKEND is reset to default
+# BR2_PACKAGE_IPCWEB_BACKEND_USE_RKIPC is reset to default
+BR2_PACKAGE_LIBPNG=y
+BR2_PACKAGE_LV_DRIVERS=y
+BR2_PACKAGE_RKIPC_RV1126B_DV=y
+# BR2_PACKAGE_RKIPC_RV1126B is reset to default

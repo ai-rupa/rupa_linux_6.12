@@ -1,0 +1,146 @@
+#!/bin/sh
+find_device_by_partname() {
+	local DEV="$1"
+	UEVENT=$(grep -l "^PARTNAME=$DEV$" /sys/class/block/*/uevent 2>/dev/null | tail -n 1 || true)
+	if [ "$UEVENT" ]; then
+		echo "/dev/$(basename $(dirname "$UEVENT"))"
+	fi
+}
+
+mount_partition() {
+	local PARTNAME="$1"
+	local MOUNT_POINT="$2"
+
+	DEVICE=$(find_device_by_partname "$PARTNAME")
+	if [ -n "$DEVICE" ]; then
+		echo "Mounting $DEVICE to $MOUNT_POINT"
+		mount -t ext4 "$DEVICE" "$MOUNT_POINT" &
+	fi
+}
+wait_fs_mount(){
+	# emmc
+	while [ ! -b /dev/mmcblk0 ]; do sleep .05 ; done
+
+	UEVENT=$(grep -l "^PARTNAME=$DEV$" \
+			/sys/class/block/*/uevent 2>/dev/null | tail -n 1 || true)
+	if [ "$UEVENT" ]; then
+		echo "/dev/$(basename $(dirname $UEVENT))"
+		return
+	fi
+
+	mount_partition "oem" "/oem"
+	mount_partition "userdata" "/userdata"
+}
+
+run_rcS(){
+
+	# Start all init scripts in /etc/init.d
+	# executing them in numerical order.
+	#
+	for i in /etc/init.d/S??* ;do
+
+		 # Ignore dangling symlinks (if any).
+		 [ ! -f "\$i" ] && continue
+
+		 case "\$i" in
+			 *.sh)
+				# Source shell script for speed.
+				(
+					trap - INT QUIT TSTP
+					set start
+					. \$i
+				)
+				;;
+			*)
+				# No sh extension, so fork subprocess.
+				\$i start
+				;;
+		esac
+	done
+
+}
+
+run_delay_task(){
+	cd /root/ko
+
+	# emmc
+	test ! -f jbd2.ko   || insmod jbd2.ko
+	test ! -f crc16.ko  || insmod crc16.ko
+	test ! -f mbcache.ko|| insmod mbcache.ko
+	test ! -f ext4.ko   || insmod ext4.ko
+	test ! -f dw_mmc.ko          || insmod dw_mmc.ko
+	test ! -f dw_mmc-pltfm.ko    || insmod dw_mmc-pltfm.ko
+	test ! -f dw_mmc-rockchip.ko || insmod dw_mmc-rockchip.ko
+	test ! -f mmc_block.ko       ||insmod mmc_block.ko
+
+	# if [ "$RK_BOOT_MEDIUM" = "spi_nor" ];then
+	# 	test ! -f mtd_blkdevs.ko || insmod mtd_blkdevs.ko
+	# 	test ! -f mtdblock.ko || insmod mtdblock.ko
+	# 	test ! -f spi-nor.ko || insmod spi-nor.ko
+	# fi
+
+	wait_fs_mount
+
+	cd /oem/usr/ko
+
+	test ! -f rknpu.ko || insmod rknpu.ko
+
+	# audio
+	test ! -f snd-soc-rockchip.ko             || insmod snd-soc-rockchip.ko
+	test ! -f snd-soc-rockchip-sai.ko         || insmod snd-soc-rockchip-sai.ko
+	test ! -f snd-soc-rk-dsm.ko               || insmod snd-soc-rk-dsm.ko
+	test ! -f snd-soc-dummy-codec.ko          || insmod snd-soc-dummy-codec.ko
+	test ! -f snd-soc-rockchip-pdm-v2.ko      || insmod snd-soc-rockchip-pdm-v2.ko
+	test ! -f snd-soc-rockchip-multicodecs.ko || insmod snd-soc-rockchip-multicodecs.ko
+	test ! -f snd-soc-simple-card-utils.ko    || insmod snd-soc-simple-card-utils.ko
+	test ! -f snd-soc-simple-card.ko          || insmod snd-soc-simple-card.ko
+	test ! -f snd-soc-rk817.ko                || insmod snd-soc-rk817.ko
+
+	RkLunch.sh
+
+	# usb,uvc,rndis
+	test ! -f configfs.ko                    || insmod configfs.ko
+	test ! -f usb-common.ko                  || insmod usb-common.ko
+	test ! -f udc-core.ko                    || insmod udc-core.ko
+	test ! -f libcomposite.ko                || insmod libcomposite.ko
+	test ! -f usbcore.ko                     || insmod usbcore.ko
+	test ! -f usb_f_fs.ko                    || insmod usb_f_fs.ko
+	test ! -f phy-rockchip-naneng-combphy.ko || insmod phy-rockchip-naneng-combphy.ko
+	test ! -f phy-rockchip-inno-usb2.ko      || insmod phy-rockchip-inno-usb2.ko
+	test ! -f xhci-hcd.ko                    || insmod xhci-hcd.ko
+	test ! -f ohci-hcd.ko                    || insmod ohci-hcd.ko
+	test ! -f xhci-plat-hcd.ko               || insmod xhci-plat-hcd.ko
+	test ! -f u_ether.ko                     || insmod u_ether.ko
+	test ! -f roles.ko                       || insmod roles.ko
+	test ! -f ohci-platform.ko               || insmod ohci-platform.ko
+	test ! -f dwc3.ko                        || insmod dwc3.ko
+	test ! -f dwc3-of-simple.ko              || insmod dwc3-of-simple.ko
+	test ! -f hid.ko                         || insmod hid.ko
+	test ! -f hid-generic.ko                 || insmod hid-generic.ko
+	test ! -f usbhid.ko                      || insmod usbhid.ko
+	test ! -f ehci-hcd.ko                    || insmod ehci-hcd.ko
+	test ! -f ehci-platform.ko               || insmod ehci-platform.ko
+	test ! -f videobuf2-dma-sg.ko            || insmod videobuf2-dma-sg.ko
+	test ! -f usb_f_rndis.ko                 || insmod usb_f_rndis.ko
+	test ! -f usb_f_uvc.ko                   || insmod usb_f_uvc.ko
+	test ! -f usb_f_hid.ko                   || insmod usb_f_hid.ko
+	test ! -f u_audio.ko                     || insmod u_audio.ko
+	test ! -f usb_f_uac1.ko                  || insmod usb_f_uac1.ko
+	test ! -f usb_f_uac2.ko                  || insmod usb_f_uac2.ko
+
+	# sdcard
+	test ! -f dw_mmc.ko          || insmod dw_mmc.ko
+	test ! -f dw_mmc-pltfm.ko    || insmod dw_mmc-pltfm.ko
+	test ! -f dw_mmc-rockchip.ko || insmod dw_mmc-rockchip.ko
+	test ! -f mmc_block.ko || insmod mmc_block.ko
+	test ! -f nls_cp936.ko || insmod nls_cp936.ko
+	test ! -f fat.ko       || insmod fat.ko
+	test ! -f vfat.ko      || insmod vfat.ko
+	test ! -f msdos.ko     || insmod msdos.ko
+
+	run_rcS
+}
+
+echo "start app" > /dev/kmsg
+
+run_delay_task &

@@ -1,0 +1,4 @@
+mesh_width: 126
+mesh_height: 126
+mesh_stepx: 8
+mesh_stepy: 8

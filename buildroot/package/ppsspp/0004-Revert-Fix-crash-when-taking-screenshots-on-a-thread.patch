@@ -1,0 +1,53 @@
+From e8adde828528be2f56c583fcb018e3665ef853ac Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Tue, 12 Aug 2025 13:07:16 +0800
+Subject: [PATCH 4/6] Revert "Fix crash when taking screenshots on a thread"
+
+This reverts commit a3a7807aac454923f1cb9df495352f6a994a16ad.
+---
+ Common/Thread/ThreadManager.cpp | 1 -
+ Common/Thread/ThreadManager.h   | 2 +-
+ Core/Screenshot.cpp             | 2 +-
+ 3 files changed, 2 insertions(+), 3 deletions(-)
+
+diff --git a/Common/Thread/ThreadManager.cpp b/Common/Thread/ThreadManager.cpp
+index 98e0b43a57..40c37efaf3 100644
+--- a/Common/Thread/ThreadManager.cpp
++++ b/Common/Thread/ThreadManager.cpp
+@@ -139,7 +139,6 @@ static void WorkerThreadFunc(GlobalThreadContext *global, TaskThreadContext *thr
+ 	}
+ 	SetCurrentThreadName(thread->name);
+ 
+-	// Should we do this on all threads?
+ 	if (thread->type == TaskType::IO_BLOCKING) {
+ 		AttachThreadToJNI();
+ 	}
+diff --git a/Common/Thread/ThreadManager.h b/Common/Thread/ThreadManager.h
+index 6afa564e85..37d16753f3 100644
+--- a/Common/Thread/ThreadManager.h
++++ b/Common/Thread/ThreadManager.h
+@@ -7,7 +7,7 @@
+ // To help smart scheduling.
+ enum class TaskType {
+ 	CPU_COMPUTE,
+-	IO_BLOCKING,  // NOTE: Only these can access scoped storage on Android (they initialize the JNI context).
++	IO_BLOCKING,
+ 	DEDICATED_THREAD,  // These can never get stuck in queue behind others, but are more expensive to launch. Cannot use I/O.
+ };
+ 
+diff --git a/Core/Screenshot.cpp b/Core/Screenshot.cpp
+index f147b78357..781007450c 100644
+--- a/Core/Screenshot.cpp
++++ b/Core/Screenshot.cpp
+@@ -361,7 +361,7 @@ ScreenshotResult TakeGameScreenshot(Draw::DrawContext *draw, const Path &filenam
+ 	}
+ 
+ 	if (callback) {
+-		g_threadManager.EnqueueTask(new IndependentTask(TaskType::IO_BLOCKING, TaskPriority::LOW,
++		g_threadManager.EnqueueTask(new IndependentTask(TaskType::CPU_COMPUTE, TaskPriority::LOW,
+ 			[buf = std::move(buf), callback = std::move(callback), filename, fmt, w, h]() {
+ 			u8 *flipbuffer = nullptr;
+ 			u32 width = w, height = h;
+-- 
+2.20.1
+

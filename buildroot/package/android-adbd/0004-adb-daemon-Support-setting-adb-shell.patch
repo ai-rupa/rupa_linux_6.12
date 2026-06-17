@@ -1,0 +1,59 @@
+From 0c6c9d5e1ee5dd3af72afd16934d1ddd4d8af7e2 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Sun, 8 Oct 2023 18:03:25 +0800
+Subject: [PATCH 04/10] adb: daemon: Support setting adb shell
+
+Tested on RK3588 EVB with:
+1/ echo ADBD_SHELL=/bin/bash > /etc/profile.d/adbd.sh
+2/ reboot
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ adb/daemon/shell_service.cpp | 20 +++++++++++++++++---
+ 1 file changed, 17 insertions(+), 3 deletions(-)
+
+diff --git a/adb/daemon/shell_service.cpp b/adb/daemon/shell_service.cpp
+index c5c426a..7465501 100644
+--- a/adb/daemon/shell_service.cpp
++++ b/adb/daemon/shell_service.cpp
+@@ -93,6 +93,7 @@
+ #include <thread>
+ #include <unordered_map>
+ #include <vector>
++#include <regex>
+ 
+ #include <android-base/logging.h>
+ #include <android-base/properties.h>
+@@ -376,13 +377,26 @@ bool Subprocess::ForkAndExec(std::string* error) {
+         }
+ #endif
+ 
++        const char *shell_command = getenv("ADBD_SHELL") ? : _PATH_BSHELL;
+         if (command_.empty()) {
++            const char* login_arg = nullptr;
++
++            if (shell_command != nullptr) {
++                std::string shell_str(shell_command);
++                std::regex pattern(".*(/|[a-z])sh$");
++
++                if (std::regex_match(shell_str, pattern))
++                    login_arg = "-l";
++            }
++
+             // Spawn a login shell if we don't have a command.
+-            execle(_PATH_BSHELL, "-" _PATH_BSHELL, nullptr, cenv.data());
++            execle(shell_command, shell_command, login_arg, nullptr, cenv.data());
+         } else {
+-            execle(_PATH_BSHELL, _PATH_BSHELL, "-c", command_.c_str(), nullptr, cenv.data());
++            execle(shell_command, shell_command, "-c", command_.c_str(), nullptr, cenv.data());
+         }
+-        WriteFdExactly(child_error_sfd, "exec '" _PATH_BSHELL "' failed: ");
++        WriteFdExactly(child_error_sfd, "exec '");
++        WriteFdExactly(child_error_sfd, shell_command);
++        WriteFdExactly(child_error_sfd, "' failed: ");
+         WriteFdExactly(child_error_sfd, strerror(errno));
+         child_error_sfd.reset(-1);
+         _Exit(1);
+-- 
+2.39.5
+

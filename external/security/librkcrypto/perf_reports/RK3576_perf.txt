@@ -1,0 +1,172 @@
+root@linaro-alip:/data# ./run_perf.sh
+=================== CPU0 (Big Core) Frequency Setup =================
+Setting CPU0 (Big Core) governor to userspace...
+Available CPU frequencies: 408000 600000 816000 1008000 1200000 1416000 1608000 1800000 2016000
+Setting CPU frequency to max: 2016000
+
+======================== DDR Frequency Setup ========================
+DDR node found: /sys/class/devfreq/dmc
+Setting DDR governor to userspace...
+Available DDR frequencies: 528000000 1068000000 1560000000 2112000000
+Setting DDR frequency to max: 2112000000
+
+======================== Current Frequencies ========================
+CPU0 current frequency: 2016000 KHz
+DDR  current frequency: 2112000000 Hz
+
+===================== Current CRYPTO Frequencies ====================
+    aclk_crypto_ns                   0       0        0        350000000   0          0     50000      N      crypto@2a400000                 no_connection_id
+          hclk_crypto_ns             0       0        0        175500000   0          0     50000      N            crypto@2a400000                 no_connection_id
+ clk_pka_crypto_ns                   0       0        0        0           0          0     50000      N   crypto@2a400000                 no_connection_id
+
+
+=================== Run librkcrypto_test on CPU0 ====================
+Executing command: taskset -c 0 librkcrypto_test -t=3
+throughput_mode = 3
+I rkcrypto: [rk_crypto_init, 398]: rkcrypto api version 1.3.0
+dma_fd: otpkey  [AES-256]       ECB     ENCRYPT 719MB/s.
+dma_fd: otpkey  [AES-256]       ECB     DECRYPT 718MB/s.
+dma_fd: otpkey  [AES-256]       CBC     ENCRYPT 274MB/s.
+dma_fd: otpkey  [AES-256]       CBC     DECRYPT 719MB/s.
+dma_fd: otpkey  [AES-256]       CTR     ENCRYPT 719MB/s.
+dma_fd: otpkey  [AES-256]       CTR     DECRYPT 718MB/s.
+dma_fd: otpkey  [SM4-128]       ECB     ENCRYPT 449MB/s.
+dma_fd: otpkey  [SM4-128]       ECB     DECRYPT 449MB/s.
+dma_fd: otpkey  [SM4-128]       CBC     ENCRYPT 143MB/s.
+dma_fd: otpkey  [SM4-128]       CBC     DECRYPT 449MB/s.
+dma_fd: otpkey  [SM4-128]       CTR     ENCRYPT 449MB/s.
+dma_fd: otpkey  [SM4-128]       CTR     DECRYPT 449MB/s.
+dma_fd: test otp_key throughput SUCCESS.
+
+virt:   otpkey  [AES-256]       ECB     ENCRYPT 166MB/s.
+virt:   otpkey  [AES-256]       ECB     DECRYPT 166MB/s.
+virt:   otpkey  [AES-256]       CBC     ENCRYPT 119MB/s.
+virt:   otpkey  [AES-256]       CBC     DECRYPT 166MB/s.
+virt:   otpkey  [AES-256]       CTR     ENCRYPT 159MB/s.
+virt:   otpkey  [AES-256]       CTR     DECRYPT 159MB/s.
+virt:   otpkey  [SM4-128]       ECB     ENCRYPT 143MB/s.
+virt:   otpkey  [SM4-128]       ECB     DECRYPT 143MB/s.
+virt:   otpkey  [SM4-128]       CBC     ENCRYPT 86MB/s.
+virt:   otpkey  [SM4-128]       CBC     DECRYPT 143MB/s.
+virt:   otpkey  [SM4-128]       CTR     ENCRYPT 138MB/s.
+virt:   otpkey  [SM4-128]       CTR     DECRYPT 138MB/s.
+virt:   test otp_key throughput SUCCESS.
+
+I rkcrypto: [rk_crypto_init, 398]: rkcrypto api version 1.3.0
+dma_fd: [DES-64]        ECB     ENCRYPT 493MB/s.
+dma_fd: [DES-64]        ECB     DECRYPT 500MB/s.
+dma_fd: [DES-64]        CBC     ENCRYPT 136MB/s.
+dma_fd: [DES-64]        CBC     DECRYPT 500MB/s.
+dma_fd: [TDES-192]      ECB     ENCRYPT 186MB/s.
+dma_fd: [TDES-192]      ECB     DECRYPT 187MB/s.
+dma_fd: [TDES-192]      CBC     ENCRYPT 48MB/s.
+dma_fd: [TDES-192]      CBC     DECRYPT 187MB/s.
+dma_fd: [AES-256]       ECB     ENCRYPT 1065MB/s.
+dma_fd: [AES-256]       ECB     DECRYPT 1063MB/s.
+dma_fd: [AES-256]       CBC     ENCRYPT 311MB/s.
+dma_fd: [AES-256]       CBC     DECRYPT 1064MB/s.
+dma_fd: [AES-256]       CTS     N/A
+dma_fd: [AES-256]       CTS     N/A
+dma_fd: [AES-256]       CTR     ENCRYPT 816MB/s.
+dma_fd: [AES-256]       CTR     DECRYPT 816MB/s.
+dma_fd: [SM4-128]       ECB     ENCRYPT 548MB/s.
+dma_fd: [SM4-128]       ECB     DECRYPT 552MB/s.
+dma_fd: [SM4-128]       CBC     ENCRYPT 151MB/s.
+dma_fd: [SM4-128]       CBC     DECRYPT 552MB/s.
+dma_fd: [SM4-128]       CTS     N/A
+dma_fd: [SM4-128]       CTS     N/A
+dma_fd: [SM4-128]       CTR     ENCRYPT 474MB/s.
+dma_fd: [SM4-128]       CTR     DECRYPT 476MB/s.
+dma_fd: test cipher throughput SUCCESS.
+
+virt:   [DES-64]        ECB     ENCRYPT 275MB/s.
+virt:   [DES-64]        ECB     DECRYPT 275MB/s.
+virt:   [DES-64]        CBC     ENCRYPT 108MB/s.
+virt:   [DES-64]        CBC     DECRYPT 275MB/s.
+virt:   [TDES-192]      ECB     ENCRYPT 134MB/s.
+virt:   [TDES-192]      ECB     DECRYPT 136MB/s.
+virt:   [TDES-192]      CBC     ENCRYPT 43MB/s.
+virt:   [TDES-192]      CBC     DECRYPT 136MB/s.
+virt:   [AES-256]       ECB     ENCRYPT 382MB/s.
+virt:   [AES-256]       ECB     DECRYPT 382MB/s.
+virt:   [AES-256]       CBC     ENCRYPT 197MB/s.
+virt:   [AES-256]       CBC     DECRYPT 382MB/s.
+virt:   [AES-256]       CTS     N/A
+virt:   [AES-256]       CTS     N/A
+virt:   [AES-256]       CTR     ENCRYPT 344MB/s.
+virt:   [AES-256]       CTR     DECRYPT 344MB/s.
+virt:   [SM4-128]       ECB     ENCRYPT 291MB/s.
+virt:   [SM4-128]       ECB     DECRYPT 290MB/s.
+virt:   [SM4-128]       CBC     ENCRYPT 118MB/s.
+virt:   [SM4-128]       CBC     DECRYPT 290MB/s.
+virt:   [SM4-128]       CTS     N/A
+virt:   [SM4-128]       CTS     N/A
+virt:   [SM4-128]       CTR     ENCRYPT 268MB/s.
+virt:   [SM4-128]       CTR     DECRYPT 267MB/s.
+virt:   test cipher throughput SUCCESS.
+
+I rkcrypto: [rk_crypto_init, 398]: rkcrypto api version 1.3.0
+dma_fd: [AES-256]       GCM     ENCRYPT 310MB/s.
+dma_fd: [AES-256]       GCM     DECRYPT 310MB/s.
+dma_fd: [SM4-128]       GCM     ENCRYPT 150MB/s.
+dma_fd: [SM4-128]       GCM     DECRYPT 152MB/s.
+dma_fd: test aead throughput SUCCESS.
+
+virt:   [AES-256]       GCM     N/A
+virt:   [SM4-128]       GCM     N/A
+virt:   test aead throughput SUCCESS.
+
+I rkcrypto: [rk_crypto_init, 398]: rkcrypto api version 1.3.0
+virt:   [         MD5]  243MB/s.
+virt:   [        SHA1]  206MB/s.
+virt:   [      SHA256]  243MB/s.
+virt:   [      SHA224]  243MB/s.
+virt:   [      SHA512]  357MB/s.
+virt:   [      SHA384]  356MB/s.
+virt:   [  SHA512_224]  N/A
+virt:   [  SHA512_256]  N/A
+virt:   [         SM3]  243MB/s.
+virt:   test hash throughput SUCCESS.
+
+dma_fd: [         MD5]  315MB/s.
+dma_fd: [        SHA1]  256MB/s.
+dma_fd: [      SHA256]  315MB/s.
+dma_fd: [      SHA224]  315MB/s.
+dma_fd: [      SHA512]  492MB/s.
+dma_fd: [      SHA384]  492MB/s.
+dma_fd: [  SHA512_224]  N/A
+dma_fd: [  SHA512_256]  N/A
+dma_fd: [         SM3]  315MB/s.
+dma_fd: test hash throughput SUCCESS.
+
+virt:   [    HMAC_MD5]  244MB/s.
+virt:   [   HMAC_SHA1]  208MB/s.
+virt:   [ HMAC_SHA256]  244MB/s.
+virt:   [ HMAC_SHA512]  356MB/s.
+virt:   [    HMAC_SM3]  243MB/s.
+virt:   test hmac throughput SUCCESS.
+
+dma_fd: [    HMAC_MD5]  315MB/s.
+dma_fd: [   HMAC_SHA1]  256MB/s.
+dma_fd: [ HMAC_SHA256]  315MB/s.
+dma_fd: [ HMAC_SHA512]  492MB/s.
+dma_fd: [    HMAC_SM3]  315MB/s.
+dma_fd: test hmac throughput SUCCESS.
+
+I rkcrypto: [rk_crypto_init, 398]: rkcrypto api version 1.3.0
+virt:   [RSA-1024]      PRIV    ENCRYPT 24ms.
+virt:   [RSA-1024]      PUB     DECRYPT 5ms.
+virt:   [RSA-2048]      PRIV    ENCRYPT 94ms.
+virt:   [RSA-2048]      PUB     DECRYPT 16ms.
+virt:   [RSA-3072]      PRIV    ENCRYPT 312ms.
+virt:   [RSA-3072]      PUB     DECRYPT 54ms.
+virt:   [RSA-4096]      PRIV    ENCRYPT 683ms.
+virt:   [RSA-4096]      PUB     DECRYPT 84ms.
+test rsa throughput SUCCESS.
+
+Test throughput SUCCESS.
+
+######## Test done ########
+
+============================== Done =================================
+root@linaro-alip:/data#

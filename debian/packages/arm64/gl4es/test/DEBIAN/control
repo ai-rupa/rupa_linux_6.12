@@ -1,0 +1,16 @@
+Package: libgl4es
+Source: gl4es
+Version: 1.1.4-1
+Architecture: arm64
+Maintainer: licheng <shiptux@gmail.com>
+Installed-Size: 1492
+Depends: libc6 (>= 2.27), libx11-6
+Section: libs
+Priority: optional
+Homepage: https://github.com/ptitSeb/gl4es
+Description: GL4ES - OpenGL for GLES Hardware
+ This is a library provide OpenGL 2.x functionality for GLES2.0 accelerated Hardware
+ (and of course also support OpenGL 1.5 function, so metimes better than when using
+ GLES 1.1 backend) There is also support for GLES 1.1 Hardware, emulating OpenGL 1.5,
+ and some OpenGL 2.x + extensions.
+ This package contains the shared libraries.

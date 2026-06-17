@@ -1,0 +1,70 @@
+From 564baae17191973fff50615cc71ce41ca31be552 Mon Sep 17 00:00:00 2001
+From: Josh Gao <jmgao@google.com>
+Date: Thu, 6 May 2021 16:31:44 -0700
+Subject: [PATCH 10/10] Retry reads on -EPIPE, if nothing has been read yet.
+
+On initial connection, some clients will send a ClearFeature(HALT) to
+attempt to resynchronize host and device after the adb server is killed.
+On newer device kernels, the reads we've already dispatched will be
+cancelled. Instead of treating this as a failure, which will tear down
+the interface and lead to the client doing the same thing again, just
+resubmit if this happens before we've actually read anything.
+
+Bug: http://b/178904115
+Test: none
+Change-Id: I1c0fb8bea3e7512f3f3b20426a9122b0cf078d57
+---
+ adb/daemon/usb.cpp | 27 +++++++++++++++++++++------
+ 1 file changed, 21 insertions(+), 6 deletions(-)
+
+diff --git a/adb/daemon/usb.cpp b/adb/daemon/usb.cpp
+index 2b66723..269bba6 100644
+--- a/adb/daemon/usb.cpp
++++ b/adb/daemon/usb.cpp
+@@ -509,15 +509,29 @@ struct UsbFfsConnection : public Connection {
+             TransferId id = TransferId::from_value(event.data);
+ 
+             if (event.res < 0) {
+-                std::string error =
+-                        StringPrintf("%s %" PRIu64 " failed with error %s",
+-                                     id.direction == TransferDirection::READ ? "read" : "write",
+-                                     id.id, strerror(-event.res));
+-                HandleError(error);
+-                return;
++                // On initial connection, some clients will send a ClearFeature(HALT) to
++                // attempt to resynchronize host and device after the adb server is killed.
++                // On newer device kernels, the reads we've already dispatched will be cancelled.
++                // Instead of treating this as a failure, which will tear down the interface and
++                // lead to the client doing the same thing again, just resubmit if this happens
++                // before we've actually read anything.
++                if (!connection_started_ && event.res == -EPIPE &&
++                    id.direction == TransferDirection::READ) {
++                    uint64_t read_idx = id.id % kUsbReadQueueDepth;
++                    SubmitRead(&read_requests_[read_idx]);
++                    continue;
++                } else {
++                    std::string error =
++                            StringPrintf("%s %" PRIu64 " failed with error %s",
++                                         id.direction == TransferDirection::READ ? "read" : "write",
++                                         id.id, strerror(-event.res));
++                    HandleError(error);
++                    return;
++                }
+             }
+ 
+             if (id.direction == TransferDirection::READ) {
++                connection_started_ = true;
+                 HandleRead(id, event.res);
+             } else {
+                 HandleWrite(id);
+@@ -695,6 +709,7 @@ struct UsbFfsConnection : public Connection {
+     unique_fd read_fd_;
+     unique_fd write_fd_;
+ 
++    bool connection_started_ = false;
+     std::optional<amessage> incoming_header_;
+     IOVector incoming_payload_;
+ 
+-- 
+2.39.5
+

@@ -1,0 +1,30 @@
+From e3e1756a10eeff81e7c7ee5bb3d557358b2f789d Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Thu, 8 Aug 2024 08:38:32 +0800
+Subject: [PATCH 092/105] HACK: compositor: Force re-assign output when
+ building view list
+
+For switching primary output in mirror mode.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ libweston/compositor.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/libweston/compositor.c b/libweston/compositor.c
+index 44b2350..cacd053 100644
+--- a/libweston/compositor.c
++++ b/libweston/compositor.c
+@@ -3753,6 +3753,9 @@ weston_compositor_build_view_list(struct weston_compositor *compositor)
+ 			}
+ 
+ 			view_list_add(compositor, view);
++
++			/* HACK: Make sure that all views are assigned */
++			weston_view_assign_output(view);
+ 		}
+ 	}
+ 
+-- 
+2.39.5
+

@@ -1,0 +1,66 @@
+#
+
+config RK_DEBIAN_SUPPORTS
+	bool
+	default y if RK_CHIP_FAMILY = "rk3288" || RK_CHIP_FAMILY = "px30" || \
+		RK_CHIP_FAMILY = "rk3326" || RK_CHIP_FAMILY = "rk3328" || \
+		RK_CHIP_FAMILY = "rk3399" || RK_CHIP_FAMILY = "rk3399pro" || \
+		RK_CHIP_FAMILY = "rk3566_rk3568" || RK_CHIP_FAMILY = "rk3588" || \
+		RK_CHIP_FAMILY = "rk3562" || RK_CHIP_FAMILY = "rk3528" || \
+		RK_CHIP_FAMILY = "rk3576" || RK_CHIP_FAMILY = "rk3572" || \
+		RK_CHIP_FAMILY = "rv1126b"
+
+comment "Debian is not supported for this chip"
+	depends on !RK_DEBIAN_SUPPORTS
+
+menuconfig RK_DEBIAN
+	bool "Debian"
+	depends on RK_DEBIAN_SUPPORTS
+	default y
+
+if RK_DEBIAN
+
+config RK_DEBIAN_ARCH
+	string
+	default "armhf" if RK_DEBIAN_ARMHF
+	default "arm64" if RK_DEBIAN_ARM64
+
+choice
+	prompt "rootfs arch"
+
+config RK_DEBIAN_ARM64
+	bool "arm64"
+	depends on RK_KERNEL_ARM64
+
+config RK_DEBIAN_ARMHF
+	bool "armhf"
+	depends on RK_KERNEL_ARM32 || RK_KERNEL_ARM64
+
+endchoice # rootfs arch
+
+config RK_DEBIAN_SERVER
+	bool "server (without desktop)"
+	select RK_ROOTFS_FRECON
+	select RK_ROOTFS_FRECON_VT1
+
+config RK_DEBIAN_MIRROR
+	string "mirror source for APT"
+	default "mirrors.ustc.edu.cn"
+
+config RK_DEBIAN_USER
+	string "default user"
+	default "rockchip"
+
+config RK_DEBIAN_PASSWORD
+	string "password for the default user"
+	default "rockchip"
+
+config RK_DEBIAN_LINUX_HEADERS
+	bool "install linux-headers"
+	default y
+
+config RK_DEBIAN_UNIFIED_IMAGE
+	bool "unified rootfs compatible with all chips"
+
+endif # Debian
+endmenuconfig # Debian

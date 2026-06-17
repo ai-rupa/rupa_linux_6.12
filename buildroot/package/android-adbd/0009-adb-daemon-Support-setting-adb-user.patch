@@ -1,0 +1,113 @@
+From 95bd0159c82c249fa6484f59164021446af3326e Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Fri, 10 Oct 2025 16:49:29 +0800
+Subject: [PATCH 09/10] adb: daemon: Support setting adb user
+
+Tested on RK3588 EVB with:
+1/ echo ADBD_USER=linaro > /etc/profile.d/adbd.sh
+2/ reboot
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ adb/daemon/file_sync_service.cpp | 13 +++++++++++++
+ adb/daemon/remount_service.cpp   |  7 +++++++
+ adb/daemon/shell_service.cpp     | 20 ++++++++++++++++++++
+ 3 files changed, 40 insertions(+)
+
+diff --git a/adb/daemon/file_sync_service.cpp b/adb/daemon/file_sync_service.cpp
+index 48b19ba..29e6247 100644
+--- a/adb/daemon/file_sync_service.cpp
++++ b/adb/daemon/file_sync_service.cpp
+@@ -30,6 +30,7 @@
+ #include <sys/types.h>
+ #include <unistd.h>
+ #include <utime.h>
++#include <pwd.h>
+ 
+ #include <memory>
+ #include <string>
+@@ -573,6 +574,18 @@ static bool handle_sync_command(int fd, std::vector<char>& buffer) {
+ void file_sync_service(unique_fd fd) {
+     std::vector<char> buffer(SYNC_DATA_MAX);
+ 
++#ifndef __ANDROID__
++    // Switch to specified user
++    const char *username = getenv("ADBD_USER");
++    if (username != nullptr) {
++        struct passwd *pw = getpwnam(username);
++        if (pw != nullptr) {
++            setgid(pw->pw_gid);
++            setuid(pw->pw_uid);
++        }
++    }
++#endif
++
+     while (handle_sync_command(fd.get(), buffer)) {
+     }
+ 
+diff --git a/adb/daemon/remount_service.cpp b/adb/daemon/remount_service.cpp
+index 1af3f69..e8dd19c 100644
+--- a/adb/daemon/remount_service.cpp
++++ b/adb/daemon/remount_service.cpp
+@@ -84,6 +84,13 @@ static bool do_remount(int fd, const std::string& cmd) {
+ }
+ #else
+ static bool do_remount(int fd, const std::string& cmd) {
++#ifndef __ANDROID__
++    const char *username = getenv("ADBD_USER");
++    if (username != nullptr && strcmp(username, "root")) {
++        WriteFdExactly(fd, "Not running as root.\n");
++        return false;
++    }
++#endif
+     return system("/usr/bin/mount -o remount,rw /") == 0;
+ }
+ #endif
+diff --git a/adb/daemon/shell_service.cpp b/adb/daemon/shell_service.cpp
+index 7465501..0ae6562 100644
+--- a/adb/daemon/shell_service.cpp
++++ b/adb/daemon/shell_service.cpp
+@@ -85,6 +85,7 @@
+ #include <paths.h>
+ #include <pty.h>
+ #include <pwd.h>
++#include <grp.h>
+ #include <sys/select.h>
+ #include <termios.h>
+ 
+@@ -269,6 +270,16 @@ bool Subprocess::ForkAndExec(std::string* error) {
+         }
+     }
+ 
++#ifndef __ANDROID__
++    // Switch to specified user
++    const char *username = getenv("ADBD_USER");
++    if (username != nullptr) {
++        struct passwd *pwd = getpwnam(username);
++        if (pwd != nullptr)
++            pw = pwd;
++    }
++#endif
++
+     if (pw != nullptr) {
+         env["HOME"] = pw->pw_dir;
+         env["HOSTNAME"] = GetHostName();
+@@ -377,6 +388,15 @@ bool Subprocess::ForkAndExec(std::string* error) {
+         }
+ #endif
+ 
++#ifndef __ANDROID__
++        // Switch to specified user
++        if (getuid() != pw->pw_uid) {
++            setgid(pw->pw_gid);
++            initgroups(username, pw->pw_gid);
++            setuid(pw->pw_uid);
++        }
++#endif
++
+         const char *shell_command = getenv("ADBD_SHELL") ? : _PATH_BSHELL;
+         if (command_.empty()) {
+             const char* login_arg = nullptr;
+-- 
+2.39.5
+

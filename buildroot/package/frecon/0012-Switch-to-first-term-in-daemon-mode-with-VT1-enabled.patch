@@ -1,0 +1,29 @@
+From e49a48978ca9e0e6f442526c477844df0e094c83 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Wed, 9 Apr 2025 12:49:52 +0800
+Subject: [PATCH 12/13] Switch to first term in daemon mode with VT1 enabled
+
+Tested with:
+FRECON_VT1=1 frecon --daemon
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ main.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/main.c b/main.c
+index e67bb87..b795e52 100644
+--- a/main.c
++++ b/main.c
+@@ -288,6 +288,8 @@ int main(int argc, char* argv[])
+ 
+ 	if (command_flags.daemon) {
+ 		term_background(true);
++		if (command_flags.enable_vt1)
++			term_switch_to(1);
+ 	} else {
+ 		/* Create and switch to first term in interactve mode. */
+ 		term_switch_to(1);
+-- 
+2.39.5
+

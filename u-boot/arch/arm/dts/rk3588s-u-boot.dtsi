@@ -1,0 +1,355 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Copyright (c) 2022 Edgeble AI Technologies Pvt. Ltd.
+ */
+
+#include "rockchip-u-boot.dtsi"
+#include <dt-bindings/phy/phy.h>
+
+/ {
+	aliases {
+		mmc0 = &sdhci;
+		mmc1 = &sdmmc;
+		spi0 = &spi0;
+		spi1 = &spi1;
+		spi2 = &spi2;
+		spi3 = &spi3;
+		spi4 = &spi4;
+		spi5 = &sfc;
+	};
+
+	dmc {
+		compatible = "rockchip,rk3588-dmc";
+		bootph-all;
+		status = "okay";
+	};
+
+	pmu1_grf: syscon@fd58a000 {
+		bootph-all;
+		compatible = "rockchip,rk3588-pmu1-grf", "syscon";
+		reg = <0x0 0xfd58a000 0x0 0x2000>;
+	};
+
+	pipe_phy0_grf: syscon@fd5bc000 {
+		compatible = "rockchip,pipe-phy-grf", "syscon";
+		reg = <0x0 0xfd5bc000 0x0 0x100>;
+	};
+
+	secure-otp@fe3a0000 {
+		bootph-all;
+		compatible = "rockchip,rk3588-secure-otp";
+		reg = <0x0 0xfe3a0000 0x0 0x4000>;
+	};
+
+	pcie2x1l2: pcie@fe190000 {
+		compatible = "rockchip,rk3588-pcie", "snps,dw-pcie";
+		#address-cells = <3>;
+		#size-cells = <2>;
+		bus-range = <0x40 0x4f>;
+		clocks = <&cru ACLK_PCIE_1L2_MSTR>, <&cru ACLK_PCIE_1L2_SLV>,
+			 <&cru ACLK_PCIE_1L2_DBI>, <&cru PCLK_PCIE_1L2>,
+			 <&cru CLK_PCIE_AUX4>, <&cru CLK_PCIE1L2_PIPE>;
+		clock-names = "aclk_mst", "aclk_slv",
+			      "aclk_dbi", "pclk",
+			      "aux", "pipe";
+		device_type = "pci";
+		interrupts = <GIC_SPI 253 IRQ_TYPE_LEVEL_HIGH 0>,
+			     <GIC_SPI 252 IRQ_TYPE_LEVEL_HIGH 0>,
+			     <GIC_SPI 251 IRQ_TYPE_LEVEL_HIGH 0>,
+			     <GIC_SPI 250 IRQ_TYPE_LEVEL_HIGH 0>,
+			     <GIC_SPI 249 IRQ_TYPE_LEVEL_HIGH 0>;
+		interrupt-names = "sys", "pmc", "msg", "legacy", "err";
+		#interrupt-cells = <1>;
+		interrupt-map-mask = <0 0 0 7>;
+		interrupt-map = <0 0 0 1 &pcie2x1l2_intc 0>,
+				<0 0 0 2 &pcie2x1l2_intc 1>,
+				<0 0 0 3 &pcie2x1l2_intc 2>,
+				<0 0 0 4 &pcie2x1l2_intc 3>;
+		linux,pci-domain = <4>;
+		num-ib-windows = <8>;
+		num-ob-windows = <8>;
+		num-viewport = <4>;
+		max-link-speed = <2>;
+		msi-map = <0x4000 &gic 0x4000 0x1000>;
+		num-lanes = <1>;
+		phys = <&combphy0_ps PHY_TYPE_PCIE>;
+		phy-names = "pcie-phy";
+		power-domains = <&power RK3588_PD_PCIE>;
+		ranges = <0x01000000 0x0 0xf4100000 0x0 0xf4100000 0x0 0x00100000>,
+			 <0x02000000 0x0 0xf4200000 0x0 0xf4200000 0x0 0x00e00000>,
+			 <0x03000000 0x0 0x40000000 0xa 0x00000000 0x0 0x40000000>;
+		reg = <0xa 0x41000000 0x0 0x00400000>,
+		      <0x0 0xfe190000 0x0 0x00010000>,
+		      <0x0 0xf4000000 0x0 0x00100000>;
+		reg-names = "dbi", "apb", "config";
+		resets = <&cru SRST_PCIE4_POWER_UP>, <&cru SRST_P_PCIE4>;
+		reset-names = "pcie", "periph";
+		rockchip,pipe-grf = <&php_grf>;
+		status = "disabled";
+
+		pcie2x1l2_intc: legacy-interrupt-controller {
+			interrupt-controller;
+			#address-cells = <0>;
+			#interrupt-cells = <1>;
+			interrupt-parent = <&gic>;
+			interrupts = <GIC_SPI 250 IRQ_TYPE_EDGE_RISING 0>;
+		};
+	};
+
+	sata0: sata@fe210000 {
+		compatible = "snps,dwc-ahci";
+		reg = <0 0xfe210000 0 0x1000>;
+		clocks = <&cru ACLK_SATA0>, <&cru CLK_PMALIVE0>,
+			 <&cru CLK_RXOOB0>, <&cru CLK_PIPEPHY0_REF>;
+		clock-names = "sata", "pmalive", "rxoob", "ref";
+		interrupts = <GIC_SPI 273 IRQ_TYPE_LEVEL_HIGH 0>;
+		interrupt-names = "hostc";
+		phys = <&combphy0_ps PHY_TYPE_SATA>;
+		phy-names = "sata-phy";
+		ports-implemented = <0x1>;
+		power-domains = <&power RK3588_PD_PHP>;
+		status = "disabled";
+	};
+
+	sfc: spi@fe2b0000 {
+		compatible = "rockchip,sfc";
+		reg = <0x0 0xfe2b0000 0x0 0x4000>;
+		interrupts = <GIC_SPI 206 IRQ_TYPE_LEVEL_HIGH 0>;
+		clocks = <&cru SCLK_SFC>, <&cru HCLK_SFC>;
+		clock-names = "clk_sfc", "hclk_sfc";
+		status = "disabled";
+	};
+
+	crypto: crypto@fe370000 {
+		compatible = "rockchip,rk3588-crypto";
+		reg = <0x0 0xfe370000 0x0 0x2000>;
+		interrupts = <GIC_SPI 209 IRQ_TYPE_LEVEL_HIGH 0>;
+		clocks = <&scmi_clk SCMI_ACLK_SECURE_NS>, <&scmi_clk SCMI_HCLK_SECURE_NS>,
+			 <&scmi_clk SCMI_CRYPTO_CORE>, <&scmi_clk SCMI_CRYPTO_PKA>;
+		clock-names = "aclk", "hclk", "sclk", "pka";
+		resets = <&scmi_reset SRST_CRYPTO_CORE>;
+		reset-names = "crypto-rst";
+		status = "disabled";
+	};
+
+	rng: rng@fe378000 {
+		compatible = "rockchip,trngv1";
+		reg = <0x0 0xfe378000 0x0 0x200>;
+		status = "disabled";
+	};
+
+	combphy0_ps: phy@fee00000 {
+		compatible = "rockchip,rk3588-naneng-combphy";
+		reg = <0x0 0xfee00000 0x0 0x100>;
+		#phy-cells = <1>;
+		clocks = <&cru CLK_REF_PIPE_PHY0>, <&cru PCLK_PCIE_COMBO_PIPE_PHY0>,
+			 <&cru PCLK_PHP_ROOT>;
+		clock-names = "refclk", "apbclk", "phpclk";
+		assigned-clocks = <&cru CLK_REF_PIPE_PHY0>;
+		assigned-clock-rates = <100000000>;
+		resets = <&cru SRST_P_PCIE2_PHY0>, <&cru SRST_REF_PIPE_PHY0>;
+		reset-names = "combphy-apb", "combphy";
+		rockchip,pipe-grf = <&php_grf>;
+		rockchip,pipe-phy-grf = <&pipe_phy0_grf>;
+		status = "disabled";
+	};
+};
+
+&emmc_bus8 {
+	bootph-all;
+};
+
+&emmc_clk {
+	bootph-all;
+};
+
+&emmc_cmd {
+	bootph-all;
+};
+
+&emmc_data_strobe {
+	bootph-all;
+};
+
+&emmc_rstnout {
+	bootph-all;
+};
+
+&pinctrl {
+	bootph-all;
+};
+
+&pcfg_pull_none {
+	bootph-all;
+};
+
+&pcfg_pull_up_drv_level_2 {
+	bootph-all;
+};
+
+&pcfg_pull_up {
+	bootph-all;
+};
+
+&xin24m {
+	bootph-all;
+	status = "okay";
+};
+
+&cru {
+	bootph-pre-ram;
+	status = "okay";
+};
+
+&sys_grf {
+	bootph-pre-ram;
+	status = "okay";
+};
+
+&scmi {
+	bootph-pre-ram;
+};
+
+&scmi_clk {
+	bootph-pre-ram;
+};
+
+&sdmmc {
+	bootph-pre-ram;
+	u-boot,spl-fifo-mode;
+	bus-width = <4>;
+	cd-gpios = <&gpio0 RK_PA4 GPIO_ACTIVE_HIGH>;
+	status = "okay";
+};
+
+&sdhci {
+	bootph-pre-ram;
+};
+
+&sdmmc_bus4 {
+	bootph-all;
+	status = "okay";
+};
+
+&sdmmc_clk {
+	bootph-all;
+	status = "okay";
+};
+
+&sdmmc_cmd {
+	bootph-all;
+	status = "okay";
+};
+
+&sdmmc_det {
+	bootph-all;
+	status = "okay";
+};
+
+&php_grf {
+	bootph-all;
+	status = "okay";
+};
+
+&pipe_phy0_grf {
+	bootph-all;
+	status = "okay";
+};
+
+&combphy0_ps{
+	bootph-all;
+	status = "okay";
+};
+
+&sata0 {
+	bootph-all;
+	status = "okay";
+};
+
+&sfc {
+	bootph-all;
+	status = "okay";
+
+	#address-cells = <1>;
+	#size-cells = <0>;
+	spi_nand: flash@0 {
+		bootph-all;
+		compatible = "spi-nand";
+		reg = <0>;
+		spi-tx-bus-width = <1>;
+		spi-rx-bus-width = <4>;
+		spi-max-frequency = <80000000>;
+	};
+
+	spi_nor: flash@1 {
+		bootph-all;
+		compatible = "jedec,spi-nor";
+		label = "sfc_nor";
+		reg = <1>;
+		spi-tx-bus-width = <1>;
+		spi-rx-bus-width = <4>;
+		spi-max-frequency = <80000000>;
+	};
+};
+
+&usb2phy0_grf {
+	bootph-all;
+};
+
+&u2phy0 {
+	bootph-all;
+	status = "okay";
+};
+
+&u2phy0_otg {
+	bootph-all;
+	status = "okay";
+};
+
+&uart2 {
+	clock-frequency = <24000000>;
+	bootph-pre-ram;
+	status = "okay";
+};
+
+&uart2m0_xfer {
+	bootph-all;
+};
+
+&usb_grf{
+	bootph-all;
+};
+
+&usbdpphy0_grf{
+	bootph-all;
+};
+
+&usbdp_phy0{
+	bootph-all;
+	status = "okay";
+};
+
+&ioc {
+	bootph-pre-ram;
+};
+
+&vo0_grf {
+	bootph-all;
+	status = "okay";
+};
+
+&hw_decompress {
+	bootph-all;
+	status = "okay";
+};
+
+#ifdef CONFIG_ROCKCHIP_SPI_IMAGE
+&binman {
+	simple-bin-spi {
+		mkimage {
+			args = "-n", CONFIG_SYS_SOC, "-T", "rksd";
+			offset = <0x8000>;
+		};
+	};
+};
+#endif

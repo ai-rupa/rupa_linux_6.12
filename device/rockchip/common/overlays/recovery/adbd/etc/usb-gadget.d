@@ -1,0 +1,1 @@
+../../../rootfs/usb-gadget/etc/usb-gadget.d

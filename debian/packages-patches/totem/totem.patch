@@ -1,0 +1,125 @@
+From 00521321fc0ca3c25a126a9ac7c4872c750263e4 Mon Sep 17 00:00:00 2001
+From: Caesar Wang <wxt@rock-chips.com>
+Date: Sat, 28 Feb 2026 14:51:09 +0800
+Subject: [PATCH] refactor(video): Switch to waylandsink and simplify video
+ pipeline
+
+* Replace `gtkglsink` with `waylandsink` as the primary video sink for
+  better Wayland desktop integration and performance.
+* Remove the `glsinkbin` wrapper and FPS display feature, directly
+  connecting `playbin` to `waylandsink`. This simplifies the pipeline
+  and reduces potential failure points.
+* In `set_current_actor()`, avoid switching the stack to the "video"
+  page by adding an early return. The video widget is managed elsewhere.
+* Disable color balance adjustments by commenting out
+  `gst_color_balance_set_value`, as it's not required for the new sink
+  or is handled differently.
+
+This change aims to improve rendering performance and compatibility on
+modern Wayland-based systems. The video output should now be more
+efficient with lower latency. Ensure the system has the necessary
+GStreamer plugins (`waylandsink`) installed.
+
+Signed-off-by: Caesar Wang <wxt@rock-chips.com>
+---
+ src/backend/bacon-video-widget.c | 52 +++-----------------------------
+ 1 file changed, 5 insertions(+), 47 deletions(-)
+
+diff --git a/src/backend/bacon-video-widget.c b/src/backend/bacon-video-widget.c
+index 4250d59fd..363f6cc61 100644
+--- a/src/backend/bacon-video-widget.c
++++ b/src/backend/bacon-video-widget.c
+@@ -484,7 +484,7 @@ set_current_actor (BaconVideoWidget *bvw)
+   else if (bvw->media_has_unsupported_video)
+     page = "broken-video";
+   else
+-    page = "video";
++    return; //page = "video";
+ 
+   gtk_stack_set_visible_child_name (GTK_STACK (bvw->stack), page);
+ }
+@@ -4759,7 +4759,7 @@ bacon_video_widget_set_video_property (BaconVideoWidget *bvw,
+ 
+   GST_DEBUG ("channel %s: set to %d/65535", found_channel->label, value);
+ 
+-  gst_color_balance_set_value (GST_COLOR_BALANCE (bvw->play), found_channel, i_value);
++  //gst_color_balance_set_value (GST_COLOR_BALANCE (bvw->play), found_channel, i_value);
+ 
+   GST_DEBUG ("channel %s: val=%d, min=%d, max=%d", found_channel->label,
+ 	     i_value, found_channel->min_value, found_channel->max_value);
+@@ -5625,29 +5625,18 @@ bvw_init_video_sink (BaconVideoWidget *bvw)
+   /* Instantiate all the fallible plugins */
+   bvw->play = element_make_or_warn ("playbin", "play");
+   bvw->audio_pitchcontrol = element_make_or_warn ("scaletempo", "scaletempo");
+-
+-  if (bvw->use_gl) {
+-    bvw->video_sink = element_make_or_warn ("gtkglsink", "video-sink");
+-    glsinkbin = element_make_or_warn ("glsinkbin", "glsinkbin");
+-  } else {
+-    bvw->video_sink = element_make_or_warn ("gtksink", "video-sink");
+-  }
+-
++  bvw->video_sink = element_make_or_warn ("waylandsink", "video-sink");
+   audio_sink = element_make_or_warn ("autoaudiosink", "audio-sink");
+ 
+   if (!bvw->play ||
+       !bvw->audio_pitchcontrol ||
+       !bvw->video_sink ||
+-      !audio_sink ||
+-      (bvw->use_gl && !glsinkbin)) {
++      !audio_sink) {
+     if (bvw->video_sink)
+       g_object_ref_sink (bvw->video_sink);
+     if (audio_sink)
+       g_object_ref_sink (audio_sink);
+     g_clear_object (&audio_sink);
+-    if (glsinkbin)
+-      g_object_ref_sink (glsinkbin);
+-    g_clear_object (&glsinkbin);
+     bvw->init_error = g_error_new_literal (BVW_ERROR, BVW_ERROR_PLUGIN_LOAD,
+ 					   _("Some necessary plug-ins are missing. "
+ 					     "Make sure that the program is correctly installed."));
+@@ -5679,39 +5668,8 @@ bvw_init_video_sink (BaconVideoWidget *bvw)
+ 
+   bvw->cursor_shown = TRUE;
+ 
+-  /* Create video output widget */
+-
+-  if (is_feature_enabled ("FPS_DISPLAY")) {
+-    GstElement *fps;
+-    fps = gst_element_factory_make ("fpsdisplaysink", "fpsdisplaysink");
+-
+-    if (bvw->use_gl)
+-      g_object_set (glsinkbin, "sink", fps, NULL);
+-    else
+-      g_object_set (bvw->play, "video-sink", fps, NULL);
+-
+-    g_object_set (fps, "video-sink", bvw->video_sink, NULL);
+-  } else {
+-    if (bvw->use_gl)
+-      g_object_set (glsinkbin, "sink", bvw->video_sink, NULL);
+-    else
+-      g_object_set (bvw->play, "video-sink", bvw->video_sink, NULL);
+-  }
+-
+-  g_object_get (bvw->video_sink, "widget", &bvw->video_widget, NULL);
+-  gtk_widget_show (bvw->video_widget);
+-  gtk_stack_add_named (GTK_STACK (bvw->stack), bvw->video_widget, "video");
+-  g_object_unref (bvw->video_widget);
+-  gtk_stack_set_visible_child_name (GTK_STACK (bvw->stack), "video");
+-
+-  if (bvw->use_gl)
+-    g_object_set (bvw->video_sink,
+-                  "rotate-method", GST_VIDEO_ORIENTATION_AUTO,
+-                  NULL);
+-
+   /* And tell playbin */
+-  if (bvw->use_gl)
+-    g_object_set (bvw->play, "video-sink", glsinkbin, NULL);
++  g_object_set (bvw->play, "video-sink", bvw->video_sink, NULL);
+ 
+   /* Link the audiopitch element */
+   bvw->audio_capsfilter =
+-- 
+2.34.1
+

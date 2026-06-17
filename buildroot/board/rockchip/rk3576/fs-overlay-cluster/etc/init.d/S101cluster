@@ -1,0 +1,8 @@
+#!/bin/sh
+
+{
+    while [ 1 ]; do
+    /usr/bin/bug-report -w
+    sleep 10
+    done
+} &

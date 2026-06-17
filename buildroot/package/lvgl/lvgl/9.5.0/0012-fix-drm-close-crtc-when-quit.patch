@@ -1,0 +1,49 @@
+From 7bb91e882540acc0a01278b8c90e0114a1e46177 Mon Sep 17 00:00:00 2001
+From: Jiajian Wu <jair.wu@rock-chips.com>
+Date: Thu, 26 Mar 2026 17:19:12 +0800
+Subject: [PATCH] fix(drm): close crtc when quit
+
+Signed-off-by: Jiajian Wu <jair.wu@rock-chips.com>
+---
+ src/drivers/display/drm/lv_linux_drm.c | 12 ++++++++++--
+ 1 file changed, 10 insertions(+), 2 deletions(-)
+
+diff --git a/src/drivers/display/drm/lv_linux_drm.c b/src/drivers/display/drm/lv_linux_drm.c
+index 169d05079..3504b3e54 100644
+--- a/src/drivers/display/drm/lv_linux_drm.c
++++ b/src/drivers/display/drm/lv_linux_drm.c
+@@ -1101,6 +1101,15 @@ err_drm_open:
+ 
+ static void drm_deinit(drm_device_t *dev)
+ {
++    /* Disable CRTC to turn off display output */
++    if (dev->crtc_id > 0) {
++        int ret = drmModeSetCrtc(dev->fd, dev->crtc_id, 0, 0, 0, NULL, 0, NULL);
++        if (ret)
++            LV_LOG_WARN("Failed to disable CRTC %d: %d", dev->crtc_id, ret);
++        else
++            LV_LOG_INFO("CRTC %d disabled", dev->crtc_id);
++    }
++
+     drm_free(dev);
+     drm_config_file_deinit(dev);
+ 
+@@ -1514,14 +1523,13 @@ int lv_drm_disp_delete(lv_display_t *disp)
+     if (!dev)
+         goto end;
+ 
+-    dev->quit = 0;
++    dev->quit = 1;
+     pthread_join(dev->pid, NULL);
+ 
+     drm_buffer_destroy(dev);
+ 
+     drm_deinit(dev);
+ 
+-    lv_free(dev->disp_buf);
+     lv_free(dev);
+ end:
+     lv_display_delete(disp);
+-- 
+2.34.1
+

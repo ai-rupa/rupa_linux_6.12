@@ -1,0 +1,7 @@
+#B2P1:    
+    isValid(#B2P2),adjProb(#B2P3),prob(#B2P4),wgt_mix(#B2P5),wgt_manual(#B2P6),
+    order2scalef(#B2P7),prob2scalef(#B2P8),ctrdat2scalef(#B2P18), 
+    prefGain(rggb)(#B2P19)
+    ctrdat(#B2P10,#B2P11),wpProb(#B2P12),clrProb(#B2P13),
+    wp_ratio(#B2P14),clor_ratio(#B2P15),
+    wpRn(#B2P16),clorRn(#B2P17)

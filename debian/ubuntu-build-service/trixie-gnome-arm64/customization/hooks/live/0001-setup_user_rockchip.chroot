@@ -1,0 +1,7 @@
+#!/bin/sh
+
+echo "I: create rockchip user"
+adduser --gecos rockchip --disabled-password rockchip
+
+echo "I: set rockchip user password"
+echo "rockchip:rockchip" | chpasswd

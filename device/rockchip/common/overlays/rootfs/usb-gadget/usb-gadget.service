@@ -1,0 +1,12 @@
+[Unit]
+Description=Manage USB gadget functions
+After=local-fs.target
+
+[Service]
+Type=simple
+RemainAfterExit=yes
+ExecStart=/usr/bin/usb-gadget start
+ExecStop=/usr/bin/usb-gadget stop
+
+[Install]
+WantedBy=local-fs.target

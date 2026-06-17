@@ -1,0 +1,28 @@
+From 942e629b14612bfeb42ce913230732b234b1c878 Mon Sep 17 00:00:00 2001
+From: Shunqian Zheng <zhengsq@rock-chips.com>
+Date: Mon, 9 Feb 2026 15:39:46 +0800
+Subject: [PATCH] Set cross-compiling CMAKE_SYSTEM_NAME and
+ CMAKE_SYSTEM_PROCESSOR
+
+Signed-off-by: Shunqian Zheng <zhengsq@rock-chips.com>
+---
+ CMakeLists.txt | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index e0632bc..1cfc53d 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -57,6 +57,9 @@ macro(build_mimick)
+     list(APPEND cmake_configure_args "-DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}")
+   endif()
+ 
++  list(APPEND cmake_configure_args "-DCMAKE_SYSTEM_NAME=${CMAKE_SYSTEM_NAME}")
++  list(APPEND cmake_configure_args "-DCMAKE_SYSTEM_PROCESSOR=${CMAKE_SYSTEM_PROCESSOR}")
++
+   include(ExternalProject)
+   set(mimick_version "de11f8377eb95f932a03707b583bf3d4ce5bd3e7")
+   externalproject_add(mimick-${mimick_version}
+-- 
+2.25.1
+

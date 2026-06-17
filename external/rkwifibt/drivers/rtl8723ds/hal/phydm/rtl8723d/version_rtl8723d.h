@@ -1,0 +1,4 @@
+/*RTL8723D PHY Parameters*/
+#define	RELEASE_DATE_8723D		20230626
+#define	COMMIT_BY_8723D			"RF_Shine_Xiao"
+#define	RELEASE_VERSION_8723D	44

@@ -1,0 +1,47 @@
+From f4944fb24867998c80c1391dd18d2ae1726acdb3 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Mon, 28 Jul 2025 17:59:56 +0800
+Subject: [PATCH 5/5] Fix demo build on arm32 with _TIME_BITS=64
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Use int64_t cast and PRId64 format specifier for cross-platform safety.
+
+Fix:
+altency.c:262:21: error: format ‘%ld’ expects argument of type ‘long int’, but argument 2 has type ‘time_t’ {aka ‘long long int’} [-Werror=format=]
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ demo/alchemy/altency.c | 8 +++++---
+ 1 file changed, 5 insertions(+), 3 deletions(-)
+
+diff --git a/demo/alchemy/altency.c b/demo/alchemy/altency.c
+index e7c31d7..64156f4 100644
+--- a/demo/alchemy/altency.c
++++ b/demo/alchemy/altency.c
+@@ -3,6 +3,7 @@
+  *
+  * Licensed under the LGPL v2.1.
+  */
++#include <inttypes.h>
+ #include <stdlib.h>
+ #include <math.h>
+ #include <stdio.h>
+@@ -259,9 +260,10 @@ static void display(void *cookie)
+ 				time(&now);
+ 				dt = now - start - WARMUP_TIME;
+ 				printf
+-				    ("RTT|  %.2ld:%.2ld:%.2ld  (%s, %Ld us period, "
+-				     "priority %d)\n", dt / 3600,
+-				     (dt / 60) % 60, dt % 60,
++				    ("RTT|  %.2" PRId64 ":%.2" PRId64 ":%.2"
++				     PRId64 "  (%s, %Ld us period, "
++				     "priority %d)\n", (int64_t)dt / 3600,
++				     (int64_t)(dt / 60) % 60, (int64_t)dt % 60,
+ 				     test_mode_names[test_mode],
+ 				     period_ns / 1000, priority);
+ 				printf("RTH|%11s|%11s|%11s|%8s|%6s|%11s|%11s\n",
+-- 
+2.20.1
+

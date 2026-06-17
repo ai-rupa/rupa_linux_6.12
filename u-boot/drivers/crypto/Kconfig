@@ -1,0 +1,29 @@
+menu "Hardware crypto devices"
+
+config CRYPTO_MANAGER
+	bool "Enable Crypto Manager driver as crypto framework for hardware crypto"
+	depends on DM
+	help
+	  If you want to use driver model for RSA Modular Exponentiation, say Y.
+
+config SPL_CRYPTO_MANAGER
+	bool "Enable Crypto Manager driver as crypto framework for hardware crypto in SPL"
+	depends on SPL_DM && SPL_CRYPTO
+	help
+	  If you want to use driver model for RSA Modular Exponentiation, say Y.
+
+source "drivers/crypto/cipher/Kconfig"
+
+source "drivers/crypto/hash/Kconfig"
+
+source "drivers/crypto/hmac/Kconfig"
+
+source "drivers/crypto/fsl/Kconfig"
+
+source "drivers/crypto/aspeed/Kconfig"
+
+source "drivers/crypto/nuvoton/Kconfig"
+
+source drivers/crypto/rockchip/Kconfig
+
+endmenu

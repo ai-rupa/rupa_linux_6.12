@@ -1,0 +1,25 @@
+Rockchip AWB Analyzer v1.0
+
+----------------------------------------------#P1th calculate wbgain----------------------------------------------
+mode:#P37, wbgnBlk(r,b):(#P66,#P67,#P68,#P69)    
+global CCT:#P2,CCRI:#P3, wbgain_s6(after damping)(rggb):(#P5) 
+iso(#P38),fLv(#P39), WpT(#P8),df(#P9,#P40), runItv(#P41),toler(#P42)
+WpNum:t(#P12,#P43),n(#P10,#P44),b(#P11,#P45),e(#P13)
+wbgns5 (wbGainOffset) :(#P46)
+wbgns4 (wbGainAdjust) :(#P47)
+wbgns3 (wbGainClip) :(#P48)
+scnMixWbgn :(#P63) isScnDet :(#P64),mainScnProb2scalef :(#P65) 
+wbgns1 (mix wpT1 and wpT3 ) :(#P27),updated (#P28)
+wpgnT3:(#P26), wpgnT1:(#P25), wgt_wpT3(#P29)
+wbgnSgc for WpT1:(#P18) ,
+    wgtSgc(#P19)[lv(#P49),wpnum(#P50),dis(#P51),grad(#P52)],wgtlastWbgn(#P53)
+    sgc illEst: #P54  (#P55),colorEst : #P56
+wbGnRef for WpT1 :(#P24),wgtRef(#P57)
+wbGnExt for wpT3 (#P58), wgtExt(#P59),dIdx[#P60],idx0Wgt(#P61)
+wgtPrfNgt (#P62)
+WpNoHist: #P36
+#B1
+
+
+Scene:
+#B2

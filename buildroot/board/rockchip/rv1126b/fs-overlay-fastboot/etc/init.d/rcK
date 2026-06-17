@@ -1,0 +1,18 @@
+#!/bin/sh
+echo "Start to killall task!!!"
+
+RkLunch-stop.sh
+for item in `echo rkipc`
+do
+	if ps |grep -v grep  |grep \$item ;then
+		echo "killall -9 \$item"
+		killall -9 \$item
+	else
+		break
+	fi
+	sleep .5
+done
+
+killall rkwifi_server
+umount /data
+echo "rcK done"

@@ -1,0 +1,10 @@
+config BR2_PACKAGE_MUPEN64PLUS_VIDEO_GLES2RICE
+	bool "mupen64plus-video-gles2rice"
+	depends on BR2_PACKAGE_MUPEN64PLUS_CORE
+	depends on BR2_PACKAGE_LIBPNG
+	depends on BR2_PACKAGE_SDL2
+	depends on !BR2_PACKAGE_MUPEN64PLUS_VIDEO_RICE
+	help
+	  mupen64plus video gles2rice.
+
+	  https://mupen64plus.org/

@@ -1,0 +1,6 @@
+#include "base/base.config"
+#include "chips/rk3588_aarch64.config"
+#include "gui/x11.config"
+#include "gpu/mesa3d.config"
+BR2_PACKAGE_LIBGLVND=y
+BR2_PACKAGE_MESA3D_OPENGL_GLX=y

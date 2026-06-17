@@ -1,0 +1,25 @@
+From 1a7ecc795df62da0a8f055c8636a968984ae5e67 Mon Sep 17 00:00:00 2001
+From: Bruno Medici <bm.git@bmconseil.com>
+Date: Thu, 24 Jul 2025 18:32:32 +0200
+Subject: [PATCH 17/46] fix(snapshot): correctly set driver.ver_res (#8594)
+
+---
+ src/extra/others/snapshot/lv_snapshot.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/extra/others/snapshot/lv_snapshot.c b/src/extra/others/snapshot/lv_snapshot.c
+index c668d0178..afa1bea02 100644
+--- a/src/extra/others/snapshot/lv_snapshot.c
++++ b/src/extra/others/snapshot/lv_snapshot.c
+@@ -121,7 +121,7 @@ lv_res_t lv_snapshot_take_to_buf(lv_obj_t * obj, lv_img_cf_t cf, lv_img_dsc_t *
+     lv_disp_drv_init(&driver);
+     /*In lack of a better idea use the resolution of the object's display*/
+     driver.hor_res = lv_disp_get_hor_res(obj_disp);
+-    driver.ver_res = lv_disp_get_hor_res(obj_disp);
++    driver.ver_res = lv_disp_get_ver_res(obj_disp);
+     lv_disp_drv_use_generic_set_px_cb(&driver, cf);
+ 
+     lv_disp_t fake_disp;
+-- 
+2.34.1
+

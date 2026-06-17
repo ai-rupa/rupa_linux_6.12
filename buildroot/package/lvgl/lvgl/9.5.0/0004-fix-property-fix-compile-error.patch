@@ -1,0 +1,28 @@
+From 95a82224338510a800478a2af7ec47971157a3cc Mon Sep 17 00:00:00 2001
+From: Jiajian Wu <jair.wu@rock-chips.com>
+Date: Thu, 26 Mar 2026 10:29:21 +0800
+Subject: [PATCH 04/11] fix(property): fix compile error
+
+Signed-off-by: Jiajian Wu <jair.wu@rock-chips.com>
+---
+ src/core/lv_obj_property.c | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/src/core/lv_obj_property.c b/src/core/lv_obj_property.c
+index d78999157..659b83bc7 100644
+--- a/src/core/lv_obj_property.c
++++ b/src/core/lv_obj_property.c
+@@ -210,9 +210,8 @@ lv_prop_id_t lv_obj_class_property_get_id(const lv_obj_class_t * clz, const char
+     found = lv_utils_bsearch(name, names, clz->names_count, sizeof(lv_property_name_t), property_name_compare);
+     if(found) return found->id;
+ #else
+-    LV_UNUSED(obj);
++    LV_UNUSED(clz);
+     LV_UNUSED(name);
+-    LV_UNUSED(property_name_compare);
+ #endif
+     return LV_PROPERTY_ID_INVALID;
+ }
+-- 
+2.34.1
+

@@ -1,0 +1,32 @@
+From 981950c04afa53e1c7effdc58c1618cfeef6cfae Mon Sep 17 00:00:00 2001
+From: Jiajian Wu <jair.wu@rock-chips.com>
+Date: Thu, 26 Mar 2026 17:27:43 +0800
+Subject: [PATCH] drm: Close crtc when quit
+
+Signed-off-by: Jiajian Wu <jair.wu@rock-chips.com>
+---
+ display/drm.c | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/display/drm.c b/display/drm.c
+index d04395e3b..20ddcd298 100644
+--- a/display/drm.c
++++ b/display/drm.c
+@@ -906,6 +906,14 @@ int drm_exit(void)
+     if (!dev)
+         return 0;
+ 
++    if (dev->crtc_id > 0) {
++        int ret = drmModeSetCrtc(dev->fd, dev->crtc_id, 0, 0, 0, NULL, 0, NULL);
++        if (ret)
++            LV_LOG_WARN("Failed to disable CRTC %d: %d", dev->crtc_id, ret);
++        else
++            LV_LOG_INFO("CRTC %d disabled", dev->crtc_id);
++    }
++
+     free_fb(dev);
+     drm_free(dev);
+ 
+-- 
+2.34.1
+

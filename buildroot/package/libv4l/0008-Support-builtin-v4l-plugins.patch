@@ -1,0 +1,281 @@
+From 0911282084ab35cdd02167b77029ed7d140c3181 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Tue, 14 Dec 2021 17:09:52 +0800
+Subject: [PATCH 8/9] Support builtin v4l plugins
+
+Use --enable-builtin-plugins to enable it.
+
+Only support mplane plugin for now.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ lib/libv4l-mplane/libv4l-mplane.c |  4 ++
+ lib/libv4l-mplane/meson.build     | 10 +++++
+ lib/libv4l2/libv4l2-priv.h        | 16 +++----
+ lib/libv4l2/libv4l2.c             | 73 +++++++++++++++++++++++++++++++
+ lib/libv4l2/meson.build           |  3 ++
+ lib/libv4l2/v4l2-plugin.c         |  8 ++--
+ lib/meson.build                   |  8 ++--
+ meson.build                       |  5 +++
+ meson_options.txt                 |  2 +
+ 9 files changed, 113 insertions(+), 16 deletions(-)
+
+diff --git a/lib/libv4l-mplane/libv4l-mplane.c b/lib/libv4l-mplane/libv4l-mplane.c
+index 12d7803..ccfbae7 100644
+--- a/lib/libv4l-mplane/libv4l-mplane.c
++++ b/lib/libv4l-mplane/libv4l-mplane.c
+@@ -610,7 +610,11 @@ static ssize_t plugin_write(void *dev_ops_priv, int fd, const void *buf,
+ 	return SYS_WRITE(fd, buf, len);
+ }
+ 
++#ifdef HAVE_V4L_BUILTIN_PLUGINS
++const struct libv4l_dev_ops libv4l2_plugin_mplane = {
++#else
+ PLUGIN_PUBLIC const struct libv4l_dev_ops libv4l2_plugin = {
++#endif
+ 	.init = &plugin_init,
+ 	.close = &plugin_close,
+ 	.ioctl = &plugin_ioctl,
+diff --git a/lib/libv4l-mplane/meson.build b/lib/libv4l-mplane/meson.build
+index 0e0e558..5f9aa15 100644
+--- a/lib/libv4l-mplane/meson.build
++++ b/lib/libv4l-mplane/meson.build
+@@ -12,6 +12,15 @@ if have_visibility
+     libv4l_mplane_c_args += ['-fvisibility=hidden']
+ endif
+ 
++if builtin_plugins
++libv4l_mplane = static_library('v4l-mplane',
++                              libv4l_mplane_sources,
++                              install : true,
++                              install_dir : libv4l2plugindir,
++                              dependencies : libv4l_mplane_deps,
++                              c_args : libv4l_mplane_c_args,
++                              include_directories : v4l2_utils_incdir)
++else
+ libv4l_mplane = shared_module('v4l-mplane',
+                               libv4l_mplane_sources,
+                               install : true,
+@@ -19,5 +28,6 @@ libv4l_mplane = shared_module('v4l-mplane',
+                               dependencies : libv4l_mplane_deps,
+                               c_args : libv4l_mplane_c_args,
+                               include_directories : v4l2_utils_incdir)
++endif
+ 
+ dep_libv4l_mplane = declare_dependency(link_with : libv4l_mplane)
+diff --git a/lib/libv4l2/libv4l2-priv.h b/lib/libv4l2/libv4l2-priv.h
+index cce6de4..cc8c4f5 100644
+--- a/lib/libv4l2/libv4l2-priv.h
++++ b/lib/libv4l2/libv4l2-priv.h
+@@ -109,20 +109,20 @@ struct v4l2_dev_info {
+ 
+ /* From v4l2-plugin.c */
+ #if defined(HAVE_V4L_PLUGINS)
+-void v4l2_plugin_init(int fd, void **plugin_lib_ret, void **plugin_priv_ret,
+-		      const struct libv4l_dev_ops **dev_ops_ret);
+-void v4l2_plugin_cleanup(void *plugin_lib, void *plugin_priv,
+-			 const struct libv4l_dev_ops *dev_ops);
++void v4l2_dyn_plugin_init(int fd, void **plugin_lib_ret, void **plugin_priv_ret,
++			  const struct libv4l_dev_ops **dev_ops_ret);
++void v4l2_dyn_plugin_cleanup(void *plugin_lib, void *plugin_priv,
++			     const struct libv4l_dev_ops *dev_ops);
+ #else
+-static inline void v4l2_plugin_init(int fd, void **plugin_lib_ret, void **plugin_priv_ret,
+-				    const struct libv4l_dev_ops **dev_ops_ret)
++static inline void v4l2_dyn_plugin_init(int fd, void **plugin_lib_ret, void **plugin_priv_ret,
++					const struct libv4l_dev_ops **dev_ops_ret)
+ {
+ 	*dev_ops_ret = v4lconvert_get_default_dev_ops();
+ 	*plugin_lib_ret = NULL;
+ 	*plugin_priv_ret = NULL;
+ }
+-static inline void v4l2_plugin_cleanup(void *plugin_lib, void *plugin_priv,
+-				       const struct libv4l_dev_ops *dev_ops)
++static inline void v4l2_dyn_plugin_cleanup(void *plugin_lib, void *plugin_priv,
++					   const struct libv4l_dev_ops *dev_ops)
+ {
+ }
+ #endif /* WITH_V4L_PLUGINS */
+diff --git a/lib/libv4l2/libv4l2.c b/lib/libv4l2/libv4l2.c
+index 21d7a59..d0925c1 100644
+--- a/lib/libv4l2/libv4l2.c
++++ b/lib/libv4l2/libv4l2.c
+@@ -69,6 +69,8 @@
+ #include "libv4l2-priv.h"
+ #include "libv4l-plugin.h"
+ 
++#define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
++
+ /* Note these flags are stored together with the flags passed to v4l2_fd_open()
+    in v4l2_dev_info's flags member, so care should be taken that the do not
+    use the same bits! */
+@@ -613,6 +615,77 @@ static void v4l2_update_fps(int index, struct v4l2_streamparm *parm)
+ 		devices[index].fps = 0;
+ }
+ 
++#ifdef HAVE_V4L_BUILTIN_PLUGINS
++extern const struct libv4l_dev_ops libv4l2_plugin_mplane;
++
++void v4l2_builtin_plugin_init(int fd, void **plugin_priv_ret,
++			      const struct libv4l_dev_ops **dev_ops_ret)
++{
++	const struct libv4l_dev_ops *builtin_plugins[] = {
++		&libv4l2_plugin_mplane,
++	};
++	const struct libv4l_dev_ops *libv4l2_plugin = NULL;
++	int i;
++
++	*dev_ops_ret = NULL;
++	*plugin_priv_ret = NULL;
++
++	for (i = 0; i < ARRAY_SIZE(builtin_plugins); i++) {
++		V4L2_LOG("PLUGIN: try builtin(%d);\n", i);
++
++		libv4l2_plugin = builtin_plugins[i];
++
++		if (!libv4l2_plugin->init ||
++		    !libv4l2_plugin->close ||
++		    !libv4l2_plugin->ioctl) {
++			V4L2_LOG("PLUGIN: does not have all mandatory ops\n");
++			continue;
++		}
++
++		*plugin_priv_ret = libv4l2_plugin->init(fd);
++		if (!*plugin_priv_ret) {
++			V4L2_LOG("PLUGIN: plugin init() returned NULL\n");
++			continue;
++		}
++
++		*dev_ops_ret = libv4l2_plugin;
++		break;
++	}
++}
++
++void v4l2_builtin_plugin_cleanup(void *plugin_priv,
++				 const struct libv4l_dev_ops *dev_ops)
++{
++	dev_ops->close(plugin_priv);
++}
++#endif /* HAVE_V4L_PLUGINS */
++
++void v4l2_plugin_init(int fd, void **plugin_lib_ret, void **plugin_priv_ret,
++		      const struct libv4l_dev_ops **dev_ops_ret)
++{
++#ifdef HAVE_V4L_BUILTIN_PLUGINS
++	*plugin_lib_ret = NULL;
++	v4l2_builtin_plugin_init(fd, plugin_priv_ret, dev_ops_ret);
++	if (*dev_ops_ret)
++		return;
++#endif
++
++	v4l2_dyn_plugin_init(fd, plugin_lib_ret, plugin_priv_ret, dev_ops_ret);
++}
++
++void v4l2_plugin_cleanup(void *plugin_lib, void *plugin_priv,
++			 const struct libv4l_dev_ops *dev_ops)
++{
++#ifdef HAVE_V4L_BUILTIN_PLUGINS
++	if (!plugin_lib) {
++		v4l2_builtin_plugin_cleanup(plugin_priv, dev_ops);
++		return;
++	}
++#endif
++
++	v4l2_dyn_plugin_cleanup(plugin_lib, plugin_priv, dev_ops);
++}
++
+ int v4l2_open(const char *file, int oflag, ...)
+ {
+ 	int fd;
+diff --git a/lib/libv4l2/meson.build b/lib/libv4l2/meson.build
+index 9d6ecd5..f856894 100644
+--- a/lib/libv4l2/meson.build
++++ b/lib/libv4l2/meson.build
+@@ -25,6 +25,9 @@ if get_option('v4l-plugins')
+         '-DHAVE_V4L_PLUGINS',
+         '-DLIBV4L2_PLUGIN_DIR="@0@"'.format(libv4l2plugindir)
+     ]
++    if builtin_plugins
++        libv4l2_deps += dep_libv4l_mplane
++    endif
+ endif
+ 
+ if have_visibility
+diff --git a/lib/libv4l2/v4l2-plugin.c b/lib/libv4l2/v4l2-plugin.c
+index e2356cb..50e00a6 100644
+--- a/lib/libv4l2/v4l2-plugin.c
++++ b/lib/libv4l2/v4l2-plugin.c
+@@ -47,8 +47,8 @@
+ 
+ #define PLUGINS_PATTERN LIBV4L2_PLUGIN_DIR "/*.so"
+ 
+-void v4l2_plugin_init(int fd, void **plugin_lib_ret, void **plugin_priv_ret,
+-		      const struct libv4l_dev_ops **dev_ops_ret)
++void v4l2_dyn_plugin_init(int fd, void **plugin_lib_ret, void **plugin_priv_ret,
++			  const struct libv4l_dev_ops **dev_ops_ret)
+ {
+ 	char *error;
+ 	int glob_ret, i;
+@@ -109,8 +109,8 @@ leave:
+ 	globfree(&globbuf);
+ }
+ 
+-void v4l2_plugin_cleanup(void *plugin_lib, void *plugin_priv,
+-			 const struct libv4l_dev_ops *dev_ops)
++void v4l2_dyn_plugin_cleanup(void *plugin_lib, void *plugin_priv,
++			     const struct libv4l_dev_ops *dev_ops)
+ {
+ 	if (plugin_lib) {
+ 		dev_ops->close(plugin_priv);
+diff --git a/lib/meson.build b/lib/meson.build
+index 47cee16..379ce67 100644
+--- a/lib/meson.build
++++ b/lib/meson.build
+@@ -1,11 +1,11 @@
+ libv4l2plugindir = get_option('prefix') / get_option('libdir') / get_option('libv4l2subdir') / 'plugins'
+ 
++if get_option('v4l-plugins')
++    subdir('libv4l-mplane')
++endif
++
+ subdir('libdvbv5')
+ subdir('libv4lconvert')
+ subdir('libv4l2')
+ subdir('libv4l1')
+ subdir('libv4l2rds')
+-
+-if get_option('v4l-plugins')
+-    subdir('libv4l-mplane')
+-endif
+diff --git a/meson.build b/meson.build
+index 31927cd..0b818f8 100644
+--- a/meson.build
++++ b/meson.build
+@@ -67,6 +67,11 @@ v4l2_utils_incdir_arr = [
+     'lib' / 'include',
+ ]
+ 
++builtin_plugins = get_option('v4l2-builtin-plugins')
++if builtin_plugins
++    conf.set('HAVE_V4L_BUILTIN_PLUGINS', 1)
++endif
++
+ if host_machine.system() == 'linux'
+     v4l2_utils_incdir_arr += 'include'
+ elif host_machine.system() == 'freebsd'
+diff --git a/meson_options.txt b/meson_options.txt
+index 53cf832..bd6ee8f 100644
+--- a/meson_options.txt
++++ b/meson_options.txt
+@@ -30,6 +30,8 @@ option('v4l2-ctl-libv4l', type : 'boolean',
+        description : 'Enable use of libv4l in v4l2-ctl')
+ option('v4l2-ctl-stream-to', type : 'boolean',
+        description : 'Enable use of --stream-to in v4l2-ctl')
++option('v4l2-builtin-plugins', type : 'boolean',
++       description : 'Enable builtin libv4l plugins')
+ 
+ # Directories
+ option('docdir', type : 'string',
+-- 
+2.20.1
+

@@ -1,0 +1,9 @@
+RK_ROOTFS=y
+RK_UBOOT_CFG_FRAGMENTS="rk-amp"
+RK_AMP=y
+RK_AMP_FIT_ITS="amp_mcu.its"
+RK_KERNEL_CFG_FRAGMENTS="rk3588_robotic.config rockchip_amp.config"
+RK_KERNEL_DTS_NAME="rk3588-robotic-evb-v11-linux-amp"
+RK_RECOVERY=y
+RK_RECOVERY_FIT_ITS_NAME="zboot4recovery.its"
+RK_PARAMETER="parameter-amp.txt"

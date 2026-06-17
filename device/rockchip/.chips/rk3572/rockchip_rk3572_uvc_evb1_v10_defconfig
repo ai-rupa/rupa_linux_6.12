@@ -1,0 +1,9 @@
+RK_BUILDROOT_BASE_CFG="rk3572_uvc"
+# RK_USB_GADGET is not set
+RK_ROOTFS_INSTALL_MODULES=y
+# RK_ROOTFS_DEBUG_INFO is not set
+# RK_WIFIBT is not set
+RK_UBOOT_SPL=y
+RK_KERNEL_DTS_NAME="rk3572-evb1-v10-linux"
+# RK_RECOVERY is not set
+RK_MISC=y

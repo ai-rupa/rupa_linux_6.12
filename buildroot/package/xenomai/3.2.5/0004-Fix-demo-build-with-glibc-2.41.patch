@@ -1,0 +1,37 @@
+From 3e363a65ec21c88f23b932b1d2e412319cb4aae8 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Tue, 22 Apr 2025 10:51:56 +0800
+Subject: [PATCH 4/4] Fix demo build with glibc-2.41
+
+The sched_*attr APIs were added to glibc
+https://sourceware.org/git/?p=glibc.git;a=commit;h=21571ca0d70302909cf72707b2a7736cf12190a0
+
+This fixes the build conflict in demo with glibc-2.4
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ demo/posix/cyclictest/rt-sched.h | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/demo/posix/cyclictest/rt-sched.h b/demo/posix/cyclictest/rt-sched.h
+index 064e51c..78644c7 100644
+--- a/demo/posix/cyclictest/rt-sched.h
++++ b/demo/posix/cyclictest/rt-sched.h
+@@ -32,6 +32,7 @@
+ #define SCHED_DEADLINE 6
+ #endif
+ 
++#if ! __GLIBC_PREREQ(2, 41)
+ struct sched_attr {
+ 	uint32_t size;
+ 	uint32_t sched_policy;
+@@ -57,5 +58,6 @@ int sched_getattr(pid_t pid,
+ 		  struct sched_attr *attr,
+ 		  unsigned int size,
+ 		  unsigned int flags);
++#endif
+ 
+ #endif /* __RT_SCHED_H__ */
+-- 
+2.20.1
+

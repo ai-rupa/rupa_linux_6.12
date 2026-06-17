@@ -1,0 +1,3 @@
+SUBSYSTEM=="platform", KERNEL=="rockchip-amp", ACTION=="change", \
+    ENV{REBOOT}=="os1-os0", ENV{OF_NAME}=="rockchip-amp", \
+    RUN+="/usr/sbin/reboot"

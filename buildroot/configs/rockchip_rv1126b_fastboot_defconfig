@@ -1,0 +1,13 @@
+#include "base/tiny.config"
+#include "chips/rv1126b_aarch64.config"
+BR2_PACKAGE_CAMERA_ENGINE_RKAIQ_FASTBOOT_CUT=y
+BR2_PACKAGE_CAMERA_ENGINE_RKAIQ_SPECIFIC_IQFILE="isp35/common/sc450ai_default_default.json isp35/common/sc850sl_default_default.json"
+BR2_PACKAGE_COMMON_ALGORITHM_FASTBOOT_CUT=y
+BR2_PACKAGE_IVA_RV1126B=y
+BR2_PACKAGE_RKIPC=y
+BR2_PACKAGE_RKIPC_FASTBOOT_CUT=y
+BR2_PACKAGE_RKIPC_RV1126B=y
+BR2_ROOTFS_OVERLAY="board/rockchip/rv1126b/fs-overlay-fastboot/"
+BR2_ROOTFS_POST_BUILD_SCRIPT="board/rockchip/common/post-build.sh board/rockchip/common/tinyrootfs/post-build-tinyrootfs.sh board/rockchip/common/tinyrootfs/post-build-fastboot.sh"
+BR2_TARGET_ROOTFS_EROFS=y
+BR2_TARGET_ROOTFS_EROFS_GZIP=y

@@ -1,0 +1,12 @@
+[Unit]
+Description=Frecon terminal emulator daemon
+Before=getty.target
+
+[Service]
+Type=simple
+RemainAfterExit=yes
+ExecStart=/etc/init.d/frecon start
+ExecStop=/etc/init.d/frecon stop
+
+[Install]
+WantedBy=multi-user.target

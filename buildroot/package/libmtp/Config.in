@@ -1,0 +1,9 @@
+config BR2_PACKAGE_LIBMTP
+	bool "libmtp"
+	select BR2_PACKAGE_LIBUSB
+	# runtime UTF conversion support (UTF-16)
+	select BR2_TOOLCHAIN_GLIBC_GCONV_LIBS_COPY if BR2_TOOLCHAIN_USES_GLIBC
+	help
+	  A library to access MTP (Media Transfer Protocol) Devices.
+
+	  https://github.com/libmtp/libmtp

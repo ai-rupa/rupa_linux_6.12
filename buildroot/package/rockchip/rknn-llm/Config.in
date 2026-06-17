@@ -1,0 +1,10 @@
+config BR2_PACKAGE_RKNN_LLM
+	bool "rknn-llm"
+	help
+	  "rknn-llm runtime lib and server"
+
+config BR2_PACKAGE_RKNN_LLM_ARCH
+	string
+	depends on BR2_ARCH = "arm" || BR2_ARCH = "aarch64"
+	default "aarch64" if BR2_ARCH="aarch64"
+	default BR2_ARCH

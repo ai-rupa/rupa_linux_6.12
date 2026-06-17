@@ -1,0 +1,2762 @@
+From e300d220c4c4e6c86d58f23b9e5a8d401fe107ee Mon Sep 17 00:00:00 2001
+From: Jiajian Wu <jair.wu@rock-chips.com>
+Date: Thu, 26 Mar 2026 10:29:42 +0800
+Subject: [PATCH 09/11] feat(drm): update drm driver
+
+Signed-off-by: Jiajian Wu <jair.wu@rock-chips.com>
+---
+ src/drivers/display/drm/lv_linux_drm.c     | 2185 +++++++++++---------
+ src/drivers/display/drm/lv_linux_drm.h     |   98 +-
+ src/drivers/display/drm/lv_linux_drm_egl.c |    2 +-
+ src/drivers/display/drm/lv_linux_drm_egl.h |  131 ++
+ 4 files changed, 1387 insertions(+), 1029 deletions(-)
+ create mode 100644 src/drivers/display/drm/lv_linux_drm_egl.h
+
+diff --git a/src/drivers/display/drm/lv_linux_drm.c b/src/drivers/display/drm/lv_linux_drm.c
+index 2a6ca6ed0..169d05079 100644
+--- a/src/drivers/display/drm/lv_linux_drm.c
++++ b/src/drivers/display/drm/lv_linux_drm.c
+@@ -7,1213 +7,1526 @@
+  *      INCLUDES
+  *********************/
+ #include "lv_linux_drm.h"
++
+ #if LV_USE_LINUX_DRM && !LV_LINUX_DRM_USE_EGL
+ 
+-#include <errno.h>
+-#include <fcntl.h>
+-#include <poll.h>
+-#include <stdint.h>
+-#include <sys/mman.h>
+-#include <time.h>
+ #include <unistd.h>
++#include <pthread.h>
++#include <time.h>
++#include <sys/time.h>
++#include <stdio.h>
++#include <stdlib.h>
+ #include <string.h>
++#include <sys/types.h>
++#include <sys/stat.h>
++#include <fcntl.h>
++#include <unistd.h>
++#include <errno.h>
++#include <sys/mman.h>
++#include <inttypes.h>
++#include <poll.h>
++#include <malloc.h>
+ 
++#include <drm_fourcc.h>
++#include <drm_mode.h>
+ #include <xf86drm.h>
+ #include <xf86drmMode.h>
+-#include <drm_fourcc.h>
+-
+-#include "../../../stdlib/lv_sprintf.h"
+-#include "../../../draw/lv_draw_buf.h"
+-
+-#if LV_USE_LINUX_DRM_GBM_BUFFERS
+-    #include <gbm.h>
+-    #include <linux/dma-buf.h>
+-    #include <sys/ioctl.h>
+-#endif
+ 
+-/*********************
+- *      DEFINES
+- *********************/
+-#if LV_COLOR_DEPTH == 32
+-    #define DRM_FOURCC DRM_FORMAT_XRGB8888
+-#elif LV_COLOR_DEPTH == 16
+-    #define DRM_FOURCC DRM_FORMAT_RGB565
++#define NUM_DUMB_BO 3
++#define ALIGN(x, a)     (((x) + (a - 1)) & ~(a - 1))
++
++#if (LV_COLOR_DEPTH == 16)
++#define DRM_FORMAT      DRM_FORMAT_RGB565
++#define RGA_FORMAT      RK_FORMAT_BGR_565
++#define SW_ROTATION     1
++#elif (LV_COLOR_DEPTH == 24)
++#define DRM_FORMAT      DRM_FORMAT_RGB888
++#define RGA_FORMAT      RK_FORMAT_BGR_888
++#define SW_ROTATION     0
++#elif (LV_COLOR_DEPTH == 32)
++#define DRM_FORMAT      DRM_FORMAT_ARGB8888
++#define RGA_FORMAT      RK_FORMAT_BGRA_8888
++#define SW_ROTATION     1
+ #else
+-    #error LV_COLOR_DEPTH not supported
++#error "Unsupported depth"
+ #endif
+ 
+-#define BUFFER_CNT 2
+-
+-/**********************
+- *      TYPEDEFS
+- **********************/
+-typedef struct {
+-    uint32_t handle;
+-    uint32_t pitch;
+-    uint32_t offset;
+-    unsigned long int size;
+-    uint8_t * map;
+-    uint32_t fb_handle;
+-} drm_buffer_t;
+-
+-typedef struct {
+-    int fd;
+-    uint32_t conn_id, enc_id, crtc_id, plane_id, crtc_idx;
+-    uint32_t width, height;
+-    uint32_t mmWidth, mmHeight;
+-    uint32_t fourcc;
+-    drmModeModeInfo mode;
+-    uint32_t blob_id;
+-    drmModeCrtc * saved_crtc;
+-    drmModeAtomicReq * req;
+-    drmEventContext drm_event_ctx;
+-    drmModePlane * plane;
+-    drmModeCrtc * crtc;
+-    drmModeConnector * conn;
+-    uint32_t count_plane_props;
+-    uint32_t count_crtc_props;
+-    uint32_t count_conn_props;
+-    drmModePropertyPtr plane_props[128];
+-    drmModePropertyPtr crtc_props[128];
+-    drmModePropertyPtr conn_props[128];
+-    drm_buffer_t drm_bufs[BUFFER_CNT];
+-    drm_buffer_t * act_buf;
+-#if LV_USE_LINUX_DRM_GBM_BUFFERS
+-    struct gbm_device * gbm_device;
+-#endif
+-} drm_dev_t;
+-
+-/**********************
+- *  STATIC PROTOTYPES
+- **********************/
+-static uint32_t get_plane_property_id(drm_dev_t * drm_dev, const char * name);
+-static uint32_t get_crtc_property_id(drm_dev_t * drm_dev, const char * name);
+-static uint32_t get_conn_property_id(drm_dev_t * drm_dev, const char * name);
+-static void page_flip_handler(int fd, unsigned int sequence, unsigned int tv_sec, unsigned int tv_usec,
+-                              void * user_data);
+-static int drm_get_plane_props(drm_dev_t * drm_dev);
+-static int drm_get_crtc_props(drm_dev_t * drm_dev);
+-static int drm_get_conn_props(drm_dev_t * drm_dev);
+-static int drm_add_plane_property(drm_dev_t * drm_dev, const char * name, uint64_t value);
+-static int drm_add_crtc_property(drm_dev_t * drm_dev, const char * name, uint64_t value);
+-static int drm_add_conn_property(drm_dev_t * drm_dev, const char * name, uint64_t value);
+-static int find_plane(drm_dev_t * drm_dev, unsigned int fourcc, uint32_t * plane_id, uint32_t crtc_id,
+-                      uint32_t crtc_idx);
+-static int drm_find_connector(drm_dev_t * drm_dev, int64_t connector_id);
+-static int drm_open(const char * path);
+-static int drm_setup(drm_dev_t * drm_dev, const char * device_path, int64_t connector_id, unsigned int fourcc);
+-
+-static uint32_t tick_get_cb(void);
+-
+-#if !LV_USE_LINUX_DRM_GBM_BUFFERS
+-    static int drm_allocate_dumb(drm_dev_t * drm_dev, drm_buffer_t * buf);
+-#elif LV_USE_LINUX_DRM_GBM_BUFFERS
+-    static int create_gbm_buffer(drm_dev_t * drm_dev, drm_buffer_t * buf);
++#ifndef LV_DRM_USE_RGA
++#define LV_DRM_USE_RGA 0
+ #endif
+ 
+-static int drm_setup_buffers(drm_dev_t * drm_dev);
+-static int drm_dmabuf_set_plane(drm_dev_t * drm_dev, drm_buffer_t * buf);
+-static void drm_flush_wait(lv_display_t * drm_dev);
+-static void drm_flush(lv_display_t * disp, const lv_area_t * area, uint8_t * px_map);
+-static void drm_dmabuf_set_active_buf(lv_event_t * event);
+-static void drm_del_event_cb(lv_event_t * event);
+-
+-/**********************
+- *  STATIC VARIABLES
+- **********************/
+-
+-/**********************
+- *      MACROS
+- **********************/
+-#ifndef DIV_ROUND_UP
+-    #define DIV_ROUND_UP(n, d) (((n) + (d) - 1) / (d))
++#if LV_DRM_USE_RGA
++#undef SW_ROTATION
++#define SW_ROTATION     0
++#include <rga/im2d.h>
++#include <rga/rga.h>
++#include <rga/RgaApi.h>
+ #endif
+ 
+-/**********************
+- *   GLOBAL FUNCTIONS
+- **********************/
++typedef struct drm_bo
++{
++    int fd;
++    void *ptr;
++    size_t size;
++    size_t offset;
++    size_t pitch;
++    unsigned int handle;
++    int fb_id;
++    int buf_fd;
++    int w;
++    int h;
++} drm_bo_t;
++
++typedef struct drm_argument
++{
++    char *key;
++    char *value;
++} drm_argv_t;
+ 
+-lv_display_t * lv_linux_drm_create(void)
++typedef struct drm_device
+ {
+-    lv_display_t * disp;
++    int fd;
++    lv_ll_t arguments;
++    char *config;
++
++    int preferred_width;
++    int preferred_height;
++    struct
++    {
++        int width;
++        int height;
++
++        int physical_width;
++        int physical_height;
++    } mode;
++
++    drmModeResPtr res;
++
++    int connector_id;
++    int encoder_id;
++    int crtc_id;
++    int plane_id;
++    bool is_primary_plane;
++    int vsync;
++    drmModeModeInfo mode_info;
++
++    int waiting_for_flip;
++    struct pollfd drm_pollfd;
++    drmEventContext drm_evctx;
++
++    int flush_buf_stride;
++    char *flush_buf;
++    lv_color_t *disp_buf;
++    int disp_rot;
++    int disp_crop;
++
++    int quit;
++    pthread_t pid;
++    pthread_mutex_t mutex;
++    int draw_update;
++
++    drm_bo_t *vop_buf[2];
++#if LV_DRM_USE_RGA
++    drm_bo_t *gbo;
++#endif
++} drm_device_t;
+ 
+-    lv_tick_set_cb(tick_get_cb);
++static int bo_map(drm_device_t *dev, drm_bo_t *bo)
++{
++    struct drm_mode_map_dumb arg =
++    {
++        .handle = bo->handle,
++    };
++    struct drm_prime_handle fd_args =
++    {
++        .fd = -1,
++        .handle = bo->handle,
++        .flags = 0,
++    };
++    int ret;
+ 
+-    drm_dev_t * drm_dev = lv_malloc_zeroed(sizeof(drm_dev_t));
+-    LV_ASSERT_MALLOC(drm_dev);
+-    if(drm_dev == NULL) return NULL;
++    ret = drmIoctl(dev->fd, DRM_IOCTL_MODE_MAP_DUMB, &arg);
++    if (ret)
++        return ret;
+ 
+-    drm_dev->fd = -1;
++    ret = drmIoctl(dev->fd, DRM_IOCTL_PRIME_HANDLE_TO_FD, &fd_args);
++    if (ret)
++    {
++        LV_LOG_ERROR("handle_to_fd failed ret=%d, handle=%x", ret , fd_args.handle);
++        return -1;
++    }
++    bo->buf_fd = fd_args.fd;
+ 
+-    disp = lv_display_create(800, 480);
+-    if(disp == NULL) {
+-        lv_free(drm_dev);
+-        return NULL;
++    bo->ptr = mmap(0, bo->size, PROT_READ | PROT_WRITE, MAP_SHARED,
++                   dev->fd, arg.offset);
++    if (bo->ptr == MAP_FAILED)
++    {
++        bo->ptr = NULL;
++        return -1;
+     }
+-    lv_display_set_driver_data(disp, drm_dev);
+-    lv_display_set_flush_wait_cb(disp, drm_flush_wait);
+-    lv_display_set_flush_cb(disp, drm_flush);
+-    lv_display_add_event_cb(disp, drm_del_event_cb, LV_EVENT_DELETE, NULL);
+ 
+-    return disp;
++    return 0;
+ }
+ 
+-/* Called by LVGL when there is something that needs redrawing
+- * it sets the active buffer. if GBM buffers are used, it issues a DMA_BUF_SYNC
+- * ioctl call to lock the buffer for CPU access, the buffer is unlocked just
+- * before the atomic commit */
+-static void drm_dmabuf_set_active_buf(lv_event_t * event)
++static void bo_unmap(drm_device_t *dev, drm_bo_t *bo)
+ {
+-    drm_dev_t * drm_dev;
+-    lv_display_t * disp;
+-    lv_draw_buf_t * act_buf;
+-    int i;
+-
+-    disp = (lv_display_t *) lv_event_get_current_target(event);
+-    drm_dev = (drm_dev_t *) lv_display_get_driver_data(disp);
+-    act_buf = lv_display_get_buf_active(disp);
+-
+-    if(drm_dev->act_buf == NULL) {
++    if (dev == NULL)
++        return;
++    if (!bo->ptr)
++        return;
+ 
+-        for(i = 0; i < BUFFER_CNT; i++) {
+-            if(act_buf->unaligned_data == drm_dev->drm_bufs[i].map) {
+-                drm_dev->act_buf = &drm_dev->drm_bufs[i];
+-                LV_LOG_TRACE("Set active buffer idx: %d", i);
+-                break;
+-            }
+-        }
++    drmUnmap(bo->ptr, bo->size);
++    if (bo->buf_fd > 0)
++        close(bo->buf_fd);
++    bo->ptr = NULL;
++}
+ 
+-#if LV_USE_LINUX_DRM_GBM_BUFFERS
+-        struct dma_buf_sync sync_req;
+-        sync_req.flags = DMA_BUF_SYNC_START | DMA_BUF_SYNC_RW;
+-        int res;
++void bo_destroy(drm_device_t *dev, drm_bo_t *bo)
++{
++    struct drm_mode_destroy_dumb arg =
++    {
++        .handle = bo->handle,
++    };
+ 
+-        if((res = ioctl(drm_dev->act_buf->handle, DMA_BUF_IOCTL_SYNC, &sync_req)) != 0) {
+-            LV_LOG_ERROR("Failed to start DMA-BUF R/W SYNC res: %d", res);
+-        }
+-#endif
++    if (bo->fb_id)
++        drmModeRmFB(dev->fd, bo->fb_id);
+ 
+-    }
+-    else {
++    bo_unmap(dev, bo);
+ 
+-        LV_LOG_TRACE("active buffer already set");
+-    }
++    if (bo->handle)
++        drmIoctl(dev->fd, DRM_IOCTL_MODE_DESTROY_DUMB, &arg);
+ 
++    free(bo);
+ }
+ 
+-lv_result_t lv_linux_drm_set_file(lv_display_t * disp, const char * file, int64_t connector_id)
++static drm_bo_t *
++bo_create(drm_device_t *dev, int width, int height, int format)
+ {
++    struct drm_mode_create_dumb arg =
++    {
++        .bpp = LV_COLOR_DEPTH,
++        .width = ALIGN(width, 16),
++        .height = ALIGN(height, 16),
++    };
++    drm_bo_t *bo;
++    uint32_t handles[4] = {0}, pitches[4] = {0}, offsets[4] = {0};
+     int ret;
+ 
+-    drm_dev_t * drm_dev = lv_display_get_driver_data(disp);
+-
+-    ret = drm_setup(drm_dev, file, connector_id, DRM_FOURCC);
+-    if(ret) {
+-        return LV_RESULT_INVALID;
++    bo = malloc(sizeof(drm_bo_t));
++    if (bo == NULL)
++    {
++        LV_LOG_ERROR("allocate bo failed");
++        return NULL;
+     }
+-
+-    int32_t hor_res = drm_dev->width;
+-    int32_t ver_res = drm_dev->height;
+-
+-    ret = drm_setup_buffers(drm_dev);
+-    if(ret) {
+-        LV_LOG_ERROR("DRM buffer allocation failed");
+-        close(drm_dev->fd);
+-        drm_dev->fd = -1;
+-        return LV_RESULT_INVALID;
++    memset(bo, 0, sizeof(*bo));
++    if (format == DRM_FORMAT_NV12)
++    {
++        arg.bpp = 8;
++        arg.height = height * 3 / 2;
+     }
+ 
+-    LV_LOG_INFO("DRM subsystem and buffer mapped successfully");
+-
+-    int32_t width = drm_dev->mmWidth;
+-
+-    size_t buf_size = LV_MIN(drm_dev->drm_bufs[1].size, drm_dev->drm_bufs[0].size);
+-    uint32_t stride = drm_dev->drm_bufs[0].pitch;
+-    /* Resolution must be set first because if the screen is smaller than the size passed
+-     * to lv_display_create then the buffers aren't big enough for LV_DISPLAY_RENDER_MODE_DIRECT.
+-     */
+-    lv_display_set_resolution(disp, hor_res, ver_res);
+-    lv_display_set_buffers_with_stride(disp, drm_dev->drm_bufs[1].map, drm_dev->drm_bufs[0].map, buf_size,
+-                                       stride, LV_DISPLAY_RENDER_MODE_DIRECT);
++    ret = drmIoctl(dev->fd, DRM_IOCTL_MODE_CREATE_DUMB, &arg);
++    if (ret)
++    {
++        LV_LOG_ERROR("create dumb failed");
++        goto err;
++    }
+ 
++    bo->fd = dev->fd;
++    bo->handle = arg.handle;
++    bo->size = arg.size;
++    bo->pitch = arg.pitch;
++    bo->w = width;
++    bo->h = height;
+ 
+-    /* Set the handler that is called before a redraw occurs to set the active buffer/plane
+-     * when GBM buffers are used the DMA_BUF_SYNC_START is issued there */
+-    lv_display_add_event_cb(disp, drm_dmabuf_set_active_buf, LV_EVENT_REFR_START, drm_dev);
++    ret = bo_map(dev, bo);
++    if (ret)
++    {
++        LV_LOG_ERROR("map bo failed");
++        goto err;
++    }
+ 
+-    if(width) {
+-        lv_display_set_dpi(disp, DIV_ROUND_UP(hor_res * 25400, width * 1000));
++    switch (format)
++    {
++    case DRM_FORMAT_NV12:
++    case DRM_FORMAT_NV16:
++        handles[0] = bo->handle;
++        pitches[0] = bo->pitch ;
++        offsets[0] = 0;
++        handles[1] = bo->handle;
++        pitches[1] = pitches[0];
++        offsets[1] = pitches[0] * height;
++        break;
++    case DRM_FORMAT_RGB332:
++        handles[0] = bo->handle;
++        pitches[0] = bo->pitch;
++        offsets[0] = 0;
++        break;
++    case DRM_FORMAT_RGB565:
++    case DRM_FORMAT_BGR565:
++        handles[0] = bo->handle;
++        pitches[0] = bo->pitch ;
++        offsets[0] = 0;
++        break;
++    case DRM_FORMAT_RGB888:
++    case DRM_FORMAT_BGR888:
++        handles[0] = bo->handle;
++        pitches[0] = bo->pitch ;
++        offsets[0] = 0;
++        break;
++    case DRM_FORMAT_ARGB8888:
++    case DRM_FORMAT_ABGR8888:
++    case DRM_FORMAT_RGBA8888:
++    case DRM_FORMAT_BGRA8888:
++        handles[0] = bo->handle;
++        pitches[0] = bo->pitch ;
++        offsets[0] = 0;
++        break;
++    }
++
++    ret = drmModeAddFB2(dev->fd, width, height, format, handles,
++                        pitches, offsets, (uint32_t *)&bo->fb_id, 0);
++    if (ret)
++    {
++        LV_LOG_ERROR("add fb failed");
++        goto err;
+     }
++    LV_LOG_INFO("Created bo: %d, %dx%d", bo->fb_id, width, height);
+ 
+-    LV_LOG_INFO("Resolution is set to %" LV_PRId32 "x%" LV_PRId32 " at %" LV_PRId32 "dpi",
+-                hor_res, ver_res, lv_display_get_dpi(disp));
+-    return LV_RESULT_OK;
++    return bo;
++err:
++    bo_destroy(dev, bo);
++    return NULL;
+ }
+ 
+-void lv_linux_drm_set_mode_cb(lv_display_t * disp, lv_linux_drm_select_mode_cb_t callback)
++drm_bo_t *malloc_drm_bo(drm_device_t *dev, int width, int height, int format)
+ {
+-    LV_UNUSED(disp);
+-    LV_UNUSED(callback);
+-    LV_LOG_WARN("DRM without EGL support doesn't currently support setting a mode selection callback");
++    return bo_create(dev, width, height, format);
+ }
+-/**********************
+- *   STATIC FUNCTIONS
+- **********************/
+ 
+-static uint32_t get_plane_property_id(drm_dev_t * drm_dev, const char * name)
++void free_drm_bo(drm_device_t *dev, drm_bo_t *bo)
+ {
+-    uint32_t i;
++    if (bo)
++        bo_destroy(dev, bo);
++}
+ 
+-    LV_LOG_TRACE("Find plane property: %s", name);
++static bool config_key_character_invalid(char c)
++{
++    if (c == '_') return false;
++    if (c >= '0' && c <= '9') return false;
++    if (c >= 'A' && c <= 'Z') return false;
++    if (c >= 'a' && c <= 'z') return false;
+ 
+-    for(i = 0; i < drm_dev->count_plane_props; ++i)
+-        if(!lv_strcmp(drm_dev->plane_props[i]->name, name))
+-            return drm_dev->plane_props[i]->prop_id;
++    return true;
++}
+ 
+-    LV_LOG_TRACE("Unknown plane property: %s", name);
++static bool config_value_character_invalid(char c)
++{
++    if (c == ';') return true;
+ 
+-    return 0;
++    /* printable character except space */
++    if (c > 0x20 && c <= 0x7e) return false;
++
++    return true;
+ }
+ 
+-static uint32_t get_crtc_property_id(drm_dev_t * drm_dev, const char * name)
++static char *drm_config_find_value(drm_device_t *dev, const char *key)
+ {
+-    uint32_t i;
++    drm_argv_t *argv = _lv_ll_get_head(&dev->arguments);
++    while (argv)
++    {
++        if (strcmp(argv->key, key) == 0) return argv->value;
++        argv = _lv_ll_get_next(&dev->arguments, argv);
++    }
+ 
+-    LV_LOG_TRACE("Find crtc property: %s", name);
++    return NULL;
++}
+ 
+-    for(i = 0; i < drm_dev->count_crtc_props; ++i)
+-        if(!lv_strcmp(drm_dev->crtc_props[i]->name, name))
+-            return drm_dev->crtc_props[i]->prop_id;
++static int drm_config_get_int_property(drm_device_t *dev, const char *name, int default_value)
++{
++    char *env = getenv(name);
++    char *config = NULL;
+ 
+-    LV_LOG_TRACE("Unknown crtc property: %s", name);
++    /* Prefer using env variable */
++    if (env)
++    {
++        if ((env[0] >= '0') && (env[0] <= '9'))
++            return atoi(env);
++    }
+ 
+-    return 0;
++    if (dev->config)
++        config = drm_config_find_value(dev, name);
++    if (config)
++    {
++        if ((config[0] >= '0') && (config[0] <= '9'))
++            return atoi(config);
++    }
++
++    return default_value;
+ }
+ 
+-static uint32_t get_conn_property_id(drm_dev_t * drm_dev, const char * name)
++static char *drm_config_get_string_property(drm_device_t *dev, const char *name)
+ {
+-    uint32_t i;
++    char *env = getenv(name);
++    char *config = NULL;
+ 
+-    LV_LOG_TRACE("Find conn property: %s", name);
++    /* Prefer using env variable */
++    if (env) return env;
+ 
+-    for(i = 0; i < drm_dev->count_conn_props; ++i)
+-        if(!lv_strcmp(drm_dev->conn_props[i]->name, name))
+-            return drm_dev->conn_props[i]->prop_id;
++    if (dev->config)
++        config = drm_config_find_value(dev, name);
++    if (config) return config;
+ 
+-    LV_LOG_TRACE("Unknown conn property: %s", name);
+-
+-    return 0;
++    return NULL;
+ }
+ 
+-static void page_flip_handler(int fd, unsigned int sequence, unsigned int tv_sec, unsigned int tv_usec,
+-                              void * user_data)
++static void drm_dump_config(drm_device_t *dev)
+ {
+-    LV_UNUSED(fd);
+-    LV_UNUSED(sequence);
+-    LV_UNUSED(tv_sec);
+-    LV_UNUSED(tv_usec);
+-    LV_LOG_TRACE("flip");
+-    drm_dev_t * drm_dev = user_data;
+-    if(drm_dev->req) {
+-        drmModeAtomicFree(drm_dev->req);
+-        drm_dev->req = NULL;
++    drm_argv_t *argv = _lv_ll_get_head(&dev->arguments);
++    while (argv)
++    {
++        LV_LOG_USER("key[%s]=value[%s]", argv->key, argv->value);
++        argv = _lv_ll_get_next(&dev->arguments, argv);
+     }
+ }
+ 
+-static int drm_get_plane_props(drm_dev_t * drm_dev)
++static void drm_parse_config(drm_device_t *dev)
+ {
+-    uint32_t i;
+-
+-    drmModeObjectPropertiesPtr props = drmModeObjectGetProperties(drm_dev->fd, drm_dev->plane_id,
+-                                                                  DRM_MODE_OBJECT_PLANE);
+-    if(!props) {
+-        LV_LOG_ERROR("drmModeObjectGetProperties failed");
+-        return -1;
+-    }
+-    LV_LOG_TRACE("Found %u plane props", props->count_props);
+-    drm_dev->count_plane_props = props->count_props;
+-    for(i = 0; i < props->count_props; i++) {
+-        drm_dev->plane_props[i] = drmModeGetProperty(drm_dev->fd, props->props[i]);
+-        LV_LOG_TRACE("Added plane prop %u:%s", drm_dev->plane_props[i]->prop_id, drm_dev->plane_props[i]->name);
++    char *config = dev->config;
++    char *key = NULL;
++    char *value = NULL;
++    drm_argv_t *argv;
++
++    _lv_ll_init(&dev->arguments, sizeof(drm_argv_t));
++    while (*config)
++    {
++        if (config_key_character_invalid(*config))
++        {
++            config++;
++            continue;
++        }
++        key = config;
++        while (*config)
++        {
++            if (config_key_character_invalid(*config))
++                break;
++            config++;
++        }
++        if (*config != '=')
++        {
++            LV_LOG_WARN("Invalid key name [%.*s], ignore", config - key + 1, key);
++            key = NULL;
++            continue;
++        }
++        /* Break the string */
++        *config = '\0';
++        config++;
++        while (*config)
++        {
++            if (!config_value_character_invalid(*config))
++                break;
++            config++;
++        }
++        if (!*config)
++        {
++            LV_LOG_WARN("Key [%s] has no value, ignore", key);
++            break;
++        }
++        value = config;
++        while (*config)
++        {
++            if (config_value_character_invalid(*config))
++                break;
++            config++;
++        }
++        if (!*config || (config != value))
++        {
++            argv = _lv_ll_ins_tail(&dev->arguments);
++            if (argv)
++            {
++                argv->key = key;
++                argv->value = value;
++            }
++            key = NULL;
++            value = NULL;
++            if (*config)
++            {
++                /* String is not end, break the string */
++                *config = '\0';
++                config++;
++            }
++        }
+     }
+-    drmModeFreeObjectProperties(props);
+-
+-    return 0;
+ }
+ 
+-static int drm_get_crtc_props(drm_dev_t * drm_dev)
++static void drm_config_file_init(drm_device_t *dev)
+ {
+-    uint32_t i;
++    FILE *fd;
++    const char *path;
++    int size;
++
++    path = "/tmp/lv_drm_setup.cfg";
++    if ((access(path, F_OK) != 0))
++    {
++        path = "/userdata/lv_drm_setup.cfg";
++        if ((access(path, F_OK) != 0))
++            return;
++    }
+ 
+-    drmModeObjectPropertiesPtr props = drmModeObjectGetProperties(drm_dev->fd, drm_dev->crtc_id,
+-                                                                  DRM_MODE_OBJECT_CRTC);
+-    if(!props) {
+-        LV_LOG_ERROR("drmModeObjectGetProperties failed");
+-        return -1;
++    fd = fopen(path, "rb");
++    fseek(fd, 0, SEEK_END);
++    size = ftell(fd);
++    fseek(fd, 0, SEEK_SET);
++
++    dev->config = lv_malloc_zeroed(size + 1);
++    if (!dev->config)
++    {
++        fclose(fd);
++        return;
+     }
+-    LV_LOG_TRACE("Found %u crtc props", props->count_props);
+-    drm_dev->count_crtc_props = props->count_props;
+-    for(i = 0; i < props->count_props; i++) {
+-        drm_dev->crtc_props[i] = drmModeGetProperty(drm_dev->fd, props->props[i]);
+-        LV_LOG_TRACE("Added crtc prop %u:%s", drm_dev->crtc_props[i]->prop_id, drm_dev->crtc_props[i]->name);
++
++    if (fread(dev->config, 1, size, fd) <= 0)
++    {
++        lv_free(dev->config);
++        dev->config = NULL;
+     }
+-    drmModeFreeObjectProperties(props);
++    fclose(fd);
+ 
+-    return 0;
++    if (dev->config) drm_parse_config(dev);
++    if (dev->config) drm_dump_config(dev);
+ }
+ 
+-static int drm_get_conn_props(drm_dev_t * drm_dev)
++static void drm_config_file_deinit(drm_device_t *dev)
+ {
+-    uint32_t i;
+-
+-    drmModeObjectPropertiesPtr props = drmModeObjectGetProperties(drm_dev->fd, drm_dev->conn_id,
+-                                                                  DRM_MODE_OBJECT_CONNECTOR);
+-    if(!props) {
+-        LV_LOG_ERROR("drmModeObjectGetProperties failed");
+-        return -1;
+-    }
+-    LV_LOG_TRACE("Found %u connector props", props->count_props);
+-    drm_dev->count_conn_props = props->count_props;
+-    for(i = 0; i < props->count_props; i++) {
+-        drm_dev->conn_props[i] = drmModeGetProperty(drm_dev->fd, props->props[i]);
+-        LV_LOG_TRACE("Added connector prop %u:%s", drm_dev->conn_props[i]->prop_id, drm_dev->conn_props[i]->name);
++    if (dev && dev->config)
++    {
++        drm_argv_t *argv = _lv_ll_get_head(&dev->arguments);
++        while (argv)
++        {
++            _lv_ll_remove(&dev->arguments, argv);
++            lv_free(argv);
++            argv = _lv_ll_get_head(&dev->arguments);
++        }
++        lv_free(dev->config);
++        dev->config = NULL;
+     }
+-    drmModeFreeObjectProperties(props);
+-
+-    return 0;
+ }
+ 
+-static int drm_add_plane_property(drm_dev_t * drm_dev, const char * name, uint64_t value)
++static int drm_get_preferred_connector(void)
+ {
+-    int ret;
+-    uint32_t prop_id = get_plane_property_id(drm_dev, name);
++    const char *path;
++    char buf[256] = "\0";
++    int fd;
+ 
+-    if(!prop_id) {
+-        LV_LOG_ERROR("Couldn't find plane prop %s", name);
+-        return -1;
+-    }
++#define DRM_CONNECTOR_CFG_PATH_ENV  "DRM_CONNECTOR_CFG_PATH"
++#define DRM_CONNECTOR_CFG_PATH_DEFAULT  "/tmp/drm_connector.cfg"
++    path = getenv(DRM_CONNECTOR_CFG_PATH_ENV);
++    if (!path)
++        path = DRM_CONNECTOR_CFG_PATH_DEFAULT;
+ 
+-    ret = drmModeAtomicAddProperty(drm_dev->req, drm_dev->plane_id, get_plane_property_id(drm_dev, name), value);
+-    if(ret < 0) {
+-        LV_LOG_ERROR("drmModeAtomicAddProperty (%s:%" PRIu64 ") failed: %d", name, value, ret);
+-        return ret;
++    if ((access(path, F_OK) == 0))
++    {
++        fd = open(path, O_RDONLY);
++        if (read(fd, buf, sizeof(buf)) <= 0)
++            LV_LOG_INFO("read failed, use default connector");
++        close(fd);
+     }
+ 
+-    return 0;
++    if (!buf[0])
++        return -1;
++
++    return atoi(buf);
+ }
+ 
+-static int drm_add_crtc_property(drm_dev_t * drm_dev, const char * name, uint64_t value)
++static int drm_get_preferred_mode(int *width, int *height)
+ {
+-    int ret;
+-    uint32_t prop_id = get_crtc_property_id(drm_dev, name);
++    const char *path;
++    char buf[256] = "\0";
++    int fd, w, h;
+ 
+-    if(!prop_id) {
+-        LV_LOG_ERROR("Couldn't find crtc prop %s", name);
+-        return -1;
+-    }
++#define DRM_MODE_CFG_PATH_ENV   "DRM_CONNECTOR_CFG_PATH"
++#define DRM_MODE_CFG_PATH_DEFAULT   "/tmp/drm_mode.cfg"
++    path = getenv(DRM_MODE_CFG_PATH_ENV);
++    if (!path)
++        path = DRM_MODE_CFG_PATH_DEFAULT;
+ 
+-    ret = drmModeAtomicAddProperty(drm_dev->req, drm_dev->crtc_id, get_crtc_property_id(drm_dev, name), value);
+-    if(ret < 0) {
+-        LV_LOG_ERROR("drmModeAtomicAddProperty (%s:%" PRIu64 ") failed: %d", name, value, ret);
+-        return ret;
++    if ((access(path, F_OK) == 0))
++    {
++        fd = open(path, O_RDONLY);
++        if (read(fd, buf, sizeof(buf)) <= 0)
++            LV_LOG_INFO("read failed, use default mode");
++        close(fd);
+     }
+ 
+-    return 0;
+-}
+-
+-static int drm_add_conn_property(drm_dev_t * drm_dev, const char * name, uint64_t value)
+-{
+-    int ret;
+-    uint32_t prop_id = get_conn_property_id(drm_dev, name);
++    if (!buf[0])
++        return -1;
+ 
+-    if(!prop_id) {
+-        LV_LOG_ERROR("Couldn't find conn prop %s", name);
++    if (2 != sscanf(buf, "%dx%d", &w, &h))
+         return -1;
+-    }
+ 
+-    ret = drmModeAtomicAddProperty(drm_dev->req, drm_dev->conn_id, get_conn_property_id(drm_dev, name), value);
+-    if(ret < 0) {
+-        LV_LOG_ERROR("drmModeAtomicAddProperty (%s:%" PRIu64 ") failed: %d", name, value, ret);
+-        return ret;
+-    }
++    *width = w;
++    *height = h;
+ 
+     return 0;
+ }
+ 
+-static int drm_dmabuf_set_plane(drm_dev_t * drm_dev, drm_buffer_t * buf)
++static drmModeConnectorPtr
++drm_get_connector(drm_device_t *dev, int connector_id)
+ {
+-    int ret;
+-    static int first = 1;
+-    uint32_t flags = DRM_MODE_PAGE_FLIP_EVENT | DRM_MODE_ATOMIC_NONBLOCK;
++    drmModeConnectorPtr conn;
+ 
+-#if LV_USE_LINUX_DRM_GBM_BUFFERS
++    conn = drmModeGetConnector(dev->fd, connector_id);
++    if (!conn)
++        return NULL;
+ 
+-    struct dma_buf_sync sync_req;
++    LV_LOG_INFO("Connector id: %d, %sconnected, modes: %d", connector_id,
++                (conn->connection == DRM_MODE_CONNECTED) ? "" : "dis",
++                conn->count_modes);
++    if (conn->connection == DRM_MODE_CONNECTED && conn->count_modes)
++        return conn;
+ 
+-    sync_req.flags = DMA_BUF_SYNC_END | DMA_BUF_SYNC_RW;
+-    if(ioctl(buf->handle, DMA_BUF_IOCTL_SYNC, &sync_req) != 0) {
+-        LV_LOG_ERROR("Failed to end DMA-BUF R/W SYNC");
+-    }
++    drmModeFreeConnector(conn);
++    return NULL;
++}
+ 
+-#endif
++static bool is_preferred_connector(const char *target, drmModeConnectorPtr conn)
++{
++    char full_name[32];
++    int len1, len2;
+ 
+-    drm_dev->req = drmModeAtomicAlloc();
++    if (!target)
++        return false;
+ 
+-    /* On first Atomic commit, do a modeset */
+-    if(first) {
+-        drm_add_conn_property(drm_dev, "CRTC_ID", drm_dev->crtc_id);
++    snprintf(full_name, sizeof(full_name), "%s-%u",
++             drmModeGetConnectorTypeName(conn->connector_type), conn->connector_type_id);
+ 
+-        drm_add_crtc_property(drm_dev, "MODE_ID", drm_dev->blob_id);
+-        drm_add_crtc_property(drm_dev, "ACTIVE", 1);
++    len1 = strlen(target);
++    len2 = strlen(full_name);
+ 
+-        flags |= DRM_MODE_ATOMIC_ALLOW_MODESET;
++    if (len1 > len2)
++        return false;
+ 
+-        first = 0;
+-    }
++    return (strncmp(target, full_name, len1) == 0) ? true : false;
++}
+ 
+-    drm_add_plane_property(drm_dev, "FB_ID", buf->fb_handle);
+-    drm_add_plane_property(drm_dev, "CRTC_ID", drm_dev->crtc_id);
+-    drm_add_plane_property(drm_dev, "SRC_X", 0);
+-    drm_add_plane_property(drm_dev, "SRC_Y", 0);
+-    drm_add_plane_property(drm_dev, "SRC_W", drm_dev->width << 16);
+-    drm_add_plane_property(drm_dev, "SRC_H", drm_dev->height << 16);
+-    drm_add_plane_property(drm_dev, "CRTC_X", 0);
+-    drm_add_plane_property(drm_dev, "CRTC_Y", 0);
+-    drm_add_plane_property(drm_dev, "CRTC_W", drm_dev->width);
+-    drm_add_plane_property(drm_dev, "CRTC_H", drm_dev->height);
+-
+-    ret = drmModeAtomicCommit(drm_dev->fd, drm_dev->req, flags, drm_dev);
+-    if(ret) {
+-        LV_LOG_ERROR("drmModeAtomicCommit failed: %s (%d)", strerror(errno), errno);
+-        drmModeAtomicFree(drm_dev->req);
+-        return ret;
++static drmModeConnectorPtr
++drm_find_best_connector(drm_device_t *dev)
++{
++    drmModeResPtr res = dev->res;
++    drmModeConnectorPtr conn;
++    int i, preferred_connector_id;
++    char *preferred_connector_type = NULL;
++    int fallback_id = -1;
++
++    preferred_connector_id = drm_config_get_int_property(dev, "LV_DRM_CONNECTOR_ID",
++                             drm_get_preferred_connector());
++    LV_LOG_INFO("Preferred connector id: %d", preferred_connector_id);
++    conn = drm_get_connector(dev, preferred_connector_id);
++    if (conn)
++        return conn;
++
++    preferred_connector_type = drm_config_get_string_property(dev, "LV_DRM_CONNECTOR_NAME");
++    LV_LOG_INFO("Preferred connector type: %s", preferred_connector_type);
++
++    for (i = 0; i < res->count_connectors; i++)
++    {
++        conn = drm_get_connector(dev, res->connectors[i]);
++        if (!conn)
++            continue;
++        if (preferred_connector_type)
++        {
++            if (is_preferred_connector(preferred_connector_type, conn))
++                return conn;
++            drmModeFreeConnector(conn);
++            if (fallback_id == -1)
++                fallback_id = i;
++            continue;
++        }
++        return conn;
+     }
++    if (fallback_id != -1)
++        return drm_get_connector(dev, res->connectors[fallback_id]);
+ 
+-    return 0;
++    return NULL;
+ }
+ 
+-static int find_plane(drm_dev_t * drm_dev, unsigned int fourcc, uint32_t * plane_id, uint32_t crtc_id,
+-                      uint32_t crtc_idx)
++static drmModeCrtcPtr
++drm_find_best_crtc(drm_device_t *dev, drmModeConnectorPtr conn)
+ {
+-    LV_UNUSED(crtc_id);
+-    drmModePlaneResPtr planes;
+-    drmModePlanePtr plane;
+-    unsigned int i;
+-    unsigned int j;
+-    int ret = 0;
++    drmModeResPtr res = dev->res;
++    drmModeEncoderPtr encoder;
++    drmModeCrtcPtr crtc;
++    int i, preferred_crtc_id = 0;
++    int crtcs_for_connector = 0;
++
++    encoder = drmModeGetEncoder(dev->fd, conn->encoder_id);
++    if (encoder)
++    {
++        preferred_crtc_id = encoder->crtc_id;
++        drmModeFreeEncoder(encoder);
++        LV_LOG_INFO("Preferred crtc: %d", preferred_crtc_id);
++
++        crtc = drmModeGetCrtc(dev->fd, preferred_crtc_id);
++        if (crtc)
++            return crtc;
++    }
++
++    for (i = 0; i < conn->count_encoders; i++)
++    {
++        encoder = drmModeGetEncoder(dev->fd, conn->encoders[i]);
++        if (encoder)
++            crtcs_for_connector |= encoder->possible_crtcs;
++        drmModeFreeEncoder(encoder);
++    }
++    LV_LOG_INFO("Possible crtcs: %x", crtcs_for_connector);
++    if (!crtcs_for_connector)
++        return NULL;
+ 
+-    planes = drmModeGetPlaneResources(drm_dev->fd);
+-    if(!planes) {
+-        LV_LOG_ERROR("drmModeGetPlaneResources failed");
+-        return -1;
+-    }
++    return drmModeGetCrtc(dev->fd, res->crtcs[ffs(crtcs_for_connector) - 1]);
++}
+ 
+-    LV_LOG_TRACE("drm: found planes %u", planes->count_planes);
++static int drm_plane_get_int_property(drm_device_t *dev, int plane_id, char *prop_name)
++{
++    drmModeObjectPropertiesPtr props;
++    drmModePropertyPtr prop;
++    unsigned int i;
++    int value = -1;
+ 
+-    for(i = 0; i < planes->count_planes; ++i) {
+-        plane = drmModeGetPlane(drm_dev->fd, planes->planes[i]);
+-        if(!plane) {
+-            LV_LOG_ERROR("drmModeGetPlane failed: %s", strerror(errno));
+-            ret = -1;
+-            break;
+-        }
++    props = drmModeObjectGetProperties(dev->fd, plane_id, DRM_MODE_OBJECT_PLANE);
++    if (!props)
++        return -1;
+ 
+-        if(!(plane->possible_crtcs & (1 << crtc_idx))) {
+-            drmModeFreePlane(plane);
++    for (i = 0; i < props->count_props; i++)
++    {
++        prop = drmModeGetProperty(dev->fd, props->props[i]);
++        if (!prop)
+             continue;
+-        }
+-
+-        for(j = 0; j < plane->count_formats; ++j) {
+-            if(plane->formats[j] == fourcc)
+-                break;
+-        }
+-
+-        if(j == plane->count_formats) {
+-            drmModeFreePlane(plane);
++        if (drmModeGetPropertyType(prop) == DRM_MODE_PROP_BLOB)
+             continue;
++        if (!strcmp(prop->name, prop_name))
++        {
++            value = (int)props->prop_values[i];
++            drmModeFreeProperty(prop);
++            break;
+         }
+-
+-        *plane_id = plane->plane_id;
+-        drmModeFreePlane(plane);
+-
+-        LV_LOG_TRACE("found plane %d", *plane_id);
+-
+-        /* Success */
+-        goto out;
++        drmModeFreeProperty(prop);
+     }
++    drmModeFreeObjectProperties(props);
+ 
+-    if(i == planes->count_planes)
+-        ret = -1;
+-out:
+-    drmModeFreePlaneResources(planes);
+-    return ret;
++    return value;
+ }
+ 
+-static int drm_find_connector(drm_dev_t * drm_dev, int64_t connector_id)
++static int drm_plane_set_int_property(drm_device_t *dev, int plane_id, char *prop_name, int value)
+ {
+-    drmModeConnector * conn = NULL;
+-    drmModeEncoder * enc = NULL;
+-    drmModeRes * res;
+-    int i;
+-    int ret = -1;
+-
+-    if((res = drmModeGetResources(drm_dev->fd)) == NULL) {
+-        LV_LOG_ERROR("drmModeGetResources() failed");
+-        goto free_res;
+-    }
++    drmModeObjectPropertiesPtr props;
++    drmModePropertyPtr prop = NULL;
++    unsigned int prop_id;
++    unsigned int i;
++    bool value_invalid = true;
+ 
+-    if(res->count_crtcs <= 0) {
+-        LV_LOG_ERROR("no Crtcs");
+-        goto free_res;
+-    }
++    props = drmModeObjectGetProperties(dev->fd, plane_id, DRM_MODE_OBJECT_PLANE);
++    if (!props)
++        return -1;
+ 
+-    /* find all available connectors */
+-    for(i = 0; i < res->count_connectors; i++) {
+-        conn = drmModeGetConnector(drm_dev->fd, res->connectors[i]);
+-        if(!conn)
++    for (i = 0; i < props->count_props; i++)
++    {
++        prop = drmModeGetProperty(dev->fd, props->props[i]);
++        if (!prop)
+             continue;
+-
+-        if(connector_id >= 0 && conn->connector_id != connector_id) {
+-            drmModeFreeConnector(conn);
++        if (prop->flags & DRM_MODE_PROP_IMMUTABLE)
+             continue;
++        if (drmModeGetPropertyType(prop) == DRM_MODE_PROP_BLOB)
++            continue;
++        if (!strcmp(prop->name, prop_name))
++        {
++            prop_id = i;
++            break;
+         }
+-
+-        if(conn->connection == DRM_MODE_CONNECTED) {
+-            LV_LOG_TRACE("drm: connector %d: connected", conn->connector_id);
+-        }
+-        else if(conn->connection == DRM_MODE_DISCONNECTED) {
+-            LV_LOG_TRACE("drm: connector %d: disconnected", conn->connector_id);
++        drmModeFreeProperty(prop);
++        prop = NULL;
++    }
++
++    if (prop)
++    {
++        if (drm_property_type_is(prop, DRM_MODE_PROP_ENUM))
++        {
++            for (i = 0; i < prop->count_enums; i++)
++            {
++                if (prop->enums[i].value == value)
++                {
++                    value_invalid = false;
++                    break;
++                }
++            }
+         }
+-        else if(conn->connection == DRM_MODE_UNKNOWNCONNECTION) {
+-            LV_LOG_TRACE("drm: connector %d: unknownconnection", conn->connector_id);
++        else
++        {
++            value_invalid = false;
+         }
+-        else {
+-            LV_LOG_TRACE("drm: connector %d: unknown", conn->connector_id);
++        if (drm_property_type_is(prop, DRM_MODE_PROP_RANGE) ||
++                drm_property_type_is(prop, DRM_MODE_PROP_SIGNED_RANGE))
++        {
++            if (value < prop->values[0])
++                value = prop->values[0];
++            if (value > prop->values[1])
++                value = prop->values[1];
+         }
+-
+-        if(conn->connection == DRM_MODE_CONNECTED && conn->count_modes > 0)
+-            break;
+-
+-        drmModeFreeConnector(conn);
+-        conn = NULL;
+-    };
+-
+-    if(!conn) {
+-        LV_LOG_ERROR("suitable connector not found");
+-        goto free_res;
++        if (!value_invalid)
++            drmModeObjectSetProperty(dev->fd, plane_id, DRM_MODE_OBJECT_PLANE,
++                                     props->props[prop_id], value);
++        drmModeFreeProperty(prop);
+     }
+ 
+-    drm_dev->conn_id = conn->connector_id;
+-    LV_LOG_TRACE("conn_id: %d", drm_dev->conn_id);
+-    drm_dev->mmWidth = conn->mmWidth;
+-    drm_dev->mmHeight = conn->mmHeight;
+-
+-    lv_memcpy(&drm_dev->mode, &conn->modes[0], sizeof(drmModeModeInfo));
++    drmModeFreeObjectProperties(props);
+ 
+-    if(drmModeCreatePropertyBlob(drm_dev->fd, &drm_dev->mode, sizeof(drm_dev->mode),
+-                                 &drm_dev->blob_id)) {
+-        LV_LOG_ERROR("error creating mode blob");
+-        goto free_res;
+-    }
++    return value;
++}
+ 
+-    drm_dev->width = conn->modes[0].hdisplay;
+-    drm_dev->height = conn->modes[0].vdisplay;
++static drmModePlanePtr get_preferred_plane(drm_device_t *dev, int plane_id, int pipe)
++{
++    drmModePlanePtr plane;
++    char *preferred_plane;
++    int preferred_type = -1;
++    int type;
+ 
+-    for(i = 0 ; i < res->count_encoders; i++) {
+-        enc = drmModeGetEncoder(drm_dev->fd, res->encoders[i]);
+-        if(!enc)
+-            continue;
++    plane = drmModeGetPlane(dev->fd, plane_id);
++    if (!plane)
++        return NULL;
+ 
+-        LV_LOG_TRACE("enc%d enc_id %d conn enc_id %d", i, enc->encoder_id, conn->encoder_id);
++    LV_LOG_INFO("Check plane: %d, possible_crtcs: %x", plane_id,
++                plane->possible_crtcs);
+ 
+-        if(enc->encoder_id == conn->encoder_id)
+-            break;
++    /* cannot used in current crtc */
++    if (!(plane->possible_crtcs & (1 << pipe)))
++        goto end;
+ 
+-        drmModeFreeEncoder(enc);
+-        enc = NULL;
+-    }
++    /* already in used */
++    if (plane->fb_id)
++        goto end;
+ 
+-    if(enc) {
+-        drm_dev->enc_id = enc->encoder_id;
+-        LV_LOG_TRACE("enc_id: %d", drm_dev->enc_id);
+-        drm_dev->crtc_id = enc->crtc_id;
+-        LV_LOG_TRACE("crtc_id: %d", drm_dev->crtc_id);
+-        drmModeFreeEncoder(enc);
+-        enc = NULL;
++    preferred_plane = drm_config_get_string_property(dev, "LV_DRM_PLANE_TYPE");
++    if (!preferred_plane)
++        preferred_plane = drm_config_get_string_property(dev, "LV_DRIVERS_SET_PLANE");
++    if (preferred_plane)
++    {
++        if (!strcmp("OVERLAY", preferred_plane))
++            preferred_type = DRM_PLANE_TYPE_OVERLAY;
++        else if (!strcmp("PRIMARY", preferred_plane))
++            preferred_type = DRM_PLANE_TYPE_PRIMARY;
++        else if (!strcmp("CURSOR", preferred_plane))
++            preferred_type = DRM_PLANE_TYPE_CURSOR;
+     }
+-    else {
+-        /* Encoder hasn't been associated yet, look it up */
+-        bool found = false;
+-        for(i = 0; i < conn->count_encoders; i++) {
+-            int crtc, crtc_id = -1;
+-
+-            enc = drmModeGetEncoder(drm_dev->fd, conn->encoders[i]);
+-            if(!enc)
+-                continue;
+ 
+-            for(crtc = 0 ; crtc < res->count_crtcs; crtc++) {
+-                uint32_t crtc_mask = 1 << crtc;
++    if (preferred_type == -1)
++        return plane;
+ 
+-                crtc_id = res->crtcs[crtc];
++    type = drm_plane_get_int_property(dev, plane_id, "type");
++    if (type == -1)
++    {
++        LV_LOG_ERROR("Get type property failed");
++        goto end;
++    }
+ 
+-                LV_LOG_TRACE("enc_id %d crtc%d id %d mask %x possible %x", enc->encoder_id, crtc, crtc_id, crtc_mask,
+-                             enc->possible_crtcs);
++    if (type == preferred_type)
++        return plane;
+ 
+-                if(enc->possible_crtcs & crtc_mask)
+-                    break;
+-            }
+-
+-            if(crtc_id > 0) {
+-                drm_dev->enc_id = enc->encoder_id;
+-                LV_LOG_TRACE("enc_id: %d", drm_dev->enc_id);
+-                drm_dev->crtc_id = crtc_id;
+-                LV_LOG_TRACE("crtc_id: %d", drm_dev->crtc_id);
+-                drmModeFreeEncoder(enc);
+-                enc = NULL;
+-                found = true;
+-                break;
+-            }
++end:
++    drmModeFreePlane(plane);
++    return NULL;
++}
+ 
+-            drmModeFreeEncoder(enc);
+-            enc = NULL;
+-        }
++static drmModePlanePtr
++drm_find_best_plane(drm_device_t *dev, drmModeCrtcPtr crtc)
++{
++    drmModeResPtr res = dev->res;
++    drmModePlaneResPtr pres;
++    drmModePlanePtr plane = NULL;
++    int preferred_plane_id;
++    unsigned int i;
++    int pipe;
+ 
+-        if(!found) {
+-            LV_LOG_ERROR("suitable encoder not found");
+-            goto free_res;
+-        }
++    preferred_plane_id = drm_config_get_int_property(dev, "LV_DRM_PLANE_ID", 0);
++    if (preferred_plane_id)
++    {
++        plane = drmModeGetPlane(dev->fd, preferred_plane_id);
++        if (plane)
++            return plane;
+     }
+ 
+-    drm_dev->crtc_idx = UINT32_MAX;
+-
+-    for(i = 0; i < res->count_crtcs; ++i) {
+-        if(drm_dev->crtc_id == res->crtcs[i]) {
+-            drm_dev->crtc_idx = i;
++    for (pipe = 0; pipe < res->count_crtcs; pipe++)
++    {
++        if (crtc->crtc_id == res->crtcs[pipe])
+             break;
+-        }
+     }
++    if (pipe == res->count_crtcs)
++        return NULL;
+ 
+-    if(drm_dev->crtc_idx == UINT32_MAX) {
+-        LV_LOG_ERROR("drm: CRTC not found");
+-        goto free_res;
++    pres = drmModeGetPlaneResources(dev->fd);
++    if (!pres)
++        return NULL;
++
++    for (i = 0; i < pres->count_planes; i++)
++    {
++        plane = get_preferred_plane(dev, pres->planes[i], pipe);
++        if (plane)
++            break;
+     }
+ 
+-    LV_LOG_TRACE("crtc_idx: %d", drm_dev->crtc_idx);
+-    ret = 0;
++    drmModeFreePlaneResources(pres);
+ 
+-free_res:
+-    if(enc) {
+-        drmModeFreeEncoder(enc);
+-        enc = NULL;
+-    }
+-    if(conn) {
+-        drmModeFreeConnector(conn);
+-        conn = NULL;
+-    }
+-    if(res) {
+-        drmModeFreeResources(res);
+-        res = NULL;
+-    }
+-    return ret;
++    return plane;
+ }
+ 
+-static int drm_open(const char * path)
++static drmModeModeInfoPtr
++drm_find_best_mode(drm_device_t *dev, drmModeConnectorPtr conn)
+ {
+-    int fd, flags;
+-    uint64_t has_dumb;
+-    int ret;
+-
+-    fd = open(path, O_RDWR);
+-    if(fd < 0) {
+-        LV_LOG_ERROR("cannot open \"%s\"", path);
+-        return -1;
+-    }
+-
+-    /* set FD_CLOEXEC flag */
+-    if((flags = fcntl(fd, F_GETFD)) < 0 ||
+-       fcntl(fd, F_SETFD, flags | FD_CLOEXEC) < 0) {
+-        LV_LOG_ERROR("fcntl FD_CLOEXEC failed");
+-        goto err;
+-    }
+-
+-    /* check capability */
+-    ret = drmGetCap(fd, DRM_CAP_DUMB_BUFFER, &has_dumb);
+-    if(ret < 0 || has_dumb == 0) {
+-        LV_LOG_ERROR("drmGetCap DRM_CAP_DUMB_BUFFER failed or \"%s\" doesn't have dumb "
+-                     "buffer", path);
+-        goto err;
++    drmModeModeInfoPtr mode;
++    int i, preferred_width, preferred_height;
++    int best_i = 0, max_width = 0, max_height = 0;
++
++    if (dev == NULL)
++        return 0;
++
++    if (drm_get_preferred_mode(&preferred_width, &preferred_height) == -1)
++    {
++        preferred_width = drm_config_get_int_property(dev, "LV_DRM_MODE_PREFERD_WIDTH",
++                          dev->preferred_width);
++        preferred_height = drm_config_get_int_property(dev, "LV_DRM_MODE_PREFERD_HEIGHT",
++                           dev->preferred_height);
++    }
++    LV_LOG_INFO("Preferred mode: %dx%d", preferred_width, preferred_height);
++
++    for (i = 0; i < conn->count_modes; i++)
++    {
++        LV_LOG_INFO("Check mode: %dx%d",
++                    conn->modes[i].hdisplay, conn->modes[i].vdisplay);
++        if (conn->modes[i].hdisplay == preferred_width &&
++                conn->modes[i].vdisplay == preferred_height)
++        {
++            best_i = i;
++            break;
++        }
++        if (conn->modes[i].hdisplay > max_width &&
++                conn->modes[i].vdisplay > max_height)
++        {
++            best_i = i;
++            max_width = conn->modes[i].hdisplay;
++            max_height = conn->modes[i].vdisplay;
++        }
+     }
++    mode = &conn->modes[best_i];
+ 
+-    return fd;
+-err:
+-    close(fd);
+-    return -1;
++    return mode;
+ }
+ 
+-static int drm_setup(drm_dev_t * drm_dev, const char * device_path, int64_t connector_id, unsigned int fourcc)
++static void drm_free(drm_device_t *dev)
+ {
+-    int ret;
+-
+-    drm_dev->fd = drm_open(device_path);
+-    if(drm_dev->fd < 0)
+-        return -1;
+-
+-    ret = drmSetClientCap(drm_dev->fd, DRM_CLIENT_CAP_ATOMIC, 1);
+-    if(ret) {
+-        LV_LOG_ERROR("No atomic modesetting support: %s", strerror(errno));
+-        goto err;
+-    }
++    int i;
+ 
+-    ret = drm_find_connector(drm_dev, connector_id);
+-    if(ret) {
+-        LV_LOG_ERROR("available drm devices not found");
+-        goto err;
++    if (dev->res)
++    {
++        drmModeFreeResources(dev->res);
++        dev->res = NULL;
+     }
+ 
+-    ret = find_plane(drm_dev, fourcc, &drm_dev->plane_id, drm_dev->crtc_id, drm_dev->crtc_idx);
+-    if(ret) {
+-        LV_LOG_ERROR("Cannot find plane");
+-        goto err;
+-    }
++    dev->connector_id = 0;
++    dev->crtc_id = 0;
++    dev->plane_id = 0;
++    dev->mode.physical_width = 0;
++    dev->mode.physical_height = 0;
++}
+ 
+-    drm_dev->plane = drmModeGetPlane(drm_dev->fd, drm_dev->plane_id);
+-    if(!drm_dev->plane) {
+-        LV_LOG_ERROR("Cannot get plane");
+-        goto err;
+-    }
++static int drm_setup(drm_device_t *dev)
++{
++    drmModeConnectorPtr conn = NULL;
++    drmModeModeInfoPtr mode;
++    drmModePlanePtr plane = NULL;
++    drmModeCrtcPtr crtc = NULL;
++    drm_bo_t *crtc_bo;
++    int type;
++    int zpos;
++    int ret;
++    int i, success = 0;
+ 
+-    drm_dev->crtc = drmModeGetCrtc(drm_dev->fd, drm_dev->crtc_id);
+-    if(!drm_dev->crtc) {
+-        LV_LOG_ERROR("Cannot get crtc");
++    dev->res = drmModeGetResources(dev->fd);
++    if (!dev->res)
++    {
++        LV_LOG_ERROR("drm get resource failed");
+         goto err;
+     }
+ 
+-    drm_dev->conn = drmModeGetConnector(drm_dev->fd, drm_dev->conn_id);
+-    if(!drm_dev->conn) {
+-        LV_LOG_ERROR("Cannot get connector");
++    conn = drm_find_best_connector(dev);
++    if (!conn)
++    {
++        LV_LOG_ERROR("drm find connector failed");
+         goto err;
+     }
++    LV_LOG_USER("Best connector id: %d", conn->connector_id);
+ 
+-    ret = drm_get_plane_props(drm_dev);
+-    if(ret) {
+-        LV_LOG_ERROR("Cannot get plane props");
++    crtc = drm_find_best_crtc(dev, conn);
++    if (!crtc)
++    {
++        LV_LOG_ERROR("drm find crtc failed");
+         goto err;
+     }
+-
+-    ret = drm_get_crtc_props(drm_dev);
+-    if(ret) {
+-        LV_LOG_ERROR("Cannot get crtc props");
+-        goto err;
++    LV_LOG_USER("Best crtc: %d", crtc->crtc_id);
++    if (crtc->mode_valid)
++    {
++        dev->preferred_width = crtc->mode.hdisplay;
++        dev->preferred_height = crtc->mode.vdisplay;
+     }
+ 
+-    ret = drm_get_conn_props(drm_dev);
+-    if(ret) {
+-        LV_LOG_ERROR("Cannot get connector props");
++    mode = drm_find_best_mode(dev, conn);
++    if (!mode)
++    {
++        LV_LOG_ERROR("drm find mode failed");
+         goto err;
+     }
++    LV_LOG_USER("Best mode: %dx%d", mode->hdisplay, mode->vdisplay);
++    memcpy(&dev->mode_info, mode, sizeof(dev->mode_info));
+ 
+-    drm_dev->drm_event_ctx.version = DRM_EVENT_CONTEXT_VERSION;
+-    drm_dev->drm_event_ctx.page_flip_handler = page_flip_handler;
+-    drm_dev->fourcc = fourcc;
+-
+-    LV_LOG_INFO("drm: Found plane_id: %u connector_id: %d crtc_id: %d",
+-                drm_dev->plane_id, drm_dev->conn_id, drm_dev->crtc_id);
+-
+-    LV_LOG_INFO("drm: %dx%d (%dmm X% dmm) pixel format %c%c%c%c",
+-                drm_dev->width, drm_dev->height, drm_dev->mmWidth, drm_dev->mmHeight,
+-                (fourcc >> 0) & 0xff, (fourcc >> 8) & 0xff, (fourcc >> 16) & 0xff, (fourcc >> 24) & 0xff);
+-
+-
+-#if LV_USE_LINUX_DRM_GBM_BUFFERS
+-
+-    /* Create GBM device and buffer */
+-    drm_dev->gbm_device = gbm_create_device(drm_dev->fd);
+-
+-    if(drm_dev->gbm_device == NULL) {
+-        LV_LOG_ERROR("Failed to create GBM device");
++    plane = drm_find_best_plane(dev, crtc);
++    if (!plane)
++    {
++        LV_LOG_ERROR("drm find plane failed");
+         goto err;
+     }
+ 
+-    LV_LOG_INFO("GBM device backend: %s", gbm_device_get_backend_name(drm_dev->gbm_device));
+-#endif
+-
+-    return 0;
+-
++    type = drm_plane_get_int_property(dev, plane->plane_id, "type");
++    if (type == DRM_PLANE_TYPE_PRIMARY)
++        dev->is_primary_plane = true;
++
++    zpos = drm_config_get_int_property(dev, "LV_DRM_PLANE_ZPOS", -1);
++    if (zpos > 0)
++        drm_plane_set_int_property(dev, plane->plane_id, "zpos", zpos);
++    drm_plane_set_int_property(dev, plane->plane_id, "pixel blend mode", 1);
++    LV_LOG_USER("Best plane: %d", plane->plane_id);
++    dev->connector_id = conn->connector_id;
++    dev->crtc_id = crtc->crtc_id;
++    dev->plane_id = plane->plane_id;
++    dev->mode.physical_width = mode->hdisplay;
++    dev->mode.physical_height = mode->vdisplay;
++    dev->vsync = drm_config_get_int_property(dev, "LV_DRM_VSYNC", 1);
++
++    crtc_bo = malloc_drm_bo(dev, dev->mode.physical_width, dev->mode.physical_height, DRM_FORMAT);
++    if (crtc_bo)
++    {
++        uint32_t fps = drm_config_get_int_property(dev, "lv_disp_fps", 0);
++        uint32_t con_ids[1];
++        if (fps && (fps != dev->mode_info.vrefresh))
++        {
++            LV_LOG_USER("Update FPS %d -> %d", dev->mode_info.vrefresh, fps);
++            dev->mode_info.clock = dev->mode_info.clock * fps / dev->mode_info.vrefresh;
++            dev->mode_info.vrefresh = fps;
++        }
++        memset(crtc_bo->ptr, 0x0, crtc_bo->size);
++        con_ids[0] = dev->connector_id;
++        ret = drmModeSetCrtc(dev->fd, dev->crtc_id, crtc_bo->fb_id, 0, 0,
++                             con_ids, 1, &dev->mode_info);
++        if (ret)
++            LV_LOG_WARN("drmModeSetCrtc failed %d %d", dev->crtc_id, ret);
++        free_drm_bo(dev, crtc_bo);
++    }
++    success = 1;
+ err:
+-#if LV_USE_LINUX_DRM_GBM_BUFFERS
+-    if(drm_dev->gbm_device) {
+-        gbm_device_destroy(drm_dev->gbm_device);
+-        drm_dev->gbm_device = NULL;
++    drmModeFreeConnector(conn);
++    drmModeFreePlane(plane);
++    drmModeFreeCrtc(crtc);
++    if (!success)
++    {
++        drm_free(dev);
++        return -1;
+     }
+-#endif
++    return 0;
++}
+ 
+-    if(drm_dev->plane) {
+-        drmModeFreePlane(drm_dev->plane);
+-        drm_dev->plane = NULL;
+-    }
+-    if(drm_dev->crtc) {
+-        drmModeFreeCrtc(drm_dev->crtc);
+-        drm_dev->crtc = NULL;
+-    }
+-    if(drm_dev->conn) {
+-        drmModeFreeConnector(drm_dev->conn);
+-        drm_dev->conn = NULL;
+-    }
+-    if(drm_dev->fd >= 0) {
+-        close(drm_dev->fd);
+-        drm_dev->fd = -1;
+-    }
+-    return -1;
++static void drm_flip_handler(int fd, unsigned frame, unsigned sec,
++                             unsigned usec, void *data)
++{
++    // data is &dev->waiting_for_flip
++    LV_LOG_TRACE("Page flip received(%d)!, %d, %d, %d, %d", *(int *)data, fd, frame, sec, usec);
++    *(int *)data = 0;
+ }
+ 
+-#if !LV_USE_LINUX_DRM_GBM_BUFFERS
+-static int drm_allocate_dumb(drm_dev_t * drm_dev, drm_buffer_t * buf)
++static drm_device_t *drm_init(void)
+ {
+-    struct drm_mode_create_dumb creq;
+-    struct drm_mode_map_dumb mreq;
+-    uint32_t handles[4] = {0}, pitches[4] = {0}, offsets[4] = {0};
++    drm_device_t *dev;
+     int ret;
+ 
+-    /* create dumb buffer */
+-    lv_memzero(&creq, sizeof(creq));
+-    creq.width = drm_dev->width;
+-    creq.height = drm_dev->height;
+-    creq.bpp = LV_COLOR_DEPTH;
+-    ret = drmIoctl(drm_dev->fd, DRM_IOCTL_MODE_CREATE_DUMB, &creq);
+-    if(ret < 0) {
+-        LV_LOG_ERROR("DRM_IOCTL_MODE_CREATE_DUMB fail");
+-        return -1;
+-    }
+-
+-    buf->handle = creq.handle;
+-    buf->pitch = creq.pitch;
+-    buf->size = creq.size;
+-
+-    /* prepare buffer for memory mapping */
+-    lv_memzero(&mreq, sizeof(mreq));
+-    mreq.handle = creq.handle;
+-    ret = drmIoctl(drm_dev->fd, DRM_IOCTL_MODE_MAP_DUMB, &mreq);
+-    if(ret) {
+-        LV_LOG_ERROR("DRM_IOCTL_MODE_MAP_DUMB fail");
+-        return -1;
++    dev = lv_malloc_zeroed(sizeof(drm_device_t));
++    if (dev == NULL)
++    {
++        LV_LOG_ERROR("allocate device failed");
++        return NULL;
+     }
+ 
+-    buf->offset = mreq.offset;
+-    LV_LOG_INFO("size %lu pitch %u offset %u", buf->size, buf->pitch, buf->offset);
+-
+-    /* perform actual memory mapping */
+-    buf->map = mmap(0, creq.size, PROT_READ | PROT_WRITE, MAP_SHARED, drm_dev->fd, mreq.offset);
+-    if(buf->map == MAP_FAILED) {
+-        LV_LOG_ERROR("mmap fail");
+-        return -1;
++    dev->fd = drmOpen("rockchip", NULL);
++    if (dev->fd < 0)
++        dev->fd = open("/dev/dri/card0", O_RDWR);
++    if (dev->fd < 0)
++    {
++        LV_LOG_ERROR("drm open failed");
++        goto err_drm_open;
+     }
++    fcntl(dev->fd, F_SETFD, FD_CLOEXEC);
+ 
+-    /* clear the framebuffer to 0 (= full transparency in ARGB8888) */
+-    lv_memzero(buf->map, creq.size);
+-
+-    /* create framebuffer object for the dumb-buffer */
+-    handles[0] = creq.handle;
+-    pitches[0] = creq.pitch;
+-    offsets[0] = 0;
+-    ret = drmModeAddFB2(drm_dev->fd, drm_dev->width, drm_dev->height, drm_dev->fourcc,
+-                        handles, pitches, offsets, &buf->fb_handle, 0);
+-    if(ret) {
+-        LV_LOG_ERROR("drmModeAddFB fail");
+-        return -1;
+-    }
++    drmSetClientCap(dev->fd, DRM_CLIENT_CAP_UNIVERSAL_PLANES, 1);
+ 
+-    return 0;
+-}
+-#endif /*!LV_USE_LINUX_DRM_GBM_BUFFERS*/
+-
+-#if LV_USE_LINUX_DRM_GBM_BUFFERS
+-
+-static int create_gbm_buffer(drm_dev_t * drm_dev, drm_buffer_t * buf)
+-{
+-    struct gbm_bo * gbm_bo;
+-    int prime_fd;
+-    uint32_t handles[4] = {0}, pitches[4] = {0}, offsets[4] = {0};
+-    uint32_t n_planes;
+-    int res;
++    drm_config_file_init(dev);
+ 
+-    /* gbm_bo_format does not define anything other than ARGB8888 or XRGB8888 */
+-    if(LV_COLOR_DEPTH != 32) {
+-        LV_LOG_ERROR("Unsupported color format");
+-        return -1;
++    ret = drm_setup(dev);
++    if (ret)
++    {
++        LV_LOG_ERROR("drm setup failed");
++        goto err_drm_setup;
+     }
+ 
+-    /* Create a linear GBM buffer object - best practice when modifiers are not used */
+-    if(!(gbm_bo = gbm_bo_create(drm_dev->gbm_device,
+-                                drm_dev->width, drm_dev->height, GBM_BO_FORMAT_XRGB8888,
+-                                GBM_BO_USE_SCANOUT | GBM_BO_USE_LINEAR))) {
++    dev->drm_pollfd.fd = dev->fd;
++    dev->drm_pollfd.events = POLLIN;
+ 
+-        LV_LOG_ERROR("Unable to create gbm buffer object");
+-        return -1;
+-    }
+-
+-    /* Currently only, one plane per dma-buf/prime fd is supported - but some GPUs feature
+-     * several planes (multiple fds or sometimes a single fd for multiple planes).
+-     * current implementation is kept simple for now */
++    dev->drm_evctx.version = DRM_EVENT_CONTEXT_VERSION;
++    dev->drm_evctx.page_flip_handler = drm_flip_handler;
+ 
+-    n_planes = gbm_bo_get_plane_count(gbm_bo);
+-
+-    if(n_planes != 1) {
+-        LV_LOG_ERROR("The current implementation only supports a single plane per fd");
+-        return -1;
+-    }
++    return dev;
+ 
+-    uint32_t h = gbm_bo_get_height(gbm_bo);
+-    pitches[0] = buf->pitch = gbm_bo_get_stride_for_plane(gbm_bo, 0);
+-    offsets[0] = buf->offset = gbm_bo_get_offset(gbm_bo, 0);
+-    buf->size = h * buf->pitch;
++err_alloc_fb:
++    drm_free(dev);
++err_drm_setup:
++    drmClose(dev->fd);
++err_drm_open:
++    lv_free(dev);
+ 
+-    LV_LOG_INFO("Created GBM BO of size: %lu pitch: %u offset: %u",
+-                buf->size, buf->pitch, buf->offset);
++    return NULL;
++}
+ 
+-    prime_fd = gbm_bo_get_fd_for_plane(gbm_bo, 0);
++static void drm_deinit(drm_device_t *dev)
++{
++    drm_free(dev);
++    drm_config_file_deinit(dev);
+ 
+-    if(prime_fd < 0) {
+-        LV_LOG_ERROR("Failed to get prime fd for plane 0");
+-        return -1;
++    if (dev->fd > 0)
++        drmClose(dev->fd);
++}
+ 
+-    }
++static void drm_wait_flip(drm_device_t *dev, int timeout)
++{
++    int ret;
+ 
+-    buf->map = mmap(NULL, buf->size, PROT_READ | PROT_WRITE, MAP_SHARED, prime_fd, 0);
++    while (dev->waiting_for_flip)
++    {
++        dev->drm_pollfd.revents = 0;
++        ret = poll(&dev->drm_pollfd, 1, timeout);
++        if (ret <= 0)
++            return;
+ 
+-    if(buf->map == MAP_FAILED) {
+-        LV_LOG_ERROR("Failed to mmap dma-buf fd.");
+-        return -1;
++        drmHandleEvent(dev->fd, &dev->drm_evctx);
+     }
++}
+ 
+-    /* Used to perform DMA_BUF_SYNC ioctl calls during the rendering cycle */
+-    buf->handle = prime_fd;
+-
+-    /* Convert prime fd to a libdrm buffer handle */
+-    drmPrimeFDToHandle(drm_dev->fd, buf->handle, &handles[0]);
++static void drm_set_plane(drm_device_t *dev, drm_bo_t *bo)
++{
++    int crtc_x, crtc_y, crtc_w, crtc_h;
++    int ret;
++    int fb = bo->fb_id, sw = dev->mode.width, sh = dev->mode.height;
++    int flip_fb;
++    drmVBlank vbl;
+ 
+-    /* create libdrm framebuffer */
+-    res = drmModeAddFB2(drm_dev->fd, drm_dev->width, drm_dev->height, drm_dev->fourcc,
+-                        handles, pitches, offsets, &buf->fb_handle, 0);
++    if (dev == NULL)
++        return;
+ 
+-    if(res) {
+-        LV_LOG_ERROR("drmModeAddFB2 failed");
+-        return -1;
++    if (dev->disp_crop)
++    {
++        crtc_w = sw;
++        crtc_h = sh;
++        crtc_x = (dev->mode.physical_width - sw) / 2;
++        crtc_y = (dev->mode.physical_height - sh) / 2;
++    }
++    else
++    {
++        /* Fullscreen */
++        crtc_w = dev->mode.physical_width;
++        crtc_h = dev->mode.physical_height;
++        crtc_x = 0;
++        crtc_y = 0;
++    }
++
++    LV_LOG_TRACE("Display bo %d(%dx%d) at (%d,%d) %dx%d", fb, sw, sh,
++                 crtc_x, crtc_y, crtc_w, crtc_h);
++    ret = drmModeSetPlane(dev->fd, dev->plane_id, dev->crtc_id, fb, 0,
++                          crtc_x, crtc_y, crtc_w, crtc_h,
++                          0, 0, sw << 16, sh << 16);
++    if (ret)
++    {
++        LV_LOG_ERROR("drm set plane failed");
++        return;
+     }
+-
+-    if(drmCloseBufferHandle(drm_dev->fd, handles[0]) != 0) {
+-        LV_LOG_ERROR("drmCloseBufferHandle failed");
+-        return -1;
++    if (dev->vsync)
++    {
++        if (dev->vsync == 1)
++        {
++            if (dev->is_primary_plane)
++            {
++                flip_fb = fb;
++            }
++            else
++            {
++                drmModeCrtc *crtc = drmModeGetCrtc(dev->fd, dev->crtc_id);
++                if (!crtc)
++                    return;
++                flip_fb = crtc->buffer_id;
++                drmModeFreeCrtc(crtc);
++            }
++            // Queue page flip
++            dev->waiting_for_flip = 1;
++            ret = drmModePageFlip(dev->fd, dev->crtc_id, flip_fb,
++                                  DRM_MODE_PAGE_FLIP_EVENT, &dev->waiting_for_flip);
++            if (ret)
++            {
++                LV_LOG_ERROR("drm page flip failed %d", ret);
++                return;
++            }
++        }
++        else
++        {
++            memset(&vbl, 0, sizeof(vbl));
++            vbl.request.type = (drmVBlankSeqType)(DRM_VBLANK_RELATIVE);
++            vbl.request.sequence = 1;
++            vbl.request.signal = &dev->waiting_for_flip;
++            ret = drmWaitVBlank(dev->fd, &vbl);
++            if (ret)
++            {
++                LV_LOG_ERROR("drm wait vblank failed %d", ret);
++                return;
++            }
++        }
++        // Wait for last page flip
++        drm_wait_flip(dev, -1);
+     }
+-
+-    return 0;
+-
+ }
+ 
+-#endif /* LV_USE_LINUX_DRM_GBM_BUFFERS */
+-
+-static int drm_setup_buffers(drm_dev_t * drm_dev)
++static void *drm_thread(void *arg)
+ {
++    drm_device_t *dev = (drm_device_t *)arg;
++    drm_bo_t *bo = NULL;
++    drm_bo_t *vop_buf[2];
++#if LV_DRM_USE_RGA
++    drm_bo_t *gbo = dev->gbo;
++    rga_buffer_t vop_img[2];
++    rga_buffer_t src_img, dst_img, pat_img;
++    im_rect src_rect, dst_rect, pat_rect;
++    int usage = IM_SYNC;
++    int src_fd;
++    int dst_fd;
+     int ret;
++#endif
+ 
+-#if LV_USE_LINUX_DRM_GBM_BUFFERS
+-    ret = create_gbm_buffer(drm_dev, &drm_dev->drm_bufs[0]);
+-    if(ret < 0) {
+-        return ret;
+-    }
+-
+-    ret = create_gbm_buffer(drm_dev, &drm_dev->drm_bufs[1]);
+-    if(ret < 0) {
+-        return ret;
+-    }
++    vop_buf[0] = dev->vop_buf[0];
++    vop_buf[1] = dev->vop_buf[1];
++
++#if LV_DRM_USE_RGA
++    switch (dev->disp_rot)
++    {
++    case 90:
++        usage |= IM_HAL_TRANSFORM_ROT_90;
++        break;
++    case 180:
++        usage |= IM_HAL_TRANSFORM_ROT_180;
++        break;
++    case 270:
++        usage |= IM_HAL_TRANSFORM_ROT_270;
++        break;
++    default:
++        break;
++    }
++
++    src_img = wrapbuffer_fd(gbo->buf_fd, gbo->w,
++                            gbo->h, RGA_FORMAT,
++                            gbo->pitch / (LV_COLOR_DEPTH >> 3),
++                            gbo->h);
++    vop_img[0] = wrapbuffer_fd(vop_buf[0]->buf_fd, vop_buf[0]->w,
++                               vop_buf[0]->h, RGA_FORMAT,
++                               vop_buf[0]->pitch / (LV_COLOR_DEPTH >> 3),
++                               vop_buf[0]->h);
++    vop_img[1] = wrapbuffer_fd(vop_buf[1]->buf_fd, vop_buf[1]->w,
++                               vop_buf[1]->h, RGA_FORMAT,
++                               vop_buf[1]->pitch / (LV_COLOR_DEPTH >> 3),
++                               vop_buf[1]->h);
++    memset(&pat_img, 0, sizeof(pat_img));
++    memset(&src_rect, 0, sizeof(src_rect));
++    memset(&dst_rect, 0, sizeof(dst_rect));
++    memset(&pat_rect, 0, sizeof(pat_rect));
++#endif
+ 
++    while (!dev->quit)
++    {
++        pthread_mutex_lock(&dev->mutex);
++        if (dev->draw_update)
++        {
++            bo = (bo == vop_buf[0]) ? vop_buf[1] : vop_buf[0];
++
++#if LV_DRM_USE_RGA
++            dst_img = (bo == vop_buf[0]) ? vop_img[0] : vop_img[1];
++            ret = imcheck_composite(src_img, dst_img, pat_img,
++                                    src_rect, dst_rect, pat_rect);
++            if (ret != IM_STATUS_NOERROR)
++            {
++                LV_LOG_ERROR("%d, check error! %s\n", __LINE__,
++                             imStrError((IM_STATUS)ret));
++            }
++            else
++            {
++                ret = improcess(src_img, dst_img, pat_img,
++                                src_rect, dst_rect, pat_rect, usage);
++                if (ret != IM_STATUS_SUCCESS)
++                    LV_LOG_ERROR("%d, running failed, %s\n", __LINE__,
++                                 imStrError((IM_STATUS)ret));
++            }
+ #else
+-    /* Use dumb buffers */
+-    ret = drm_allocate_dumb(drm_dev, &drm_dev->drm_bufs[0]);
+-    if(ret)
+-        return ret;
+-
+-    ret = drm_allocate_dumb(drm_dev, &drm_dev->drm_bufs[1]);
+-    if(ret)
+-        return ret;
++            for (int i = 0; i < dev->mode.height; i++)
++            {
++                memcpy(bo->ptr + i * bo->pitch,
++                       dev->flush_buf + i * dev->flush_buf_stride * (LV_COLOR_DEPTH >> 3),
++                       bo->pitch);
++            }
++#endif
++            drm_set_plane(dev, bo);
++            dev->draw_update = 0;
++        }
++        pthread_mutex_unlock(&dev->mutex);
++        usleep(100);
++    }
++    return NULL;
++}
+ 
++#if SW_ROTATION
++#if (LV_COLOR_DEPTH == 16)
++typedef uint16_t data_type;
++#elif (LV_COLOR_DEPTH == 32)
++typedef uint32_t data_type;
+ #endif
+ 
+-    return 0;
++static void rotate_90(lv_display_t *disp, const lv_area_t *area, uint8_t *color_p)
++{
++    drm_device_t *dev = lv_display_get_driver_data(disp);
++    data_type *src = (data_type *)color_p;
++    data_type *dst;
++    int32_t x, tx;
++    int32_t y, ty;
++
++    for (y = area->y1; y <= area->y2; y++)
++    {
++        tx = (dev->mode.width - 1) - y;
++        ty = area->x1;
++        dst = (data_type *)(dev->flush_buf + (ty * dev->flush_buf_stride + tx) * (LV_COLOR_DEPTH >> 3));
++        for (x = area->x1; x <= area->x2; x++)
++        {
++            *dst = *src;
++            src++;
++            dst += dev->flush_buf_stride;
++        }
++    }
+ }
+ 
+-static void drm_flush_wait(lv_display_t * disp)
++static void rotate_180(lv_display_t *disp, const lv_area_t *area, uint8_t *color_p)
+ {
+-    drm_dev_t * drm_dev = lv_display_get_driver_data(disp);
+-
+-    struct pollfd pfd;
+-    pfd.fd = drm_dev->fd;
+-    pfd.events = POLLIN;
+-
+-    while(drm_dev->req) {
+-        int ret;
+-        do {
+-            ret = poll(&pfd, 1, -1);
+-        } while(ret == -1 && errno == EINTR);
+-
+-        if(ret > 0)
+-            drmHandleEvent(drm_dev->fd, &drm_dev->drm_event_ctx);
+-        else {
+-            LV_LOG_ERROR("poll failed: %s", strerror(errno));
+-            return;
++    drm_device_t *dev = lv_display_get_driver_data(disp);
++    data_type *src = (data_type *)color_p;
++    data_type *dst;
++    int32_t x, tx;
++    int32_t y, ty;
++
++    for (y = area->y1; y <= area->y2; y++)
++    {
++        tx = (dev->mode.width - 1) - area->x1;
++        ty = (dev->mode.height - 1) - y;
++        dst = (data_type *)(dev->flush_buf + (ty * dev->flush_buf_stride + tx) * (LV_COLOR_DEPTH >> 3));
++        for (x = area->x1; x <= area->x2; x++)
++        {
++            *dst = *src;
++            src++;
++            dst--;
+         }
+     }
+ }
+ 
+-static void drm_flush(lv_display_t * disp, const lv_area_t * area, uint8_t * px_map)
++static void rotate_270(lv_display_t *disp, const lv_area_t *area, uint8_t *color_p)
+ {
+-    if(!lv_display_flush_is_last(disp)) return;
+-
+-    LV_UNUSED(area);
+-    LV_UNUSED(px_map);
+-    drm_dev_t * drm_dev = lv_display_get_driver_data(disp);
+-
+-    LV_ASSERT(drm_dev->act_buf != NULL);
+-
+-    if(drm_dmabuf_set_plane(drm_dev, drm_dev->act_buf)) {
+-        LV_LOG_ERROR("Flush fail");
+-        return;
++    drm_device_t *dev = lv_display_get_driver_data(disp);
++    data_type *src = (data_type *)color_p;
++    data_type *dst;
++    int32_t x, tx;
++    int32_t y, ty;
++
++    for (y = area->y1; y <= area->y2; y++)
++    {
++        tx = y;
++        ty = (dev->mode.height - 1) - area->x1;
++        dst = (data_type *)(dev->flush_buf + (ty * dev->flush_buf_stride + tx) * (LV_COLOR_DEPTH >> 3));
++        for (x = area->x1; x <= area->x2; x++)
++        {
++            *dst = *src;
++            src++;
++            dst -= dev->flush_buf_stride;
++        }
+     }
+-
+-    drm_dev->act_buf = NULL;
+-
+ }
++#endif
+ 
+-static void drm_del_event_cb(lv_event_t * e)
++static void drm_flush(lv_display_t *disp, const lv_area_t *area, uint8_t *color_p)
+ {
+-    if(LV_EVENT_DELETE != lv_event_get_code(e))
+-        return;
++    drm_device_t *dev = lv_display_get_driver_data(disp);
++    int32_t x;
++    int32_t y;
++    int32_t w = lv_area_get_width(area);
++    int32_t h = lv_area_get_height(area);
+ 
+-    lv_display_t * disp = lv_event_get_current_target(e);
+-    drm_dev_t * drm_dev = lv_display_get_driver_data(disp);
+-    if(!drm_dev) return;
+-
+-    /* Restore original CRTC if saved */
+-    if(drm_dev->fd >= 0 && drm_dev->saved_crtc) {
+-        drmModeCrtc * s_crtc = drm_dev->saved_crtc;
+-        drmModeSetCrtc(drm_dev->fd, s_crtc->crtc_id, s_crtc->buffer_id, 0, 0,
+-                       NULL, 0, &s_crtc->mode);
+-        drmModeFreeCrtc(s_crtc);
+-        drm_dev->saved_crtc = NULL;
+-    }
++    pthread_mutex_lock(&dev->mutex);
+ 
+-    /* Prevent further flushes & free any pending atomic request */
+-    lv_display_set_flush_cb(disp, NULL);
+-    if(drm_dev->req) {
+-        drmModeAtomicFree(drm_dev->req);
+-        drm_dev->req = NULL;
++#if SW_ROTATION
++    if (!dev->disp_rot)
++    {
++#endif
++        for (y = area->y1; y <= area->y2; y++)
++        {
++            lv_color_t *ptr = (lv_color_t *)(dev->flush_buf + (y * dev->flush_buf_stride + area->x1) *
++                                             (LV_COLOR_DEPTH >> 3));
++            memcpy(ptr, color_p, w * (LV_COLOR_DEPTH >> 3));
++            color_p += w * (LV_COLOR_DEPTH >> 3);
++        }
++#if SW_ROTATION
++    }
++    else
++    {
++        if (dev->disp_rot == 90)
++            rotate_90(disp, area, color_p);
++        else if (dev->disp_rot == 180)
++            rotate_180(disp, area, color_p);
++        else if (dev->disp_rot == 270)
++            rotate_270(disp, area, color_p);
+     }
++#endif
++    if (lv_display_flush_is_last(disp))
++        dev->draw_update = 1;
++    pthread_mutex_unlock(&dev->mutex);
+ 
+-#if LV_USE_LINUX_DRM_GBM_BUFFERS
+-    for(int i = 0; i < BUFFER_CNT; ++i) {
+-        drm_buffer_t * b = &drm_dev->drm_bufs[i];
++    lv_display_flush_ready(disp);
++}
+ 
+-        if(b->fb_handle) {
+-            drmModeRmFB(drm_dev->fd, b->fb_handle);
+-            b->fb_handle = 0;
+-        }
++static void drm_buffer_setup(drm_device_t *dev)
++{
++    int buf_w, buf_h;
+ 
+-        if(MAP_FAILED != b->map) {
+-            munmap(b->map, b->size);
+-            b->map = MAP_FAILED;
+-        }
++    LV_LOG_USER("bit depth %d", LV_COLOR_DEPTH);
+ 
+-        if((int)b->handle >= 0) {
+-            close((int)b->handle);
+-            b->handle = 0;
+-        }
++    /* If use software rotation, the size of flush buffer equal to vop buffer,
++     * If use RGA rotaion, the size of flush buffer equal to draw buffer.
++     * lvgl->draw buffer->flush buffer->vop buffer
++     */
++#if SW_ROTATION
++    buf_w = dev->mode.width;
++    buf_h = dev->mode.height;
++#else
++    if ((dev->disp_rot == 0) || (dev->disp_rot == 180))
++    {
++        buf_w = dev->mode.width;
++        buf_h = dev->mode.height;
+     }
+-
+-    if(drm_dev->gbm_device) {
+-        gbm_device_destroy(drm_dev->gbm_device);
+-        drm_dev->gbm_device = NULL;
++    else
++    {
++        buf_w = dev->mode.height;
++        buf_h = dev->mode.width;
+     }
++#endif
++#if LV_DRM_USE_RGA
++    dev->gbo = malloc_drm_bo(dev, buf_w, buf_h, DRM_FORMAT);
++    dev->flush_buf = dev->gbo->ptr;
++    dev->flush_buf_stride = dev->gbo->pitch / (LV_COLOR_DEPTH >> 3);
++    c_RkRgaInit();
++#else
++    dev->flush_buf = malloc(buf_w * buf_h * (LV_COLOR_DEPTH >> 3));
++    dev->flush_buf_stride = buf_w;
++#endif
++    dev->vop_buf[0] = malloc_drm_bo(dev, dev->mode.width, dev->mode.height, DRM_FORMAT);
++    dev->vop_buf[1] = malloc_drm_bo(dev, dev->mode.width, dev->mode.height, DRM_FORMAT);
++    LV_LOG_USER("DRM subsystem and buffer mapped successfully");
++}
+ 
+-#else /* dumb buffers */
+-    for(int i = 0; i < BUFFER_CNT; ++i) {
+-        drm_buffer_t * b = &drm_dev->drm_bufs[i];
+-
+-        if(b->fb_handle) {
+-            drmModeRmFB(drm_dev->fd, b->fb_handle);
+-            b->fb_handle = 0;
+-        }
+-        if(MAP_FAILED != b->map) {
+-            munmap(b->map, b->size);
+-            b->map = MAP_FAILED;
+-        }
+-        if(b->handle) {
+-            struct drm_mode_destroy_dumb d = { .handle = b->handle };
+-            /* Dumb buffers should be destroyed if they are closed, but might as well use the DRM_IOCTL_MODE_DESTROY_DUMB */
+-            drmIoctl(drm_dev->fd, DRM_IOCTL_MODE_DESTROY_DUMB, &d);
+-            b->handle = 0;
+-        }
+-    }
++static void drm_buffer_destroy(drm_device_t *dev)
++{
++#if LV_DRM_USE_RGA
++    free_drm_bo(dev, dev->gbo);
++#else
++    free(dev->flush_buf);
++    free(dev->disp_buf);
+ #endif
++    free_drm_bo(dev, dev->vop_buf[0]);
++    free_drm_bo(dev, dev->vop_buf[1]);
++}
+ 
+-    /* Free DRM properties */
+-    for(uint32_t i = 0; i < drm_dev->count_plane_props; ++i) {
+-        if(drm_dev->plane_props[i]) {
+-            drmModeFreeProperty(drm_dev->plane_props[i]);
+-            drm_dev->plane_props[i] = NULL;
+-        }
+-    }
+-    drm_dev->count_plane_props = 0;
++lv_display_t *lv_drm_disp_create(int hor_res, int ver_res, int rot)
++{
++    lv_display_t *disp;
+ 
+-    for(uint32_t i = 0; i < drm_dev->count_crtc_props; ++i) {
+-        if(drm_dev->crtc_props[i]) {
+-            drmModeFreeProperty(drm_dev->crtc_props[i]);
+-            drm_dev->crtc_props[i] = NULL;
+-        }
++    drm_device_t *dev = drm_init();
++    if (!dev)
++        return NULL;
++#if LV_DRM_USE_RGA || SW_ROTATION
++    dev->disp_rot = drm_config_get_int_property(dev, "lv_disp_rot", rot);;
++#endif
++    dev->mode.width = drm_config_get_int_property(dev, "lv_disp_width", hor_res);
++    dev->mode.height = drm_config_get_int_property(dev, "lv_disp_height", ver_res);
++    dev->disp_crop = drm_config_get_int_property(dev, "lv_disp_crop", 0);
++    if (!dev->mode.width)
++        dev->mode.width = dev->mode.physical_width;
++    if (!dev->mode.height)
++        dev->mode.height = dev->mode.physical_height;
++
++    drm_buffer_setup(dev);
++
++    if ((dev->disp_rot == 0) || (dev->disp_rot == 180))
++        disp = lv_display_create(dev->mode.width, dev->mode.height);
++    else
++        disp = lv_display_create(dev->mode.height, dev->mode.width);
++
++    if (disp == NULL)
++    {
++        LV_LOG_ERROR("lv_display_create failed");
++        return NULL;
+     }
+-    drm_dev->count_crtc_props = 0;
+ 
+-    for(uint32_t i = 0; i < drm_dev->count_conn_props; ++i) {
+-        if(drm_dev->conn_props[i]) {
+-            drmModeFreeProperty(drm_dev->conn_props[i]);
+-            drm_dev->conn_props[i] = NULL;
+-        }
+-    }
+-    drm_dev->count_conn_props = 0;
++    int size = dev->mode.width * dev->mode.height * (LV_COLOR_DEPTH >> 3);
++    dev->disp_buf = lv_malloc(size);
++    lv_display_set_buffers(disp, dev->disp_buf, NULL, size, LV_DISPLAY_RENDER_MODE_PARTIAL);
++    lv_display_set_driver_data(disp, dev);
++    lv_display_set_flush_cb(disp, drm_flush);
++    lv_display_set_color_format(disp, LV_COLOR_FORMAT_NATIVE_WITH_ALPHA);
+ 
+-    if(drm_dev->blob_id) {
+-        drmModeDestroyPropertyBlob(drm_dev->fd, drm_dev->blob_id);
+-        drm_dev->blob_id = 0;
+-    }
++    pthread_mutex_init(&dev->mutex, NULL);
++    pthread_create(&dev->pid, NULL, drm_thread, dev);
+ 
+-    if(drm_dev->conn) {
+-        drmModeFreeConnector(drm_dev->conn);
+-        drm_dev->conn = NULL;
+-    }
++    return disp;
++}
+ 
+-    if(drm_dev->crtc) {
+-        drmModeFreeCrtc(drm_dev->crtc);
+-        drm_dev->crtc = NULL;
+-    }
++int lv_drm_disp_delete(lv_display_t *disp)
++{
++    drm_device_t *dev = lv_display_get_driver_data(disp);
+ 
+-    if(drm_dev->plane) {
+-        drmModeFreePlane(drm_dev->plane);
+-        drm_dev->plane = NULL;
+-    }
++    if (!dev)
++        goto end;
+ 
+-    if(drm_dev->fd >= 0) {
+-        close(drm_dev->fd);
+-        drm_dev->fd = -1;
+-    }
++    dev->quit = 0;
++    pthread_join(dev->pid, NULL);
+ 
+-    lv_display_set_driver_data(disp, NULL);
+-    lv_free(drm_dev);
+-}
++    drm_buffer_destroy(dev);
+ 
+-static uint32_t tick_get_cb(void)
+-{
+-    struct timespec t;
+-    clock_gettime(CLOCK_MONOTONIC, &t);
+-    uint64_t time_ms = t.tv_sec * 1000 + (t.tv_nsec / 1000000);
+-    return time_ms;
++    drm_deinit(dev);
++
++    lv_free(dev->disp_buf);
++    lv_free(dev);
++end:
++    lv_display_delete(disp);
++
++    return 0;
+ }
+ 
+-#endif /*LV_USE_LINUX_DRM && !LV_LINUX_DRM_USE_EGL*/
++#endif
+diff --git a/src/drivers/display/drm/lv_linux_drm.h b/src/drivers/display/drm/lv_linux_drm.h
+index 5afede049..857f2e6c6 100644
+--- a/src/drivers/display/drm/lv_linux_drm.h
++++ b/src/drivers/display/drm/lv_linux_drm.h
+@@ -13,11 +13,10 @@ extern "C" {
+ /*********************
+  *      INCLUDES
+  *********************/
+-
+-#include "../../../display/lv_display.h"
++#include <lvgl.h>
+ 
+ #if LV_USE_LINUX_DRM
+-#include <xf86drmMode.h>
++#include "lv_linux_drm_egl.h"
+ 
+ /*********************
+  *      DEFINES
+@@ -27,105 +26,20 @@ extern "C" {
+  *      TYPEDEFS
+  **********************/
+ 
+-typedef drmModeModeInfo lv_linux_drm_mode_t;
+-
+-/**
+- * Callback function type for selecting a DRM display mode
+- * @param disp pointer to the display object
+- * @param modes array of available DRM modes
+- * @param mode_count number of modes in the array
+- * @return index of the selected mode from the modes array
+- */
+-typedef size_t (*lv_linux_drm_select_mode_cb_t)(lv_display_t * disp,
+-                                                const lv_linux_drm_mode_t * modes,
+-                                                size_t mode_count);
+-
+ /**********************
+  * GLOBAL PROTOTYPES
+  **********************/
+-
+-/**
+- * @brief Create a new Linux DRM display
+- *
+- * Creates and initializes a new LVGL display using the Linux DRM (Direct Rendering Manager)
+- * subsystem for hardware-accelerated graphics output.
+- *
+- * @return Pointer to the created display object, or NULL on failure
+- */
+-lv_display_t * lv_linux_drm_create(void);
+-
+-/**
+- * @brief Configure the DRM device file and connector for a display
+- *
+- * Sets the DRM device file path and connector ID to use for the specified display.
+- * The DRM device file is typically located at /dev/dri/cardN where N is the card number.
+- * The connector ID specifies which physical output (HDMI, VGA, etc.) to use.
+- *
+- * @param disp         Pointer to the display object created with lv_linux_drm_create()
+- * @param file         Path to the DRM device file (e.g., "/dev/dri/card0")
+- * @param connector_id ID of the DRM connector to use, or -1 to auto-select the first available
+- * @return LV_RESULT_OK if the initialization succeeeded or LV_RESULT_INVALID if it failed
+- */
+-lv_result_t lv_linux_drm_set_file(lv_display_t * disp, const char * file, int64_t connector_id);
+-
+-/**
+- * @brief Automatically find a suitable DRM device path
+- *
+- * Scans the system for available DRM devices and returns the path to a suitable
+- * device file that can be used with lv_linux_drm_set_file().
+- *
+- * @return Dynamically allocated string containing the device path (must be freed with lv_free()),
+- *         or NULL if no suitable device is found
+- */
+-char * lv_linux_drm_find_device_path(void);
+-
+-/**
+- * Set a callback function for custom DRM mode selection to override the default mode selection behavior
+- *
+- * The default mode selection behavior is selecting the native mode
+- *
+- * @param disp pointer to the display object
+- * @param callback function to be called when a display mode needs to be selected,
+- *                 or NULL to use the default mode selection behavior
+- */
+-void lv_linux_drm_set_mode_cb(lv_display_t * disp, lv_linux_drm_select_mode_cb_t callback);
+-
+-/**
+- * Get the horizontal resolution of a DRM mode
+- * @param mode pointer to the DRM mode object
+- * @return horizontal resolution in pixels, or 0 if mode is invalid
+- */
+-int32_t lv_linux_drm_mode_get_horizontal_resolution(const lv_linux_drm_mode_t * mode);
+-
+-/**
+- * Get the vertical resolution of a DRM mode
+- * @param mode pointer to the DRM mode object
+- * @return vertical resolution in pixels, or 0 if mode is invalid
+- */
+-int32_t lv_linux_drm_mode_get_vertical_resolution(const lv_linux_drm_mode_t * mode);
+-
+-/**
+- * Get the refresh rate of a DRM mode
+- * @param mode pointer to the DRM mode object
+- * @return refresh rate in Hz, or 0 if mode is invalid
+- */
+-int32_t lv_linux_drm_mode_get_refresh_rate(const lv_linux_drm_mode_t * mode);
+-
+-/**
+- * Check if a DRM mode is the preferred mode for the display
+- * @param mode pointer to the DRM mode object
+- * @return true if this is the preferred/native mode, false otherwise
+- */
+-bool lv_linux_drm_mode_is_preferred(const lv_linux_drm_mode_t * mode);
++lv_display_t *lv_drm_disp_create(int hor_res, int ver_res, int rot);
++int lv_drm_disp_delete(lv_display_t *disp);
+ 
+ /**********************
+  *      MACROS
+  **********************/
+ 
+-#endif /* LV_USE_LINUX_DRM */
++#endif  /*LV_USE_LINUX_DRM*/
+ 
+ #ifdef __cplusplus
+ } /* extern "C" */
+ #endif
+ 
+-#endif /* LV_LINUX_DRM_H */
++#endif /*DRM_H*/
+diff --git a/src/drivers/display/drm/lv_linux_drm_egl.c b/src/drivers/display/drm/lv_linux_drm_egl.c
+index 546256611..2b72f44ac 100644
+--- a/src/drivers/display/drm/lv_linux_drm_egl.c
++++ b/src/drivers/display/drm/lv_linux_drm_egl.c
+@@ -6,7 +6,7 @@
+ /*********************
+  *      INCLUDES
+  *********************/
+-#include "lv_linux_drm.h"
++#include "lv_linux_drm_egl.h"
+ 
+ #if LV_USE_LINUX_DRM && LV_LINUX_DRM_USE_EGL
+ 
+diff --git a/src/drivers/display/drm/lv_linux_drm_egl.h b/src/drivers/display/drm/lv_linux_drm_egl.h
+new file mode 100644
+index 000000000..d62ecf958
+--- /dev/null
++++ b/src/drivers/display/drm/lv_linux_drm_egl.h
+@@ -0,0 +1,131 @@
++/**
++ * @file lv_linux_drm_egl.h
++ *
++ */
++
++#ifndef LV_LINUX_DRM_EGL_H
++#define LV_LINUX_DRM_EGL_H
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++/*********************
++ *      INCLUDES
++ *********************/
++
++#include "../../../display/lv_display.h"
++
++#if LV_USE_LINUX_DRM
++#include <xf86drmMode.h>
++
++/*********************
++ *      DEFINES
++ *********************/
++
++/**********************
++ *      TYPEDEFS
++ **********************/
++
++typedef drmModeModeInfo lv_linux_drm_mode_t;
++
++/**
++ * Callback function type for selecting a DRM display mode
++ * @param disp pointer to the display object
++ * @param modes array of available DRM modes
++ * @param mode_count number of modes in the array
++ * @return index of the selected mode from the modes array
++ */
++typedef size_t (*lv_linux_drm_select_mode_cb_t)(lv_display_t * disp,
++                                                const lv_linux_drm_mode_t * modes,
++                                                size_t mode_count);
++
++/**********************
++ * GLOBAL PROTOTYPES
++ **********************/
++
++/**
++ * @brief Create a new Linux DRM display
++ *
++ * Creates and initializes a new LVGL display using the Linux DRM (Direct Rendering Manager)
++ * subsystem for hardware-accelerated graphics output.
++ *
++ * @return Pointer to the created display object, or NULL on failure
++ */
++lv_display_t * lv_linux_drm_create(void);
++
++/**
++ * @brief Configure the DRM device file and connector for a display
++ *
++ * Sets the DRM device file path and connector ID to use for the specified display.
++ * The DRM device file is typically located at /dev/dri/cardN where N is the card number.
++ * The connector ID specifies which physical output (HDMI, VGA, etc.) to use.
++ *
++ * @param disp         Pointer to the display object created with lv_linux_drm_create()
++ * @param file         Path to the DRM device file (e.g., "/dev/dri/card0")
++ * @param connector_id ID of the DRM connector to use, or -1 to auto-select the first available
++ * @return LV_RESULT_OK if the initialization succeeeded or LV_RESULT_INVALID if it failed
++ */
++lv_result_t lv_linux_drm_set_file(lv_display_t * disp, const char * file, int64_t connector_id);
++
++/**
++ * @brief Automatically find a suitable DRM device path
++ *
++ * Scans the system for available DRM devices and returns the path to a suitable
++ * device file that can be used with lv_linux_drm_set_file().
++ *
++ * @return Dynamically allocated string containing the device path (must be freed with lv_free()),
++ *         or NULL if no suitable device is found
++ */
++char * lv_linux_drm_find_device_path(void);
++
++/**
++ * Set a callback function for custom DRM mode selection to override the default mode selection behavior
++ *
++ * The default mode selection behavior is selecting the native mode
++ *
++ * @param disp pointer to the display object
++ * @param callback function to be called when a display mode needs to be selected,
++ *                 or NULL to use the default mode selection behavior
++ */
++void lv_linux_drm_set_mode_cb(lv_display_t * disp, lv_linux_drm_select_mode_cb_t callback);
++
++/**
++ * Get the horizontal resolution of a DRM mode
++ * @param mode pointer to the DRM mode object
++ * @return horizontal resolution in pixels, or 0 if mode is invalid
++ */
++int32_t lv_linux_drm_mode_get_horizontal_resolution(const lv_linux_drm_mode_t * mode);
++
++/**
++ * Get the vertical resolution of a DRM mode
++ * @param mode pointer to the DRM mode object
++ * @return vertical resolution in pixels, or 0 if mode is invalid
++ */
++int32_t lv_linux_drm_mode_get_vertical_resolution(const lv_linux_drm_mode_t * mode);
++
++/**
++ * Get the refresh rate of a DRM mode
++ * @param mode pointer to the DRM mode object
++ * @return refresh rate in Hz, or 0 if mode is invalid
++ */
++int32_t lv_linux_drm_mode_get_refresh_rate(const lv_linux_drm_mode_t * mode);
++
++/**
++ * Check if a DRM mode is the preferred mode for the display
++ * @param mode pointer to the DRM mode object
++ * @return true if this is the preferred/native mode, false otherwise
++ */
++bool lv_linux_drm_mode_is_preferred(const lv_linux_drm_mode_t * mode);
++
++/**********************
++ *      MACROS
++ **********************/
++
++#endif /* LV_USE_LINUX_DRM */
++
++#ifdef __cplusplus
++} /* extern "C" */
++#endif
++
++#endif /* LV_LINUX_DRM_H */
+-- 
+2.34.1
+

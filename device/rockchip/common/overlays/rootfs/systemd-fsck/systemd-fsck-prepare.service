@@ -1,0 +1,18 @@
+[Unit]
+Description=Remount root filesystem as readonly and hack /proc/cmdline for fsck
+Before=systemd-fsck-root.service
+DefaultDependencies=no
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+SuccessExitStatus=0 1
+
+ExecStart=/bin/mount -o remount,ro /
+ExecStart=/bin/cp /proc/cmdline /dev/cmdline
+ExecStart=/bin/sed -i 's/$/ fsck.repair=yes/' /dev/cmdline
+ExecStart=/bin/mount --bind /dev/cmdline /proc/cmdline
+ExecStart=/bin/rm /dev/cmdline
+
+[Install]
+WantedBy=systemd-fsck-root.service

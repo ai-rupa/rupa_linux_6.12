@@ -1,0 +1,112 @@
+From 80a8f4c4fec781c1aa17fd4181b2d4cfb851661f Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Tue, 8 Jul 2025 18:05:28 +0800
+Subject: [PATCH 3/3] mconf: Support jumping to the specified menu
+
+Tested with:
+KCONFIG_JUMP_SYMBOL="RK_USB_GADGET$" make menuconfig
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ mconf.c | 36 ++++++++++++++++++++++++++++++++++--
+ 1 file changed, 34 insertions(+), 2 deletions(-)
+
+diff --git a/mconf.c b/mconf.c
+index 4aab7cd..5924006 100644
+--- a/mconf.c
++++ b/mconf.c
+@@ -388,7 +388,7 @@ static void update_text(char *buf, size_t start, size_t end, void *_data)
+ 	data->keys[k] = 0;
+ }
+ 
+-static void search_conf(void)
++static void search_conf(const char *target_symbol)
+ {
+ 	struct symbol **sym_arr;
+ 	struct gstr res;
+@@ -403,6 +403,11 @@ static void search_conf(void)
+ 	str_printf( &title, _("Enter (sub)string or regexp to search for "
+ 			      "(with or without \"%s\")"), CONFIG_);
+ 
++	if (target_symbol) {
++		snprintf(dialog_input_result, MAX_LEN, "%s", target_symbol);
++		goto search;
++	}
++
+ again:
+ 	dialog_clear();
+ 	dres = dialog_inputbox(_("Search Configuration Parameter"),
+@@ -419,6 +424,7 @@ again:
+ 		return;
+ 	}
+ 
++search:
+ 	/* strip the prefix if necessary */
+ 	dialog_input = dialog_input_result;
+ 	if (strncasecmp(dialog_input_result, CONFIG_, strlen(CONFIG_)) == 0)
+@@ -442,6 +448,16 @@ again:
+ 		struct jump_key *pos, *tmp;
+ 
+ 		res = get_relations_str(sym_arr, &head);
++
++		/* HACK: Jump to the exact matching menu */
++		if (sym_arr && sym_arr[0] && !sym_arr[1]) {
++			list_for_each_entry_safe(pos, tmp, &head, entries) {
++				conf(pos->target->parent, pos->target);
++				again = false;
++				goto out;
++			}
++		}
++
+ 		set_subtitle();
+ 		dres = show_textbox_ext(_("Search Results"), (char *)
+ 					str_get(&res), 0, 0, keys, &vscroll,
+@@ -453,6 +469,8 @@ again:
+ 				conf(targets[i]->parent, targets[i]);
+ 				again = true;
+ 			}
++
++out:
+ 		str_free(&res);
+ 		list_for_each_entry_safe(pos, tmp, &head, entries)
+ 			free(pos);
+@@ -654,6 +672,13 @@ static void conf(struct menu *menu, struct menu *active_menu)
+ 	int res;
+ 	int s_scroll = 0;
+ 
++	const char *target_symbol = NULL;
++	if (menu == &rootmenu) {
++#define JUMP_SYMBOL "KCONFIG_JUMP_SYMBOL"
++		target_symbol = getenv(JUMP_SYMBOL);
++		unsetenv(JUMP_SYMBOL);
++	}
++
+ 	if (menu != &rootmenu)
+ 		stpart.text = menu_get_prompt(menu);
+ 	else
+@@ -666,6 +691,13 @@ static void conf(struct menu *menu, struct menu *active_menu)
+ 		build_conf(menu);
+ 		if (!child_count)
+ 			break;
++
++		if (target_symbol) {
++			search_conf(target_symbol);
++			target_symbol = NULL;
++			continue;
++		}
++
+ 		set_subtitle();
+ 		dialog_clear();
+ 		res = dialog_menu(prompt ? _(prompt) : _("Main Menu"),
+@@ -747,7 +779,7 @@ static void conf(struct menu *menu, struct menu *active_menu)
+ 				conf(submenu, NULL);
+ 			break;
+ 		case 9:
+-			search_conf();
++			search_conf(NULL);
+ 			break;
+ 		case 10:
+ 			show_all_options = !show_all_options;
+-- 
+2.20.1
+

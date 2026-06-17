@@ -1,0 +1,47 @@
+From fdd9930431568e96d4223b89392316be3b762920 Mon Sep 17 00:00:00 2001
+From: Jiajian Wu <jair.wu@rock-chips.com>
+Date: Mon, 14 Apr 2025 16:54:57 +0800
+Subject: [PATCH 45/46] fix(conf): move lv_conf_kconfig.h after lv_conf.h
+
+Signed-off-by: Jiajian Wu <jair.wu@rock-chips.com>
+---
+ src/lv_conf_internal.h | 16 ++++++++--------
+ 1 file changed, 8 insertions(+), 8 deletions(-)
+
+diff --git a/src/lv_conf_internal.h b/src/lv_conf_internal.h
+index 0c297081c..a3bcfd187 100644
+--- a/src/lv_conf_internal.h
++++ b/src/lv_conf_internal.h
+@@ -10,14 +10,6 @@
+ 
+ #include <stdint.h>
+ 
+-/* Handle special Kconfig options */
+-#ifndef LV_KCONFIG_IGNORE
+-    #include "lv_conf_kconfig.h"
+-    #ifdef CONFIG_LV_CONF_SKIP
+-        #define LV_CONF_SKIP
+-    #endif
+-#endif
+-
+ /*If "lv_conf.h" is available from here try to use it later.*/
+ #ifdef __has_include
+     #if __has_include("lv_conf.h")
+@@ -47,6 +39,14 @@
+     #endif
+ #endif
+ 
++/* Handle special Kconfig options */
++#ifndef LV_KCONFIG_IGNORE
++    #include "lv_conf_kconfig.h"
++    #ifdef CONFIG_LV_CONF_SKIP
++        #define LV_CONF_SKIP
++    #endif
++#endif
++
+ #ifdef CONFIG_LV_COLOR_DEPTH
+     #define _LV_KCONFIG_PRESENT
+ #endif
+-- 
+2.34.1
+

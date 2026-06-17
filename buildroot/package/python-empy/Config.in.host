@@ -1,0 +1,17 @@
+config BR2_PACKAGE_HOST_PYTHON_EMPY
+	bool "host python-empy"
+	help
+	  Empy is a system for embedding Python expressions and statements
+	  in template text; it takes an Empy source file, processes it, and
+	  produces output.
+
+	  This is accomplished via expansions, which are special signals to
+	  the Empy system and are set off by a special prefix (by default
+	  the at sign, '@'). Empy can expand arbitrary Python expressions
+	  and statements in this way, as well as a variety of special
+	  forms. Text that does not contain special forms is left
+	  undisturbed.
+
+	  https://github.com/alecthomas/empy
+
+	  This is the host version.

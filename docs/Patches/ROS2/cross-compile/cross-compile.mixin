@@ -1,0 +1,40 @@
+build:
+  aarch64-docker: {}
+  aarch64-linux:
+    cmake-args:
+      - "-DCMAKE_SYSTEM_NAME=Linux"
+      - "-DCMAKE_SYSTEM_PROCESSOR=aarch64"
+      - "-DCMAKE_AR=/buildroot/host/bin/aarch64-buildroot-linux-gnu-ar"
+      - "-DCMAKE_LINKER=/buildroot/host/bin/aarch64-buildroot-linux-gnu-ld"
+      - "-DCMAKE_NM=/buildroot/host/bin/aarch64-buildroot-linux-gnu-nm"
+      - "-DCMAKE_OBJCOPY=/buildroot/host/bin/aarch64-buildroot-linux-gnu-objcopy"
+      - "-DCMAKE_OBJDUMP=/buildroot/host/bin/aarch64-buildroot-linux-gnu-objdump"
+      - "-DCMAKE_RANLIB=/buildroot/host/bin/aarch64-buildroot-linux-gnu-ranlib"
+      - "-DCMAKE_STRIP=/buildroot/host/bin/aarch64-buildroot-linux-gnu-strip"
+      - "-DCMAKE_C_COMPILER=/buildroot/host/bin/aarch64-buildroot-linux-gnu-gcc"
+      - "-DCMAKE_CXX_COMPILER=/buildroot/host/bin/aarch64-buildroot-linux-gnu-g++"
+      - "-DCMAKE_SYSROOT=/buildroot/host/aarch64-buildroot-linux-gnu/sysroot"
+      - "-DCMAKE_PREFIX_PATH=/buildroot/host/aarch64-buildroot-linux-gnu/sysroot/opt;/buildroot/host/aarch64-buildroot-linux-gnu/sysroot/usr;/buildroot/host/aarch64-buildroot-linux-gnu/sysroot/usr/share;/buildroot/host/aarch64-buildroot-linux-gnu/sysroot;/buildroot/target/opt/ros/opt;/buildroot/target/opt/ros/lib"
+      - "-DCMAKE_FIND_ROOT_PATH=/buildroot/host/aarch64-buildroot-linux-gnu/sysroot/opt;/buildroot/host/aarch64-buildroot-linux-gnu/sysroot;/usr/lib/python3/dist-packages"
+      - "-DCMAKE_INSTALL_RPATH=/buildroot/host/aarch64-buildroot-linux-gnu/sysroot/opt"
+      - "-DCMAKE_INSTALL_RPATH_USE_LINK_PATH=ON"
+      - "-DCMAKE_LIBRARY_PATH=/buildroot/host/aarch64-buildroot-linux-gnu/sysroot/opt/lib"
+      - "-DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER"
+      - "-DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE=ONLY"
+      - "-DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY"
+      - "-DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY"
+      - "-DPYTHON_SOABI=cpython-312-aarch64-linux-gnu"
+      - "-DTHREADS_PTHREAD_ARG=0"
+      - "-DPYTHON_LIBRARY=/buildroot/target/usr/lib/libpython3.12.so"
+      - "-DPYTHON_EXECUTABLE=/buildroot/host/aarch64-buildroot-linux-gnu/sysroot/usr/bin/python3"
+      - "-DCMAKE_CROSSCOMPILING_EMULATOR=/usr/bin/qemu-aarch64-static;-L;/buildroot/target"
+      - "-DPYTHON_INCLUDE_DIR=/buildroot/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/python3.12;/buildroot/host/aarch64-buildroot-linux-gnu/sysroot/usr/lib/python3.12/site-packages/numpy/core/include"
+      - "-DPYTHON_LIBRARY_SUFFIX=3.12"
+      - "-DPYBIND11_PYTHONLIBS_OVERWRITE=OFF"
+      - "-DPYTHON_MODULE_EXTENSION=.cpython-312-aarch64-linux-gnu.so"
+      - "-DPython3_NumPy_INCLUDE_DIR=/buildroot/host/aarch64-buildroot-linux-gnu/sysroot/usr/lib/python3.12/site-packages/numpy/core/include"
+      - "--no-warn-unused-cli"
+  armhf-docker: {}
+  armhf-linux: {}
+  x86_64-docker: {}
+  x86_64-linux: {}

@@ -1,0 +1,12 @@
+[Unit]
+Description=Resize all internal mounted partitions
+After=local-fs.target systemd-remount-fs.service
+ConditionPathExists=/etc/fstab
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/resize-helper
+
+[Install]
+WantedBy=multi-user.target

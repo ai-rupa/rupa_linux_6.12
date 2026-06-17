@@ -1,0 +1,5 @@
+#B1P1:
+     strategy_result.gain (rggb):(#B1P2) 
+     prob_total(#B1P3),prob_dis(#B1P4),prob_LV(#B1P5),prob_WPNO(#B1P6)
+     spatial gain(rggb):(#B1P7),statistics gain weight(#B1P8)
+#B1S1

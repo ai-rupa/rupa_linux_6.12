@@ -1,0 +1,1 @@
+     type#B1S1P1: gain (rggb):(#B1S1P2) WPNo(#B1S1P3)

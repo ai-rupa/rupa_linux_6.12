@@ -1,0 +1,5 @@
+config BR2_PACKAGE_CPPTOML
+    bool "cpptoml"
+    help
+      A header-only library for parsing TOML configuration files.
+      https://github.com/skystrife/cpptoml

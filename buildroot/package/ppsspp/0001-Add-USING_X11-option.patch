@@ -1,0 +1,57 @@
+From f9e67c665ff3435d57fe82a8f74e1f0dc22d4578 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Tue, 18 Sep 2018 19:00:35 +0800
+Subject: [PATCH 1/6] Add USING_X11 option
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ CMakeLists.txt               | 3 ++-
+ SDL/SDLGLGraphicsContext.cpp | 4 ++--
+ 2 files changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index a21c3d12ac..04e170a5eb 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -177,6 +177,7 @@ option(X86_64 "Set to ON if targeting an X86_64 processor" ${X86_64_DEVICE})
+ option(USING_EGL "Set to ON if target environment uses EGL" ${USING_EGL})
+ option(USING_FBDEV "Set to ON if target environment uses fbdev (eg. Pandora)" ${USING_FBDEV})
+ option(USING_GLES2 "Set to ON if target device uses OpenGL ES 2.0" ${USING_GLES2})
++option(USING_X11 "Set to OFF if target environment doesn't use X11" ON)
+ option(USING_X11_VULKAN "Set to OFF if target environment doesn't use X11 for Vulkan" ON)
+ option(USE_WAYLAND_WSI "Enable or disable Wayland WSI support for Vulkan" ON)
+ option(USE_VULKAN_DISPLAY_KHR "Enable or disable full screen display of Vulkan" ${USE_VULKAN_DISPLAY_KHR})
+@@ -945,7 +946,7 @@ if(ARM64)
+ 	endif()
+ endif()
+ 
+-if(USING_GLES2 OR (USING_EGL AND NOT USING_FBDEV))
++if(USING_X11)
+ 	find_package(X11)
+ endif()
+ 
+diff --git a/SDL/SDLGLGraphicsContext.cpp b/SDL/SDLGLGraphicsContext.cpp
+index db53a72507..1a366c048a 100644
+--- a/SDL/SDLGLGraphicsContext.cpp
++++ b/SDL/SDLGLGraphicsContext.cpp
+@@ -77,7 +77,7 @@ static bool EGL_OpenInit() {
+ }
+ 
+ static int8_t EGL_Open(SDL_Window *window) {
+-#if defined(USING_FBDEV)
++#if !defined(USING_X11)
+ 	g_Display = (EGLNativeDisplayType)nullptr;
+ 	g_Window = (EGLNativeWindowType)nullptr;
+ #elif defined(__APPLE__)
+@@ -286,7 +286,7 @@ void EGL_Close() {
+ 		g_eglDisplay = EGL_NO_DISPLAY;
+ 	}
+ 	if (g_Display != nullptr) {
+-#if !defined(USING_FBDEV)
++#if defined(USING_X11)
+ 		if (g_XDisplayOpen)
+ 			XCloseDisplay((Display *)g_Display);
+ #endif
+-- 
+2.20.1
+

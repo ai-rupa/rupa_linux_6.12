@@ -1,0 +1,37 @@
+From 5de3c4d9efbc0f872f3b7a983969cd3d61a74791 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Fri, 31 May 2024 18:49:02 +0800
+Subject: [PATCH 085/105] HACK: compositor: Fix crash when disabling output
+ with fullscreen chromium
+
+Tested on RK3588 EVB with:
+chromium --start-fullscreen&
+echo off > /sys/class/drm/card0-DSI-1/status
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ libweston/compositor.c | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/libweston/compositor.c b/libweston/compositor.c
+index ba7d87d..eac7798 100644
+--- a/libweston/compositor.c
++++ b/libweston/compositor.c
+@@ -2228,7 +2228,13 @@ weston_view_get_pos_offset_global(struct weston_view *view)
+ 	struct weston_coord_global out;
+ 
+ 	assert(view->surface->committed != subsurface_committed);
+-	assert(!view->geometry.parent);
++	/**
++	 * HACK: Somehow it would fail when disabling output with
++	 * fullscreen chromium:
++	 * chromium --start-fullscreen&
++	 * echo off > /sys/class/drm/card0-DSI-1/status
++	 */
++	// assert(!view->geometry.parent);
+ 
+ 	out.c = view->geometry.pos_offset;
+ 
+-- 
+2.39.5
+

@@ -1,0 +1,25 @@
+From d10a508d6bc81bbb27183a920b806ec35c3d1a39 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=E8=92=8B=E6=85=A7=E8=B5=9F?=
+ <42379289+cnjhb@users.noreply.github.com>
+Date: Fri, 16 May 2025 21:14:04 +0800
+Subject: [PATCH 16/46] fix(imgfont):for img cache (#7963)
+
+---
+ src/draw/sw/lv_draw_sw_letter.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/draw/sw/lv_draw_sw_letter.c b/src/draw/sw/lv_draw_sw_letter.c
+index 0faab8d20..e26ea986e 100644
+--- a/src/draw/sw/lv_draw_sw_letter.c
++++ b/src/draw/sw/lv_draw_sw_letter.c
+@@ -186,6 +186,7 @@ static void LV_ATTRIBUTE_FAST_MEM draw_letter_normal(lv_draw_ctx_t * draw_ctx, c
+         img_dsc.zoom = LV_IMG_ZOOM_NONE;
+         img_dsc.opa = dsc->opa;
+         img_dsc.blend_mode = dsc->blend_mode;
++        lv_img_cache_invalidate_src(map_p);
+         lv_draw_img(draw_ctx, &img_dsc, &fill_area, map_p);
+         return;
+     }
+-- 
+2.34.1
+

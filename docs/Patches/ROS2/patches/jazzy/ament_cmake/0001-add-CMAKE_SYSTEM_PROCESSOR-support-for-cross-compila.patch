@@ -1,0 +1,32 @@
+From aab817dd97d210cd6169339fc9b117602d85d7d5 Mon Sep 17 00:00:00 2001
+From: Shunqian Zheng <zhengsq@rock-chips.com>
+Date: Mon, 2 Feb 2026 17:17:19 +0800
+Subject: [PATCH] add CMAKE_SYSTEM_PROCESSOR support for cross-compilation
+
+Signed-off-by: Shunqian Zheng <zhengsq@rock-chips.com>
+---
+ ament_cmake_vendor_package/cmake/ament_vendor.cmake | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/ament_cmake_vendor_package/cmake/ament_vendor.cmake b/ament_cmake_vendor_package/cmake/ament_vendor.cmake
+index c9b963c..d40e25f 100644
+--- a/ament_cmake_vendor_package/cmake/ament_vendor.cmake
++++ b/ament_cmake_vendor_package/cmake/ament_vendor.cmake
+@@ -245,6 +245,14 @@ function(_ament_vendor TARGET_NAME VCS_TYPE VCS_URL VCS_VERSION PATCHES CMAKE_AR
+     set(CMAKE_ARGS_CONTENT "${CMAKE_ARGS_CONTENT}\nset(CMAKE_MODULE_PATH [=[${CMAKE_MODULE_PATH}]=] CACHE INTERNAL \"\")")
+   endif()
+ 
++  if(DEFINED CMAKE_SYSTEM_NAME)
++    set(CMAKE_ARGS_CONTENT "${CMAKE_ARGS_CONTENT}\nset(CMAKE_SYSTEM_NAME [=[${CMAKE_SYSTEM_NAME}]=] CACHE INTERNAL \"\")")
++  endif()
++
++  if(DEFINED CMAKE_SYSTEM_PROCESSOR)
++    set(CMAKE_ARGS_CONTENT "${CMAKE_ARGS_CONTENT}\nset(CMAKE_SYSTEM_PROCESSOR [=[${CMAKE_SYSTEM_PROCESSOR}]=] CACHE INTERNAL \"\")")
++  endif()
++
+   list(PREPEND CMAKE_PREFIX_PATH ${_AMENT_CMAKE_VENDOR_PACKAGE_PREFIX_PATH})
+   set(CMAKE_ARGS_CONTENT "${CMAKE_ARGS_CONTENT}\nset(CMAKE_PREFIX_PATH [=[${CMAKE_PREFIX_PATH}]=] CACHE INTERNAL \"\")")
+ 
+-- 
+2.25.1
+

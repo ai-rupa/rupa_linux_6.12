@@ -1,0 +1,12 @@
+[Unit]
+Description=Enable ASYNC_COMMIT for Rockchip BSP kernel > 4.4
+Before=graphical.target
+After=local-fs.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/async-commit
+
+[Install]
+WantedBy=local-fs.target graphical.target

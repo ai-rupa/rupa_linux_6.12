@@ -1,0 +1,10 @@
+config BR2_PACKAGE_BUG_REPORT
+	bool "rockchip bug-report"
+
+if BR2_PACKAGE_BUG_REPORT
+
+config BR2_PACKAGE_BUG_REPORT_STATIC
+	bool "Enable static"
+	default y if BR2_STATIC_LIBS
+
+endif

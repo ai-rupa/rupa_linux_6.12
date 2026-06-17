@@ -1,0 +1,11 @@
+#!/bin/sh
+
+{
+	echo "Starting loader touch driver"
+	sleep 2;
+	echo "[KO-Loader] insmod /usr/lib/modules/himax_mmi.ko"
+	insmod /usr/lib/modules/himax_mmi.ko
+	echo "[KO-Loader] insmod /usr/lib/modules/ili210x.ko"
+	insmod /usr/lib/modules/ili210x.ko
+	echo "done"
+} &
