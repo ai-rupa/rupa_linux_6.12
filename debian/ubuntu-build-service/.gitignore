@@ -4,6 +4,7 @@
 */config
 */binary
 
+*/*wget-log*
 */*.build-log.txt
 */*.modified_timestamps
 */*.packages.install

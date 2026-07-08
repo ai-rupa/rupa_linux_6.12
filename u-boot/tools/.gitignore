@@ -39,3 +39,5 @@
 /version.h
 /xway-swap-bytes
 /boot
+/resource_tool
+/bmp2gray16

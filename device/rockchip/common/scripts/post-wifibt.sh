@@ -251,6 +251,11 @@ build_wifibt()
 		fi
 	fi
 
+	if [[ "$RK_WIFIBT_MODULES" = "SWT6621S" ]];then
+		echo "building SWT6621S"
+		$KMAKE M=$RKWIFIBT_DIR/drivers/swt6621s 
+	fi	
+
 	mkdir -p $TARGET_DIR/etc/ $TARGET_DIR/usr/bin/ \
 		$TARGET_DIR/lib/modules/ $TARGET_DIR/lib/firmware/rtlbt/ \
 		$TARGET_DIR/lib/firmware/brcm/

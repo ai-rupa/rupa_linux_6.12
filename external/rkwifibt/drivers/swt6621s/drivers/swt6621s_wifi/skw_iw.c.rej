@@ -1,0 +1,11 @@
+--- skw_iw.c
++++ skw_iw.c
+@@ -4087,7 +4087,7 @@ int skw_get_reg_value(struct skw_core *skw, struct skw_debug_info_s *param, u8 *
+ 	int ret = -1;
+ 	struct skw_tlv *tlv;
+ 
+-	skw_dbg("msg xmit len %d\n", sizeof(struct skw_debug_info_s) + 3);
++	skw_dbg("msg xmit len %zd\n", sizeof(struct skw_debug_info_s) + 3);
+ 
+ 	ret = skw_msg_xmit(priv_to_wiphy(skw), 0, SKW_CMD_GET_DEBUG_INFO,
+ 						param, sizeof(struct skw_debug_info_s) + 3,

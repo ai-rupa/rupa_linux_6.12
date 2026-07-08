@@ -1,0 +1,10 @@
+/rockdev
+/common
+/patch
+/output
+debian/binary/
+debian/rockchip-debian-trixie*.tar.gz
+debian/rockchip-trixie*.tar.gz
+debian/rockchip-rootfs.img
+.DS_Store
+._* 
