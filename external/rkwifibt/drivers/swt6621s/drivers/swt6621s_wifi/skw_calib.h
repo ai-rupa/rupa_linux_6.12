@@ -55,7 +55,7 @@ struct skw_rf_rxdpd_param {
 	struct skw_rf_rxdpd_train train[2];
 } __packed;
 
-int skw_dpd_set_coeff_params(struct wiphy *wiphy, struct net_device *ndev,
+int skw_dpd_set_coeff_params(struct wiphy *wiphy, struct net_device *dev,
 			     u8 chn, u8 center_chan,
 			     u8 center_chan2, u8 bandwidth);
 
@@ -65,13 +65,14 @@ void skw_dpd_deinit(struct skw_dpd *dpd);
 void skw_dpd_zero(struct skw_dpd *dpd);
 #else
 static inline int skw_dpd_set_coeff_params(struct wiphy *wiphy,
-			struct net_device *ndev, u8 chn, u8 center_chan,
+			struct net_device *dev, u8 chn, u8 center_chan,
 			u8 center_two_chan2, u8 bandwidth)
 {
 	return 0;
 }
 
-static inline int skw_dpd_result_handler(struct skw_core *skw, void *buf, int len)
+static inline int skw_dpd_result_handler(struct skw_core *skw,
+					void *buf, int len)
 {
 	return 0;
 }

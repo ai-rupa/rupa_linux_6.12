@@ -27,16 +27,17 @@
 #include "skw_mlme.h"
 #include "skw_rx.h"
 #include "skw_tx.h"
+#include "skw_regd.h"
 
 static inline void
-skw_recovery_sta_disconnect(struct net_device *ndev, u8 *addr)
+skw_recovery_sta_disconnect(struct net_device *dev, u8 *addr)
 {
-	struct skw_iface *iface = netdev_priv(ndev);
+	struct skw_iface *iface = netdev_priv(dev);
 
 	if (iface->sta.sme_external)
-		skw_tx_mlme_mgmt(ndev, IEEE80211_STYPE_DEAUTH, addr, addr, 3);
+		skw_tx_mlme_mgmt(dev, IEEE80211_STYPE_DEAUTH, addr, addr, 3);
 	else
-		skw_disconnected(ndev, 3, NULL, 0, true, GFP_KERNEL);
+		skw_disconnected(dev, 3, NULL, 0, true, GFP_KERNEL);
 }
 
 static int skw_recovery_sta(struct wiphy *wiphy, struct skw_recovery_data *rd,
@@ -219,8 +220,8 @@ skw_recovery_prepare(struct skw_core *skw, struct skw_recovery_data *rd)
 
 	for (i = 0; i < SKW_MAX_LMAC_SUPPORT; i++) {
 		atomic_set(&skw->hw.lmac[i].fw_credit, 0);
-
 		WRITE_ONCE(skw->hw.lmac[i].iface_bitmap, 0);
+		SKW_CLEAR(skw->hw.lmac[i].flags, SKW_LMAC_FLAG_ACTIVED);
 	}
 
 	if (test_and_set_bit(SKW_FLAG_FW_CHIP_RECOVERY, &skw->flags)) {
@@ -422,6 +423,18 @@ static void skw_recovery_work(struct work_struct *wk)
 		goto ret;
 	}
 
+	skw_init_mib(wiphy);
+
+	rtnl_lock();
+
+	skw_set_wiphy_regd(wiphy, skw->country);
+
+	if (skw->config->regd.country[0] != '0' &&
+	    skw->config->regd.country[1] != '0')
+		skw_set_regdom(wiphy, skw->country);
+
+	rtnl_unlock();
+
 	for (i = 0; i < SKW_NR_IFACE; i++) {
 		struct skw_iface *iface = skw->vif.iface[i];
 
@@ -470,22 +483,6 @@ static void skw_recovery_work(struct work_struct *wk)
 
 ret:
 	skw_dbg("end %d\n", ret);
-}
-
-void skw_recovery_del_peer(struct skw_iface *iface, u8 peer_idx)
-{
-	struct skw_recovery_data *rd = &iface->skw->recovery_data;
-	u8 lmac_id = iface->lmac_id;
-
-	if (!test_bit(SKW_FLAG_FW_CHIP_RECOVERY, &iface->skw->flags))
-		return;
-
-	mutex_lock(&rd->lock);
-
-	if (rd->peer[lmac_id])
-		rd->peer[lmac_id][peer_idx]->flags |= SKW_PEER_FLAG_DEAUTHED;
-
-	mutex_unlock(&rd->lock);
 }
 
 int skw_recovery_data_update(struct skw_iface *iface, void *param, int len)

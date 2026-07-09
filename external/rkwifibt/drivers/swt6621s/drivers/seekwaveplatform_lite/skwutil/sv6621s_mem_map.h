@@ -52,7 +52,7 @@
 
 /*----------------SDIO MEM SECTION-----------------------*/
 #define SDIO_MEM_BASE_ADDR		  0x401D0000
-#define SDIO_MEM_SIZE			   0x800//2K
+#define SDIO_MEM_SIZE			   0x1000//4K
 /*-------------------------------------------------------*/
 
 
@@ -100,12 +100,36 @@
 /*----------------BTRF MEM SECTION-----------------------*/
 #define RCLK_MEM_BASE_ADDR		  0x40150000
 #define RCLK_MEM_SIZE			   0x200//512B
+ /*----------------BTRF MEM SECTION-----------------------*/
+#define BBPLL_MEM_BASE_ADDR              0x40150400
+#define BBPLL_MEM_SIZE                    0x200//512B
+/*-------------------------------------------------------*/
+/*----------------EFUSE MEM SECTION-----------------------*/
+#define EFUSE_MEM_BASE_ADDR		  0x40064000
+#define EFUSE_MEM_SIZE			   0x400
 /*-------------------------------------------------------*/
 
-/*----------------BTRF MEM SECTION-----------------------*/
-#define BBPLL_MEM_BASE_ADDR		  0x40150400
-#define BBPLL_MEM_SIZE			   0x200//512B
+/*----------------AONGLB MEM SECTION-----------------------*/
+#define AONGLB_REG_BASE_ADDR		  0x40100000
+#define AONGLB_REG_SIZE			   0x400//1K
 /*-------------------------------------------------------*/
+
+/*----------------PIN_REG MEM SECTION-----------------------*/
+#define PIN_REG_BASE_ADDR		  0x40102000
+#define PIN_REG_SIZE			   0x400//1K
+/*-------------------------------------------------------*/
+
+/*----------------PMU_REG MEM SECTION-----------------------*/
+#define PMU_REG_BASE_ADDR		  0x40108000
+#define PMU_REG_SIZE			   0x1000//4K
+/*-------------------------------------------------------*/
+/*----------------AONSLP_GLBREG MEM SECTION-----------------------*/
+#define AONSLP_GLBREG_BASE_ADDR		  0x40120000
+#define AONSLP_GLBREG_SIZE			   0x1000//4K
+/*-------------------------------------------------------*/
+/*----------------PMUREG_AONSLP MEM SECTION-----------------------*/
+#define PMUREG_AONSLP_BASE_ADDR		  0x40124000
+#define PMUREG_AONSLP_SIZE			   0x1000//4K
 /*-------------------------------------------------------*/
 /*-------------------------------------------------------*/
 

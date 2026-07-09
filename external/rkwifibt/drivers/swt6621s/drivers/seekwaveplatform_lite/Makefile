@@ -19,8 +19,8 @@ ccflags-y +=-I$(CURRENT_DIR)/sdio
 #obj-$(CONFIG_SKW_SDIOHAL)           += sdio/
 #obj-$(CONFIG_SEEKWAVE_BSP_DRIVERS)  += skwutil/
 #endif
-
-ifeq ($(CONFIG_SKW_BT),m)
+ccflags-y += -Wno-missing-prototypes -Wno-missing-declarations
+ifeq ($(filter y,$(CONFIG_ANDROID_BINDER_IPC) $(CONFIG_SKW_ANDROID)),)
         ccflags-y += -DCONFIG_BT_SEEKWAVE
 endif
 
@@ -46,6 +46,7 @@ skw_sdio_lite-y += ./sdio/skw_sdio_host.o
 skw_sdio_lite-y += ./skwutil/skw_user_com.o
 skw_sdio_lite-y += ./skwutil/skw_log_to_file.o
 skw_sdio_lite-y += ./skwutil/skw_boot.o
+skw_sdio_lite-y += ./skwutil/skw_btlog.o
 
 obj-$(CONFIG_SKW_USB) += skw_usb_lite.o
 skw_usb_lite-y := ./usb/skw_usb_io.o
@@ -55,6 +56,7 @@ skw_usb_lite-y += ./usb/skw_usb_log.o
 skw_usb_lite-y += ./skwutil/skw_user_com.o
 skw_usb_lite-y += ./skwutil/skw_log_to_file.o
 skw_usb_lite-y += ./skwutil/skw_boot.o
+skw_usb_lite-y += ./skwutil/skw_btlog.o
 
 clean:
 	@rm -rf *.o *.ko *.mod.c *.order *.a *.builtin .*.cmd .*.d

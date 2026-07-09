@@ -18,6 +18,7 @@
 #include <linux/kthread.h>
 #include <linux/ip.h>
 #include <linux/ctype.h>
+#include <linux/hrtimer.h>
 
 #include "skw_core.h"
 #include "skw_tx.h"
@@ -116,75 +117,9 @@ static const struct file_operations skw_tx_time_fops = {
 };
 #endif
 
-#ifdef CONFIG_SWT6621S_SKB_RECYCLE
-void skw_recycle_skb_free(struct skw_core *skw, struct sk_buff *skb)
-{
-	if (!skb)
-		return;
-
-	skb->data = skb->head;
-	skb_reset_tail_pointer(skb);
-
-	skb->mac_header = (typeof(skb->mac_header))~0U;
-	skb->transport_header = (typeof(skb->transport_header))~0U;
-	skb->network_header = 0;
-
-	skb->len = 0;
-
-	skb_reserve(skb, NET_SKB_PAD);
-
-	skb_queue_tail(&skw->skb_recycle_qlist, skb);
-}
-
-int skw_recycle_skb_copy(struct skw_core *skw, struct sk_buff *skb_recycle, struct sk_buff *skb)
-{
-	if (!skw || !skb_recycle || !skb)
-		return -1;
-
-	skb_recycle->dev = skb->dev;
-
-	skb_reserve(skb_recycle, skw->skb_headroom);
-	skb_put(skb_recycle, skb->len);
-	memcpy(skb_recycle->data, skb->data, skb->len);
-
-	skb_set_mac_header(skb_recycle, 0);
-	skb_set_network_header(skb_recycle, ETH_HLEN);
-	skb_set_transport_header(skb_recycle, skb->transport_header - skb->mac_header);
-	if (skb->ip_summed == CHECKSUM_PARTIAL) {
-		skb_recycle->ip_summed = skb->ip_summed;
-		skb_recycle->csum_start = skb_headroom(skb_recycle) + skb_checksum_start_offset(skb);
-	}
-
-	return 0;
-}
-
-struct sk_buff *skw_recycle_skb_get(struct skw_core *skw)
-{
-	unsigned long flags;
-	struct sk_buff *skb = NULL;
-
-	spin_lock_irqsave(&skw->skb_recycle_qlist.lock, flags);
-	if (skw->skb_recycle_qlist.qlen > 0) {
-		skb = skb_peek(&skw->skb_recycle_qlist);
-		if (skb)
-			__skb_unlink(skb, &skw->skb_recycle_qlist);
-	}
-	spin_unlock_irqrestore(&skw->skb_recycle_qlist.lock, flags);
-
-	return skb;
-}
-#endif
-
 void skw_skb_kfree(struct skw_core *skw, struct sk_buff *skb)
 {
-#ifdef CONFIG_SWT6621S_SKB_RECYCLE
-	if (1 == SKW_SKB_TXCB(skb)->recycle)
-		skw_recycle_skb_free(skw, skb);
-	else
-		dev_kfree_skb_any(skb);
-#else
 	dev_kfree_skb_any(skb);
-#endif
 }
 
 int skw_pcie_cmd_xmit(struct skw_core *skw, void *data, int data_len)
@@ -247,15 +182,15 @@ static int skw_sync_sdma_tx(struct skw_core *skw, struct sk_buff_head *list,
 				skw->hw_pdata->max_buffer_size);
 
 	ret = skw->hw_pdata->hw_sdma_tx(port, skw->sdma_buff, total_len);
-	if (ret < 0)
+	if (ret <= 0)
 		skw_err("failed, ret: %d nents:%d\n", ret, nents);
 
 	if (list) {
-		if (likely(0 == ret))
+		if (likely(0 < ret))
 			skw_sub_credit(skw, lmac_id, skb_queue_len(list));
 
 		skb_queue_walk_safe(list, skb, tmp) {
-			if (likely(0 == ret)) {
+			if (likely(0 < ret)) {
 				skb->dev->stats.tx_packets++;
 				skb->dev->stats.tx_bytes += SKW_SKB_TXCB(skb)->skb_native_len;
 			} else
@@ -298,32 +233,37 @@ static int skw_async_sdma_tx(struct skw_core *skw, struct sk_buff_head *list,
 			int nents, int tx_len)
 {
 	void *buff;
-	int ret, total_len;
+	int ret, data_len;
 	struct sk_buff *skb, *tmp;
 	struct skw_sg_node *node;
+	int total_alloc;
 
 	if (!skw->hw_pdata || !skw->hw_pdata->hw_sdma_tx_async)
 		return -EINVAL;
 
-	tx_len += sizeof(struct skw_sg_node);
+	/* data + node header */
+	total_alloc = tx_len + sizeof(struct skw_sg_node);
 
-	buff = SKW_ZALLOC(tx_len, GFP_KERNEL);
+	buff = SKW_ZALLOC(total_alloc, GFP_KERNEL);
 	if (!buff) {
 		skw_err("invalid buffer\n");
 		return -ENOMEM;
 	}
 
 	node = (struct skw_sg_node *)buff;
+	/* Point buff to data area after node header */
 	buff = (u8 *)buff + sizeof(struct skw_sg_node);
 
-	total_len = sg_copy_to_buffer(sgl, nents, buff, tx_len);
+	/* Copy ONLY tx_len bytes (not total_alloc) to prevent overflow */
+	data_len = sg_copy_to_buffer(sgl, nents, buff, tx_len);
 	node->lmac_id = lmac_id;
 	node->data = (void *)skw;
 	node->nents = nents;
-	ret = skw->hw_pdata->hw_sdma_tx_async(port, buff, total_len);
+
+	ret = skw->hw_pdata->hw_sdma_tx_async(port, buff, data_len);
 	if (ret < 0) {
-		skw_err("failed, ret: %d nents:%d\n", ret, nents);
-		SKW_KFREE(buff);
+		skw_err("tx failed, port:%d ret:%d nents:%d\n", port, ret, nents);
+		SKW_KFREE(node); /* Free entire buffer on immediate failure */
 	}
 
 	if (list) {
@@ -331,19 +271,15 @@ static int skw_async_sdma_tx(struct skw_core *skw, struct sk_buff_head *list,
 			skw_sub_credit(skw, lmac_id, skb_queue_len(list));
 
 		skb_queue_walk_safe(list, skb, tmp) {
-			if (likely(0 == ret)) {
+			if (likely(ret == 0)) {
 				skb->dev->stats.tx_packets++;
 				skb->dev->stats.tx_bytes += SKW_SKB_TXCB(skb)->skb_native_len;
 			} else
 				skb->dev->stats.tx_errors++;
 
 			__skb_unlink(skb, list);
-			//kfree_skb(skb);
 			skw_skb_kfree(skw, skb);
 		}
-
-		//skw_sub_credit(skw, lmac_id, skb_queue_len(list));
-		//__skb_queue_purge(list);
 	}
 
 	return ret;
@@ -440,15 +376,19 @@ out:
 static int skw_async_adma_tx_free(int id, struct scatterlist *sg, int nents,
 			   void *data, int status)
 {
+	int ret = 0;
 	struct skw_sg_node node = {0};
 	struct skw_core *skw = data;
 	struct wiphy *wiphy = priv_to_wiphy(skw);
 
+	memset(&node, 0, sizeof(node));
 	node.sg = sg;
 	node.nents = nents;
 	node.status = status;
 
-	skw_queue_work(wiphy, NULL, SKW_WORK_TX_FREE, &node, sizeof(node));
+	ret = skw_queue_work(wiphy, NULL, SKW_WORK_TX_FREE, &node, sizeof(node));
+	if (ret < 0)
+		skw_work_async_adma_tx_free(wiphy, sg, nents);
 
 	return 0;
 }
@@ -480,60 +420,55 @@ static int skw_async_sdma_tx_free(int id,  void *buffer, int size,
 
 int skw_sdio_xmit(struct skw_core *skw, int lmac_id, struct sk_buff_head *txq)
 {
+	int nents = 0, tx_bytes = 0;
 	struct sk_buff *skb, *tmp;
 	struct skw_lmac *lmac = &skw->hw.lmac[lmac_id];
 
-	skb_queue_walk_safe(txq, skb, tmp) {
-		int aligned;
-		struct skw_packet_header *extra_hdr;
+	if (skw->hw.dma == SKW_SYNC_ADMA_TX) {
+		skb_queue_walk_safe(txq, skb, tmp) {
+			int aligned;
+			struct skw_packet_header *extra_hdr;
 
-		extra_hdr = (void *)skb_push(skb, SKW_EXTER_HDR_SIZE);
-		aligned = round_up(skb->len, skw->hw.align);
-		skw_set_extra_hdr(skw, extra_hdr, lmac->lport, aligned, 0, 0);
+			extra_hdr = (void *)skb_push(skb, SKW_EXTER_HDR_SIZE);
+			aligned = round_up(skb->len, skw->hw.align);
+			skw_set_extra_hdr(skw, extra_hdr, lmac->lport, aligned, 0, 0);
 
-		skw_vring_set(skw, skb->data, skb->len, lmac_id);
-		__skb_unlink(skb, txq);
-		skb->dev->stats.tx_packets++;
-		skb->dev->stats.tx_bytes += SKW_SKB_TXCB(skb)->skb_native_len;
-		dev_kfree_skb_any(skb);
+			skw_vring_set(skw, skb->data, skb->len, lmac_id);
+			__skb_unlink(skb, txq);
+			skb->dev->stats.tx_packets++;
+			skb->dev->stats.tx_bytes += SKW_SKB_TXCB(skb)->skb_native_len;
+			dev_kfree_skb_any(skb);
+		}
+
+		queue_work(skw->tx_dy, &skw->hw.lmac[lmac_id].dy_work);
+	} else {
+		sg_init_table(skw->sgl_dat, SKW_NR_SGL_DAT);
+
+		skb_queue_walk(txq, skb) {
+			int aligned;
+			struct skw_packet_header *extra_hdr;
+
+			extra_hdr = (void *)skb_push(skb, SKW_EXTER_HDR_SIZE);
+
+			aligned = round_up(skb->len, skw->hw.align);
+			skw_set_extra_hdr(skw, extra_hdr, lmac->lport, aligned, 0, 0);
+
+			sg_set_buf(&skw->sgl_dat[nents++], skb->data, aligned);
+
+			tx_bytes += aligned;
+		}
+
+		skw_set_extra_hdr(skw, skw->eof_blk, lmac->lport, skw->hw.align, 0, 1);
+		sg_set_buf(&skw->sgl_dat[nents++], skw->eof_blk, skw->hw.align);
+		tx_bytes += skw->hw.align;
+		skw_detail("nents:%d", nents);
+
+		return skw->hw.dat_xmit(skw, txq, lmac_id, lmac->dport,
+					skw->sgl_dat, nents, tx_bytes);
 	}
-	schedule_work(&skw->hw.lmac[lmac_id].dy_work);
 
 	return 0;
 }
-
-#if 0
-int skw_sdio_xmit(struct skw_core *skw, int lmac_id, struct sk_buff_head *txq)
-{
-	struct sk_buff *skb;
-	int nents = 0, tx_bytes = 0;
-	struct skw_lmac *lmac = &skw->hw.lmac[lmac_id];
-
-	sg_init_table(skw->sgl_dat, SKW_NR_SGL_DAT);
-
-	skb_queue_walk(txq, skb) {
-		int aligned;
-		struct skw_packet_header *extra_hdr;
-
-		extra_hdr = (void *)skb_push(skb, SKW_EXTER_HDR_SIZE);
-
-		aligned = round_up(skb->len, skw->hw.align);
-		skw_set_extra_hdr(skw, extra_hdr, lmac->lport, aligned, 0, 0);
-
-		sg_set_buf(&skw->sgl_dat[nents++], skb->data, aligned);
-
-		tx_bytes += aligned;
-	}
-
-	skw_set_extra_hdr(skw, skw->eof_blk, lmac->lport, skw->hw.align, 0, 1);
-	sg_set_buf(&skw->sgl_dat[nents++], skw->eof_blk, skw->hw.align);
-	tx_bytes += skw->hw.align;
-	skw_detail("nents:%d", nents);
-
-	return skw->hw.dat_xmit(skw, txq, lmac_id, lmac->dport,
-				skw->sgl_dat, nents, tx_bytes);
-}
-#endif
 
 int skw_usb_xmit(struct skw_core *skw, int lmac_id, struct sk_buff_head *txq)
 {
@@ -547,6 +482,9 @@ int skw_usb_xmit(struct skw_core *skw, int lmac_id, struct sk_buff_head *txq)
 	skb_queue_walk_safe(txq, skb, tmp) {
 		int aligned;
 		struct skw_packet_header *extra_hdr;
+
+		if (skb == NULL)
+			break;
 
 		extra_hdr = (void *)skb_push(skb, SKW_EXTER_HDR_SIZE);
 
@@ -722,6 +660,17 @@ static bool is_skw_peer_data_valid(struct skw_core *skw, struct sk_buff *skb)
 	return valid;
 }
 
+static inline bool skw_iface_check_deauth_flag(struct skw_core *skw, int inst)
+{
+	struct skw_iface *iface;
+
+	iface = to_skw_iface(skw, inst);
+	if (iface && !(READ_ONCE(iface->flags) & SKW_IFACE_FLAG_DEAUTH))
+		return true;
+
+	return false;
+}
+
 static inline void skw_reset_ac(struct skw_tx_lmac *txlp)
 {
 	int i;
@@ -769,7 +718,7 @@ _exit:
 bool skw_tx_exit_check(struct skw_core *skw, struct skw_tx_lmac *txlp)
 {
 	bool ret;
-	int mac, credit = 0, pending_qlen = 0;
+	int mac, credit = 0;
 
 	ret = true;
 
@@ -780,23 +729,17 @@ bool skw_tx_exit_check(struct skw_core *skw, struct skw_tx_lmac *txlp)
 				if (credit > 0 && txlp[mac].pending_qlen > 0)
 					ret = false;
 			}
-			trace_skw_tx_exit_check(mac, credit, txlp[mac].pending_qlen);
+			//trace_skw_tx_exit_check(mac, credit, txlp[mac].pending_qlen);
 		}
 	}
 
 	if (skw->hw.bus == SKW_BUS_SDIO || skw->hw.bus == SKW_BUS_SDIO2) {
 		for (mac = 0; mac < skw->hw.nr_lmac; mac++) {
-			pending_qlen += txlp[mac].pending_qlen;
+			if (skw_lmac_is_actived(skw, mac)) {
+				if (txlp[mac].pending_qlen > 0 && skw_vring_available_count(skw->hw.lmac[mac].tx_vring) > 1)
+					ret = false;
+			}
 		}
-
-		if (pending_qlen == 0) {
-			if (skw_check_txq(skw))
-			ret = false;
-		} else
-			ret = false;
-
-		if (msecs_to_jiffies(100) > (jiffies - skw->trans_start))
-			ret = true;
 	}
 
 	if (test_bit(SKW_CMD_FLAG_XMIT, &skw->cmd.flags))
@@ -928,7 +871,6 @@ static inline bool skw_vring_check(struct skw_core *skw, struct sk_buff_head *ql
 	return false;
 }
 
-#ifdef CONFIG_SWT6621S_TX_WORKQUEUE
 void skw_tx_worker(struct work_struct *work)
 {
 	int i, ac, mac;
@@ -945,7 +887,7 @@ void skw_tx_worker(struct work_struct *work)
 	struct skw_tx_lmac *txlp;
 	struct sk_buff_head pure_ack_list;
 	//int xmit_tx_flag;
-	struct skw_core *skw = container_of(to_delayed_work(work), struct skw_core, tx_worker);
+	struct skw_core *skw = container_of(work, struct skw_core, tx_worker);
 	int times = 0, ret;
 
 start:
@@ -1078,6 +1020,8 @@ start:
 						__skb_unlink(skb, txlp->tx[i].list);
 						skw_skb_kfree(skw, skb);
 
+						pending_qlen--;
+						txlp->current_qlen--;
 						continue;
 					}
 
@@ -1160,9 +1104,10 @@ static void skw_kfree_skb_worker(struct work_struct *work)
 	}
 }
 
+#if 0
 void skw_dump_vring(struct vring *vr)
 {
-	int i;
+	//int i;
 	u16 avail_idx = vr->avail->idx;
 	u16 used_idx = vr->used->idx;
 	u16 pending, available;
@@ -1178,30 +1123,34 @@ void skw_dump_vring(struct vring *vr)
 			available);
 	skw_dbg("  Descriptors pending hardware processing: %u\n", pending);
 
-	// 打印描述符表
 	skw_dbg("  Descriptor Table:\n");
+
 	for (i = 0; i < vr->num; i++) {
 		struct vring_desc *desc = &vr->desc[i];
+
 		skw_dbg("    Desc[%03u]: addr=0x%016llx, len=%u, flags=0x%04x, next=%u\n",
 				i, (unsigned long long)desc->addr, desc->len, desc->flags, desc->next);
 		skw_hex_dump("desc addr", phys_to_virt(desc->addr), desc->len, true);
 	}
 
-	// 打印可用环
 	skw_dbg("  Available Ring (avail->idx=%u):\n", avail_idx);
+
 	for (i = 0; i < vr->num; i++) {
 		unsigned int idx = i % vr->num;
+
 		skw_dbg("    Avail[%03u]: desc_idx=%u\n", i, vr->avail->ring[idx]);
 	}
 
-	// 打印已用环
 	skw_dbg("  Used Ring (used->idx=%u):\n", used_idx);
+
 	for (i = 0; i < vr->num; i++) {
 		unsigned int idx = i % vr->num;
+
 		skw_dbg("    Used[%03u]: id=%u, len=%u\n",
-				i, vr->used->ring[idx].id, vr->used->ring[idx].len);
+			i, vr->used->ring[idx].id, vr->used->ring[idx].len);
 	}
 }
+#endif
 
 u16 skw_vring_available_count(struct skw_tx_vring *tx_vring)
 {
@@ -1214,8 +1163,6 @@ u16 skw_vring_available_count(struct skw_tx_vring *tx_vring)
 	used_idx = vr->used->idx;
 	spin_unlock(&tx_vring->lock);
 
-	// 可用描述符数量 = 总容量 - (avail_idx - used_idx)
-	// 其中 (avail_idx - used_idx) 是已分配但未被设备处理的描述符数量
 	return vr->num - ((avail_idx - used_idx) & (vr->num - 1));
 }
 
@@ -1231,27 +1178,21 @@ u16 skw_vring_pending_count(struct skw_tx_vring *tx_vring)
 	used_idx = vr->used->idx;
 	spin_unlock(&tx_vring->lock);
 
-
-	// 利用位运算处理回绕（要求vr->num是2的幂）
 	return (avail_idx - used_idx) & (vr->num - 1);
 }
 
 bool tx_vring_is_full(struct skw_tx_vring *tx_vring)
 {
-    struct vring *vr = &tx_vring->vr;
-    u16 avail_idx, used_idx;
-    u16 pending;
+	struct vring *vr = &tx_vring->vr;
+	u16 avail_idx, used_idx;
+	u16 pending;
 
-    //spin_lock(&tx_vring->lock);
-    avail_idx = vr->avail->idx;
-    used_idx = vr->used->idx;
-    //spin_unlock(&tx_vring->lock);
+	avail_idx = vr->avail->idx;
+	used_idx = vr->used->idx;
 
-    // 计算待处理的描述符数量
-    pending = (avail_idx - used_idx) & (vr->num - 1);
+	pending = (avail_idx - used_idx) & (vr->num - 1);
 
-    // 当待处理数量达到队列大小时，表示队列已满
-    return pending >= (vr->num - 1);
+	return pending >= (vr->num - 1);
 }
 
 bool vring_has_pending(struct skw_tx_vring *tx_vring)
@@ -1268,7 +1209,6 @@ bool vring_has_pending(struct skw_tx_vring *tx_vring)
 
 	spin_unlock(&tx_vring->lock);
 
-	// 计算待处理描述符数量（考虑回绕）
 	return ((avail_idx - used_idx) & (vr->num - 1)) != 0;
 }
 
@@ -1281,35 +1221,28 @@ int skw_vring_set(struct skw_core *skw, void *data, u16 len, int lmac_id)
 	tx_vring = skw->hw.lmac[lmac_id].tx_vring;
 	vr = &tx_vring->vr;
 
-	// 1. 先获取锁，再检查队列状态
 	spin_lock(&tx_vring->lock);
 	smp_rmb();
 
 	if (tx_vring_is_full(tx_vring)) {
 		spin_unlock(&tx_vring->lock);
-		//skw_dbg("tx_vring_is_full\n");
 		return -EINVAL;
 	}
 
-	// 2. 获取当前可用描述符索引（正确方式）
 	desc_idx = vr->avail->idx & (vr->num - 1);
 
-	// 3. 配置描述符指向数据
 	//skw_sdio_hdr_set(skw, skb);
 	aligned = round_up(len, skw->hw.align);
 	memcpy(phys_to_virt(vr->desc[desc_idx].addr), data, aligned);
 	vr->desc[desc_idx].len = aligned;
 	vr->desc[desc_idx].flags = VRING_DESC_F_WRITE;
 
-	// 4. 更新可用环索引
 	vr->avail->ring[desc_idx] = desc_idx;
 
-	// 6. 使用内存屏障确保描述符更新先于索引更新
 	smp_wmb();
 	vr->avail->idx += 1;
 
 	//atomic_inc(&tx_vring->set);
-
 	spin_unlock(&tx_vring->lock);
 
 	return 0;
@@ -1324,19 +1257,19 @@ struct skw_tx_vring *skw_tx_vring_init(void)
 	tx_vring = kcalloc(1, sizeof(struct skw_tx_vring), GFP_KERNEL);
 	if (!tx_vring) {
 		skw_dbg("alloc tx_vring fail\n");
-		goto __1;
+		goto __alloc_vring_fail;
 	}
 
-	tx_vring->page = alloc_pages(GFP_KERNEL | GFP_DMA, get_order(SKW_TX_PACK_SIZE*SKW_TX_VRING_SIZE));
+	tx_vring->page = alloc_pages(GFP_KERNEL, get_order(SKW_TX_PACK_SIZE*SKW_TX_VRING_SIZE));
 	if (!tx_vring->page) {
 		skw_dbg("alloc page fail\n");
-		goto __2;
+		goto __alloc_page_fail;
 	}
 
 	tx_vring->sgl_dat = kcalloc(SKW_TX_VRING_SIZE, sizeof(struct scatterlist), GFP_KERNEL);
 	if (!tx_vring->sgl_dat) {
 		skw_dbg("alloc sgl_dat fail\n");
-		goto __3;
+		goto __alloc_sgl_fail;
 	}
 	sg_init_table(tx_vring->sgl_dat, SKW_TX_VRING_SIZE);
 	tx_vring->tx_bytes = 0;
@@ -1346,60 +1279,53 @@ struct skw_tx_vring *skw_tx_vring_init(void)
 	queue_mem = kzalloc(vring_size(SKW_TX_VRING_SIZE, PAGE_SIZE), GFP_KERNEL);
 	if (!queue_mem) {
 		skw_dbg("Failed to allocate vring memory\n");
-		goto __4;
+		goto __alloc_queue_mem_fail;
 	}
 	skw_dbg("queue_mem:%p\n", queue_mem);
 
 	vring_init(&tx_vring->vr, SKW_TX_VRING_SIZE, queue_mem, PAGE_SIZE);
 	for (i = 0; i < SKW_TX_VRING_SIZE; i++) {
-		tx_vring->vr.avail->ring[i] = i;  // 将描述符索引 0~num-1 依次放入可用环
+		tx_vring->vr.avail->ring[i] = i;
 		tx_vring->vr.desc[i].addr = virt_to_phys(page_address(tx_vring->page)) + i * SKW_TX_PACK_SIZE;
 	}
-	tx_vring->queue_mem = queue_mem;  // 记录指针以便后续释放
+	tx_vring->queue_mem = queue_mem;
 
 	atomic_set(&tx_vring->set, 0);
 	atomic_set(&tx_vring->write, 0);
 
 	return tx_vring;
 
-__4:
+__alloc_queue_mem_fail:
 	kfree(tx_vring->sgl_dat);
-__3:
+__alloc_sgl_fail:
 	__free_pages(tx_vring->page, get_order(SKW_TX_PACK_SIZE*SKW_TX_VRING_SIZE));
-__2:
+__alloc_page_fail:
 	kfree(tx_vring);
-__1:
+__alloc_vring_fail:
 	return NULL;
 }
 
 void skw_tx_vring_deinit(struct skw_tx_vring *tx_vring)
 {
-	if (tx_vring)
-		return ;
+	if (!tx_vring)
+		return;
 	if (tx_vring->page)
 		__free_pages(tx_vring->page, get_order(SKW_TX_PACK_SIZE*SKW_TX_VRING_SIZE));
-	if (tx_vring->sgl_dat)
-		kfree(tx_vring->sgl_dat);
 
-	if (tx_vring->queue_mem)
-		kfree(tx_vring->queue_mem);
-
+	kfree(tx_vring->sgl_dat);
+	kfree(tx_vring->queue_mem);
 	kfree(tx_vring);
-
-	return ;
 }
 
 int skw_sdio_write(struct skw_core *skw, struct skw_tx_vring *tx_vring, u16 limit, int lmac_id)
 {
 	struct vring *vr = &tx_vring->vr;
-	//u16 avail_idx;
-	//u16 used_idx;  // 使用vr->used->idx而不是last_used_idx
 	u16 desc_idx, data_len, used_ring_idx, used_idx, avail_idx;
 	u16 nents;
 	u32 tx_bytes;
 	int ret;
+	struct skw_tx_desc_hdr *desc_hdr;
 
-	// 检查是否有新的可用描述符
 	if (!vring_has_pending(tx_vring)) {
 		skw_dbg("no avail data vr->avail->idx:%d vr->used->idx:%d\n", vr->avail->idx, vr->used->idx);
 		return -EINVAL;
@@ -1409,35 +1335,32 @@ int skw_sdio_write(struct skw_core *skw, struct skw_tx_vring *tx_vring, u16 limi
 	avail_idx = vr->avail->idx;
 	used_idx = vr->used->idx;
 
-	// 处理所有待处理的描述符（从used_idx到avail_idx-1）
 	sg_init_table(tx_vring->sgl_dat, SKW_TX_VRING_SIZE);
 	nents = 0;
 	tx_bytes = 0;
 	while ((used_idx & (vr->num - 1)) != (avail_idx & (vr->num - 1))) {
 		if (nents == limit)
 			break;
-		// 获取当前待处理的描述符索引
+
 		desc_idx = vr->avail->ring[used_idx % vr->num];
 
-		// 从描述符读取数据地址和长度
 		data_len = vr->desc[desc_idx].len;
 
-		// 记录调试信息
-		//printk("Processing descriptor %u: len=%u\n", desc_idx, data_len);
-
-		// 将结果添加到已用环
 		used_ring_idx = used_idx % vr->num;
 		vr->used->ring[used_ring_idx].id = desc_idx;
 		vr->used->ring[used_ring_idx].len = data_len;
 
+		desc_hdr = (struct skw_tx_desc_hdr *)((u8 *)phys_to_virt(vr->desc[desc_idx].addr) + SKW_EXTER_HDR_SIZE);
+		if (!skw_iface_check_deauth_flag(skw, desc_hdr->inst))
+			goto __next;
+
 		sg_set_buf(&tx_vring->sgl_dat[nents++],  phys_to_virt(vr->desc[desc_idx].addr), vr->desc[desc_idx].len);
 		tx_bytes += vr->desc[desc_idx].len;
 
-		// 清理已处理描述符的状态
+__next:
 		vr->desc[desc_idx].flags &= ~VRING_DESC_F_WRITE;
 		vr->desc[desc_idx].len = 0;
 
-		// 移动到下一个待处理的描述符
 		used_idx++;
 
 		//atomic_inc(&tx_vring->write);
@@ -1452,7 +1375,6 @@ int skw_sdio_write(struct skw_core *skw, struct skw_tx_vring *tx_vring, u16 limi
 	if (ret)
 		skw_err("hw_adma_tx fail ret:%d nents:%d tx_bytes:%d\n", ret, nents, tx_bytes);
 
-	// 更新已用环索引
 	spin_lock(&tx_vring->lock);
 	smp_wmb();
 	vr->used->idx = used_idx;
@@ -1487,6 +1409,8 @@ void skw_dy_worker(struct work_struct *work)
 
 		limit = min(pending, credit);
 
+		limit = min(limit, skw->hw.pkt_limit);
+
 		if (skw_sdio_write(skw, tx_vring, limit, lmac->id) == 0)
 			skw_sub_credit(skw, lmac->id, limit);
 	}
@@ -1496,16 +1420,21 @@ static int __skw_tx_init(struct skw_core *skw)
 {
 	//struct workqueue_attrs wq_attrs;
 	int j;
-#ifdef CONFIG_SWT6621S_SKB_RECYCLE
-	int i;
-	struct sk_buff *skb;
-#endif
 
 	skw->tx_wq = alloc_workqueue("skw_txwq.%d",
 			WQ_UNBOUND | WQ_CPU_INTENSIVE | WQ_HIGHPRI | WQ_SYSFS,
 			0, skw->idx);
 	if (!skw->tx_wq) {
 		skw_err("alloc skwtx_workqueue failed\n");
+		return -EFAULT;
+	}
+
+	skw->tx_dy = alloc_workqueue("skwifid_dywq.%d",
+			WQ_HIGHPRI | WQ_SYSFS,
+			0, skw->idx);
+	if (!skw->tx_dy) {
+		destroy_workqueue(skw->tx_wq);
+		skw_err("alloc skwtx_dy_workqueue failed\n");
 		return -EFAULT;
 	}
 
@@ -1517,8 +1446,8 @@ static int __skw_tx_init(struct skw_core *skw)
 	//apply_workqueue_attrs(skw->tx_wq, &wq_attrs);
 #endif
 
-	INIT_DELAYED_WORK(&skw->tx_worker, skw_tx_worker);
-	queue_delayed_work(skw->tx_wq, &skw->tx_worker, msecs_to_jiffies(0));
+	INIT_WORK(&skw->tx_worker, skw_tx_worker);
+	queue_work(skw->tx_wq, &skw->tx_worker);
 	//queue_work_on(cpumask_last(cpu_online_mask), skw->tx_wq, &skw->tx_worker);
 	skw->trans_start = 0;
 
@@ -1526,23 +1455,12 @@ static int __skw_tx_init(struct skw_core *skw)
 	INIT_WORK(&skw->kfree_skb_task, skw_kfree_skb_worker);
 
 	skb_queue_head_init(&skw->skb_recycle_qlist);
-#ifdef CONFIG_SWT6621S_SKB_RECYCLE
-	for (i = 0; i < SKW_SKB_RECYCLE_COUNT; i++) {
-		skb = dev_alloc_skb(SKW_2K_SIZE);
-		if (skb)
-			skb_queue_tail(&skw->skb_recycle_qlist, skb);
-		else {
-			__skb_queue_purge(&skw->skb_recycle_qlist);
-			destroy_workqueue(skw->tx_wq);
-			skw_err("alloc skb recycle failed\n");
-			return -ENOMEM;
-		}
-	}
-#endif
 
-	for (j = 0; j < SKW_MAX_LMAC_SUPPORT; j++) {
-		INIT_WORK(&skw->hw.lmac[j].dy_work, skw_dy_worker);
-		skw->hw.lmac[j].tx_vring = skw_tx_vring_init();
+	if (skw->hw.bus == SKW_BUS_SDIO || skw->hw.bus == SKW_BUS_SDIO2) {
+		for (j = 0; j < SKW_MAX_LMAC_SUPPORT; j++) {
+			INIT_WORK(&skw->hw.lmac[j].dy_work, skw_dy_worker);
+			skw->hw.lmac[j].tx_vring = skw_tx_vring_init();
+		}
 	}
 
 	return 0;
@@ -1552,334 +1470,24 @@ static void __skw_tx_deinit(struct skw_core *skw)
 {
 	int j;
 
+	if (hrtimer_active(&skw->timer))
+		hrtimer_cancel(&skw->timer);
+
 	atomic_set(&skw->exit, 1);
-	cancel_delayed_work_sync(&skw->tx_worker);
+	cancel_work_sync(&skw->tx_worker);
 	cancel_work_sync(&skw->kfree_skb_task);
 	skb_queue_purge(&skw->kfree_skb_qlist);
 	destroy_workqueue(skw->tx_wq);
+	destroy_workqueue(skw->tx_dy);
 	skb_queue_purge(&skw->skb_recycle_qlist);
 
-	for (j = 0; j < SKW_MAX_LMAC_SUPPORT; j++) {
-		cancel_work_sync(&skw->hw.lmac[j].dy_work);
-		skw_tx_vring_deinit(skw->hw.lmac[j].tx_vring);
-	}
-}
-
-#else
-
-static int skw_tx_thread(void *data)
-{
-	struct skw_core *skw = data;
-	int i, ac, mac;
-	int base = 0;
-	unsigned long flags;
-	int lmac_tx_capa;
-	int qlen, pending_qlen = 0;
-	int max_tx_count_limit = 0;
-	int lmac_tx_map = 0;
-	struct sk_buff *skb;
-	struct skw_iface *iface;
-	struct sk_buff_head *qlist;
-	struct skw_tx_lmac txl[SKW_MAX_LMAC_SUPPORT];
-	struct skw_tx_lmac *txlp;
-	struct sk_buff_head pure_ack_list;
-	int xmit_tx_flag;
-	int all_credit;
-
-	memset(txl, 0, sizeof(txl));
-	skw_reset_ac(txl);
-
-	max_tx_count_limit = skw->hw.pkt_limit;
-
-	/* reserve one for eof block */
-	if (skw->hw.bus == SKW_BUS_SDIO)
-		max_tx_count_limit--;
-
-	for (i = 0; i < skw->hw.nr_lmac; i++) {
-		__skb_queue_head_init(&txl[i].tx_list);
-		txl[i].tx_count_limit = max_tx_count_limit;
-	}
-
-	while (!kthread_should_stop()) {
-		// TODO:
-		/* CPU bind */
-		/* check if frame in pending queue is timeout */
-
-		atomic_inc(&skw->dbg.loop);
-
-		if (test_and_clear_bit(SKW_CMD_FLAG_XMIT, &skw->cmd.flags)) {
-			skw_bus_cmd_xmit(skw, skw->cmd.data, skw->cmd.data_len);
-
-			if (test_bit(SKW_CMD_FLAG_NO_ACK, &skw->cmd.flags)) {
-				set_bit(SKW_CMD_FLAG_DONE, &skw->cmd.flags);
-				skw->cmd.callback(skw);
-			}
-		}
-
-		if (!skw_tx_allowed(skw->flags)) {
-			set_current_state(TASK_INTERRUPTIBLE);
-			schedule_timeout(msecs_to_jiffies(200));
-			continue;
-		}
-
-		pending_qlen = 0;
-		lmac_tx_map = 0;
-
-		for (ac = 0; ac < SKW_WMM_AC_MAX; ac++) {
-			int ac_qlen = 0;
-
-			for (i = 0; i < SKW_NR_IFACE; i++) {
-				iface = skw->vif.iface[i];
-				// if (!iface || skw_lmac_is_actived(skw, iface->lmac_id))
-				if (!iface || !iface->ndev)
-					continue;
-
-				if (ac == SKW_WMM_AC_BE && iface->txq[SKW_ACK_TXQ].qlen) {
-					qlist = &iface->txq[SKW_ACK_TXQ];
-					__skb_queue_head_init(&pure_ack_list);
-
-					spin_lock_irqsave(&qlist->lock, flags);
-					skb_queue_splice_tail_init(&iface->txq[SKW_ACK_TXQ],
-								&pure_ack_list);
-					spin_unlock_irqrestore(&qlist->lock, flags);
-
-					skw_merge_pure_ack(skw, &pure_ack_list, &iface->tx_cache[ac]);
-				}
-
-				qlist = &iface->txq[ac];
-				if (!skb_queue_empty(qlist)) {
-					spin_lock_irqsave(&qlist->lock, flags);
-					skb_queue_splice_tail_init(qlist, &iface->tx_cache[ac]);
-					spin_unlock_irqrestore(&qlist->lock, flags);
-				}
-
-				qlen = skb_queue_len(&iface->tx_cache[ac]);
-				if (qlen) {
-					txlp = &txl[iface->lmac_id];
-					txlp->current_qlen += qlen;
-					txlp->txq_map |= BIT(txlp->nr_txq);
-					txlp->tx[txlp->nr_txq].list = &iface->tx_cache[ac];
-
-					if (txlp->ac_reset & BIT(ac)) {
-						txlp->tx[txlp->nr_txq].quota = iface->wmm.factor[ac];
-						txlp->tx[txlp->nr_txq].reset = true;
-						txlp->reset = true;
-						txlp->ac_reset ^= BIT(ac);
-					}
-
-					txlp->nr_txq++;
-					ac_qlen += qlen;
-				}
-			}
-
-			if (!ac_qlen)
-				continue;
-
-			pending_qlen += ac_qlen;
-			lmac_tx_capa = 0;
-
-			all_credit = 0;
-			for (mac = 0; mac < skw->hw.nr_lmac; mac++)
-				all_credit += skw_get_hw_credit(skw, mac);
-
-			if (all_credit == 0) {
-				skw_stop_dev_queue(skw);
-				wait_event_interruptible_exclusive(skw->tx_wait_q,
-					atomic_xchg(&skw->tx_wake, 0) || atomic_xchg(&skw->exit, 0));
-				skw_start_dev_queue(skw);
-			}
-
-			for (mac = 0; mac < skw->hw.nr_lmac; mac++) {
-				int credit;
-
-				txlp = &txl[mac];
-				if (!txlp->txq_map)
-					goto reset;
-
-				credit = txlp->cred = skw_get_hw_credit(skw, mac);
-				if (!txlp->cred)
-					goto reset;
-
-				if (txlp->reset) {
-					switch (ac) {
-					case SKW_WMM_AC_VO:
-						base = SKW_BASE_VO;
-						break;
-
-					case SKW_WMM_AC_VI:
-						base = SKW_BASE_VI;
-						break;
-
-					case SKW_WMM_AC_BK:
-						if (txlp->bk_tx_limit) {
-							base = min(txlp->cred, txlp->bk_tx_limit);
-							txlp->bk_tx_limit = 0;
-						} else {
-							base = txlp->cred;
-						}
-
-						base = base / txlp->nr_txq;
-
-						break;
-					default:
-						base = min(txlp->cred, txlp->current_qlen);
-						base = base / txlp->nr_txq;
-						txlp->bk_tx_limit = (txlp->cred + 1) >> 1;
-
-						break;
-					}
-
-					base = base ? base : 1;
-					txlp->reset = false;
-				}
-
-				for (i = 0; txlp->txq_map != 0; i++) {
-					i = i % txlp->nr_txq;
-
-					if (!(txlp->txq_map & BIT(i)))
-						continue;
-
-					if (!txlp->cred)
-						break;
-
-					if (txlp->tx[i].reset) {
-						txlp->tx[i].quota += base;
-
-						if (txlp->tx[i].quota < 0)
-							txlp->tx[i].quota = 0;
-
-						txlp->tx[i].reset = false;
-					}
-
-					skb = skb_peek(txlp->tx[i].list);
-					if (!skb) {
-						txlp->txq_map ^= BIT(i);
-						continue;
-					}
-
-					if (!is_skw_peer_data_valid(skw, skb)) {
-						skw_detail("drop dest: %pM\n",
-							   eth_hdr(skb)->h_dest);
-
-						__skb_unlink(skb, txlp->tx[i].list);
-						kfree_skb(skb);
-
-						continue;
-					}
-
-					if (!txlp->tx_count_limit--)
-						break;
-
-					if (txlp->tx[i].quota) {
-						txlp->tx[i].quota--;
-					} else {
-						txlp->txq_map ^= BIT(i);
-						continue;
-					}
-
-					if ((long)skb->data & SKW_DATA_ALIGN_MASK)
-						skw_warn("address unaligned\n");
-#if 0
-					if (skb->len % skw->hw_pdata->align_value)
-						skw_warn("len: %d unaligned\n", skb->len);
-#endif
-					__skb_unlink(skb, txlp->tx[i].list);
-					__skb_queue_tail(&txlp->tx_list, skb);
-					txlp->cred--;
-				}
-
-				pending_qlen = pending_qlen - credit + txlp->cred;
-
-				trace_skw_tx_info(mac, ac, credit, credit - txlp->cred,
-						txlp->current_qlen, pending_qlen);
-
-				// skw_lmac_tx(skw, mac, &txlp->tx_list);
-				skw_bus_data_xmit(skw, mac, &txlp->tx_list);
-				txlp->tx_count_limit = max_tx_count_limit;
-
-				lmac_tx_map |= BIT(mac);
-
-				if (txlp->cred)
-					lmac_tx_capa |= BIT(mac);
-reset:
-				txlp->nr_txq = 0;
-				txlp->txq_map = 0;
-				txlp->current_qlen = 0;
-			}
-
-			if (!lmac_tx_capa)
-				break;
-		}
-
-		if (ac == SKW_WMM_AC_MAX)
-			skw_reset_ac(txl);
-
-		if (pending_qlen == 0) {
-			xmit_tx_flag = 0;
-
-			for (ac = 0; ac < SKW_WMM_AC_MAX; ac++) {
-				for (i = 0; i < SKW_NR_IFACE; i++) {
-					iface = skw->vif.iface[i];
-					if (!iface || !iface->ndev)
-						continue;
-
-					if (skb_queue_len(&iface->tx_cache[ac]) != 0) {
-						xmit_tx_flag = 1;
-						goto need_running;
-					}
-
-					spin_lock_irqsave(&iface->txq[ac].lock, flags);
-					if (skb_queue_len(&iface->txq[ac]) != 0) {
-						xmit_tx_flag = 1;
-						spin_unlock_irqrestore(&iface->txq[ac].lock, flags);
-						goto need_running;
-
-					}
-					spin_unlock_irqrestore(&iface->txq[ac].lock, flags);
-				}
-			}
-need_running:
-
-			if (xmit_tx_flag == 0) {
-				//skw_start_dev_queue(skw);
-				wait_event_interruptible_exclusive(skw->tx_wait_q,
-					atomic_xchg(&skw->tx_wake, 0) || atomic_xchg(&skw->exit, 0));
-			}
+	if (skw->hw.bus == SKW_BUS_SDIO || skw->hw.bus == SKW_BUS_SDIO2) {
+		for (j = 0; j < SKW_MAX_LMAC_SUPPORT; j++) {
+			cancel_work_sync(&skw->hw.lmac[j].dy_work);
+			skw_tx_vring_deinit(skw->hw.lmac[j].tx_vring);
 		}
 	}
-
-	skw_info("exit");
-
-	return 0;
 }
-
-static int __skw_tx_init(struct skw_core *skw)
-{
-	skw->tx_thread = kthread_create(skw_tx_thread, skw, "skw_tx.%d", skw->idx);
-	if (IS_ERR(skw->tx_thread)) {
-		skw_err("create tx thread failed\n");
-		return  PTR_ERR(skw->tx_thread);
-	}
-
-	//kthread_bind(skw->tx_thread, cpumask_last(cpu_online_mask));
-
-	skw_set_thread_priority(skw->tx_thread, SCHED_RR, 1);
-	set_user_nice(skw->tx_thread, MIN_NICE);
-	wake_up_process(skw->tx_thread);
-
-	return 0;
-}
-
-static void __skw_tx_deinit(struct skw_core *skw)
-{
-	if (skw->tx_thread) {
-		atomic_set(&skw->exit, 1);
-		kthread_stop(skw->tx_thread);
-		skw->tx_thread = NULL;
-	}
-}
-
-#endif
 
 static int skw_register_tx_callback(struct skw_core *skw, void *func, void *data)
 {

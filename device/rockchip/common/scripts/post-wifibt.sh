@@ -417,6 +417,20 @@ build_wifibt()
 			$TARGET_DIR/lib/modules/
 	fi
 
+	if [[ "$RK_WIFIBT_MODULES" =~ "SWT6621S" ]];then
+		echo "Install skw6621s file to rootfs"
+		cp $RKWIFIBT_DIR/firmware/seekwave/usb/* \
+			$TARGET_DIR/lib/firmware/	
+		cp $RKWIFIBT_DIR/firmware/seekwave/sdio/* \
+			$TARGET_DIR/lib/firmware/				
+		cp $RKWIFIBT_DIR/drivers/swt6621s/drivers/swt6621s_wifi/*.ko \
+			$TARGET_DIR/lib/modules/
+		cp $RKWIFIBT_DIR/drivers/swt6621s/drivers/swtbt4l/*.ko \
+			$TARGET_DIR/lib/modules/			
+		cp $RKWIFIBT_DIR/drivers/swt6621s/drivers/seekwaveplatform_lite/*.ko \
+			$TARGET_DIR/lib/modules/
+	fi	
+
 	# Install boot services
 	install_sysv_service $RKWIFIBT_DIR/S36wifibt-init.sh S
 	install_busybox_service $RKWIFIBT_DIR/S36wifibt-init.sh

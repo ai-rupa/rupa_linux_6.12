@@ -49,19 +49,23 @@
 #include "skw_regd.h"
 #include "skw_recovery.h"
 #include "skw_config.h"
+#include "skw_core_dbg.h"
 #include "trace.h"
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
+#include <net/netdev_rx_queue.h>
+#endif
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 9, 0)
+#include <net/rps.h>
+#endif
 
 struct skw_global_config {
 	atomic_t index;
-	struct skw_config conf;
+	struct skw_config config;
 };
 
-#include <linux/soc/rockchip/rk_vendor_storage.h>
-
-#define LEN_LAN_MAC					6
-
 static u8 skw_mac[ETH_ALEN];
-static u8 lan_mac[ETH_ALEN];
 static struct skw_global_config g_skw_config;
 
 static atomic_t skw_chip_idx = ATOMIC_INIT(0);
@@ -77,832 +81,17 @@ static const int g_skw_up_to_ac[8] = {
 	SKW_WMM_AC_VO
 };
 
-static int skw_repeater_show(struct seq_file *seq, void *data)
-{
-	struct skw_core *skw = seq->private;
-
-	if (test_bit(SKW_FLAG_REPEATER, &skw->flags))
-		seq_puts(seq, "enable\n");
-	else
-		seq_puts(seq, "disable\n");
-
-	return 0;
-}
-
-static int skw_repeater_open(struct inode *inode, struct file *file)
-{
-	return single_open(file, skw_repeater_show, inode->i_private);
-}
-
-static ssize_t skw_repeater_write(struct file *fp, const char __user *buf,
-				size_t len, loff_t *offset)
-{
-	int i;
-	char cmd[32] = {0};
-	struct skw_core *skw = fp->f_inode->i_private;
-
-	for (i = 0; i < len; i++) {
-		char c;
-
-		if (get_user(c, buf))
-			return -EFAULT;
-
-		if (c == '\n' || c == '\0')
-			break;
-
-		cmd[i] = tolower(c);
-		buf++;
-	}
-
-	if (strcmp(cmd, "enable") == 0)
-		set_bit(SKW_FLAG_REPEATER, &skw->flags);
-	else if (strcmp(cmd, "disable") == 0)
-		clear_bit(SKW_FLAG_REPEATER, &skw->flags);
-	else
-		skw_warn("rx_reorder support setting values of \"enable\" or \"disable\"\n");
-
-	return len;
-}
-
-static const struct file_operations skw_repeater_fops = {
-	.owner = THIS_MODULE,
-	.open = skw_repeater_open,
-	.read = seq_read,
-	.release = single_release,
-	.write = skw_repeater_write,
-};
-
-static void skw_dbg_print(struct skw_core *skw, struct seq_file *seq)
-{
-	int i;
-	u64 nsecs;
-	unsigned long rem_nsec;
-
-	for (i = 0; i < skw->dbg.nr_cmd; i++) {
-		struct skw_dbg_cmd *cmd = &skw->dbg.cmd[i];
-
-		seq_printf(seq, "cmd[%d].id: %d, seq: %d, flags: 0x%lx, loop: %d\n",
-			i, cmd->id, cmd->seq, cmd->flags, cmd->loop);
-
-		nsecs = cmd->trigger;
-		rem_nsec = do_div(nsecs, 1000000000);
-		seq_printf(seq, "    cmd.%d.%d.trigger: %5lu.%06lu\n", cmd->id, cmd->seq,
-			(unsigned long)nsecs, rem_nsec / 1000);
-
-		nsecs = cmd->build;
-		rem_nsec = do_div(nsecs, 1000000000);
-		seq_printf(seq, "    cmd.%d.%d.build: %5lu.%06lu\n", cmd->id, cmd->seq,
-			(unsigned long)nsecs, rem_nsec / 1000);
-
-		nsecs = cmd->xmit;
-		rem_nsec = do_div(nsecs, 1000000000);
-		seq_printf(seq, "    cmd.%d.%d.xmit: %5lu.%06lu\n", cmd->id, cmd->seq,
-			(unsigned long)nsecs, rem_nsec / 1000);
-
-		nsecs = cmd->done;
-		rem_nsec = do_div(nsecs, 1000000000);
-		seq_printf(seq, "    cmd.%d.%d.done: %5lu.%06lu\n", cmd->id, cmd->seq,
-			(unsigned long)nsecs, rem_nsec / 1000);
-
-		nsecs = cmd->ack;
-		rem_nsec = do_div(nsecs, 1000000000);
-		seq_printf(seq, "    cmd.%d.%d.ack: %5lu.%06lu\n", cmd->id, cmd->seq,
-			(unsigned long)nsecs, rem_nsec / 1000);
-
-		nsecs = cmd->assert;
-		rem_nsec = do_div(nsecs, 1000000000);
-		seq_printf(seq, "    cmd.%d.%d.assert: %5lu.%06lu\n", cmd->id, cmd->seq,
-			(unsigned long)nsecs, rem_nsec / 1000);
-
-		seq_puts(seq, "\n");
-	}
-
-	for (i = 0; i < skw->dbg.nr_dat; i++) {
-		struct skw_dbg_dat *dat = &skw->dbg.dat[i];
-
-		seq_printf(seq, "dat[%d], tx_qlen: %d\n", i, dat->qlen);
-
-		nsecs = dat->trigger;
-		rem_nsec = do_div(nsecs, 1000000000);
-		seq_printf(seq, "    dat.%d.%d.trigger: %5lu.%06lu\n",
-			i, dat->qlen, (unsigned long)nsecs, rem_nsec / 1000);
-
-		nsecs = dat->done;
-		rem_nsec = do_div(nsecs, 1000000000);
-		seq_printf(seq, "    dat.%d.%d.done: %5lu.%06lu\n",
-			i, dat->qlen, (unsigned long)nsecs, rem_nsec / 1000);
-
-		seq_puts(seq, "\n");
-	}
-}
-
-static void skw_timestap_print(struct skw_core *skw, struct seq_file *seq)
-{
-	u64 ts;
-	struct rtc_time tm;
-	unsigned long rem_nsec;
-
-	ts = skw->fw.host_timestamp;
-	rem_nsec = do_div(ts, 1000000000);
-	skw_compat_rtc_time_to_tm(skw->fw.host_seconds, &tm);
-
-	seq_printf(seq,
-		   "Timestamp: %u - %lu.%06lu (%d-%02d-%02d %02d:%02d:%02d UTC)\n",
-		   skw->fw.timestamp, (unsigned long)ts,
-		   rem_nsec / 1000, tm.tm_year + 1900,
-		   tm.tm_mon + 1, tm.tm_mday, tm.tm_hour,
-		   tm.tm_min, tm.tm_sec);
-}
-
-static void skw_drv_info_print(struct skw_core *skw, struct seq_file *seq)
-{
-	int i;
-
-#define FLAG_TEST(n) test_bit(SKW_FLAG_##n, &skw->flags)
-	seq_printf(seq,
-		   "SKW Flags:\t 0x%lx %s\n"
-		   "TX Packets:\t %ld\n"
-		   "RX Packets:\t %ld\n"
-		   "txqlen_pending:\t %d\n"
-		   "nr lmac:\t %d\n"
-		   "skb_recycle_qlist:%d\n",
-		   skw->flags, FLAG_TEST(FW_ASSERT) ? "(Assert)" : "",
-		   skw->tx_packets,
-		   skw->rx_packets,
-		   atomic_read(&skw->txqlen_pending),
-		   skw->hw.nr_lmac,
-		   READ_ONCE(skw->skb_recycle_qlist.qlen));
-
-	for (i = 0; i < skw->hw.nr_lmac; i++)
-		seq_printf(seq, "    credit[%d]:\t %d (%s)\n",
-			   i, skw_get_hw_credit(skw, i),
-			   skw_lmac_is_actived(skw, i) ? "active" : "inactive");
-#undef FLAG_TEST
-}
-
-static void skw_fw_info_print(struct skw_core *skw, struct seq_file *seq)
-{
-	if (!skw->hw_pdata)
-		return;
-
-	/* Firmware & BSP Info */
-	seq_printf(seq, "Calib File:\t %s\n"
-			"FW Build:\t %s\n"
-			"FW Version:\t %s-%s (BSP-MAC)\n"
-			"BUS Type:\t 0x%x (%s)\n"
-			"Align Size:\t %d\n"
-			"TX Limit:\t %d\n",
-			skw->fw.calib_file,
-			skw->fw.build_time,
-			skw->fw.plat_ver,
-			skw->fw.wifi_ver,
-			skw->hw_pdata->bus_type,
-			skw_bus_name(skw->hw.bus),
-			skw->hw_pdata->align_value,
-			skw->hw.pkt_limit);
-}
-
-static int skw_core_show(struct seq_file *seq, void *data)
-{
-	struct skw_core *skw = seq->private;
-
-	seq_puts(seq, "\n");
-	skw_timestap_print(skw, seq);
-
-	seq_puts(seq, "\n");
-	skw_drv_info_print(skw, seq);
-
-	seq_puts(seq, "\n");
-	skw_fw_info_print(skw, seq);
-
-	seq_puts(seq, "\n");
-	skw_dbg_print(skw, seq);
-
-	seq_puts(seq, "\n");
-
-	return 0;
-}
-
-static int skw_core_open(struct inode *inode, struct file *file)
-{
-	// return single_open(file, skw_core_show, inode->i_private);
-	return single_open(file, skw_core_show, skw_pde_data(inode));
-}
-
-void skw_debug_print_hw_tx_info(struct seq_file *seq, struct skw_get_hw_tx_info_s *info)
-{
-	int i = 0;
-
-	if (!info) {
-		seq_puts(seq, "HW Tx Info structure is NULL\n");
-		return;
-	}
-
-	seq_puts(seq, "Hardware Tx info:\n\n");
-	seq_printf(seq, "\tHIF TX All Count: %u\n", info->hif_tx_all_cnt);
-	seq_printf(seq, "\tHIF Report All Credit Count: %u\n", info->hif_rpt_all_credit_cnt);
-	seq_printf(seq, "\tCurrent Free Buffer Count: %u\n", info->cur_free_buf_cnt);
-	seq_printf(seq, "\tPending TX Packet Count: %u\n", info->pendding_tx_pkt_cnt);
-	seq_printf(seq, "\tLast Command Sequence: %u\n", info->lst_cmd_seq);
-	seq_printf(seq, "\tLast Event Sequence: %u\n", info->lst_evt_seq);
-	seq_printf(seq, "\tLMAC TX Broadcast Count: %u\n", info->lmac_tx_bc_cnt);
-	seq_printf(seq, "\tLMAC TX Unicast Count: %u\n", info->lmac_tx_uc_cnt[0]);
-
-	// Print array lmac_tx_uc_cnt
-	seq_puts(seq, "\tLMAC TX Unicast Count Array: ");
-
-	for (i = 0; i < 5; i++)
-		seq_printf(seq, "%u ", info->lmac_tx_uc_cnt[i]);
-
-	seq_puts(seq, "\n");
-
-	// Print hmac_tx_stat
-	seq_puts(seq, "\tHMAC TX Stat: ");
-
-	for (i = 0; i < 7; i++)
-		seq_printf(seq, "%u ", info->hmac_tx_stat.hmac_tx_stat[i]);
-
-	seq_puts(seq, "\n");
-
-	// Print tx_mib_acc_info
-	seq_printf(seq, "\tAccumulated TX PSDU Count: %u\n", info->tx_mib_acc_info.acc_tx_psdu_cnt);
-	seq_printf(seq, "\tAccumulated TX With ACK Timeout Count: %u\n", info->tx_mib_acc_info.acc_tx_wi_ack_to_cnt);
-	seq_printf(seq, "\tAccumulated TX With ACK Fail Count: %u\n", info->tx_mib_acc_info.acc_tx_wi_ack_fail_cnt);
-	seq_printf(seq, "\tAccumulated RTS Without CTS Count: %u\n", info->tx_mib_acc_info.acc_rts_wo_cts_cnt);
-	seq_printf(seq, "\tAccumulated TX Post Busy Count: %u\n", info->tx_mib_acc_info.acc_tx_post_busy_cnt);
-	seq_printf(seq, "\tTX Enable Percentage: %u%%\n", info->tx_mib_acc_info.tx_en_perct);
-
-	// Print tx_mib_tb_acc_info
-	seq_printf(seq, "\tTB Basic Trigger Count: %u\n", info->tx_mib_tb_acc_info.rx_basic_trig_cnt);
-	seq_printf(seq, "\tTB Basic Trigger Success Count: %u\n", info->tx_mib_tb_acc_info.rx_basic_trig_succ_cnt);
-	seq_printf(seq, "\tTB Generate Invoke Count: %u\n", info->tx_mib_tb_acc_info.tb_gen_invoke_cnt);
-	seq_printf(seq, "\tTB Generate Abort Count: %u\n", info->tx_mib_tb_acc_info.tb_gen_abort_cnt);
-	seq_printf(seq, "\tTB CS Fail Accumulated Count: %u\n", info->tx_mib_tb_acc_info.tb_cs_fail_acc_cnt);
-	seq_printf(seq, "\tAll TB Pre TX Count: %u\n", info->tx_mib_tb_acc_info.all_tb_pre_tx_cnt);
-	seq_printf(seq, "\tTB TX Accumulated Count: %u\n", info->tx_mib_tb_acc_info.tb_tx_acc_cnt);
-	seq_printf(seq, "\tTB TX Success Accumulated Count: %u\n", info->tx_mib_tb_acc_info.tb_tx_acc_scucc_cnt);
-	seq_printf(seq, "\tTB TX Success Ratio: %u\n", info->tx_mib_tb_acc_info.tb_tx_suc_ratio);
-	seq_printf(seq, "\tRX Trigger Register Count: %u\n", info->tx_mib_tb_acc_info.rx_trig_reg_cnt);
-	seq_printf(seq, "\tRX Trigger Start TX Count: %u\n", info->tx_mib_tb_acc_info.rx_trig_start_tx_cnt);
-	seq_printf(seq, "\tRX Trigger Success Ratio: %u\n", info->tx_mib_tb_acc_info.rx_trig_suc_ratio);
-}
-
-void skw_debug_print_inst_info(struct seq_file *seq, struct skw_get_inst_info_s *info)
-{
-	int i = 0;
-
-	if (!info) {
-		seq_puts(seq, "\tInst Info structure is NULL\n");
-		return;
-	}
-
-	seq_puts(seq, "Inst info:\n\n");
-	seq_printf(seq, "\tInst Mode: %u\n", info->inst_mode);
-	seq_printf(seq, "\tHW ID: %u\n", info->hw_id);
-	seq_printf(seq, "\tEnable: %u\n", info->enable);
-	seq_printf(seq, "\tMAC ID: %u\n", info->mac_id);
-	seq_printf(seq, "\tASOC Peer Map: %u\n", info->asoc_peer_map);
-	seq_printf(seq, "\tPeer PS State: %u\n", info->peer_ps_state);
-
-	seq_puts(seq, "\tCS Info:\n");
-	seq_printf(seq, "\t\tP20 Last Busy Percentage: %u\n", info->cs_info.p20_lst_busy_perctage);
-	seq_printf(seq, "\t\tP40 Last Busy Percentage: %u\n", info->cs_info.p40_lst_busy_perctage);
-	seq_printf(seq, "\t\tP80 Last Busy Percentage: %u\n", info->cs_info.p80_lst_busy_perctage);
-	seq_printf(seq, "\t\tP20 Last NAV Percentage: %u\n", info->cs_info.p20_lst_nav_perctage);
-	seq_printf(seq, "\t\tP40 Last NAV Percentage: %u\n", info->cs_info.p40_lst_nav_perctage);
-	seq_printf(seq, "\t\tP80 Last NAV Percentage: %u\n", info->cs_info.p80_lst_nav_perctage);
-
-	seq_puts(seq, "\tRPI Info:\n");
-	seq_printf(seq, "\t\tNo UC Direct RPI Level: %d\n", info->rpi_info.no_uc_direct_rpi_level);
-	seq_printf(seq, "\t\tUC Direct RPI Level: %d\n", info->rpi_info.uc_direct_rpi_level);
-	seq_printf(seq, "\t\tRX BA RSSI: %d\n", info->rpi_info.rx_ba_rssi);
-	seq_printf(seq, "\t\tRX Idle Percent in RPI: %u\n", info->rpi_info.rx_idle_percent_in_rpi);
-	seq_printf(seq, "\t\tRX Percent in RPI: %u\n", info->rpi_info.rx_percent_in_rpi);
-
-	seq_puts(seq, "\t\tRPI Class Duration: ");
-
-	for (i = 0; i < RPI_MAX_LEVEL; i++)
-		seq_printf(seq, "%u ", info->rpi_info.rpi_class_dur[i]);
-
-	seq_puts(seq, "\n");
-
-	seq_puts(seq, "\tNoise Info:\n");
-	seq_puts(seq, "\t\tNoise Class Duration: ");
-
-	for (i = 0; i < NOISE_MAX_LEVEL; i++)
-		seq_printf(seq, "%u ", info->noise_info.noise_class_dur[i]);
-
-	seq_puts(seq, "\n");
-}
-
-void skw_debug_print_peer_info(struct seq_file *seq, struct skw_get_peer_info *peer_info)
-{
-	int i = 0;
-
-	if (!peer_info) {
-		seq_puts(seq, "\tPeer Info structure is NULL\n");
-		return;
-	}
-
-	seq_puts(seq, "Peer info:\n\n");
-	seq_printf(seq, "\tIs Valid: %u\n", peer_info->is_valid);
-	seq_printf(seq, "\tInstance ID: %u\n", peer_info->inst_id);
-	seq_printf(seq, "\tHW ID: %u\n", peer_info->hw_id);
-	seq_printf(seq, "\tRX RSSI: %d\n", peer_info->rx_rsp_rssi);
-	seq_printf(seq, "\tAverage ADD Delay (ms): %u\n", peer_info->avg_add_delay_in_ms);
-	seq_printf(seq, "\tTX Max Delay Time: %u\n", peer_info->tx_max_delay_time);
-
-	// Print TX Hmac Per Peer Report
-	seq_puts(seq, "\tHMAC TX Stat:\n");
-	seq_puts(seq, "\t\t");
-
-	for (i = 0; i < 5; i++)
-		seq_printf(seq, "%u ", peer_info->hmac_tx_stat.hmac_tx_stat[i]);
-
-	seq_puts(seq, "\n");
-
-	seq_printf(seq, "\tTXC ISR Read DSCR FIFO Count: %u\n",
-		   peer_info->hmac_tx_stat.txc_isr_read_dscr_fifo_cnt);
-
-	// Print TX Rate Info
-	seq_puts(seq, "\tTX Rate Info:\n");
-	seq_printf(seq, "\t\tFlags: %u\n", peer_info->tx_rate_info.flags);
-	seq_printf(seq, "\t\tMCS Index: %u\n", peer_info->tx_rate_info.mcs_idx);
-	seq_printf(seq, "\t\tLegacy Rate: %u\n", peer_info->tx_rate_info.legacy_rate);
-	seq_printf(seq, "\t\tNSS: %u\n", peer_info->tx_rate_info.nss);
-	seq_printf(seq, "\t\tBW: %u\n", peer_info->tx_rate_info.bw);
-	seq_printf(seq, "\t\tGI: %u\n", peer_info->tx_rate_info.gi);
-	seq_printf(seq, "\t\tRU: %u\n", peer_info->tx_rate_info.ru);
-	seq_printf(seq, "\t\tDCM: %u\n", peer_info->tx_rate_info.dcm);
-
-	// Print RX MSDU Info Report
-	seq_puts(seq, "\tRX MSDU Info:\n");
-	seq_printf(seq, "\t\tPPDU Mode: %u\n", peer_info->rx_msdu_info_rpt.ppdu_mode);
-	seq_printf(seq, "\t\tData Rate: %u\n", peer_info->rx_msdu_info_rpt.data_rate);
-	seq_printf(seq, "\t\tGI Type: %u\n", peer_info->rx_msdu_info_rpt.gi_type);
-	seq_printf(seq, "\t\tSBW: %u\n", peer_info->rx_msdu_info_rpt.sbw);
-	seq_printf(seq, "\t\tDCM: %u\n", peer_info->rx_msdu_info_rpt.dcm);
-	seq_printf(seq, "\t\tNSS: %u\n", peer_info->rx_msdu_info_rpt.nss);
-
-	// Print TX Debug Stats Per Peer
-	seq_puts(seq, "\tTX Stats Info:\n");
-	seq_printf(seq, "\t\tRTS Fail Count: %u\n", peer_info->tx_stats_info.rts_fail_cnt);
-	seq_printf(seq, "\t\tPSDU Ack Timeout Count: %u\n", peer_info->tx_stats_info.psdu_ack_timeout_cnt);
-	seq_printf(seq, "\t\tTX MPDU Count: %u\n", peer_info->tx_stats_info.tx_mpdu_cnt);
-	seq_printf(seq, "\t\tTX Wait Time: %u\n", peer_info->tx_stats_info.tx_wait_time);
-
-	// Print TX Pending Packet Count
-	seq_puts(seq, "\tTX Pending Packet Count: ");
-
-	for (i = 0; i < 4; i++)
-		seq_printf(seq, "%u ", peer_info->tx_pending_pkt_cnt[i]);
-
-	seq_puts(seq, "\n");
-}
-
-void skw_debug_print_hw_rx_info(struct seq_file *seq, struct skw_get_hw_rx_info *rx_info)
-{
-	if (!rx_info) {
-		seq_puts(seq, "\tInfo structure is NULL\n");
-		return;
-	}
-
-	seq_puts(seq, "rx info:\n\n");
-	seq_printf(seq, "\tPHY RX All Count: %u\n", rx_info->phy_rx_all_cnt);
-	seq_printf(seq, "\tPHY RX 11B Count: %u\n", rx_info->phy_rx_11b_cnt);
-	seq_printf(seq, "\tPHY RX 11G Count: %u\n", rx_info->phy_rx_11g_cnt);
-	seq_printf(seq, "\tPHY RX 11N Count: %u\n", rx_info->phy_rx_11n_cnt);
-	seq_printf(seq, "\tPHY RX 11AC Count: %u\n", rx_info->phy_rx_11ac_cnt);
-	seq_printf(seq, "\tPHY RX 11AX Count: %u\n", rx_info->phy_rx_11ax_cnt);
-	seq_printf(seq, "\tMAC RX MPDU Count: %u\n", rx_info->mac_rx_mpdu_cnt);
-	seq_printf(seq, "\tMAC RX MPDU FCS Pass Count: %u\n", rx_info->mac_rx_mpdu_fcs_pass_cnt);
-	seq_printf(seq, "\tMAC RX MPDU FCS Pass Direct Count: %u\n", rx_info->mac_rx_mpdu_fcs_pass_dir_cnt);
-}
-
-void skw_debug_print_inst_tsf(struct seq_file *seq, struct skw_inst_tsf *inst_tsf)
-{
-	if (!inst_tsf) {
-		seq_puts(seq, "\tInst tsf structure is NULL\n");
-		return;
-	}
-
-	seq_puts(seq, "inst tsf:\n\n");
-	seq_printf(seq, "\tInst tsf low: %u\n", inst_tsf->tsf_l);
-	seq_printf(seq, "\tInst tsf high: %u\n", inst_tsf->tsf_h);
-}
-
-void skw_debug_print_winfo(struct seq_file *seq, struct skw_debug_info_w  *w_info)
-{
-	int i, j;
-	int percent;
-
-	seq_puts(seq, "debug_w info:\n");
-
-	for (i = 0; i < SKW_MAX_LMAC_SUPPORT; i++) {
-		seq_printf(seq, "    hw[%d]:\t total[%d]\t other_count:%d\n",
-			i, w_info->hw_w[i].w_total_cnt,
-			w_info->hw_w[i].w_cnt[SKW_MAX_W_LEVEL - 1]);
-		seq_puts(seq, "\n");
-		for (j = 0; j < SKW_MAX_W_LEVEL - 1; j++) {
-			percent = w_info->hw_w[i].w_cnt[j] * 1000
-					/ w_info->hw_w[i].w_total_cnt;
-			seq_printf(seq, "\t  %d:thresh[%d]\t"
-			"count:%d\t     percent:%d.%d%%\n", j,
-				w_info->hw_w[i].w_ctrl_thresh[j],
-				w_info->hw_w[i].w_cnt[j],
-				percent/10, percent%10);
-		}
-		seq_puts(seq, "\n");
-	}
-
-	seq_puts(seq, "\n");
-
-}
-
-void skw_debug_print_nss_info(struct seq_file *seq, struct skw_mac_nss_info  *nss_info)
-{
-	int i;
-
-	seq_puts(seq, "nss info:\n");
-	seq_printf(seq,
-		"\t mac0 nss: %d,\tmac1 nss: %d.\t"
-		" dbdc mode:%d\n\n"
-		"\t instence num:%d\n",
-		nss_info->mac_nss[0],
-		nss_info->mac_nss[1],
-		nss_info->is_dbdc_mode,
-		nss_info->max_inst_num);
-
-	for (i = 0; i < nss_info->max_inst_num; i++)
-		if (nss_info->inst_nss[i].valid_id)
-			seq_printf(seq, "\t  inst[%d]:\t valid:%d\t"
-				"rx_nss:%d\t tx_nss:%d\n",
-				i, nss_info->inst_nss[i].valid_id,
-				nss_info->inst_nss[i].inst_rx_nss,
-				nss_info->inst_nss[i].inst_tx_nss);
-
-	seq_puts(seq, "\n");
-
-}
-
-int skw_debug_get_hw_tx_info(struct skw_core *skw, u8 *buf, int len)
-{
-	int ret = -1;
-	struct skw_tlv *tlv;
-	struct skw_debug_info_s debug_info_param = {0};
-
-	debug_info_param.tlv = SKW_MIB_GET_HW_TX_INFO_E;
-	ret = skw_msg_xmit(priv_to_wiphy(skw), 0, SKW_CMD_GET_DEBUG_INFO,
-				&debug_info_param, sizeof(struct skw_debug_info_s),
-				buf, len);
-
-	if (ret) {
-		skw_warn("failed, ret: %d\n", ret);
-		return ret;
-	}
-
-	tlv = (struct skw_tlv *)buf;
-	if (tlv->type != SKW_MIB_GET_HW_TX_INFO_E ||
-		tlv->len != sizeof(struct skw_get_hw_tx_info_s))
-		return -1;
-
-	return 0;
-}
-
-int skw_debug_get_inst_info(struct skw_core *skw, u8 inst_id, u8 *buf, int len)
-{
-	int ret = -1;
-	struct skw_tlv *tlv;
-	struct skw_debug_info_s debug_info_param = {0};
-
-	debug_info_param.tlv = SKW_MIB_GET_INST_INFO_E;
-	ret = skw_msg_xmit(priv_to_wiphy(skw), inst_id, SKW_CMD_GET_DEBUG_INFO,
-				&debug_info_param, sizeof(struct skw_debug_info_s),
-				buf, len);
-
-	if (ret) {
-		skw_warn("failed, ret: %d\n", ret);
-		return ret;
-	}
-
-	tlv = (struct skw_tlv *)buf;
-	if (tlv->type != SKW_MIB_GET_INST_INFO_E ||
-		tlv->len != sizeof(struct skw_get_inst_info_s))
-		return -1;
-
-	return 0;
-}
-
-int skw_debug_get_peer_info(struct skw_core *skw, u8 peer_idx, u8 *buf, int len)
-{
-	int ret = -1;
-	struct skw_tlv *tlv;
-	struct skw_debug_info_s debug_info_param = {0};
-
-	debug_info_param.tlv = SKW_MIB_GET_PEER_INFO_E;
-	debug_info_param.val[0] = peer_idx;
-	ret = skw_msg_xmit(priv_to_wiphy(skw), 0, SKW_CMD_GET_DEBUG_INFO,
-				&debug_info_param, sizeof(struct skw_debug_info_s),
-				buf, len);
-
-	if (ret) {
-		skw_warn("failed, ret: %d\n", ret);
-		return ret;
-	}
-
-	tlv = (struct skw_tlv *)buf;
-	if (tlv->type != SKW_MIB_GET_PEER_INFO_E ||
-		tlv->len != sizeof(struct skw_get_peer_info))
-		return -1;
-
-	return 0;
-}
-
-
-int skw_debug_get_hw_rx_info(struct skw_core *skw,  u8 *buf, int len)
-{
-	int ret = -1;
-	struct skw_tlv *tlv;
-	struct skw_debug_info_s debug_info_param = {0};
-
-	debug_info_param.tlv = SKW_MIB_GET_HW_RX_INFO_E;
-	ret = skw_msg_xmit(priv_to_wiphy(skw), 0, SKW_CMD_GET_DEBUG_INFO,
-				&debug_info_param, sizeof(struct skw_debug_info_s),
-				buf, len);
-
-	if (ret) {
-		skw_warn("failed, ret: %d\n", ret);
-		return ret;
-	}
-
-	tlv = (struct skw_tlv *)buf;
-	if (tlv->type != SKW_MIB_GET_HW_RX_INFO_E ||
-		tlv->len != sizeof(struct skw_get_hw_rx_info))
-		return -1;
-
-	return 0;
-}
-
-int skw_debug_get_inst_tsf(struct skw_core *skw, u8 *buf, int len)
-{
-	int ret = -1;
-	struct skw_tlv *tlv;
-	struct skw_debug_info_s debug_info_param = {0};
-
-	debug_info_param.tlv = SKW_MIB_GET_INST_TSF_E;
-	ret = skw_msg_xmit(priv_to_wiphy(skw), 0, SKW_CMD_GET_DEBUG_INFO,
-				&debug_info_param, sizeof(struct skw_debug_info_s),
-				buf, len);
-
-	if (ret) {
-		skw_warn("failed, ret: %d\n", ret);
-		return ret;
-	}
-
-	tlv = (struct skw_tlv *)buf;
-	if (tlv->type != SKW_MIB_GET_INST_TSF_E ||
-		tlv->len != sizeof(struct skw_inst_tsf))
-		return -1;
-
-	return 0;
-}
-
-int skw_debug_get_winfo(struct skw_core *skw, u8 *buf, int len)
-{
-	int ret = -1;
-	struct skw_tlv *tlv;
-
-	struct skw_debug_info_s debug_info_param = {0};
-	debug_info_param.tlv = SKW_MIB_W_INFO;
-	ret = skw_msg_xmit(priv_to_wiphy(skw), 0, SKW_CMD_GET_DEBUG_INFO,
-						&debug_info_param, sizeof(struct skw_debug_info_s),
-						buf, len);
-
-	if (ret) {
-		skw_warn("failed, ret: %d\n", ret);
-		return ret;
-	}
-
-	tlv = (struct skw_tlv *)buf;
-	if (tlv->type != SKW_MIB_W_INFO ||
-		tlv->len != sizeof(struct skw_debug_info_w))
-		return -1;
-
-	return 0;
-}
-
-int skw_debug_get_nss_info(struct skw_core *skw, u8 *buf, int len)
-{
-	int ret = -1;
-	struct skw_tlv *tlv;
-
-	struct skw_debug_info_s debug_info_param = {0};
-	debug_info_param.tlv = SKW_MIB_MAC_NSS_INFO;
-	ret = skw_msg_xmit(priv_to_wiphy(skw), 0, SKW_CMD_GET_DEBUG_INFO,
-						&debug_info_param, sizeof(struct skw_debug_info_s),
-						buf, len);
-
-	if (ret) {
-		skw_warn("failed, ret: %d\n", ret);
-		return ret;
-	}
-
-	tlv = (struct skw_tlv *)buf;
-	if (tlv->type != SKW_MIB_MAC_NSS_INFO ||
-		tlv->len != sizeof(struct skw_mac_nss_info))
-		return -1;
-
-	return 0;
-}
-
-static int skw_debug_info_show(struct seq_file *seq, void *data)
-{
-	struct skw_core *skw = seq->private;
-	u8 *tx_info = NULL;
-	u8 *inst_info = NULL;
-	u8 *peer_info = NULL;
-	u8 *rx_info = NULL;
-	u8 *inst_tsf = NULL;
-	u8 *nss_buf = NULL;
-	u8 *w_info = NULL;
-	int len;
-
-	len = sizeof(struct skw_get_hw_tx_info_s) + sizeof(struct skw_tlv);
-	tx_info = SKW_ZALLOC(len, GFP_KERNEL);
-	if (!tx_info) {
-		skw_err("tx_info failed\n");
-	} else {
-		if (skw_debug_get_hw_tx_info(skw, tx_info, len) == 0) {
-			seq_puts(seq, "\n");
-			skw_debug_print_hw_tx_info(seq, (void *)(tx_info + sizeof(struct skw_tlv)));
-			seq_puts(seq, "\n");
-		}
-
-		SKW_KFREE(tx_info);
-	}
-
-	len = sizeof(struct skw_get_inst_info_s) + sizeof(struct skw_tlv);
-	inst_info = SKW_ZALLOC(len, GFP_KERNEL);
-	if (!inst_info) {
-		skw_err("inst_info failed\n");
-	} else {
-		if (skw_debug_get_inst_info(skw, 0, inst_info, len) == 0) {
-			seq_puts(seq, "\n");
-			skw_debug_print_inst_info(seq, (void *)(inst_info + sizeof(struct skw_tlv)));
-			seq_puts(seq, "\n");
-		}
-
-		SKW_KFREE(inst_info);
-	}
-
-	len = sizeof(struct skw_get_peer_info) + sizeof(struct skw_tlv);
-	peer_info = SKW_ZALLOC(len, GFP_KERNEL);
-	if (!peer_info) {
-		skw_err("peer_info failed\n");
-	} else {
-		if (skw_debug_get_peer_info(skw, 0, peer_info, len) == 0) {
-			seq_puts(seq, "\n");
-			skw_debug_print_peer_info(seq, (void *)(peer_info + sizeof(struct skw_tlv)));
-			seq_puts(seq, "\n");
-		}
-
-		SKW_KFREE(peer_info);
-	}
-
-	len = sizeof(struct skw_get_hw_rx_info) + sizeof(struct skw_tlv);
-	rx_info = SKW_ZALLOC(len, GFP_KERNEL);
-	if (!rx_info) {
-		skw_err("rx_info failed\n");
-	} else {
-		if (skw_debug_get_hw_rx_info(skw, rx_info, len) == 0) {
-			seq_puts(seq, "\n");
-			skw_debug_print_hw_rx_info(seq, (void *)(rx_info + sizeof(struct skw_tlv)));
-			seq_puts(seq, "\n");
-		}
-
-		SKW_KFREE(rx_info);
-	}
-
-	len = sizeof(struct skw_inst_tsf) + sizeof(struct skw_tlv);
-	inst_tsf = SKW_ZALLOC(len, GFP_KERNEL);
-	if (!inst_tsf) {
-		skw_err("inst_tsf failed\n");
-	} else {
-		if (skw_debug_get_inst_tsf(skw, inst_tsf, len) == 0) {
-			seq_puts(seq, "\n");
-			skw_debug_print_inst_tsf(seq, (void *)(inst_tsf + sizeof(struct skw_tlv)));
-			seq_puts(seq, "\n");
-		}
-
-		SKW_KFREE(inst_tsf);
-	}
-
-	len = sizeof(struct skw_debug_info_w) + sizeof(struct skw_tlv);
-	w_info = SKW_ZALLOC(len, GFP_KERNEL);
-	if (!w_info) {
-		skw_err("w_info failed\n");
-	} else {
-		if (skw_debug_get_winfo(skw, w_info, len) == 0) {
-			seq_puts(seq, "\n");
-			skw_debug_print_winfo(seq, (void *)(w_info + sizeof(struct skw_tlv)));
-			seq_puts(seq, "\n");
-		}
-
-		SKW_KFREE(w_info);
-	}
-
-	len = sizeof(struct skw_mac_nss_info) + sizeof(struct skw_tlv);
-	nss_buf = SKW_ZALLOC(len, GFP_KERNEL);
-	if (!nss_buf) {
-		skw_err("nss_buf failed\n");
-	} else {
-		if (skw_debug_get_nss_info(skw, nss_buf, len) == 0) {
-			seq_puts(seq, "\n");
-			skw_debug_print_nss_info(seq, (void *)(nss_buf + sizeof(struct skw_tlv)));
-			seq_puts(seq, "\n");
-		}
-
-		SKW_KFREE(nss_buf);
-	}
-
-	seq_puts(seq, "\n");
-
-	return 0;
-}
-
-static int skw_debug_info_open(struct inode *inode, struct file *file)
-{
-	return single_open(file, skw_debug_info_show, skw_pde_data(inode));
-}
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 6, 0)
-static const struct proc_ops skw_core_fops = {
-	.proc_open = skw_core_open,
-	.proc_read = seq_read,
-	.proc_lseek = seq_lseek,
-	.proc_release = single_release,
-};
-static const struct proc_ops skw_debug_info_fops = {
-	.proc_open = skw_debug_info_open,
-	.proc_read = seq_read,
-	.proc_lseek = seq_lseek,
-	.proc_release = single_release,
-};
-#else
-static const struct file_operations skw_core_fops = {
-	.owner = THIS_MODULE,
-	.open = skw_core_open,
-	.read = seq_read,
-	.llseek = seq_lseek,
-	.release = single_release,
-};
-static const struct file_operations skw_debug_info_fops = {
-	.owner = THIS_MODULE,
-	.open = skw_debug_info_open,
-	.read = seq_read,
-	.llseek = seq_lseek,
-	.release = single_release,
-};
-#endif
-
-static int skw_assert_show(struct seq_file *seq, void *data)
-{
-	return 0;
-}
-
-static int skw_assert_open(struct inode *inode, struct file *file)
-{
-	return single_open(file, skw_assert_show, inode->i_private);
-}
-
-static ssize_t skw_assert_write(struct file *fp, const char __user *buf,
-				size_t len, loff_t *offset)
-{
-	struct skw_core *skw = fp->f_inode->i_private;
-
-	skw_hw_assert(skw, false);
-
-	return len;
-}
-
-static const struct file_operations skw_assert_fops = {
-	.owner = THIS_MODULE,
-	.open = skw_assert_open,
-	.read = seq_read,
-	.write = skw_assert_write,
-	.release = single_release,
-};
-
 static int skw_ndo_open(struct net_device *dev)
 {
 	struct skw_iface *iface = netdev_priv(dev);
 	struct skw_core *skw = iface->skw;
 
-	skw_dbg("dev: %s, type: %s\n", netdev_name(dev),
-		skw_iftype_name(dev->ieee80211_ptr->iftype));
+	skw_dev_dbg(dev, "type: %s, flags: 0x%lx\n",
+		skw_iftype_name(dev->ieee80211_ptr->iftype),
+		skw->flags);
 
 	if (test_bit(SKW_FLAG_FW_THERMAL, &skw->flags)) {
-		skw_warn("disable TX for thermal warnning");
+		skw_dev_warn(dev, "disable TX for thermal warnning");
 		netif_tx_stop_all_queues(dev);
 	}
 
@@ -911,8 +100,9 @@ static int skw_ndo_open(struct net_device *dev)
 	if (dev->ieee80211_ptr->iftype == NL80211_IFTYPE_MONITOR) {
 		dev->type = ARPHRD_IEEE80211_RADIOTAP;
 		netif_tx_stop_all_queues(dev);
-	} else
+	} else {
 		dev->type = ARPHRD_ETHER;
+	}
 
 	return 0;
 }
@@ -922,7 +112,7 @@ static int skw_ndo_stop(struct net_device *dev)
 	struct skw_iface *iface = netdev_priv(dev);
 	struct skw_core *skw = iface->skw;
 
-	skw_dbg("dev: %s, type: %s\n", netdev_name(dev),
+	skw_dev_dbg(dev, "type: %s\n",
 		skw_iftype_name(dev->ieee80211_ptr->iftype));
 
 	//netif_tx_stop_all_queues(dev);
@@ -955,7 +145,7 @@ static int skw_ndo_stop(struct net_device *dev)
 	return 0;
 }
 
-static bool skw_udp_filter(struct net_device *ndev, struct sk_buff *skb)
+static bool skw_udp_filter(struct net_device *dev, struct sk_buff *skb)
 {
 	bool ret = false;
 	struct udphdr *udp = udp_hdr(skb);
@@ -968,7 +158,7 @@ static bool skw_udp_filter(struct net_device *ndev, struct sk_buff *skb)
 	switch (ntohs(udp->dest)) {
 	case DHCP_CLIENT_PORT:
 	case DHCP_SERVER_PORT:
-		if (ndev->priv_flags & IFF_BRIDGE_PORT) {
+		if (dev->priv_flags & IFF_BRIDGE_PORT) {
 			/* set BOOTP flag to broadcast */
 			*((u8 *)udp + 18) = 0x80;
 			udp->check = 0;
@@ -979,7 +169,7 @@ static bool skw_udp_filter(struct net_device *ndev, struct sk_buff *skb)
 	case DHCPV6_CLIENT_PORT:
 	case DHCPV6_SERVER_PORT:
 		ret = true;
-		skw_dbg("DHCP, port: %d\n", ntohs(udp->dest));
+		skw_dev_dbg(dev, "DHCP, port: %d\n", ntohs(udp->dest));
 		break;
 
 	default:
@@ -997,12 +187,22 @@ static void skw_setup_txba(struct skw_core *skw, struct skw_iface *iface,
 	struct skw_ba_action tx_ba = {0};
 
 	if (tid >= SKW_NR_TID) {
-		skw_warn("tid: %d invalid\n", tid);
+		skw_dev_warn(iface->ndev, "tid: %d invalid\n", tid);
 		return;
 	}
 
-	if ((peer->txba.bitmap | peer->txba.blacklist) & BIT(tid))
+	if (peer->txba.bitmap & BIT(tid))
 		return;
+
+	if (peer->txba.blacklist & BIT(tid)) {
+		if (time_after(jiffies, peer->txba.tx_timeout[tid])) {
+
+			SKW_CLEAR(peer->txba.blacklist, BIT(tid));
+			peer->txba.tx_timeout[tid] = 0;
+		} else {
+			return;
+		}
+	}
 
 	tx_ba.tid = tid;
 	tx_ba.win_size = 64;
@@ -1042,29 +242,38 @@ struct skw_peer_ctx *skw_get_ctx(struct skw_core *skw, u8 lmac_id, u8 idx)
 
 static int skw_downgrade_ac(struct skw_iface *iface, int aci)
 {
-#if 1
 	while (iface->wmm.acm & BIT(aci)) {
 		if (aci == SKW_WMM_AC_BK)
 			break;
 		aci++;
 	}
-#else
-	if (iface->wmm.acm & BIT(aci)) {
-		int i;
-		int acm = SKW_WMM_AC_BK;
-
-		for (i = SKW_WMM_AC_BK; i >= 0; i--) {
-			if (!(iface->wmm.acm & BIT(i))) {
-				acm = i;
-				break;
-			}
-		}
-
-		aci = acm;
-	}
-#endif
 
 	return aci;
+}
+
+void skw_udp_special_hdl(struct skw_core *skw, struct sk_buff *skb)
+{
+	const struct sock *sk = skb->sk;
+
+	if (sk)
+		skb_orphan(skb);
+}
+
+void skw_tcp_special_hdl(struct skw_core *skw, struct sk_buff *skb)
+{
+	const struct sock *sk = skb->sk;
+
+	if (sk) {
+		if (sk->sk_state == TCP_ESTABLISHED) {
+			const struct tcp_sock *tp;
+
+			tp = tcp_sk(sk);
+			if (tp) {
+				if (tp->snd_cwnd < 500)  //700Kbye cwnd
+					skb_orphan(skb);
+			}
+		}
+	}
 }
 
 static inline bool is_skw_tcp_pure_ack(struct sk_buff *skb)
@@ -1073,7 +282,7 @@ static inline bool is_skw_tcp_pure_ack(struct sk_buff *skb)
 	       ntohs(ip_hdr(skb)->tot_len) == ip_hdrlen(skb) + tcp_hdrlen(skb);
 }
 
-static netdev_tx_t skw_ndo_xmit(struct sk_buff *skb, struct net_device *ndev)
+static netdev_tx_t skw_ndo_xmit(struct sk_buff *skb, struct net_device *dev)
 {
 	int ret = -1;
 	u8 tid;
@@ -1097,23 +306,21 @@ static netdev_tx_t skw_ndo_xmit(struct sk_buff *skb, struct net_device *ndev)
 
 	struct netdev_queue *txq;
 	struct skw_peer_ctx *ctx;
-	struct skw_iface *iface = netdev_priv(ndev);
+	struct skw_iface *iface = netdev_priv(dev);
 	struct ethhdr *eth = eth_hdr(skb);
 	struct skw_ctx_entry *entry = NULL;
 	struct sk_buff_head *qlist;
 	struct skw_tx_desc_hdr *desc_hdr;
 	struct skw_tx_desc_conf *desc_conf;
 	struct skw_core *skw = iface->skw;
-#ifdef CONFIG_SWT6621S_SKB_RECYCLE
-	struct sk_buff *skb_recycle;
-#endif
 	s16 pkt_limit;
+	struct sk_buff *pre_skb = NULL;
 
 	__net_timestamp(skb);
 
 	/* Mini frame size that HW support */
 	if (unlikely(skb->len <= 16)) {
-		skw_dbg("current: %s\n", current->comm);
+		skw_dev_dbg(dev, "current: %s\n", current->comm);
 		skw_hex_dump("short skb", skb->data, skb->len, true);
 
 		if (skb->len != ETH_HLEN || eth->h_proto != htons(ETH_P_IP))
@@ -1139,8 +346,10 @@ static netdev_tx_t skw_ndo_xmit(struct sk_buff *skb, struct net_device *ndev)
 		prot = ip_hdr(skb)->protocol;
 		reset_l4_offset = ETH_HLEN + ip_hdrlen(skb);
 
-		if (prot == IPPROTO_TCP)
+		if (prot == IPPROTO_TCP) {
 			pure_tcp_ack = is_skw_tcp_pure_ack(skb);
+			skw_tcp_special_hdl(skw, skb);
+		}
 
 		break;
 
@@ -1155,8 +364,9 @@ static netdev_tx_t skw_ndo_xmit(struct sk_buff *skb, struct net_device *ndev)
 		if (test_bit(SKW_FLAG_FW_FILTER_ARP, &skw->flags))
 			is_prot_filter = true;
 
+#ifndef CONFIG_SKW6316_GKI
 		if (unlikely(test_bit(SKW_FLAG_REPEATER, &skw->flags)) &&
-		    ndev->priv_flags & IFF_BRIDGE_PORT) {
+		    dev->priv_flags & IFF_BRIDGE_PORT) {
 			if (iface->wdev.iftype == NL80211_IFTYPE_STATION) {
 				struct sk_buff *arp_skb;
 				struct skw_ctx_entry *e;
@@ -1164,7 +374,7 @@ static netdev_tx_t skw_ndo_xmit(struct sk_buff *skb, struct net_device *ndev)
 
 				rcu_read_lock();
 				e = skw_get_ctx_entry(iface->skw, arp->ar_sha);
-				if (e)
+				if (e && e->peer)
 					e->peer->ip_addr = arp->ar_sip;
 
 				rcu_read_unlock();
@@ -1184,6 +394,7 @@ static netdev_tx_t skw_ndo_xmit(struct sk_buff *skb, struct net_device *ndev)
 				eth = skw_eth_hdr(skb);
 			}
 		}
+#endif
 
 		if (is_skw_sta_mode(iface))
 			fixed_rate = 1;
@@ -1218,7 +429,8 @@ static netdev_tx_t skw_ndo_xmit(struct sk_buff *skb, struct net_device *ndev)
 	/* enable checksum for TCP & UDP frame, except framgment frame */
 	switch (prot) {
 	case IPPROTO_UDP:
-		is_udp_filter = skw_udp_filter(ndev, skb);
+		skw_udp_special_hdl(skw, skb);
+		is_udp_filter = skw_udp_filter(dev, skb);
 		if (udp_hdr(skb)->check == 0)
 			do_csum = 0;
 
@@ -1233,6 +445,8 @@ static netdev_tx_t skw_ndo_xmit(struct sk_buff *skb, struct net_device *ndev)
 		break;
 	}
 
+	skw_tx_dump_tcp_data(iface, skb);
+
 	ac_idx = skw_downgrade_ac(iface, g_skw_up_to_ac[skb->priority]);
 	tid = (fixed_tid != SKW_INVALID_ID) ? fixed_tid : tid_map[ac_idx];
 
@@ -1245,7 +459,7 @@ static netdev_tx_t skw_ndo_xmit(struct sk_buff *skb, struct net_device *ndev)
 			entry = skw_get_ctx_entry(skw, eth->h_dest);
 			peer_index = entry ? entry->idx : SKW_INVALID_ID;
 
-			if (entry && entry->peer->sm.state != SKW_STATE_COMPLETED)
+			if (entry && entry->peer && entry->peer->sm.state != SKW_STATE_COMPLETED)
 				is_completed = false;
 		} else {
 			fixed_rate = 1;
@@ -1277,8 +491,8 @@ static netdev_tx_t skw_ndo_xmit(struct sk_buff *skb, struct net_device *ndev)
 
 				rcu_read_unlock();
 
-				skw_dbg("%s drop dst: %pm, proto: 0x%x, state: %s\n",
-					netdev_name(ndev), eth->h_dest, htons(eth->h_proto),
+				skw_dev_dbg(dev, "drop dst: %pm, proto: 0x%x, state: %s\n",
+					eth->h_dest, htons(eth->h_proto),
 					skw_state_name(iface->sta.core.sm.state));
 
 				goto free;
@@ -1296,7 +510,7 @@ static netdev_tx_t skw_ndo_xmit(struct sk_buff *skb, struct net_device *ndev)
 	}
 
 	if (entry) {
-		if(is_completed)
+		if (is_completed && entry->peer)
 			skw_setup_txba(skw, iface, entry->peer, tid);
 
 		if (entry->peer) {
@@ -1306,9 +520,8 @@ static netdev_tx_t skw_ndo_xmit(struct sk_buff *skb, struct net_device *ndev)
 
 				rcu_read_unlock();
 
-				skw_dbg("%s drop dst: %pm, proto: 0x%x, filter: 0x%x\n",
-					netdev_name(ndev), eth->h_dest,
-					htons(eth->h_proto), filter_map);
+				skw_dev_dbg(dev, "drop dst: %pm, proto: 0x%x, filter: 0x%x\n",
+					eth->h_dest, htons(eth->h_proto), filter_map);
 
 				goto free;
 			}
@@ -1318,37 +531,13 @@ static netdev_tx_t skw_ndo_xmit(struct sk_buff *skb, struct net_device *ndev)
 	rcu_read_unlock();
 
 	if (peer_index == SKW_INVALID_ID) {
-		skw_dbg("%s drop dst: %pM, proto: 0x%x\n",
-			netdev_name(ndev), eth->h_dest, htons(eth->h_proto));
+		skw_dev_detail(dev, "drop dst: %pM, proto: 0x%x\n",
+			eth->h_dest, htons(eth->h_proto));
 
 		goto free;
 	}
 
 	is_tx_filter = (is_prot_filter || is_udp_filter || is_802_3_frame);
-
-#ifdef CONFIG_SWT6621S_SKB_RECYCLE
-	if (!is_prot_filter && !is_udp_filter && !is_802_3_frame && !is_multicast_ether_addr(eth->h_dest)) {
-		skb_recycle = skw_recycle_skb_get(skw);
-		if (skb_recycle) {
-			if (!skw_recycle_skb_copy(skw, skb_recycle, skb)) {
-				dev_kfree_skb_any(skb);
-				skb = skb_recycle;
-				eth = skw_eth_hdr(skb);
-				SKW_SKB_TXCB(skb)->recycle = 1;
-			} else {
-				skw_err("skw_recycle_skb_copy failed\n");
-				skw_recycle_skb_free(skw, skb_recycle);
-			}
-		} else {
-			skb_recycle = skb_copy(skb, GFP_ATOMIC);
-			if (skb_recycle) {
-				dev_kfree_skb_any(skb);
-				skb = skb_recycle;
-				eth = skw_eth_hdr(skb);
-			}
-		}
-	}
-#endif
 
 #define SKW_EXPAND_SIZE(x, y)  ((x) > (y) ? (x) - (y) : 0)
 	hdr_size = sizeof(struct skw_tx_desc_conf);
@@ -1380,21 +569,25 @@ static netdev_tx_t skw_ndo_xmit(struct sk_buff *skb, struct net_device *ndev)
 
 		hdr_size += sizeof(struct skw_tx_desc_hdr) + SKW_EXTER_HDR_SIZE;
 
-		if (SKW_DATA_ALIGN_SIZE > 4) {
+		if (skw->config->global.dma_addr_align > 4) {
 			unsigned char *ptr = NULL;
 			struct sk_buff *pskb = NULL;
 
-			total_len = skb->len + hdr_size + SKW_DATA_ALIGN_SIZE;
+			total_len = skb->len + hdr_size + skw->config->global.dma_addr_align;
 			pskb = netdev_alloc_skb(skb->dev, ALIGN(total_len, skw->hw.align));
 			if (!pskb)
 				goto free;
 
-			ptr = PTR_ALIGN(pskb->data, SKW_DATA_ALIGN_SIZE);
+			ptr = PTR_ALIGN(pskb->data, skw->config->global.dma_addr_align);
 			skb_reserve(pskb, ptr - pskb->data + hdr_size);
 			skw_put_skb_data(pskb, skb->data, skb->len);
 			eth = skw_eth_hdr(pskb);
 
-			dev_kfree_skb_any(skb);
+			if (is_tx_filter)
+				pre_skb = skb;
+			else
+				dev_kfree_skb_any(skb);
+
 			skb = pskb;
 
 			nhead = ntail = 0;
@@ -1411,7 +604,7 @@ static netdev_tx_t skw_ndo_xmit(struct sk_buff *skb, struct net_device *ndev)
 
 	if (nhead || ntail || skb_cloned(skb)) {
 		if (unlikely(pskb_expand_head(skb, nhead, ntail, GFP_ATOMIC))) {
-			skw_dbg("failed, nhead: %d, ntail: %d\n", nhead, ntail);
+			skw_dev_dbg(dev, "failed, nhead: %d, ntail: %d\n", nhead, ntail);
 			goto free;
 		}
 
@@ -1443,7 +636,7 @@ static netdev_tx_t skw_ndo_xmit(struct sk_buff *skb, struct net_device *ndev)
 	}
 
 	if (unlikely(is_tx_filter)) {
-		skw_dbg("proto: 0x%x, udp filter: %d, 802.3 frame: %d\n",
+		skw_dev_dbg(dev, "proto: 0x%x, udp filter: %d, 802.3 frame: %d\n",
 			htons(eth->h_proto), is_udp_filter, is_802_3_frame);
 
 		ret = skw_msg_try_send(skw, iface->id, SKW_CMD_TX_DATA_FRAME,
@@ -1455,7 +648,13 @@ static netdev_tx_t skw_ndo_xmit(struct sk_buff *skb, struct net_device *ndev)
 					       SKW_WORK_TX_ETHER_DATA,
 					       skb->data, skb->len);
 			} else {
-				skb_pull(skb, skb->len - msdu_len);
+
+				if (pre_skb) {
+					dev_kfree_skb_any(skb);
+					skb = NULL;
+				} else {
+					skb_pull(skb, skb->len - msdu_len);
+				}
 				return NETDEV_TX_BUSY;
 			}
 		}
@@ -1481,10 +680,15 @@ static netdev_tx_t skw_ndo_xmit(struct sk_buff *skb, struct net_device *ndev)
 	if (skw_get_hw_credit(skw, iface->lmac_id) == 0)
 		goto _ok;
 
-	if (prot == IPPROTO_UDP || prot == IPPROTO_TCP) {
+	if (prot == IPPROTO_UDP || prot == IPPROTO_TCP)
+		pkt_limit = 15;
+	else
+		pkt_limit = 0;
+
+	if (pkt_limit) {
 		if (skb_queue_len(qlist) < pkt_limit) {
-			if (!timer_pending(&skw->tx_worker.timer))
-				skw_wakeup_tx(skw, msecs_to_jiffies(1));
+			if (!hrtimer_active(&skw->timer))
+				skw_wakeup_tx(skw, ms_to_ktime(1));
 		} else
 			skw_wakeup_tx(skw, 0);
 	} else
@@ -1496,19 +700,27 @@ _ok:
 
 	txq_len = skb_queue_len(qlist) + skb_queue_len(&iface->tx_cache[ac_idx]);
 	if (txq_len >= SKW_TXQ_HIGH_THRESHOLD) {
-		txq = netdev_get_tx_queue(ndev, ac_idx);
+		txq = netdev_get_tx_queue(dev, ac_idx);
 		if (!netif_tx_queue_stopped(txq))
 			netif_tx_stop_queue(txq);
 	}
 
+	if (pre_skb) {
+		dev_kfree_skb_any(pre_skb);
+		pre_skb = NULL;
+	}
 	return NETDEV_TX_OK;
 
 free:
 	if (ret != 0)
-		ndev->stats.tx_dropped++;
+		dev->stats.tx_dropped++;
 
 	dev_kfree_skb_any(skb);
 
+	if (pre_skb) {
+		dev_kfree_skb_any(pre_skb);
+		pre_skb = NULL;
+	}
 	return NETDEV_TX_OK;
 }
 
@@ -1533,7 +745,7 @@ static u16 skw_ndo_select(struct net_device *dev, struct sk_buff *skb
 		return SKW_WMM_AC_BE;
 	}
 
-	if(!skb->protocol && skb->len > ETH_HLEN) {
+	if (!skb->protocol && skb->len > ETH_HLEN) {
 		skb->protocol = eth_type_trans(skb, iface->ndev);
 		skb_push(skb, ETH_HLEN);
 	}
@@ -1543,37 +755,59 @@ static u16 skw_ndo_select(struct net_device *dev, struct sk_buff *skb
 	return g_skw_up_to_ac[skb->priority];
 }
 
-#ifdef CONFIG_SWT6621S_PRESUSPEND_SUPPORT
-static int skw_set_suspendmode(struct wiphy *wiphy, struct net_device *dev, char *presuspend)
+static int skw_set_android_suspend(struct wiphy *wiphy, struct net_device *dev,
+				char *suspend)
 {
-	int ret;
-	u8 suspendmode;
+	int ret = 0;
+	long val = 0;
+	char *endp = NULL;
 
-	if (presuspend[0] == '1') {
-		suspendmode = true;
-	} else if(presuspend[0] == '0') {
-		suspendmode = false;
-	} else {
-		skw_err("failed, invalid param %c\n", presuspend[0]);
-		return -1;
+	skw_dev_dbg(dev, "data: %s\n", suspend);
+
+	val = simple_strtol(suspend, &endp, 0);
+	if (*endp != '\0' || (val != 0 && val != 1)) {
+		skw_dev_err(dev, "endp: %d, val: %ld\n", *endp, val);
+
+		return -EINVAL;
 	}
 
-	skw_dbg("set_suspendmode: %d\n", suspendmode);
-
-	return skw_util_set_mib_enable(wiphy, 0,
-			SKW_MIB_SET_SUSPEND_MODE, suspendmode);
+#ifdef CONFIG_SWT6621S_PRESUSPEND_SUPPORT
+	ret = skw_set_mib_bool(wiphy, SKW_NDEV_ID(dev),
+			SKW_MIB_SET_SUSPEND_MODE, !!val);
+#endif
 
 	return ret;
 }
-#endif
 
-#define SKW_ANDROID_CMD_LEN    128
+static int skw_cfg80211_set_wps_p2p_ie(struct net_device *ndev, char *buf, int len)
+{
+	int ret = 0;
+	struct skw_iface *iface = (struct skw_iface *)netdev_priv(ndev);
+	struct skw_core *skw = iface->skw;
+	struct skw_set_ie_param *set_ie = NULL;
+	int skip = strlen(SKW_ANDROID_PRIV_SET_AP_WPS_P2P_IE) + 3;
+	int msg_len = len - skip + sizeof(struct skw_set_ie_param);
+
+	set_ie = (struct skw_set_ie_param *)(buf + skip - sizeof(struct skw_set_ie_param));
+	set_ie->type = *(buf + skip - 2) - '0';
+	set_ie->len = len - skip;
+
+	skw_dbg("type=%u,len=%u,msg_len=%d\n", set_ie->type, set_ie->len, msg_len);
+
+	ret = skw_send_msg(priv_to_wiphy(skw), ndev, SKW_CMD_SET_IE, set_ie, msg_len, NULL, 0);
+	if (ret)
+		skw_err("SET_AP_WPS_P2P_IE fail:%d\n", ret);
+
+	return ret;
+}
+
 static int skw_android_cmd(struct net_device *dev, void __user *priv_data)
 {
-	char command[SKW_ANDROID_CMD_LEN], *data = NULL;
+	int ret = 0;
+	char *data = NULL;
+	char *command = NULL;
 	struct android_wifi_priv_cmd priv_cmd;
 	bool compat_task = false;
-	int ret = 0;
 
 	if (!priv_data)
 		return  -EINVAL;
@@ -1597,12 +831,27 @@ static int skw_android_cmd(struct net_device *dev, void __user *priv_data)
 	    copy_from_user(&priv_cmd, priv_data, sizeof(priv_cmd)))
 		return -EFAULT;
 
-	if (copy_from_user(command, priv_cmd.buf, sizeof(command)))
-		return -EFAULT;
+	if ((priv_cmd.total_len > PRIVATE_COMMAND_MAX_LEN) || (priv_cmd.total_len < 0)) {
+		skw_dev_err(dev, "buf length invalid: %d\n", priv_cmd.total_len);
+		ret = -EINVAL;
+		goto exit;
+	}
 
-	command[SKW_ANDROID_CMD_LEN - 1] = 0;
+	command = (char *)SKW_VALLOC((priv_cmd.total_len + 1));
+	if (!command) {
+		skw_dev_err(dev, "failed to allocate %d memory\n", priv_cmd.total_len);
+		ret = -ENOMEM;
+		goto exit;
+	}
 
-	skw_dbg("%s: %s\n", netdev_name(dev), command);
+	if (copy_from_user(command, priv_cmd.buf, priv_cmd.total_len)) {
+		ret = -EFAULT;
+		goto exit;
+	}
+
+	command[priv_cmd.total_len] = 0;
+
+	skw_dev_dbg(dev, "total: %d, cmd: %s\n", priv_cmd.total_len, command);
 
 #define IS_SKW_CMD(c, k)        \
 	!strncasecmp(c, SKW_ANDROID_PRIV_##k, strlen(SKW_ANDROID_PRIV_##k))
@@ -1624,20 +873,27 @@ static int skw_android_cmd(struct net_device *dev, void __user *priv_data)
 	} else if (IS_SKW_CMD(command, RXFILTER_ADD)) {
 	} else if (IS_SKW_CMD(command, RXFILTER_REMOVE)) {
 	} else if (IS_SKW_CMD(command, SETSUSPENDMODE)) {
-#ifdef CONFIG_SWT6621S_PRESUSPEND_SUPPORT
 		data = SKW_CMD_DATA(command, SETSUSPENDMODE);
-		if (skw_set_suspendmode(dev->ieee80211_ptr->wiphy, dev, data))
-			skw_err("skw_set_suspend mode failed\n");
-#endif
+		ret = skw_set_android_suspend(dev->ieee80211_ptr->wiphy, dev, data);
+		if (ret)
+			skw_dev_err(dev, "failed, command: %s, ret: %d\n",
+				command, ret);
 	} else if (IS_SKW_CMD(command, BTCOEXMODE)) {
 	} else if (IS_SKW_CMD(command, SET_AP_WPS_P2P_IE)) {
+		skw_hex_dump("P2P_IE:", command, priv_cmd.total_len, false);
+
+		ret = skw_cfg80211_set_wps_p2p_ie(dev, command, priv_cmd.total_len);
 	} else {
-		skw_info("Unsupport cmd: %s - ignored\n", command);
+		skw_dev_info(dev, "Unsupport cmd: %s - ignored\n", command);
 	}
 
 #undef IS_SKW_CMD
 
-	return 0;
+exit:
+	if (command)
+		SKW_VFREE(command);
+
+	return ret;
 }
 
 static int skw_ioctl(struct net_device *dev, void __user *user_data)
@@ -1663,12 +919,12 @@ static int skw_ioctl(struct net_device *dev, void __user *user_data)
 
 		ret = skw_set_regdom(dev->ieee80211_ptr->wiphy, country);
 		if (ret)
-			skw_err("set regdom failed, ret: %d\n", ret);
+			skw_dev_err(dev, "set regdom failed, ret: %d\n", ret);
 
 		break;
 
 	default:
-		skw_warn("unsupport cmd: 0x%x, len: %d\n", cmd.id, cmd.len);
+		skw_dev_warn(dev, "unsupport cmd: 0x%x, len: %d\n", cmd.id, cmd.len);
 		break;
 	}
 
@@ -1699,7 +955,7 @@ static int skw_ndo_ioctl(struct net_device *dev, struct ifreq *ifr,
 
 	default:
 		ret = -ENOTSUPP;
-		skw_warn("%s, unsupport cmd: 0x%x\n", netdev_name(dev), cmd);
+		skw_dev_warn(dev, "unsupport cmd: 0x%x\n", cmd);
 
 		break;
 	}
@@ -1713,17 +969,23 @@ static void skw_ndo_tx_timeout(struct net_device *dev
 #endif
 				SKW_NULL)
 {
-	struct skw_iface *iface = (struct skw_iface *)netdev_priv(dev);
-	struct skw_core *skw;
+	int i;
+	struct skw_iface *iface = netdev_priv(dev);
 
-	if (!iface) {
-		skw_err("iface NULL\n");
-		return;
+	skw_dev_warn(dev, "carrier on: %d, flags: 0x%lx\n",
+		 netif_carrier_ok(dev), iface->skw->flags);
+
+	for (i = 0; i < SKW_WMM_AC_MAX; i++) {
+		skw_info("tx queue[%d]: stopped: %d, pending: %d, cached: %d\n",
+			 i, netif_tx_queue_stopped(netdev_get_tx_queue(dev, i)),
+			 skb_queue_len(&iface->txq[i]),
+			 skb_queue_len(&iface->tx_cache[i]));
 	}
 
-	skw = iface->skw;
-
-	skw_warn("ndev:%s,flag:0x%lx\n", netdev_name(dev), skw->flags);
+	for (i = 0; i < SKW_MAX_LMAC_SUPPORT; i++) {
+		skw_info("credit[%d]: %d\n",
+			 i, atomic_read(&iface->skw->hw.lmac[i].fw_credit));
+	}
 }
 
 static void skw_ndo_set_rx_mode(struct net_device *dev)
@@ -1732,7 +994,7 @@ static void skw_ndo_set_rx_mode(struct net_device *dev)
 	struct skw_mc_list *mc;
 	struct netdev_hw_addr *ha;
 
-	skw_dbg("%s, mc: %d, uc: %d\n", netdev_name(dev),
+	skw_dev_dbg(dev, "mc: %d, uc: %d\n",
 		netdev_mc_count(dev), netdev_uc_count(dev));
 
 	count = netdev_mc_count(dev);
@@ -1742,7 +1004,7 @@ static void skw_ndo_set_rx_mode(struct net_device *dev)
 	total_len = sizeof(*mc) + sizeof(struct mac_address) * count;
 	mc = SKW_ZALLOC(total_len, GFP_ATOMIC);
 	if (!mc) {
-		skw_err("alloc failed, mc count: %d, total_len: %d\n",
+		skw_dev_err(dev, "alloc failed, mc count: %d, total_len: %d\n",
 			count, total_len);
 		return;
 	}
@@ -1758,43 +1020,6 @@ static void skw_ndo_set_rx_mode(struct net_device *dev)
 
 	SKW_KFREE(mc);
 }
-#if 0
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 11, 0)
-static struct rtnl_link_stats64 *
-#else
-static void
-#endif
-skw_ndo_get_stats64(struct net_device *dev,
-		    struct rtnl_link_stats64 *stats)
-{
-	int i;
-
-	for_each_possible_cpu(i) {
-		const struct pcpu_sw_netstats *tstats;
-		u64 rx_packets, rx_bytes, tx_packets, tx_bytes;
-		unsigned int start;
-
-		tstats = per_cpu_ptr(dev->tstats, i);
-
-		do {
-			start = u64_stats_fetch_begin_irq(&tstats->syncp);
-			rx_packets = tstats->rx_packets;
-			tx_packets = tstats->tx_packets;
-			rx_bytes = tstats->rx_bytes;
-			tx_bytes = tstats->tx_bytes;
-		} while (u64_stats_fetch_retry_irq(&tstats->syncp, start));
-
-		stats->rx_packets += rx_packets;
-		stats->tx_packets += tx_packets;
-		stats->rx_bytes   += rx_bytes;
-		stats->tx_bytes   += tx_bytes;
-	}
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 11, 0)
-	return stats;
-#endif
-}
-#endif
 
 static int skw_ndo_set_mac_address(struct net_device *dev, void *addr)
 {
@@ -1802,18 +1027,20 @@ static int skw_ndo_set_mac_address(struct net_device *dev, void *addr)
 	struct sockaddr *sa = addr;
 	int ret = 0, err = 0;
 
-	skw_dbg("mac: %pM\n", sa->sa_data);
+	skw_dev_dbg(dev, "mac: %pM\n", sa->sa_data);
 
 	ret = eth_mac_addr(dev, sa);
 	if (ret) {
-		skw_err("failed, addr: %pM, ret: %d\n", sa->sa_data, ret);
+		skw_dev_err(dev, "failed, addr: %pM, ret: %d\n",
+			sa->sa_data, ret);
+
 		return ret;
 	}
 
 	ret = skw_send_msg(iface->wdev.wiphy, dev, SKW_CMD_RANDOM_MAC,
 			sa->sa_data, ETH_ALEN, NULL, 0);
 	if (ret) {
-		skw_err("set mac: %pM failed, ret: %d\n",
+		skw_dev_err(dev, "set mac: %pM failed, ret: %d\n",
 			sa->sa_data, ret);
 
 		err = eth_mac_addr(dev, iface->addr);
@@ -1827,22 +1054,6 @@ static int skw_ndo_set_mac_address(struct net_device *dev, void *addr)
 
 	return 0;
 }
-
-#if 0
-static void skw_ndo_uninit(struct net_device *ndev)
-{
-	struct skw_iface *iface = netdev_priv(ndev);
-	struct wiphy *wiphy = ndev->ieee80211_ptr->wiphy;
-
-	skw_dbg("%s\n", netdev_name(ndev));
-
-	free_percpu(ndev->tstats);
-
-	skw_del_vif(wiphy, iface);
-	skw_iface_teardown(wiphy, iface);
-	skw_release_inst(wiphy, iface->id);
-}
-#endif
 
 static const struct net_device_ops skw_netdev_ops = {
 	// .ndo_uninit = skw_ndo_uninit,
@@ -1861,51 +1072,51 @@ static const struct net_device_ops skw_netdev_ops = {
 	.ndo_set_mac_address = skw_ndo_set_mac_address,
 };
 
-int skw_netdev_init(struct wiphy *wiphy, struct net_device *ndev, u8 *addr)
+int skw_netdev_init(struct wiphy *wiphy, struct net_device *dev, u8 *addr)
 {
 	struct skw_core *skw;
 	struct skw_iface *iface;
 
-	if (!ndev)
+	if (!dev)
 		return -EINVAL;
 
 	skw = wiphy_priv(wiphy);
-	iface = netdev_priv(ndev);
-	SET_NETDEV_DEV(ndev, wiphy_dev(wiphy));
+	iface = netdev_priv(dev);
+	SET_NETDEV_DEV(dev, wiphy_dev(wiphy));
 
-	ndev->features = NETIF_F_GRO |
+	dev->features = NETIF_F_GRO |
 			 NETIF_F_IP_CSUM |
 			 NETIF_F_IPV6_CSUM;
 
-	ndev->ieee80211_ptr = &iface->wdev;
-	ndev->netdev_ops = &skw_netdev_ops;
-	ndev->watchdog_timeo = 3 * HZ;
-	ndev->needed_headroom =	skw->skb_headroom;
-	ndev->needed_tailroom = skw->hw_pdata->align_value;
-	// ndev->priv_destructor = skw_netdev_deinit;
+	dev->ieee80211_ptr = &iface->wdev;
+	dev->netdev_ops = &skw_netdev_ops;
+	dev->watchdog_timeo = 3 * HZ;
+	dev->needed_headroom =	skw->skb_headroom;
+	dev->needed_tailroom = skw->hw_pdata->align_value;
+	// dev->priv_destructor = skw_netdev_deinit;
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4, 12, 0)
-	ndev->destructor = free_netdev;
+	dev->destructor = free_netdev;
 #else
-	ndev->needs_free_netdev = true;
+	dev->needs_free_netdev = true;
 #endif
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 0, 0)
-	eth_hw_addr_set(ndev, addr);
+	eth_hw_addr_set(dev, addr);
 #else
-	skw_ether_copy(ndev->dev_addr, addr);
+	skw_ether_copy(dev->dev_addr, addr);
 #endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 14, 0)
-	ndev->tstats = netdev_alloc_pcpu_stats(struct pcpu_tstats);
+	dev->tstats = netdev_alloc_pcpu_stats(struct pcpu_tstats);
 #else
-	ndev->tstats = netdev_alloc_pcpu_stats(struct pcpu_sw_netstats);
+	dev->tstats = netdev_alloc_pcpu_stats(struct pcpu_sw_netstats);
 #endif
-	if (!ndev->tstats)
+	if (!dev->tstats)
 		return -ENOMEM;
 
 #ifdef CONFIG_WIRELESS_EXT
-	ndev->wireless_handlers = skw_iw_handlers();
+	dev->wireless_handlers = skw_iw_handlers();
 #endif
 
 #ifdef CONFIG_RPS
@@ -1916,26 +1127,10 @@ int skw_netdev_init(struct wiphy *wiphy, struct net_device *ndev, u8 *addr)
 	return 0;
 }
 
-void skw_netdev_deinit(struct net_device *ndev)
-{
-	free_percpu(ndev->tstats);
-}
-
-#if 0
 void skw_netdev_deinit(struct net_device *dev)
 {
-	struct skw_iface *iface = netdev_priv(dev);
-
-	skw_dbg("%s\n", netdev_name(dev));
-
-#if 0 //move these actions to ndo_uninit
 	free_percpu(dev->tstats);
-	skw_cmd_close_dev(iface->wdev.wiphy, iface->id);
-	skw_del_vif(iface->skw, iface);
-	skw_iface_teardown(iface);
-#endif
 }
-#endif
 
 int skw_sync_cmd_event_version(struct wiphy *wiphy)
 {
@@ -2096,109 +1291,19 @@ static const char *skw_get_chip_id(u32 chip_type)
 	return NULL;
 }
 
-static int skw_set_link_loss_mib(struct wiphy *wiphy, u8 to)
+void skw_init_mib(struct wiphy *wiphy)
 {
-	int ret;
-	u16 *plen;
-	struct skw_tlv_conf conf;
+	struct skw_core *skw = wiphy_priv(wiphy);
 
-	skw_dbg("beacon to: %d\n", to);
+	skw_set_mib_u8(wiphy, 0, SKW_MIB_SET_LINK_LOSS_THOLD,
+			skw->config->fw.beacon_timeout);
 
-	ret = skw_tlv_alloc(&conf, 128, GFP_KERNEL);
-	if (ret) {
-		skw_err("alloc failed\n");
-		return ret;
-	}
+	skw_set_mib_u8(wiphy, 0, SKW_MIB_SET_BAND_2G,
+			skw->config->band.bw_2ghz);
 
-	plen = skw_tlv_reserve(&conf, 2);
-	if (!plen) {
-		skw_err("reserve failed\n");
-		skw_tlv_free(&conf);
-		return -ENOMEM;
-	}
+	skw_set_mib_u8(wiphy, 0, SKW_MIB_SET_WAKEUP_HOST_ENABLE, 1);
 
-	if (skw_tlv_add(&conf, SKW_MIB_SET_LINK_LOSS_THOLD, &to, 1)) {
-		skw_err("set link loss failed\n");
-		skw_tlv_free(&conf);
-
-		return -EINVAL;
-	}
-
-	*plen = conf.total_len;
-
-	ret = skw_msg_xmit(wiphy, 0, SKW_CMD_SET_MIB, conf.buff,
-			   conf.total_len, NULL, 0);
-	if (ret)
-		skw_warn("failed, ret: %d\n", ret);
-
-	skw_tlv_free(&conf);
-
-	return ret;
-}
-
-static int skw_set_24ghz_band_mib(struct wiphy *wiphy, u32 band)
-{
-	int ret;
-	u16 *plen;
-	struct skw_tlv_conf conf;
-
-	skw_dbg("24ghz_band: %d\n", band);
-
-	ret = skw_tlv_alloc(&conf, 128, GFP_KERNEL);
-	if (ret) {
-		skw_err("alloc failed\n");
-		return ret;
-	}
-
-	plen = skw_tlv_reserve(&conf, 2);
-	if (!plen) {
-		skw_err("reserve failed\n");
-		skw_tlv_free(&conf);
-		return -ENOMEM;
-	}
-
-	if (skw_tlv_add(&conf, SKW_MIB_SET_BAND_2G, &band, sizeof(band))) {
-		skw_err("set 24ghz band failed\n");
-		skw_tlv_free(&conf);
-
-		return -EINVAL;
-	}
-
-	*plen = conf.total_len;
-
-	ret = skw_msg_xmit(wiphy, 0, SKW_CMD_SET_MIB, conf.buff,
-			   conf.total_len, NULL, 0);
-	if (ret)
-		skw_warn("failed, ret: %d\n", ret);
-
-	skw_tlv_free(&conf);
-
-	return ret;
-}
-
-static int skw_set_hdk_test_mib(struct wiphy *wiphy, bool enable)
-{
-	return skw_util_set_mib_enable(wiphy, 0,
-			SKW_MIB_SET_HDK_TEST, enable);
-}
-
-#ifdef CONFIG_SWT6621S_NOT_WAKEUP_HOST
-static int skw_set_wakeup_host_mib(struct wiphy *wiphy, bool enable)
-{
-	return skw_util_set_mib_enable(wiphy, 0,
-			SKW_MIB_SET_WAKEUP_HOST_ENABLE, enable);
-}
-#endif
-
-static void skw_common_mib_set(struct wiphy *wiphy, struct skw_core *skw)
-{
-	skw_set_link_loss_mib(wiphy, skw->config.fw.link_loss_thrd);
-	skw_set_24ghz_band_mib(wiphy, skw->config.fw.band_24ghz);
-	skw_set_hdk_test_mib(wiphy, skw->config.fw.hdk_tst);
-
-#ifdef CONFIG_SWT6621S_NOT_WAKEUP_HOST
-	skw_set_wakeup_host_mib(wiphy, false);
-#endif
+	skw_config_set_mib(wiphy, 0, &skw->config->mib.init);
 }
 
 int skw_sync_chip_info(struct wiphy *wiphy, struct skw_chip_info *chip)
@@ -2232,6 +1337,19 @@ int skw_sync_chip_info(struct wiphy *wiphy, struct skw_chip_info *chip)
 	if (chip->priv_dfs_master_enabled)
 		skw->dfs.fw_enabled = true;
 
+	if (skw->config->global.mdns_offload) {
+		skw->mdns_info.mdns_offload_support = chip->priv_mdns_offload;
+		skw->mdns_info.mdns_rsp_matchrule_maxunm = chip->mdns_rsp_matchrule_maxunm;
+		skw->mdns_info.mdns_rsp_matchrule_buf_maxsize =
+			chip->mdns_rsp_matchrule_buf_maxsize;
+		skw->mdns_info.mdns_filter_qname_buf_maxsize = chip->mdns_filter_qname_buf_maxsize;
+		skw_dbg("mdns_info:%u,%u,%u,%u\n",
+			skw->mdns_info.mdns_offload_support,
+			skw->mdns_info.mdns_rsp_matchrule_maxunm,
+			skw->mdns_info.mdns_rsp_matchrule_buf_maxsize,
+			skw->mdns_info.mdns_filter_qname_buf_maxsize);
+	}
+
 	if (chip->nr_hw_mac)
 		skw->hw.nr_lmac = chip->nr_hw_mac;
 	else
@@ -2254,53 +1372,36 @@ int skw_sync_chip_info(struct wiphy *wiphy, struct skw_chip_info *chip)
 		return -ENOTSUPP;
 	}
 
-	if (test_bit(SKW_CFG_FLAG_OVERLAY_MODE, &g_skw_config.conf.global.flags)) {
-		int j;
-		char *pos, cfg[64] = {0};
-
-		if (strlen(g_skw_config.conf.calib.chip))
-			pos = g_skw_config.conf.calib.chip;
-		else
-			pos = (char *)chipid;
-
-		snprintf(cfg, sizeof(cfg) - 1, "%s.cfg", pos);
-
-		for (j = 0; j < strlen(cfg); j++)
-			cfg[j] = tolower(cfg[j]);
-
-		skw_update_config(NULL, cfg, &skw->config);
-	}
-
 	/* BIT[0:1] Reserved
 	 * BIT[2:3] BUS Type
 	 * BIT[4:7] Vendor ID
 	 */
 	vendor = 0;
 
-	if (test_bit(SKW_CFG_CALIB_STRICT_MODE, &skw->config.calib.flags))
+	if (skw_config_append_bus_name(skw->config))
 		vendor |= ((skw->hw.bus & 0x3) << 2);
 
-#ifdef CONFIG_SWT6621S_CALIB_APPEND_MODULE_ID
-	if (chip->calib_module_id) {
-		int i;
-		int vdata = chip->calib_module_id;
+	if (skw_config_append_module_id(skw->config)) {
+		if (chip->calib_module_id) {
+			int i;
+			int vdata = chip->calib_module_id;
 
-		for (i = 0; i < 4; i++) {
-			if ((vdata & 0xf) == 0xf)
-				vendor |= BIT(4 + i);
+			for (i = 0; i < 4; i++) {
+				if ((vdata & 0xf) == 0xf)
+					vendor |= BIT(4 + i);
 
-			vdata >>= 4;
+				vdata >>= 4;
+			}
 		}
 	}
-#endif
 
 	revision = skw->hw_pdata->chipid[15];
 
-	if (strlen(skw->config.calib.chip))
-		chipid = skw->config.calib.chip;
+	if (strlen(skw->config->calib.chip_alias_name))
+		chipid = skw->config->calib.chip_alias_name;
 
 	snprintf(skw->fw.calib_file, sizeof(skw->fw.calib_file),
-		"%s_%s_R%02X%03X.bin", chipid, skw->config.calib.project,
+		"%s_%s_R%02X%03X.bin", chipid, skw->config->calib.project,
 		vendor & 0xff, revision);
 
 	if (chip->priv_pn_reuse)
@@ -2308,8 +1409,6 @@ int skw_sync_chip_info(struct wiphy *wiphy, struct skw_chip_info *chip)
 
 	skw_set_ext_capa(skw, chip);
 	/* HT capa */
-
-	skw_common_mib_set(wiphy, skw);
 
 	skw_dbg("efuse mac: %pM, %s\n", chip->mac,
 		is_valid_ether_addr(chip->mac) ? "valid" : "invalid");
@@ -2383,6 +1482,7 @@ static int skw_buffer_init(struct skw_core *skw)
 			skw_err("mallc data buffer failed\n");
 			SKW_KFREE(skw->sgl_dat);
 			SKW_KFREE(skw->sgl_cmd);
+
 			return -ENOMEM;
 		}
 	}
@@ -2467,7 +1567,7 @@ static void skw_hw_hal_init(struct skw_core *skw, struct sv6160_platform_data *p
 		skw->hw.extra.chn_offset = 24;
 		skw->hw.extra.len_offset = 7;
 
-		if(test_bit(SKW_HW_FLAG_SDIO_V2, &skw->hw.flags))
+		if (test_bit(SKW_HW_FLAG_SDIO_V2, &skw->hw.flags))
 			skw->hw.extra.len_offset = 0;
 
 		skw->hw.rx_desc.hdr_offset = SKW_SDIO_RX_DESC_HDR_OFFSET;
@@ -2509,7 +1609,7 @@ static void skw_hw_hal_init(struct skw_core *skw, struct sv6160_platform_data *p
 		skw->hw.extra.chn_offset = 24;
 		skw->hw.extra.len_offset = 7;
 
-		if(test_bit(SKW_HW_FLAG_USB_V2, &skw->hw.flags))
+		if (test_bit(SKW_HW_FLAG_USB_V2, &skw->hw.flags))
 			skw->hw.extra.len_offset = 0;
 
 		skw->hw.rx_desc.hdr_offset = SKW_USB_RX_DESC_HDR_OFFSET;
@@ -2591,7 +1691,7 @@ static int skw_core_init(struct skw_core *skw, struct platform_device *pdev, int
 		return -ENODEV;
 	}
 
-	memcpy(&skw->config, &g_skw_config.conf, sizeof(struct skw_config));
+	skw->config = &g_skw_config.config;
 
 	skw->idx = idx;
 	skw_hw_hal_init(skw, skw->hw_pdata);
@@ -2628,6 +1728,8 @@ static int skw_core_init(struct skw_core *skw, struct platform_device *pdev, int
 	atomic_set(&skw->txqlen_pending, 0);
 
 	spin_lock_init(&skw->dfs.skw_pool_lock);
+	hrtimer_init(&skw->timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+	spin_lock_init(&skw->timer_lock);
 	INIT_LIST_HEAD(&skw->dfs.skw_pulse_pool);
 	INIT_LIST_HEAD(&skw->dfs.skw_pseq_pool);
 
@@ -2666,8 +1768,6 @@ static int skw_core_init(struct skw_core *skw, struct platform_device *pdev, int
 		skw_err("tx init failed, ret: %d\n", ret);
 		goto deinit_rx;
 	}
-
-	skw_debugfs_file(skw->dentry, "repeater", 0666, &skw_repeater_fops, skw);
 
 	skw->dbg.nr_cmd = SKW_DBG_NR_CMD;
 	skw->dbg.nr_dat = SKW_DBG_NR_DAT;
@@ -2718,17 +1818,17 @@ static void skw_core_deinit(struct skw_core *skw)
 	proc_remove(skw->pentry);
 }
 
-int skw_set_ip(struct wiphy *wiphy, struct net_device *ndev,
+int skw_set_ip(struct wiphy *wiphy, struct net_device *dev,
 		struct skw_setip_param *setip_param, int size)
 {
 	int ret = 0;
 	//int size = 0;
 
 	//size = sizeof(struct skw_setip_param);
-	ret = skw_queue_work(wiphy, netdev_priv(ndev),
+	ret = skw_queue_work(wiphy, netdev_priv(dev),
 			SKW_WORK_SET_IP, setip_param, size);
 	if (ret)
-		skw_err("Set IP failed\n");
+		skw_dev_err(dev, "Set IP failed\n");
 
 	return ret;
 }
@@ -2737,7 +1837,7 @@ int skw_set_ip(struct wiphy *wiphy, struct net_device *ndev,
  * Get the IP address for both IPV4 and IPV6, set it
  * to firmware while they are valid.
  */
-void skw_set_ip_to_fw(struct wiphy *wiphy, struct net_device *ndev)
+void skw_set_ip_to_fw(struct wiphy *wiphy, struct net_device *dev)
 {
 	struct in_device *in_dev;
 	struct in_ifaddr *ifa;
@@ -2745,10 +1845,11 @@ void skw_set_ip_to_fw(struct wiphy *wiphy, struct net_device *ndev)
 	struct inet6_dev *idev;
 	struct inet6_ifaddr *ifp;
 
+	struct skw_iface *iface = netdev_priv(dev);
 	struct skw_setip_param setip_param[SKW_FW_IPV6_COUNT_LIMIT+1];
 	int ip_count = 0, ipv6_count = 0;
 
-	in_dev = __in_dev_get_rtnl(ndev);
+	in_dev = __in_dev_get_rtnl(dev);
 	if (!in_dev)
 		goto ipv6;
 
@@ -2756,22 +1857,27 @@ void skw_set_ip_to_fw(struct wiphy *wiphy, struct net_device *ndev)
 	if (!ifa || !ifa->ifa_local)
 		goto ipv6;
 
-	skw_info("ip addr: %pI4\n", &ifa->ifa_local);
+	skw_dev_info(dev, "ip addr: %pI4\n", &ifa->ifa_local);
+
 	setip_param[ip_count].ip_type = SKW_IP_IPV4;
 	setip_param[ip_count].ipv4 = ifa->ifa_local;
+
+	if (is_skw_sta_mode(iface))
+		iface->sta.ipv4 = ifa->ifa_local;
+
 	ip_count++;
 
 ipv6:
-	idev = __in6_dev_get(ndev);
+	idev = __in6_dev_get(dev);
 	if (!idev)
 		goto ip_apply;
 
 	read_lock_bh(&idev->lock);
 	list_for_each_entry_reverse(ifp, &idev->addr_list, if_list) {
-		skw_info("ip addr: %pI6\n", &ifp->addr);
+		skw_dev_info(dev, "ip addr: %pI6\n", &ifp->addr);
 		if (++ipv6_count > SKW_FW_IPV6_COUNT_LIMIT) {
-			skw_warn("%s set first %d of %d ipv6 address\n",
-				ndev->name, SKW_FW_IPV6_COUNT_LIMIT, ipv6_count);
+			skw_dev_warn(dev, "set first %d of %d ipv6 address\n",
+				SKW_FW_IPV6_COUNT_LIMIT, ipv6_count);
 
 			read_unlock_bh(&idev->lock);
 			goto ip_apply;
@@ -2785,7 +1891,7 @@ ipv6:
 
 ip_apply:
 	if (ip_count)
-		skw_set_ip(wiphy, ndev, setip_param, ip_count*sizeof(struct skw_setip_param));
+		skw_set_ip(wiphy, dev, setip_param, ip_count*sizeof(struct skw_setip_param));
 
 }
 
@@ -2794,7 +1900,7 @@ static int skw_ifa4_notifier(struct notifier_block *nb,
 			unsigned long action, void *data)
 {
 	struct in_ifaddr *ifa = data;
-	struct net_device *ndev;
+	struct net_device *dev;
 	struct wireless_dev *wdev;
 	struct skw_core *skw = container_of(nb, struct skw_core, ifa4_nf);
 
@@ -2803,20 +1909,20 @@ static int skw_ifa4_notifier(struct notifier_block *nb,
 	if (!ifa->ifa_dev)
 		return NOTIFY_DONE;
 
-	ndev = ifa->ifa_dev->dev;
-	wdev = ndev->ieee80211_ptr;
+	dev = ifa->ifa_dev->dev;
+	wdev = dev->ieee80211_ptr;
 
 	if (!wdev || wdev->wiphy != priv_to_wiphy(skw))
 		return NOTIFY_DONE;
 
-	if (ndev->ieee80211_ptr->iftype != NL80211_IFTYPE_STATION &&
-	    ndev->ieee80211_ptr->iftype != NL80211_IFTYPE_P2P_CLIENT)
+	if (dev->ieee80211_ptr->iftype != NL80211_IFTYPE_STATION &&
+	    dev->ieee80211_ptr->iftype != NL80211_IFTYPE_P2P_CLIENT)
 		return NOTIFY_DONE;
 
 	switch (action) {
 	case NETDEV_UP:
 //	case NETDEV_DOWN:
-		skw_set_ip_to_fw(wdev->wiphy, ndev);
+		skw_set_ip_to_fw(wdev->wiphy, dev);
 
 		break;
 
@@ -2836,7 +1942,7 @@ static int skw_ifa6_notifier(struct notifier_block *nb,
 	struct inet6_ifaddr *ifa6 = data;
 	struct skw_core *skw = container_of(nb, struct skw_core, ifa6_nf);
 
-	struct net_device *ndev;
+	struct net_device *dev;
 	struct wireless_dev *wdev;
 
 	skw_dbg("action: %ld\n", action);
@@ -2844,8 +1950,8 @@ static int skw_ifa6_notifier(struct notifier_block *nb,
 	if (!ifa6->idev || !ifa6->idev->dev)
 		return NOTIFY_DONE;
 
-	ndev = ifa6->idev->dev;
-	wdev = ndev->ieee80211_ptr;
+	dev = ifa6->idev->dev;
+	wdev = dev->ieee80211_ptr;
 
 	if (!wdev || wdev->wiphy != priv_to_wiphy(skw))
 		return NOTIFY_DONE;
@@ -2854,7 +1960,7 @@ static int skw_ifa6_notifier(struct notifier_block *nb,
 	case NETDEV_UP:
 	// case NETDEV_DOWN:
 
-		skw_set_ip_to_fw(wdev->wiphy, ndev);
+		skw_set_ip_to_fw(wdev->wiphy, dev);
 
 		break;
 
@@ -2864,7 +1970,6 @@ static int skw_ifa6_notifier(struct notifier_block *nb,
 
 	return NOTIFY_DONE;
 }
-
 #endif
 
 static int skw_bsp_notifier(struct notifier_block *nb,
@@ -2944,6 +2049,28 @@ static int skw_bsp_notifier(struct notifier_block *nb,
 	return NOTIFY_DONE;
 }
 
+static void skw_wowlan_prepare_handler(struct skw_core *skw)
+{
+	int i;
+	struct skw_iface *iface = NULL;
+
+	if (test_bit(SKW_CFG_WOWLAN_SUPPORT, &skw->config->wowlan.flags) &&
+	    test_bit(SKW_CFG_WOWLAN_ADVPWS, &skw->config->wowlan.flags))
+		return;
+
+	for (i = 0; i < SKW_NR_IFACE; i++) {
+
+		spin_lock_bh(&skw->vif.lock);
+
+		iface = skw->vif.iface[i];
+		if (iface)
+			cfg80211_stop_iface(priv_to_wiphy(skw), &iface->wdev,
+					GFP_ATOMIC);
+
+		spin_unlock_bh(&skw->vif.lock);
+	}
+}
+
 static int skw_pm_notifier(struct notifier_block *nb,
 			unsigned long action, void *data)
 {
@@ -2954,6 +2081,7 @@ static int skw_pm_notifier(struct notifier_block *nb,
 	switch (action) {
 	case PM_SUSPEND_PREPARE:
 		set_bit(SKW_FLAG_SUSPEND_PREPARE, &skw->flags);
+		skw_wowlan_prepare_handler(skw);
 		break;
 
 	case PM_POST_SUSPEND:
@@ -3061,56 +2189,75 @@ void skw_add_credit(struct skw_core *skw, int lmac_id, int cred)
 	skw_detail("lmac_id:%d cred:%d", lmac_id, cred);
 
 	if (skw->hw.bus == SKW_BUS_SDIO || skw->hw.bus == SKW_BUS_SDIO2)
-		schedule_work(&skw->hw.lmac[lmac_id].dy_work);
+		queue_work(skw->tx_dy, &skw->hw.lmac[lmac_id].dy_work);
 
 }
 
-static int skw_add_default_iface(struct wiphy *wiphy)
+static int skw_iface_init(struct wiphy *wiphy)
 {
+	int i;
 	int ret = 0;
+	u8 *mac = NULL;
+	enum nl80211_iftype iftype;
+	bool is_legacy_p2p = false;
 	struct skw_iface *iface = NULL;
-#ifdef CONFIG_SWT6621S_LEGACY_P2P
-	struct skw_iface *p2p = NULL;
+	struct skw_cfg_interface *intf = NULL;
 	struct skw_core *skw = wiphy_priv(wiphy);
-#endif
 
 	rtnl_lock();
 
-	iface = skw_add_iface(wiphy, "wlan%d", NL80211_IFTYPE_STATION,
-				skw_mac, SKW_INVALID_ID, true);
-	if (IS_ERR(iface)) {
-		ret = PTR_ERR(iface);
-		skw_err("add iface failed, ret: %d\n", ret);
+	for (i = 0; i < SKW_NR_IFACE; i++) {
+		intf = &skw->config->intf.interface[i];
 
-		goto unlock;
+		if (!test_bit(SKW_CFG_INTF_FLAG_VALID, &intf->flags))
+			continue;
+
+		iftype = intf->iftype;
+		if (intf->iftype == NL80211_IFTYPE_P2P_DEVICE) {
+			if (test_bit(SKW_FLAG_LEGACY_P2P_COMMON_PORT, &skw->flags))
+				iftype = NL80211_IFTYPE_STATION;
+			else
+				is_legacy_p2p = true;
+		}
+
+		if (is_valid_ether_addr(intf->mac))
+			mac = intf->mac;
+		else
+			mac = skw->address[i].addr;
+
+		skw_detail("%s, inst: %d, mac: %pM\n",
+			 skw_iftype_name(iftype), intf->inst, mac);
+
+		iface = skw_add_iface(wiphy, intf->name, iftype,
+				      mac, intf->inst, true);
+		if (IS_ERR(iface)) {
+			skw_err("failed, inst: %d, ifname: %s, iftype: %d\n",
+				intf->inst, intf->name, intf->iftype);
+
+			ret = -PTR_ERR(iface);
+			break;
+		}
+
+		if (is_legacy_p2p)
+			iface->flags |= SKW_IFACE_FLAG_LEGACY_P2P_DEV;
 	}
 
-#ifdef CONFIG_SWT6621S_LEGACY_P2P
-	if (test_bit(SKW_FLAG_LEGACY_P2P_COMMON_PORT, &skw->flags))
-		p2p = skw_add_iface(wiphy, "p2p%d", NL80211_IFTYPE_STATION,
-				NULL, SKW_LAST_IFACE_ID, true);
-	else
-		p2p = skw_add_iface(wiphy, "p2p%d", NL80211_IFTYPE_P2P_DEVICE,
-				NULL, SKW_LAST_IFACE_ID, true);
-
-	if (IS_ERR(p2p)) {
-		ret = PTR_ERR(p2p);
-		skw_err("add p2p legacy interface failed, ret: %d\n", ret);
-
-		skw_del_iface(wiphy, iface);
-
-		goto unlock;
-	}
-
-	if (!test_bit(SKW_FLAG_LEGACY_P2P_COMMON_PORT, &skw->flags))
-		p2p->flags |= SKW_IFACE_FLAG_LEGACY_P2P_DEV;
-
-#endif
-
-unlock:
 	rtnl_unlock();
 
 	return ret;
+}
+
+static void skw_iface_deinit(struct wiphy *wiphy)
+{
+	int i;
+	struct skw_core *skw = wiphy_priv(wiphy);
+
+	rtnl_lock();
+
+	for (i = 0; i < SKW_NR_IFACE; i++)
+		skw_del_iface(wiphy, skw->vif.iface[i]);
+
+	rtnl_unlock();
 }
 
 static int skw_calib_bin_download(struct wiphy *wiphy, const u8 *data, u32 size)
@@ -3118,8 +2265,6 @@ static int skw_calib_bin_download(struct wiphy *wiphy, const u8 *data, u32 size)
 	int i = 0, ret = 0;
 	int buf_size, remain = size;
 	struct skw_calib_param calib;
-
-	skw_dbg("file size: %d\n", size);
 
 	buf_size = sizeof(calib.data);
 
@@ -3158,13 +2303,13 @@ int skw_calib_download(struct wiphy *wiphy, const char *fname)
 	int ret = 0;
 	const struct firmware *fw;
 
-	skw_dbg("fw file: %s\n", fname);
-
 	ret = request_firmware(&fw, fname, &wiphy->dev);
 	if (ret) {
 		skw_err("load %s failed, ret: %d\n", fname, ret);
 		return ret;
 	}
+
+	skw_info("%s, size: %zd\n", fname, fw->size);
 
 	ret = skw_calib_bin_download(wiphy, fw->data, fw->size);
 	if (ret != 0)
@@ -3173,64 +2318,6 @@ int skw_calib_download(struct wiphy *wiphy, const char *fname)
 	release_firmware(fw);
 
 	return ret;
-}
-
-void skw_dbg_dump(struct skw_core *skw)
-{
-	int i;
-	u64 nsecs;
-	unsigned long rem_nsec;
-
-	for (i = 0; i < skw->dbg.nr_cmd; i++) {
-		struct skw_dbg_cmd *cmd = &skw->dbg.cmd[i];
-
-		skw_info("cmd[%d].id: %d, seq: %d, flags: 0x%lx, loop: %d\n",
-			i, cmd->id, cmd->seq, cmd->flags, cmd->loop);
-
-		nsecs = cmd->trigger;
-		rem_nsec = do_div(nsecs, 1000000000);
-		skw_info("cmd.%d.%d.trigger: %5lu.%06lu\n", cmd->id, cmd->seq,
-			(unsigned long)nsecs, rem_nsec / 1000);
-
-		nsecs = cmd->build;
-		rem_nsec = do_div(nsecs, 1000000000);
-		skw_info("cmd.%d.%d.build: %5lu.%06lu\n", cmd->id, cmd->seq,
-			(unsigned long)nsecs, rem_nsec / 1000);
-
-		nsecs = cmd->xmit;
-		rem_nsec = do_div(nsecs, 1000000000);
-		skw_info("cmd.%d.%d.xmit: %5lu.%06lu\n", cmd->id, cmd->seq,
-			(unsigned long)nsecs, rem_nsec / 1000);
-
-		nsecs = cmd->done;
-		rem_nsec = do_div(nsecs, 1000000000);
-		skw_info("cmd.%d.%d.done: %5lu.%06lu\n", cmd->id, cmd->seq,
-			(unsigned long)nsecs, rem_nsec / 1000);
-
-		nsecs = cmd->ack;
-		rem_nsec = do_div(nsecs, 1000000000);
-		skw_info("cmd.%d.%d.ack: %5lu.%06lu\n", cmd->id, cmd->seq,
-			(unsigned long)nsecs, rem_nsec / 1000);
-
-		nsecs = cmd->assert;
-		rem_nsec = do_div(nsecs, 1000000000);
-		skw_info("cmd.%d.%d.assert: %5lu.%06lu\n", cmd->id, cmd->seq,
-			(unsigned long)nsecs, rem_nsec / 1000);
-	}
-
-	for (i = 0; i < skw->dbg.nr_dat; i++) {
-		struct skw_dbg_dat *dat = &skw->dbg.dat[i];
-
-		nsecs = dat->trigger;
-		rem_nsec = do_div(nsecs, 1000000000);
-		skw_info("dat.%d.%d.trigger: %5lu.%06lu\n",
-			i, dat->qlen, (unsigned long)nsecs, rem_nsec / 1000);
-
-		nsecs = dat->done;
-		rem_nsec = do_div(nsecs, 1000000000);
-		skw_info("dat.%d.%d.done: %5lu.%06lu\n",
-			i, dat->qlen, (unsigned long)nsecs, rem_nsec / 1000);
-	}
 }
 
 static int skw_drv_probe(struct platform_device *pdev)
@@ -3276,14 +2363,6 @@ static int skw_drv_probe(struct platform_device *pdev)
 #ifdef CONFIG_PLATFORM_ROCKCHIP
 	if (!is_valid_ether_addr(skw_mac))
 		rockchip_wifi_mac_addr(skw_mac);
-	
-	if (!is_valid_ether_addr(skw_mac)){
-		rk_vendor_read(LAN_MAC_ID, lan_mac, LEN_LAN_MAC);
-		printk("hgs_vendor LAN_MAC : %pM\n", lan_mac);
-		lan_mac[3] += 0x80;
-		memcpy(skw_mac, lan_mac, LEN_LAN_MAC); 
-		printk("hgs_vendor WIFI_MAC : %pM\n", skw_mac);
-	}
 #endif
 
 	skw_setup_mac_address(wiphy, skw_mac, chip.mac);
@@ -3297,38 +2376,33 @@ static int skw_drv_probe(struct platform_device *pdev)
 		goto core_deinit;
 	}
 
+	/* make sure mib init after calib download */
+	skw_init_mib(wiphy);
+
 	rtnl_lock();
 
 	skw_set_wiphy_regd(wiphy, skw->country);
 
-	if (skw->config.regd.country[0] != '0' &&
-	    skw->config.regd.country[1] != '0'){
-
-		ret = skw_set_regdom(wiphy, skw->config.regd.country);
-		if (ret)
-			skw_err("skw_set_regdom failed, ret: %d\n", ret);
-	}
+	if (skw->config->regd.country[0] != '0' &&
+	    skw->config->regd.country[1] != '0')
+		skw_set_regdom(wiphy, skw->config->regd.country);
 
 	rtnl_unlock();
 
-	ret = skw_add_default_iface(wiphy);
+	ret = skw_iface_init(wiphy);
 	if (ret)
-		goto unregister_wiphy;
+		goto iface_deinit;
 
 	skw_ifa_notifier_register(skw);
 
 	platform_set_drvdata(pdev, skw);
 
-	skw_procfs_file(skw->pentry, "core", 0444, &skw_core_fops, skw);
-
-	skw_debugfs_file(SKW_WIPHY_DENTRY(wiphy), "assert", 0444,
-			 &skw_assert_fops, skw);
-
-	skw_procfs_file(skw->pentry, "debug_info", 0444, &skw_debug_info_fops, skw);
+	skw_core_dbg_init(wiphy);
 
 	return 0;
 
-unregister_wiphy:
+iface_deinit:
+	skw_iface_deinit(wiphy);
 	wiphy_unregister(wiphy);
 
 core_deinit:
@@ -3350,7 +2424,6 @@ failed:
 
 static int skw_drv_remove(struct platform_device *pdev)
 {
-	int i;
 	struct wiphy *wiphy;
 	struct skw_core *skw = platform_get_drvdata(pdev);
 
@@ -3361,6 +2434,8 @@ static int skw_drv_remove(struct platform_device *pdev)
 
 	wiphy = priv_to_wiphy(skw);
 
+	skw_work_deinit(wiphy);
+
 	skw_ifa_notifier_unregister(skw);
 
 	rtnl_lock();
@@ -3369,10 +2444,9 @@ static int skw_drv_remove(struct platform_device *pdev)
 	cfg80211_shutdown_all_interfaces(wiphy);
 #endif
 
-	for (i = 0; i < SKW_NR_IFACE; i++)
-		skw_del_iface(wiphy, skw->vif.iface[i]);
-
 	rtnl_unlock();
+
+	skw_iface_deinit(wiphy);
 
 	wiphy_unregister(wiphy);
 
@@ -3386,8 +2460,6 @@ static int skw_drv_remove(struct platform_device *pdev)
 
 	skw_core_deinit(skw);
 
-	skw_work_deinit(wiphy);
-
 	wiphy_free(wiphy);
 
 	atomic_dec(&skw_chip_idx);
@@ -3395,100 +2467,40 @@ static int skw_drv_remove(struct platform_device *pdev)
 	return 0;
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 11, 0)
+static void skw_platform_drv_remove(struct platform_device *pdev)
+{
+	skw_drv_remove(pdev);
+
+	return;
+}
+#else
+static int skw_platform_drv_remove(struct platform_device *pdev)
+{
+	return skw_drv_remove(pdev);
+}
+#endif
+
 static struct platform_driver skw_drv = {
 	.probe = skw_drv_probe,
-	.remove = skw_drv_remove,
+	.remove = skw_platform_drv_remove,
 	.driver = {
 		.owner = THIS_MODULE,
 		.name = "sv6621s_wireless1",
 	},
 };
 
-static void skw_global_config_init(struct skw_global_config *gconf)
+static void skw_global_config_init(struct skw_global_config *cfg)
 {
-	memset(gconf, 0x0, sizeof(struct skw_global_config));
+	memset(cfg, 0x0, sizeof(struct skw_global_config));
 
-	atomic_set(&gconf->index, 0);
+	atomic_set(&cfg->index, 0);
+	skw_config_init(&cfg->config);
+}
 
-	/* global */
-	gconf->conf.global.dma_addr_align = 4;
-
-	gconf->conf.global.reorder_timeout = 100;
-
-	gconf->conf.fw.link_loss_thrd = 6;
-
-	gconf->conf.fw.band_24ghz = SKW_CHAN_WIDTH_40;
-
-	gconf->conf.fw.hdk_tst = 0;
-
-#ifdef CONFIG_SWT6621S_RX_REORDER_TIMEOUT
-	gconf->conf.global.reorder_timeout = CONFIG_SWT6621S_RX_REORDER_TIMEOUT;
-#endif
-
-#ifdef CONFIG_SWT6621S_STA_SME_EXT
-	set_bit(SKW_CFG_FLAG_STA_EXT, &gconf->conf.global.flags);
-#endif
-
-#ifdef CONFIG_SWT6621S_SAP_SME_EXT
-	set_bit(SKW_CFG_FLAG_SAP_EXT, &gconf->conf.global.flags);
-#endif
-
-#ifdef CONFIG_SWT6621S_REPEATER_MODE
-	set_bit(SKW_CFG_FLAG_REPEATER, &gconf->conf.global.flags);
-#endif
-
-#ifdef CONFIG_SWT6621S_OFFCHAN_TX
-	set_bit(SKW_CFG_FLAG_OFFCHAN_TX, &gconf->conf.global.flags);
-#endif
-
-	/* interface */
-	strcpy(gconf->conf.intf.interface[0].name, "wlan%d");
-	gconf->conf.intf.interface[0].inst = SKW_INVALID_ID;
-	gconf->conf.intf.interface[0].iftype = NL80211_IFTYPE_STATION;
-
-#ifdef CONFIG_SWT6621S_LEGACY_P2P
-	set_bit(SKW_CFG_FLAG_P2P_DEV, &gconf->conf.global.flags);
-	strcpy(gconf->conf.intf.interface[3].name, "p2p%d");
-	gconf->conf.intf.interface[3].inst = 3;
-	gconf->conf.intf.interface[3].iftype = NL80211_IFTYPE_P2P_DEVICE;
-#endif
-
-	/* regdom */
-	gconf->conf.regd.country[0] = '0';
-	gconf->conf.regd.country[1] = '0';
-
-#ifdef CONFIG_SWT6621S_REGD_SELF_MANAGED
-	set_bit(SKW_CFG_REGD_SELF_MANAGED, &gconf->conf.regd.flags);
-#endif
-
-#ifdef CONFIG_SWT6621S_DEFAULT_COUNTRY
-	if (strlen(CONFIG_SWT6621S_DEFAULT_COUNTRY) == 2 &&
-	    is_skw_valid_reg_code(CONFIG_SWT6621S_DEFAULT_COUNTRY))
-		memcpy(gconf->conf.regd.country,
-		       CONFIG_SWT6621S_DEFAULT_COUNTRY, 2);
-
-#endif
-
-	/* calib */
-#ifdef CONFIG_SWT6621S_CALIB_APPEND_BUS_ID
-	set_bit(SKW_CFG_CALIB_STRICT_MODE, &gconf->conf.calib.flags);
-#endif
-
-#ifdef CONFIG_SWT6621S_CHIP_ID
-	if (strlen(CONFIG_SWT6621S_CHIP_ID))
-		strncpy(gconf->conf.calib.chip, CONFIG_SWT6621S_CHIP_ID,
-			sizeof(gconf->conf.calib.chip) - 1);
-#endif
-
-	strcpy(gconf->conf.calib.project, "SEEKWAVE");
-
-#ifdef CONFIG_SWT6621S_PROJECT_NAME
-	if (strlen(CONFIG_SWT6621S_PROJECT_NAME))
-		strncpy(gconf->conf.calib.project, CONFIG_SWT6621S_PROJECT_NAME,
-			sizeof(gconf->conf.calib.project) - 1);
-#endif
-
-	skw_update_config(NULL, "skwifid.cfg", &g_skw_config.conf);
+static void skw_global_config_deinit(struct skw_global_config *cfg)
+{
+	skw_config_deinit(&cfg->config);
 }
 
 static int __init skw_module_init(void)
@@ -3525,6 +2537,8 @@ static void __exit skw_module_exit(void)
 
 	skw_del_dbg_iface();
 	platform_driver_unregister(&skw_drv);
+
+	skw_global_config_deinit(&g_skw_config);
 
 	skw_power_off_chip();
 

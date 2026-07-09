@@ -53,6 +53,9 @@ static int skw_iface_show(struct seq_file *seq, void *data)
 	struct skw_bss_cfg *bss = NULL;
 	struct net_device *ndev = seq->private;
 	struct skw_iface *iface = netdev_priv(ndev);
+	struct skw_reorder_rx *reorder;
+	struct skw_tid_rx *tid_rx;
+	struct skw_tid_stats *stats;
 	int i;
 
 	seq_puts(seq, "\n");
@@ -78,7 +81,7 @@ static int skw_iface_show(struct seq_file *seq, void *data)
 		seq_printf(seq, "    state: \t%s\n"
 					"    connect width: %s\n",
 				skw_state_name(iface->sta.core.sm.state),
-				bss && bss->channel ? NL80211_BAND_2GHZ != bss->channel->band ? skw_width_name(bss->width) :
+				bss && bss->channel ? 0 != bss->channel->band ? skw_width_name(bss->width) :
 				skw_width_name(min(bss->width, bss->ht_cap_chwidth)) : "");
 		break;
 
@@ -165,6 +168,27 @@ static int skw_iface_show(struct seq_file *seq, void *data)
 
 			seq_printf(seq, "\n        Channnel occupancy: tx: %d, rx_idle: %d\n",
 				 ctx->peer->tx.percent, ctx->peer->rx.percent);
+
+			rcu_read_lock();
+
+			seq_puts(seq, "\n");
+			for (i = 0; i < SKW_NR_TID; i++) {
+				reorder = &ctx->peer->reorder[i];
+
+				tid_rx = rcu_dereference(reorder->tid_rx);
+				if (!tid_rx)
+					continue;
+
+				stats = &tid_rx->stats;
+				seq_printf(seq, "        tid:%d win_start:%d win_size:%d"
+					"stored_num:%d expired_cnt:%llu oob_cnt:%llu"
+					" dup_cnt:%llu pn_err_cnt:%llu\n",
+					i, tid_rx->win_start, tid_rx->win_size,
+					tid_rx->stored_num, stats->expired_cnt, stats->oob_cnt,
+					stats->dup_cnt, stats->pn_err_cnt);
+			}
+
+			rcu_read_unlock();
 
 			seq_puts(seq, "\n");
 		}
@@ -434,13 +458,13 @@ static void skw_sta_work(struct work_struct *wk)
 
 	skw_wdev_lock(&iface->wdev);
 
-	skw_dbg("inst: %d, state: %s, retry: %d jiff: %d step_start: %d ctx_start: %d auth_start: %d redo:%d\n",
+	skw_dbg("inst: %d, state: %s, retry: %d jiff: %d step_start: %d ctx_start: %d auth_start: %d redo:%d not_first:%d\n",
 		core->sm.inst, skw_state_name(core->sm.state),
 		core->pending.retry, jiffies_to_msecs(jiffies),
 		jiffies_to_msecs(core->pending.step_start),
 		jiffies_to_msecs(core->pending.ctx_start),
 		jiffies_to_msecs(core->auth_start),
-		core->pending.redo);
+		core->pending.redo, iface->skw->startup_unconn_flag);
 
 	if (time_after(jiffies, core->auth_start + SKW_AUTH_TIMEOUT + SKW_ASSOC_TIMEOUT))
 		connect_failed = true;
@@ -466,7 +490,8 @@ static void skw_sta_work(struct work_struct *wk)
 		if (time_after(jiffies, core->pending.step_start + SKW_STEP_TIMEOUT)) {
 			if (++core->pending.retry >= SKW_MAX_AUTH_RETRY_NUM &&
 				iface->wdev.iftype == NL80211_IFTYPE_STATION &&
-				core->pending.auth_type == NL80211_AUTHTYPE_OPEN_SYSTEM) {
+				core->pending.auth_type == NL80211_AUTHTYPE_OPEN_SYSTEM &&
+				!iface->skw->startup_unconn_flag) {
 				if (time_after(jiffies, core->pending.ctx_start + core->pending.ctx_to) ||
 					core->pending.redo >= SKW_MAX_REAUTH_REDO_NUM) {
 					connect_failed = true;
@@ -483,32 +508,32 @@ static void skw_sta_work(struct work_struct *wk)
 						core->pending.redo++;
 
 						if (skw_msg_xmit_timeout(wiphy,
-							SKW_NDEV_ID(ndev),
-							SKW_CMD_AUTH,
-							core->pending.auth_cmd,
-							core->pending.auth_cmd_len,
-							NULL, 0, "SKW_CMD_AUTH",
-							msecs_to_jiffies(300), 0))
+									SKW_NDEV_ID(ndev),
+									SKW_CMD_AUTH,
+									core->pending.auth_cmd,
+									core->pending.auth_cmd_len,
+									NULL, 0, "SKW_CMD_AUTH",
+									msecs_to_jiffies(300), 0)) {
 							connect_failed = true;
-						else {
+						} else {
 							core->pending.retry = 0;
 							core->pending.step_start = jiffies;
 							skw_set_state(&iface->sta.core.sm, SKW_STATE_AUTHING);
 						}
 					}
 				}
-			} else if (core->pending.retry >= SKW_MAX_AUTH_RETRY_NUM)
+			} else if (core->pending.retry >= SKW_MAX_AUTH_RETRY_NUM) {
 				connect_failed = true;
-			else {
+			} else {
 				skw_set_state(&core->sm, SKW_STATE_AUTHING);
 
 				if (skw_msg_xmit_timeout(wiphy,
-					SKW_NDEV_ID(ndev),
-					SKW_CMD_AUTH,
-					core->pending.auth_cmd,
-					core->pending.auth_cmd_len,
-					NULL, 0, "SKW_CMD_AUTH",
-					msecs_to_jiffies(300), 0))
+							SKW_NDEV_ID(ndev),
+							SKW_CMD_AUTH,
+							core->pending.auth_cmd,
+							core->pending.auth_cmd_len,
+							NULL, 0, "SKW_CMD_AUTH",
+							msecs_to_jiffies(300), 0))
 					connect_failed = true;
 			}
 		}
@@ -532,7 +557,8 @@ static void skw_sta_work(struct work_struct *wk)
 		if (time_after(jiffies, core->pending.step_start + SKW_STEP_TIMEOUT)) {
 			if ((++core->pending.retry >= SKW_MAX_ASSOC_RETRY_NUM) &&
 				iface->wdev.iftype == NL80211_IFTYPE_STATION &&
-				core->pending.auth_type == NL80211_AUTHTYPE_OPEN_SYSTEM) {
+				core->pending.auth_type == NL80211_AUTHTYPE_OPEN_SYSTEM &&
+				!iface->skw->startup_unconn_flag) {
 				if (time_after(jiffies, core->pending.ctx_start + core->pending.ctx_to) ||
 					core->pending.redo >= SKW_MAX_REAUTH_REDO_NUM) {
 					connect_failed = true;
@@ -563,9 +589,9 @@ static void skw_sta_work(struct work_struct *wk)
 					}
 				}
 
-			} else if (core->pending.retry >= SKW_MAX_ASSOC_RETRY_NUM)
+			} else if (core->pending.retry >= SKW_MAX_ASSOC_RETRY_NUM) {
 				connect_failed = true;
-			 else {
+			} else {
 				skw_set_state(&core->sm, SKW_STATE_ASSOCING);
 
 				if (skw_msg_xmit_timeout(wiphy,
@@ -789,6 +815,9 @@ int skw_iface_setup(struct wiphy *wiphy, struct net_device *dev,
 	mutex_init(&iface->lock);
 	atomic_set(&iface->peer_map, 0);
 	atomic_set(&iface->actived_ctx, 0);
+	atomic_set(&iface->gtk_idx, SKW_INVALID_ID);
+
+	spin_lock_init(&iface->apf.lock);
 
 	INIT_LIST_HEAD(&iface->survey_list);
 
@@ -823,7 +852,29 @@ int skw_iface_setup(struct wiphy *wiphy, struct net_device *dev,
 	if (ret) {
 		skw_err("open failed, iface: %d, iftype: %d, ret:%d\n",
 			id, iftype, ret);
+
 		goto iface_deinit;
+	}
+
+	switch (iftype) {
+	case NL80211_IFTYPE_STATION:
+		skw_config_set_mib(wiphy, id, &skw->config->mib.sta);
+		break;
+
+	case NL80211_IFTYPE_P2P_CLIENT:
+		skw_config_set_mib(wiphy, id, &skw->config->mib.gc);
+		break;
+
+	case NL80211_IFTYPE_AP:
+		skw_config_set_mib(wiphy, id, &skw->config->mib.sap);
+		break;
+
+	case NL80211_IFTYPE_P2P_GO:
+		skw_config_set_mib(wiphy, id, &skw->config->mib.go);
+		break;
+
+	default:
+		break;
 	}
 
 	spin_lock_bh(&skw->vif.lock);
@@ -876,6 +927,11 @@ int skw_iface_teardown(struct wiphy *wiphy, struct skw_iface *iface)
 	struct skw_core *skw = wiphy_priv(wiphy);
 
 	skw_dbg("iface id: %d\n", iface->id);
+
+	spin_lock_bh(&iface->apf.lock);
+	if (iface->apf.apf_buff)
+		SKW_KFREE(iface->apf.apf_buff);
+	spin_unlock_bh(&iface->apf.lock);
 
 	skw_scan_done(skw, iface, true);
 	skw_purge_survey_data(iface);
@@ -994,6 +1050,10 @@ struct skw_iface *skw_add_iface(struct wiphy *wiphy, const char *name,
 		iface->procfs = skw_procfs_file(SKW_WIPHY_PENTRY(wiphy),
 						netdev_name(ndev), 0444,
 						&skw_iface_fops, ndev);
+
+		ret = skw_mdns_iface_list_add(iface);
+		if (ret)
+			skw_err("mdns iface add fail,%d\n", ret);
 	} else {
 		skw_ether_copy(iface->wdev.address, addr);
 	}
@@ -1031,6 +1091,8 @@ int skw_del_iface(struct wiphy *wiphy, struct skw_iface *iface)
 	skw_release_inst(wiphy, iface->id);
 
 	if (iface->ndev) {
+		skw_mdns_iface_list_del(iface);
+
 		proc_remove(iface->procfs);
 		skw_netdev_deinit(iface->ndev);
 		skw_unregister_netdevice(iface->ndev);
@@ -1076,9 +1138,11 @@ void skw_peer_free(struct skw_peer *peer)
 	skw_purge_key_conf(&peer->ptk_conf);
 	skw_purge_key_conf(&peer->gtk_conf);
 
+	synchronize_rcu();
+
 	entry = skw_ctx_entry(peer);
 
-#ifdef CONFIG_SWT6621S_GKI_DRV
+#ifdef CONFIG_SWT6621S_GKI
 	skw_call_rcu(peer->iface->skw, &entry->rcu, skw_peer_release);
 #else
 	call_rcu(&entry->rcu, skw_peer_release);

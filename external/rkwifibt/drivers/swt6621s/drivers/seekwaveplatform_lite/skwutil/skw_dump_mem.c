@@ -23,9 +23,15 @@ struct memory_segment cp_mem_seg[] = {
 	{ "BTEM", 	BTEM_MEM_BASE_ADDR, BTEM_MEM_SIZE},
 	{ "BTGB", 	BTGB_MEM_BASE_ADDR, BTGB_MEM_SIZE},
 	{ "BTRF", 	BTRF_MEM_BASE_ADDR, BTRF_MEM_SIZE},
-	{ "RFTOP", 	RFTOP_MEM_BASE_ADDR, RFTOP_MEM_SIZE},
+	{ "EFGB", 	EFUSE_MEM_BASE_ADDR, EFUSE_MEM_SIZE},
+	{ "AONR", 	AONGLB_REG_BASE_ADDR, AONGLB_REG_SIZE},
+	{ "PINR", 	PIN_REG_BASE_ADDR, PIN_REG_SIZE},
+	{ "PMUR", 	PMU_REG_BASE_ADDR, PMU_REG_SIZE},
+	{ "ANSP", 	AONSLP_GLBREG_BASE_ADDR, AONSLP_GLBREG_SIZE},
+	{ "PUSP", 	PMUREG_AONSLP_BASE_ADDR, PMUREG_AONSLP_SIZE},
 	{ "RCLK", 	RCLK_MEM_BASE_ADDR, RCLK_MEM_SIZE},
-	{ "BBPLL", 	BBPLL_MEM_BASE_ADDR, BBPLL_MEM_SIZE}
+	{ "RFTP", 	RFTOP_MEM_BASE_ADDR, RFTOP_MEM_SIZE},
+	{ "BPLL", 	BBPLL_MEM_BASE_ADDR, BBPLL_MEM_SIZE}
 
 };
 static uint32_t skw_checksum(void *data, int data_len)
@@ -61,19 +67,39 @@ int skw_dump_memory_into_buffer(struct ucom_dev *ucom, char *buffer, int length)
 		return 0;
 	buffer[offset] = sg_count; //save total segment count
 	offset++;
-
+	if (offset > length) {
+		skwlog_warn("%s :line:%d buff overflow\n", __func__,__LINE__);
+		kfree(read_buf);
+		return offset;
+	}
 	do {
 		uint32_t source_addr;
 		sg_size = mem_sg->size;
 
 		memcpy(&buffer[offset], mem_sg->name, 5); //save segment name
 		offset += 5;
+		if (offset > length) {
+			skwlog_warn("%s :line:%d buff overflow\n", __func__,__LINE__);
+			break;
+		}
 		memcpy(&buffer[offset], &mem_sg->address, 4); //save segment base addrss
 		offset += 4;
+		if (offset > length) {
+			skwlog_warn("%s :line:%d buff overflow\n", __func__,__LINE__);
+			break;
+		}
 		memcpy(&buffer[offset], &mem_sg->size, 4); //save segment size
 		offset += 4;
+		if (offset > length) {
+			skwlog_warn("%s :line:%d buff overflow\n", __func__,__LINE__);
+			break;
+		}
 		memcpy(&buffer[offset], &packet_len, 2); //save segment size
 		offset += 2;
+		if (offset > length) {
+			skwlog_warn("%s :line:%d buff overflow\n", __func__,__LINE__);
+			break;
+		}
 		skwlog_log("%s %s:%d 0x%x 0x%x\n", __func__, mem_sg->name,
 			offset, mem_sg->address, mem_sg->size);
 		seq = 0;
@@ -85,7 +111,10 @@ int skw_dump_memory_into_buffer(struct ucom_dev *ucom, char *buffer, int length)
 			memcpy(&buffer[offset], &seq, 2); //save segment size
 			seq++;
 			offset += 2;
-
+			if (offset > length) {
+				skwlog_warn("%s :line:%d buff overflow\n", __func__,__LINE__);
+				break;
+			}
 			if (sg_size > packet_len)
 				read_len = packet_len;
 			else
@@ -98,11 +127,17 @@ int skw_dump_memory_into_buffer(struct ucom_dev *ucom, char *buffer, int length)
 			source_addr += read_len;
 			memcpy(buffer+offset, read_buf, read_len); //save packet payload 
 			offset += read_len;
-
+			if (offset > length) {
+				skwlog_warn("%s :line:%d buff overflow\n", __func__,__LINE__);
+				break;
+			}
 			sum = skw_checksum(read_buf, read_len);
 			memcpy (buffer+offset, &sum, 4); //save checksum
 			offset += 4;
-
+			if (offset > length) {
+				skwlog_warn("%s :line:%d buff overflow\n", __func__,__LINE__);
+				break;
+			}
 			sg_size -= read_len;
 		} while (sg_size);
 		mem_sg++;
@@ -179,12 +214,12 @@ static const struct file_operations skw_dump_ops = {
 static int bt_state_event_notifier(struct notifier_block *nb, unsigned long action, void *data)
 {
 	struct ucom_dev *ucom = container_of(nb, struct ucom_dev, notifier);
-	//int status = cp_exception_sts;
+	int status = cp_exception_sts;
 	switch(action)
 	{
 		case DEVICE_ASSERT_EVENT:
 		{
-			skwboot_log("BT BSPASSERT EVENT received!!!!\n");
+			skwboot_log("UCOM BSPASSERT EVENT received!!!!\n");
 			cp_exception_sts = 1;
 			ucom = ucoms[log_portno];
 			if (dump_log_size){
@@ -192,7 +227,7 @@ static int bt_state_event_notifier(struct notifier_block *nb, unsigned long acti
 				return NOTIFY_OK;
 			}
 			if (!dump_memory_buffer && !atomic_read(&ucom->open) && SKW_DUMP_BUFFER_SIZE!=0)
-				dump_memory_buffer = kzalloc(SKW_DUMP_BUFFER_SIZE, GFP_KERNEL);
+				dump_memory_buffer = vmalloc(SKW_DUMP_BUFFER_SIZE);
 			if(ucom->pdata && ucom->pdata->dump_modem_memory) {
 				dump_log_size = 0;
 				if (dump_memory_buffer) {
@@ -211,19 +246,23 @@ static int bt_state_event_notifier(struct notifier_block *nb, unsigned long acti
 		case DEVICE_BSPREADY_EVENT:
 		{
 			cp_exception_sts = 0;
-			skwboot_log("BT BSPREADY EVENT Comming in !!!!\n");
+			skwboot_log("UCOM BSPREADY EVENT Comming in !!!!\n");
+			if (status==5 && original_ucom) {
+				wake_up(&original_ucom->wq);
+				original_ucom = NULL;
+			}
 		}
 		break;
 		case DEVICE_DUMPDONE_EVENT:
 		{
 			cp_exception_sts = 2;
-			skwboot_log("BT DUMPDONE EVENT Comming in !!!!\n");
+			skwboot_log("UCOM DUMPDONE EVENT Comming in !!!!\n");
 		}
 		break;
 		case DEVICE_BLOCKED_EVENT:
 		{
 			cp_exception_sts = 3;
-			skwboot_log("BT BLOCKED EVENT Comming in !!!!\n");
+			skwboot_log("UCOM BLOCKED EVENT Comming in !!!!\n");
 			if (dump_log_size){
 				skwboot_log(" dump done ,mem size: %d\n", dump_log_size);
 				return NOTIFY_OK;
@@ -239,6 +278,7 @@ static int bt_state_event_notifier(struct notifier_block *nb, unsigned long acti
 		case DEVICE_DISCONNECT_EVENT:
 		{
 			cp_exception_sts = action;
+			skwboot_log("UCOM DISCONNECT EVENT Comming in !!!!\n");
 		}
 		break;
 		default:
@@ -273,7 +313,6 @@ static int skw_bt_state_event_deinit(struct ucom_dev *ucom)
 	if(ucom) {
 		if((ucom->notifier.notifier_call)){
 			skwboot_log("%s :%d release the notifier \n", __func__,__LINE__);
-			ucom->notifier.notifier_call = NULL;
 			ucom->pdata->modem_unregister_notify(&ucom->notifier);
 		}
 		devno = MKDEV(skw_major, UCOM_PORTNO_MAX+1);

@@ -153,6 +153,7 @@ struct sv6160_platform_data {
 	u8				data_port;
 	u8				cmd_port;
 	u8				audio_port;
+	u8				isoc_port;
 	u8				bus_type;
 
 #define SDIO_LINK		(0<<0)

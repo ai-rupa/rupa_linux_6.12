@@ -37,14 +37,21 @@ int skw_sdio_mmc_scan(int sd_id)
 	pr_info("%s:[%d]\n", __func__, sd_id);
 #if defined(CONFIG_SKW_HOST_PLATFORM_AMLOGIC)
 	//如果定义了CONFIG_SKW_HOST_PLATFORM_AMLOGIC，则调用extern_wifi_set_enable(1)函数
-	extern_wifi_set_enable(1);
+	//extern_wifi_set_enable(1);
+	set_usb_wifi_power(0);
+	set_usb_wifi_power(1);
 #elif defined(CONFIG_SKW_HOST_PLATFORM_FULLHAN)
 	pr_info("%s:[mmc%d:card init]\n", __func__, sd_id);
 	fh_sdio_card_scan(sd_id); //fullhan sdio card scan
 #elif defined(CONFIG_SKW_HOST_PLATFORM_ALLWINER)
+	int bus_index = sunxi_wlan_get_bus_index();
+	if (bus_index < 0){
+		skw_sdio_warn(" the allwiner bus index err %d\n",bus_index);
+		return bus_index;
+	}
 	sunxi_wlan_set_power(1);
 	msleep(100);
-	sunxi_mmc_rescan_card(1); //allwiner sdio card rescan
+	sunxi_mmc_rescan_card(bus_index); //allwiner sdio card rescan
 #elif defined(CONFIG_SKW_HOST_PLATFORM_ROCKCHIP)
 	rockchip_wifi_power(1);
 	msleep(150);
@@ -52,7 +59,6 @@ int skw_sdio_mmc_scan(int sd_id)
 #else
 	pr_info("%s: no need skw self scan!!\n", __func__);
 #endif
-	pr_info("%s:[-]\n", __func__);
 	return ret;
 }
 
@@ -62,13 +68,23 @@ int skw_sdio_mmc_rescan(int sd_id)
 #if defined(CONFIG_SKW_HOST_PLATFORM_AMLOGIC)
 	//如果定义了CONFIG_SKW_HOST_PLATFORM_AMLOGIC，则调用extern_wifi_set_enable(1)函数
 	//extern_wifi_set_enable(1);
+	set_usb_wifi_power(0);
+	set_usb_wifi_power(1);
 #elif defined(CONFIG_SKW_HOST_PLATFORM_FULLHAN)
 	skw_chip_power_reset();
 	fh_sdio_card_scan(sd_id); //fullhan sdio card scan
 #elif defined(CONFIG_SKW_HOST_PLATFORM_ALLWINER)
-	skw_chip_power_reset();
-	msleep(100);
-	sunxi_mmc_rescan_card(1); //allwiner sdio card rescan
+	struct skw_sdio_data_t *skw_sdio = skw_sdio_get_data();
+	skw_sdio_info("[+]");
+	if (skw_sdio->sdio_dev_host && skw_sdio->sdio_dev_host->card) {
+		sdio_claim_host(skw_sdio->sdio_func[FUNC_1]);
+		skw_chip_power_reset();
+		msleep(100);
+		ret = mmc_sw_reset(skw_sdio->sdio_dev_host->card);
+		sdio_release_host(skw_sdio->sdio_func[FUNC_1]);
+	} else {
+		return -EINVAL;
+	}
 #elif defined(CONFIG_SKW_HOST_PLATFORM_ROCKCHIP)
 	rockchip_wifi_set_carddetect(0);
 	msleep(150);
@@ -77,6 +93,7 @@ int skw_sdio_mmc_rescan(int sd_id)
 	rockchip_wifi_set_carddetect(1);
 #else
 	struct skw_sdio_data_t *skw_sdio = skw_sdio_get_data();
+	skw_sdio_info("[+]");
 	if (skw_sdio) {
 #if (KERNEL_VERSION(4, 18, 0) <= LINUX_VERSION_CODE &&                         \
      LINUX_VERSION_CODE <= KERNEL_VERSION(5, 18, 19))

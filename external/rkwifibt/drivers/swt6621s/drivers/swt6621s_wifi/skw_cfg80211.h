@@ -31,7 +31,7 @@
 
 #define SKW_MAX_SCAN_SSID                 4
 #define SKW_SCAN_TIMEOUT                  8000
-#define SKW_CQM_SCAN_TIMEOUT              4
+#define SKW_CQM_SCAN_TIMEOUT              4000
 #define SKW_MAX_STA_AUTH_ASSOC_RETRY      3
 #define SKW_EXTENDED_CAPA_LEN             11
 
@@ -58,6 +58,32 @@ struct skw_bss_priv {
 	u16 resv;
 };
 
+#define SKW_MAX_TCPKEEP_OFFLOAD_INFO_NUM    30
+struct skw_tcp_keepalive_info {
+	u32 ipaddr_peer;
+	u16 port_self;
+	u16 port_peer;
+	u32 seqnum_self;
+	u32 acknum_self;
+	u16 interval_idle;
+	u16 probe_interval;
+	u8 probe_count;
+	u8 inst_id;
+	u8 peer_addr[ETH_ALEN];
+} __packed;
+
+struct skw_tcp_keepalive_offload_tlv {
+	u8 resv[3];
+	u8 tcpinfo_num;
+	struct skw_tcp_keepalive_info tcpinfo[];//tcpinfo[SKW_MAX_TCPKEEP_OFFLOAD_INFO_NUM];
+} __packed;
+
+struct skw_tcp_keep_active_offload_set {
+	atomic_t enabled[SKW_MAX_TCPKEEP_OFFLOAD_INFO_NUM];
+	//struct skw_tcp_keepalive_offload_tlv keep;
+	struct skw_tcp_keepalive_info tcpinfo[SKW_MAX_TCPKEEP_OFFLOAD_INFO_NUM];
+} __packed;
+
 struct skw_suspend_t {
 	u8 wow_enable;
 	u8 reserved;
@@ -65,7 +91,10 @@ struct skw_suspend_t {
 	 * set wow_flags to 0 if wakeup any
 	 */
 	u16 wow_flags;
-};
+
+	struct skw_tlv tlv[];
+} __packed;
+
 
 #define SKW_SUITE(oui, id)                  (((oui) << 8) | (id))
 #define SKW_CIPHER_SUITE_WEP40              SKW_SUITE(0x000FAC, 1)
@@ -156,6 +185,8 @@ enum SKW_MIB_ID {
 	SKW_MIB_SET_FORCE_RX_UPDATE_NAV = 61,
 	SKW_MIB_SET_SCAN_SEND_PROBE_REQ_CNT = 62,
 
+	SKW_TLV_SET_SUPP_BAND = 68,
+
 	SKW_MIB_SET_APGO_TIMMAP = 70,
 	SKW_MIB_SET_DBDC_DISABLE = 71,
 
@@ -163,12 +194,17 @@ enum SKW_MIB_ID {
 	SKW_MIB_SET_RATE_CTRL_RATE_CHANGE_PARAM = 81,
 	SKW_MIB_SET_RATE_CTRL_SPECIAL_FRM_RATE = 82,
 
+	SKW_SET_RECOVERY_ENABLE = 128,
+	SKW_SET_HOST_VERSION = 129,
+	SKW_SET_TCP_KEEPALIVE_OFFLOAD = 130,
 	SKW_MIB_SET_HDK_TEST = 131,
 
 	SKW_MIB_SET_ASSIGN_ADDRESS_VAL = 150,
 	SKW_MIB_SET_WAKEUP_HOST_ENABLE = 151,
 	SKW_MIB_SET_WDS_ENABLE = 152,
 	SKW_MIB_SET_SUSPEND_MODE = 153,
+
+	SKW_MIB_SET_AC_TX_LIFE_TIME = 167,
 
 	SKW_MIB_W_INFO = 200,
 	SKW_MIB_MAC_NSS_INFO = 201,
@@ -274,7 +310,7 @@ struct skw_sched_scan_param {
 	u8 n_scan_plans;
 	u32 scan_plans_len;
 	u32 scan_plans_offset;
-	u8 data[0];
+	u8 data[];
 } __packed;
 
 struct skw_center_chn {
@@ -419,7 +455,7 @@ struct skw_startap_param {
 	u16 probe_rsp_ies_len;
 	u16 assoc_rsp_ies_offset;
 	u16 assoc_rsp_ies_len;
-	u8 ies[0];
+	u8 ies[];
 } __packed;
 
 struct skw_startap_resp {
@@ -443,7 +479,7 @@ struct skw_beacon_params {
 	u16 assoc_rsp_ies_len;
 	u16 probe_rsp_offset;
 	u16 probe_rsp_len;
-	u8 ies[0];
+	u8 ies[];
 } __packed;
 
 struct skw_del_sta_param {
@@ -474,6 +510,132 @@ struct skw_rx_rate_desc {
 	u16 resv1;
 } __packed;
 
+#define SKW_IEEE80211_MAX_CHAINS	4
+
+enum skw_nl80211_mesh_power_mode {
+	SKW_MESH_POWER_UNKNOWN,
+	SKW_MESH_POWER_ACTIVE,
+	SKW_MESH_POWER_LIGHT_SLEEP,
+	SKW_MESH_POWER_DEEP_SLEEP,
+
+	_SKW_MESH_POWER_AFTER_LAST,
+	SKW_MESH_POWER_MAX = _SKW_MESH_POWER_AFTER_LAST - 1
+};
+
+struct skw_rate_info {
+	u8 flags;
+	u8 mcs;
+	u16 legacy;
+	u8 nss;
+	u8 bw;
+	u8 he_gi;
+	u8 he_dcm;
+	u8 he_ru_alloc;
+} __packed;
+
+struct skw_sta_bss_parameters {
+	u8 flags;
+	u8 dtim_period;
+	u16 beacon_interval;
+} __packed;
+
+struct skw_nl80211_sta_flag_update {
+	u32 mask;
+	u32 set;
+} __packed;
+
+struct skw_cfg80211_txq_stats {
+	u32 filled;
+	u32 backlog_bytes;
+	u32 backlog_packets;
+	u32 flows;
+	u32 drops;
+	u32 ecn_marks;
+	u32 overlimit;
+	u32 overmemory;
+	u32 collisions;
+	u32 tx_bytes;
+	u32 tx_packets;
+	u32 max_flows;
+} __packed;
+
+struct skw_cfg80211_tid_stats {
+	u32 filled;
+	u64 rx_msdu;
+	u64 tx_msdu;
+	u64 tx_msdu_retries;
+	u64 tx_msdu_failed;
+	struct skw_cfg80211_txq_stats txq_stats;
+} __packed;
+
+struct skw_station_info {
+	u64 filled;
+	u32 connected_time;
+	u32 inactive_time;
+	u64 assoc_at;
+	u64 rx_bytes;
+	u64 tx_bytes;
+	u16 llid;
+	u16 plid;
+	u8 plink_state;
+	s8 signal;
+	s8 signal_avg;
+
+	u8 chains;
+	s8 chain_signal[SKW_IEEE80211_MAX_CHAINS];
+	s8 chain_signal_avg[SKW_IEEE80211_MAX_CHAINS];
+
+	struct skw_rate_info txrate;
+	struct skw_rate_info rxrate;
+	u32 rx_packets;
+	u32 tx_packets;
+	u32 tx_retries;
+	u32 tx_failed;
+	u32 rx_dropped_misc;
+	struct skw_sta_bss_parameters bss_param;
+	struct skw_nl80211_sta_flag_update sta_flags;
+
+	int generation;
+
+	u32 assoc_req_ies_offset;
+	u32 assoc_req_ies_len;
+
+	u32 beacon_loss_count;
+	s64 t_offset;
+	enum skw_nl80211_mesh_power_mode local_pm;
+	enum skw_nl80211_mesh_power_mode peer_pm;
+	enum skw_nl80211_mesh_power_mode nonpeer_pm;
+
+	u32 expected_throughput;
+
+	u64 tx_duration;
+	u64 rx_duration;
+	u64 rx_beacon;
+	u8 rx_beacon_signal_avg;
+	u8 connected_to_gate;
+
+	u32 pertid_offset; //struct skw_cfg80211_tid_stats *
+	u32 pertid_len;
+
+	s8 ack_signal;
+	s8 avg_ack_signal;
+
+	u16 airtime_weight;
+
+	u32 rx_mpdu_count;
+	u32 fcs_err_count;
+
+	u32 airtime_link_metric;
+
+	u8 connected_to_as;
+
+	u8 mlo_params_valid;
+	u8 assoc_link_id;
+	u8 mld_addr[ETH_ALEN];
+	u32 assoc_resp_ies_offset;
+	u32 assoc_resp_ies_len;
+} __packed;
+
 struct skw_get_sta_resp {
 	struct skw_rate tx_rate;
 	s8 signal;
@@ -485,6 +647,7 @@ struct skw_get_sta_resp {
 	struct skw_rx_rate_desc rx_rate;
 	u8 tx_percent;
 	u8 rx_percent;
+	struct skw_station_info sinfo;
 } __packed;
 
 struct skw_roc_param {
@@ -496,6 +659,18 @@ struct skw_roc_param {
 	u64 cookie;
 } __packed;
 
+struct skw_resume_param {
+	u8 wake_event_id;
+	u8 wake_rxmsdu_status;
+	u16 wake_msdu_num;
+	u16 wake_by_magicpkt:1;
+	u16 rst:15;
+	u32 wow_wakeup_srcbmp;
+	u8 rst1[134];
+	u32 suspend_time;
+	u8 wake_rule_idx;
+} __packed;
+
 struct skw_mgmt_tx_param {
 	u32 wait;
 	u64 cookie;
@@ -503,7 +678,7 @@ struct skw_mgmt_tx_param {
 	u8 band;
 	u8 dont_wait_for_ack;
 	u16 mgmt_frame_len;
-	struct ieee80211_mgmt mgmt[0];
+	struct ieee80211_mgmt mgmt[];
 } __packed;
 
 struct skw_mgmt_register_param {
@@ -835,7 +1010,7 @@ static inline enum nl80211_he_gi skw_gi_to_nl80211_info_gi(enum SKW_HE_GI skw_gi
 }
 #endif
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,0,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 0, 0)
 	#define __STA_INFO_FIELD(field)				SKW_BIT_ULL(NL80211_STA_INFO_##field)
 #else
 	#define __STA_INFO_FIELD(field)				STATION_INFO_##field
@@ -884,14 +1059,14 @@ int skw_connect_sae_auth(struct wiphy *wiphy, struct net_device *dev,
 			 struct cfg80211_bss *bss);
 int skw_connect_auth(struct wiphy *wiphy, struct net_device *dev,
 		struct skw_connect_param *conn, struct cfg80211_bss *bss);
-int skw_connect_assoc(struct wiphy *wiphy, struct net_device *ndev,
+int skw_connect_assoc(struct wiphy *wiphy, struct net_device *dev,
 		struct skw_connect_param *conn);
 void skw_connected(struct net_device *dev, struct skw_connect_param *conn,
 		   const u8 *req_ie, int req_ie_len, const u8 *resp_ie,
 		   int resp_ie_len, u16 status, gfp_t gfp);
 void skw_disconnected(struct net_device *dev, u16 reason, const u8 *resp_ie,
 		int resp_ie_len, bool local_gen, gfp_t gfp);
-int skw_cmd_unjoin(struct wiphy *wiphy, struct net_device *ndev,
+int skw_cmd_unjoin(struct wiphy *wiphy, struct net_device *dev,
 		   const u8 *addr, u16 reason, bool tx_frame);
 int skw_sap_set_mib(struct wiphy *wiphy, struct net_device *dev,
 		const u8 *ies, int ies_len);

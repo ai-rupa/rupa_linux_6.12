@@ -44,13 +44,21 @@
 #define SKW_CLEAR(d, v)              ((d) &= ~(v))
 #define SKW_TEST(d, v)               ((d) & (v))
 
-#define SKW_ZALLOC(s, f)             kzalloc(s, f)
+#define SKW_ZALLOC(s, f)             ((s) ? kzalloc(s, f) : NULL)
 
 #define SKW_KFREE(p)                 \
 	do {                         \
 		kfree(p);            \
 		p = NULL;            \
 	} while (0)
+
+#define SKW_VALLOC(s)             (((s) && (s) <= 0x100000) ? vzalloc(s) : NULL)
+
+#define SKW_VFREE(p)                 \
+		do {						 \
+			vfree(p);			 \
+			p = NULL;			 \
+		} while (0)
 
 #define SKW_KMEMDUP(s, l, f)     (((s) != NULL) ? kmemdup(s, l, f) : NULL)
 #define SKW_MGMT_SFC(fc)         (le16_to_cpu(fc) & IEEE80211_FCTL_STYPE)
@@ -147,7 +155,7 @@ struct skw_template {
 	u16 head_len;
 	u16 tail_ofsset;
 	u16 tail_len;
-	struct ieee80211_mgmt mgmt[0];
+	struct ieee80211_mgmt mgmt[];
 };
 
 struct skw_rate {
@@ -183,11 +191,12 @@ struct skw_element {
 struct skw_tlv {
 	u16 type;
 	u16 len;
-	char value[0];
+	char value[];
 };
 
 struct skw_tlv_conf {
 	void *buff;
+	u16 *plen;
 	int buff_len, total_len;
 };
 
@@ -318,21 +327,45 @@ void skw_file_close(struct file *fp);
 #endif
 
 u64 skw_local_clock(void);
-int skw_key_idx(u16 bitmap);
+int skw_key_idx(unsigned long bitmap);
 char *skw_mgmt_name(u16 fc);
 int skw_freq_to_chn(int freq);
-u32 skw_calc_rate(u64 bytes, u32 delta_ms);
-int skw_build_deauth_frame(void *buf, int buf_len, u8 *da, u8 *sa,
-			   u8 *bssid, u16 reason_code);
-const u8 *skw_find_ie_match(u8 eid, const u8 *ies, int len, const u8 *match,
-			    int match_len, int match_offset);
 
-int skw_desc_get_rx_rate(struct skw_rate *rate, u8 bw, u8 mode, u8 gi,
-		    u8 nss, u8 dcm, u16 data_rate);
-void skw_tlv_free(struct skw_tlv_conf *conf);
-void *skw_tlv_reserve(struct skw_tlv_conf *conf, int len);
 int skw_tlv_alloc(struct skw_tlv_conf *conf, int len, gfp_t gfp);
+void skw_tlv_start(struct skw_tlv_conf *conf);
+void skw_tlv_end(struct skw_tlv_conf *conf);
+void *skw_tlv_reserve(struct skw_tlv_conf *conf, int len);
 int skw_tlv_add(struct skw_tlv_conf *conf, int type, void *dat, int dat_len);
-bool skw_bss_check_vendor_name(struct cfg80211_bss *bss, const u8 *oui);
-int skw_util_set_mib_enable(struct wiphy *wiphy, int inst, int mib_id, bool enable);
+void skw_tlv_free(struct skw_tlv_conf *conf);
+
+static inline int skw_tlv_add_bool(struct skw_tlv_conf *conf, int type, bool enable)
+{
+	u8 val = enable;
+
+	return skw_tlv_add(conf, type, &val, 1);
+}
+
+int skw_set_mib(struct wiphy *wiphy, int inst, int mib, void *dat, int dat_len);
+static inline int skw_set_mib_bool(struct wiphy *wiphy, int inst, int mib, bool enable)
+{
+	u8 data = enable;
+
+	return skw_set_mib(wiphy, inst, mib, &data, 1);
+}
+
+static inline int skw_set_mib_u8(struct wiphy *wiphy, int inst, int mib, u8 data)
+{
+	return skw_set_mib(wiphy, inst, mib, &data, 1);
+}
+
+static inline int skw_set_mib_u16(struct wiphy *wiphy, int inst, int mib, u16 data)
+{
+	return skw_set_mib(wiphy, inst, mib, &data, 2);
+}
+
+static inline int skw_set_mib_u32(struct wiphy *wiphy, int inst, int mib, u32 data)
+{
+	return skw_set_mib(wiphy, inst, mib, &data, 4);
+}
+
 #endif

@@ -37,8 +37,10 @@
 #include "skw_calib.h"
 #include "skw_recovery.h"
 #include "skw_config.h"
+#include "skw_mdnsoffload.h"
 
-extern unsigned int tx_wait_time;
+#define SKW_EXTEND_NAME                     ".dat"
+#define SKW_CONFIG_FILE                     KBUILD_MODNAME SKW_EXTEND_NAME
 
 #define SKW_BUS_TYPE_MASK                   TYPE_MASK
 #define SKW_BUS_SDIO                        SDIO_LINK
@@ -145,6 +147,8 @@ extern unsigned int tx_wait_time;
 #define SKW_IOCTL_CMD                       (SIOCDEVPRIVATE + 15)
 #define SKW_IOCTL_SUBCMD_COUNTRY            1
 
+extern unsigned int tx_wait_time;
+
 struct skw_ioctl_cmd {
 	int len;
 	int id;
@@ -245,7 +249,8 @@ struct skw_chip_info {
 	u32 priv_p2p_common_port:1;
 	u32 priv_dfs_master_enabled:1;
 	u32 priv_2g_only:1;
-	u32 priv_resv:18;
+	u32 priv_resv:17;
+	u32 priv_mdns_offload:1;
 	u32 nr_hw_mac:8;
 
 	u8 fw_build_time[32];
@@ -257,7 +262,13 @@ struct skw_chip_info {
 	u32 fw_chip_type;
 	u16 calib_module_id;
 	u16 resv;
-	u32 fw_ext_capa[12];
+
+	u8 mdns_rsp_matchrule_maxunm;
+	u8 apf_vertion;
+	u16 apf_data_maxlen;
+	u16 mdns_rsp_matchrule_buf_maxsize;
+	u16 mdns_filter_qname_buf_maxsize;
+	u32 fw_ext_capa[10];
 } __packed;
 
 enum SKW_MSG_VERSION {V0, V1, V2, V3};
@@ -302,7 +313,7 @@ struct skw_hw_info {
 	u8 cmd_port;
 
 	u16 align;
-	s16 pkt_limit;
+	int pkt_limit;
 	unsigned long flags;
 	atomic_t credit; /* total credit of all LMAC */
 
@@ -335,6 +346,7 @@ struct skw_work_data {
 	struct rcu_head *rcu_hdr;
 	struct rcu_head **rcu_tail;
 
+	atomic_t enabled;
 	unsigned long flags;
 	struct sk_buff_head work_list;
 };
@@ -379,15 +391,10 @@ struct skw_core {
 
 	struct task_struct *rx_thread;
 
-#ifdef CONFIG_SWT6621S_TX_WORKQUEUE
-	struct workqueue_struct *tx_wq;
-	struct delayed_work tx_worker;
-
-	//struct workqueue_struct *rx_wq;
-	//struct work_struct rx_worker;
-#else
-	struct task_struct *tx_thread, *rx_thread;
-#endif
+	struct workqueue_struct *tx_wq, *tx_dy;
+	struct work_struct tx_worker;
+	struct hrtimer timer;
+	spinlock_t timer_lock;
 
 	/* workqueu for mlme worker and etc. */
 	struct workqueue_struct *event_wq;
@@ -460,7 +467,7 @@ struct skw_core {
 	struct proc_dir_entry *pentry;
 
 	struct skw_timer_data timer_data;
-	struct skw_config config;
+	struct skw_config *config;
 
 	struct {
 		struct semaphore lock;
@@ -519,6 +526,10 @@ struct skw_core {
 		struct skw_dbg_cmd cmd[SKW_DBG_NR_CMD];
 		struct skw_dbg_dat dat[SKW_DBG_NR_DAT];
 	} dbg;
+
+	int startup_unconn_flag;
+
+	struct skw_mdns_info mdns_info;
 };
 
 struct android_wifi_priv_cmd {
@@ -724,14 +735,37 @@ static inline int skw_unregister_bsp_notifier(struct skw_core *skw,
 	return 0;
 }
 
-static inline void skw_wakeup_tx(struct skw_core *skw, unsigned long delay)
+static enum hrtimer_restart skw_tx_timer_callback(struct hrtimer *timer)
 {
-#ifdef CONFIG_SWT6621S_TX_WORKQUEUE
-	mod_delayed_work(skw->tx_wq, &skw->tx_worker, delay);
-#else
-	if (atomic_add_return(1, &skw->tx_wake) == 1)
-		wake_up(&skw->tx_wait_q);
-#endif
+	struct skw_core *skw = container_of(timer, struct skw_core, timer);
+
+	queue_work(skw->tx_wq, &skw->tx_worker);
+
+	return HRTIMER_NORESTART;
+}
+
+static inline void skw_wakeup_tx(struct skw_core *skw, ktime_t delay_kt)
+{
+	unsigned long flags;
+	struct hrtimer *timer = &skw->timer;
+
+	spin_lock_irqsave(&skw->timer_lock, flags);
+
+	if (delay_kt == 0) {
+		if (hrtimer_active(timer))
+			hrtimer_cancel(timer);
+
+		queue_work(skw->tx_wq, &skw->tx_worker);
+	} else {
+		if (hrtimer_active(timer))
+			hrtimer_set_expires(timer, delay_kt);
+		else {
+			timer->function = skw_tx_timer_callback;
+			hrtimer_start(timer, delay_kt, HRTIMER_MODE_REL);
+		}
+	}
+
+	spin_unlock_irqrestore(&skw->timer_lock, flags);
 }
 
 static inline void skw_wakeup_rx(struct skw_core *skw)
@@ -886,14 +920,14 @@ static inline const char *skw_bus_name(int bus)
 struct skw_peer_ctx *skw_get_ctx(struct skw_core *skw, u8 lmac_id, u8 idx);
 int skw_lmac_bind_iface(struct skw_core *skw, struct skw_iface *iface, int lmac_id);
 int skw_lmac_unbind_iface(struct skw_core *skw, int lmac_id, int iface_id);
-int skw_netdev_init(struct wiphy *wiphy, struct net_device *ndev, u8 *addr);
-void skw_netdev_deinit(struct net_device *ndev);
+int skw_netdev_init(struct wiphy *wiphy, struct net_device *dev, u8 *addr);
+void skw_netdev_deinit(struct net_device *dev);
 void skw_add_credit(struct skw_core *skw, int lmac_id, int cred);
 int skw_sync_chip_info(struct wiphy *wiphy, struct skw_chip_info *chip);
 int skw_sync_cmd_event_version(struct wiphy *wiphy);
-void skw_get_dev_ip(struct net_device *ndev);
-void skw_set_ip_to_fw(struct wiphy *wiphy, struct net_device *ndev);
+void skw_get_dev_ip(struct net_device *dev);
+void skw_set_ip_to_fw(struct wiphy *wiphy, struct net_device *dev);
 int skw_calib_download(struct wiphy *wiphy, const char *fname);
 struct skw_ctx_entry *skw_get_ctx_entry(struct skw_core *skw, const u8 *addr);
-
+void skw_init_mib(struct wiphy *wiphy);
 #endif

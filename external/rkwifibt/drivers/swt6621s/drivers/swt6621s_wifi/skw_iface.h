@@ -47,6 +47,7 @@
 #define SKW_PEER_FLAG_BAD_ADDR          BIT(2)
 #define SKW_PEER_FLAG_ACTIVE            BIT(3)
 #define SKW_PEER_FLAG_DEAUTHED          BIT(4)
+#define SKW_PEER_FLAGS_AUTHORIZED       BIT(5)
 
 #define SKW_IFACE_FLAG_LEGACY_P2P_DEV   BIT(0)
 #define SKW_IFACE_FLAG_DEAUTH           BIT(1)
@@ -155,11 +156,12 @@ struct skw_frag_entry {
 	u8 last_pn[IEEE80211_CCMP_PN_LEN];
 };
 
+#define SKW_NUM_TIDS                     (SKW_NR_TID + 1)
 struct skw_key {
 	struct rcu_head rcu;
 	u32 key_len;
 	u8 key_data[WLAN_MAX_KEY_LEN];
-	u8 rx_pn[IEEE80211_NUM_TIDS][SKW_PN_LEN];
+	u8 rx_pn[SKW_NUM_TIDS][SKW_PN_LEN];
 };
 
 #define SKW_KEY_FLAG_WEP_SHARE        BIT(0)
@@ -175,14 +177,23 @@ struct skw_key_conf {
 	struct skw_key __rcu *key[SKW_NUM_MAX_KEY];
 };
 
+struct skw_tid_stats {
+	u64 expired_cnt;
+	u64 oob_cnt;
+	u64 dup_cnt;
+	u64 pn_err_cnt;
+};
+
 struct skw_tid_rx {
 	u16 win_start;
 	u16 win_size;
 	u32 stored_num;
 	int ref_cnt;
 	struct rcu_head rcu_head;
+	struct skw_core *skw;
 	struct skw_reorder_rx *reorder;
 	struct sk_buff_head *reorder_buf;
+	struct skw_tid_stats stats;
 };
 
 struct skw_rx_todo {
@@ -239,7 +250,7 @@ struct skw_sm {
 struct skw_txba_ctrl {
 	u16 bitmap;
 	u16 blacklist;
-	u8 tx_try[SKW_NR_TID];
+	unsigned long tx_timeout[SKW_NR_TID];
 };
 
 enum skw_msdu_filter {
@@ -443,6 +454,13 @@ struct skw_monitor_dbg_iface {
 	u32 frame_cnt;
 };
 
+struct skw_apf {
+	spinlock_t lock;
+	uint8_t *apf_buff;
+	uint16_t apf_program_len;
+	unsigned long apf_time;
+};
+
 struct skw_iface {
 	u8 id;
 	u8 lmac_id;
@@ -450,6 +468,7 @@ struct skw_iface {
 
 	atomic_t peer_map;
 	atomic_t actived_ctx;
+	atomic_t gtk_idx;
 
 	struct mutex lock;
 	struct skw_core *skw;
@@ -468,6 +487,7 @@ struct skw_iface {
 	s16 default_multicast;
 	u16 mgmt_frame_bitmap;
 	int cpu_id;
+	struct skw_apf apf;
 
 	struct sk_buff_head txq[SKW_WMM_AC_MAX + 1];
 	struct sk_buff_head tx_cache[SKW_WMM_AC_MAX + 1];
@@ -522,6 +542,7 @@ struct skw_iface {
 			} roam_data;
 
 			u16 last_seq_ctrl;
+			__be32 ipv4;
 		} sta;
 
 		struct {
@@ -572,7 +593,7 @@ static inline void skw_list_add(struct skw_list *list, struct list_head *entry)
 static inline void skw_list_del(struct skw_list *list, struct list_head *entry)
 {
 	spin_lock_bh(&list->lock);
-	list_del(entry);
+	list_del_init(entry);
 	list->count--;
 	spin_unlock_bh(&list->lock);
 }
@@ -609,22 +630,28 @@ static inline void skw_peer_ctx_unlock(struct skw_peer_ctx *ctx)
 
 	mutex_unlock(&ctx->lock);
 }
-#if 0
-static inline void skw_sta_lock(struct skw_sta_core *core)
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 7, 0)
+static inline void skw_wdev_lock(struct wireless_dev *wdev)
+	__acquires(&wdev->wiphy->mtx)
 {
-	mutex_lock(&core->lock);
+	mutex_lock(&wdev->wiphy->mtx);
+	__acquire(&wdev->wiphy->mtx);
 }
 
-static inline void skw_sta_unlock(struct skw_sta_core *core)
+static inline void skw_wdev_unlock(struct wireless_dev *wdev)
+	__releases(&wdev->wiphy->mtx)
 {
-	mutex_unlock(&core->lock);
-}
-#endif
-static inline void skw_sta_assert_lock(struct skw_sta_core *core)
-{
-	lockdep_assert_held(&core->lock);
+	__release(&wdev->wiphy->mtx);
+	mutex_unlock(&wdev->wiphy->mtx);
 }
 
+static inline void skw_wdev_assert_lock(struct skw_iface *iface)
+{
+	lockdep_assert_held(&iface->wdev.wiphy->mtx);
+}
+
+#else
 static inline void skw_wdev_lock(struct wireless_dev *wdev)
 	__acquires(wdev)
 {
@@ -643,6 +670,8 @@ static inline void skw_wdev_assert_lock(struct skw_iface *iface)
 {
 	lockdep_assert_held(&iface->wdev.mtx);
 }
+#endif
+
 
 struct skw_iface *skw_add_iface(struct wiphy *wiphy, const char *name,
 				enum nl80211_iftype iftype, u8 *mac,

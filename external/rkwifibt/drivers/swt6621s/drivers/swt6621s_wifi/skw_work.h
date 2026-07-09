@@ -97,8 +97,10 @@ void skw_work_init(struct wiphy *wiphy);
 void skw_work_deinit(struct wiphy *wiphy);
 int skw_init_rps_map(struct skw_iface *iface);
 void skw_work_resume(struct wiphy *wiphy);
+void skw_work_async_adma_tx_free(struct wiphy *wiphy,
+			struct scatterlist *sglist, int nents);
 
-#ifdef CONFIG_SWT6621S_GKI_DRV
+#ifdef CONFIG_SWT6621S_GKI
 void skw_call_rcu(void *skw, struct rcu_head *head, rcu_callback_t func);
 #endif
 

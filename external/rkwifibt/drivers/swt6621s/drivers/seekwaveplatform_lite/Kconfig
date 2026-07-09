@@ -19,7 +19,7 @@ config SKW_NO_CONFIG
 
 #seekwave`s wifi bluetooth device driver etc
 if  SEEKWAVE_BSP_DRIVERS
-source "drivers/misc/seekwaveplatform_lite/usb/Kconfig"
-source "drivers/misc/seekwaveplatform_lite/sdio/Kconfig"
-source "drivers/misc/seekwaveplatform_lite/skwutil/Kconfig"
+source "drivers/net/wireless/rockchip_wlan/swt6621s/seekwaveplatform_lite/usb/Kconfig"
+source "drivers/net/wireless/rockchip_wlan/swt6621s/seekwaveplatform_lite/sdio/Kconfig"
+source "drivers/net/wireless/rockchip_wlan/swt6621s/seekwaveplatform_lite/skwutil/Kconfig"
 endif

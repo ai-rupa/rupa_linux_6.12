@@ -18,6 +18,8 @@
 #ifndef __SKW_VENDOR_H__
 #define __SKW_VENDOR_H__
 
+#include <linux/version.h>
+
 #define OUI_GOOGLE	                         0x001A11
 
 /* Vendor Command ID */
@@ -32,9 +34,14 @@
 #define SKW_VID_GET_RING_BUFFER_DATA             0x1405
 #define SKW_VID_GET_LOGGER_FEATURE               0x1406
 #define SKW_VID_GET_WAKE_REASON_STATS            0x140D
-#define SKW_VID_GET_APF_CAPABILITIES             0x1800
+#define SKW_VID_GET_APF_CAPA                     0x1800
+#define SKW_VID_SET_APF                          0x1801
+#define SKW_VID_GET_APF                          0x1802
 #define SKW_VID_SELECT_TX_POWER_SCENARIO         0x1900
 #define SKW_VID_GET_USABLE_CHANS                 0x2000
+
+#define SKW_APF_VER                              4
+#define SKW_APF_BUFFER_LEN                       1024
 
 /* ATTR IE Start */
 
@@ -156,7 +163,17 @@ struct skw_usable_chan_req {
 	u32 resvd;
 };
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
 void skw_vendor_init(struct wiphy *wiphy);
 void skw_vendor_deinit(struct wiphy *wiphy);
+#else
+static inline void skw_vendor_init(struct wiphy *wiphy)
+{
+}
+
+static inline void skw_vendor_deinit(struct wiphy *wiphy)
+{
+}
+#endif
 
 #endif

@@ -37,6 +37,8 @@
 #define SKW_PCIE_RX_DESC_HDR_OFFSET       44
 #define SKW_PCIE_RX_DESC_MSDU_OFFSET      8
 
+#define CalRssiVal(RssiInit) (RssiInit & BIT(10) ? ((s16)((u16)(RssiInit>>3) | 0xFF00)) : ((s16)(RssiInit>>3)))
+
 #ifndef ETH_P_80211_RAW
 #define ETH_P_80211_RAW (ETH_P_ECONET + 1)
 #endif
@@ -58,6 +60,7 @@ struct skw_skb_rxcb {
 	u8 skw_created;
 	u8 lmac_id;
 	u8 skip_replay_detect;
+	u8 gtk_idx;
 };
 
 struct skw_drop_sn_info {
@@ -248,6 +251,8 @@ struct skw_sniffer_desc {
 struct skw_radiotap_desc {
 	struct ieee80211_radiotap_header radiotap_hdr;
 	u8 radiotap_flag;
+	s16 rt_antenna_signal;
+	u8 rt_antenna;
 } __packed;
 
 static inline void skw_snap_unmatch_handler(struct sk_buff *skb)
@@ -285,7 +290,7 @@ static inline bool is_skw_monitor_data(struct skw_core *skw, void *data)
 	skw_detail("sniffer flag:%d\n", desc->sniff_flag);
 
 	if (desc->sniff_flag) {
-		skw_detail("recv sniffer data, desc len:%u\n", sizeof(struct skw_sniffer_desc));
+		skw_detail("recv sniffer data, desc len:%ld\n", sizeof(struct skw_sniffer_desc));
 		return true;
 	}
 

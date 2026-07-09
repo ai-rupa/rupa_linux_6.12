@@ -30,13 +30,13 @@ enum SKW_TDLS_PEER_CAPA {
 };
 
 #ifdef CONFIG_SWT6621S_TDLS
-int skw_tdls_build_send_mgmt(struct skw_core *skw, struct net_device *ndev,
+int skw_tdls_build_send_mgmt(struct skw_core *skw, struct net_device *dev,
 			const u8 *peer, u8 action_code, u8 dialog_token,
 			u16 status_code, u32 peer_cap, bool initiator,
 			const u8 *ies, size_t ies_len);
 #else
 static inline int skw_tdls_build_send_mgmt(struct skw_core *skw,
-			struct net_device *ndev, const u8 *peer, u8 action,
+			struct net_device *dev, const u8 *peer, u8 action,
 			u8 token, u16 status, u32 peer_capa, bool initiator,
 			const u8 *ies, size_t ies_len)
 {

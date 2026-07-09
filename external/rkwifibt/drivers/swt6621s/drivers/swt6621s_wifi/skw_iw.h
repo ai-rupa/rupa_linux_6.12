@@ -31,14 +31,14 @@
 
 struct skw_keep_active_rule_data {
 	u16 is_chksumed;
-	u8 payload[0];
+	u8 payload[];
 } __packed;
 struct skw_keep_active_rule {
 	u32 keep_interval;
 	u8 send_cnt:7;
 	u8 always:1;
 	u8 payload_len;
-	struct skw_keep_active_rule_data data[0];
+	struct skw_keep_active_rule_data data[];
 } __packed;
 
 struct skw_keep_active_setup {
@@ -49,7 +49,7 @@ struct skw_keep_active_setup {
 
 struct skw_keep_active_param {
 	u8 rule_num;
-	struct skw_keep_active_rule rules[0];
+	struct skw_keep_active_rule rules[];
 } __packed;
 
 typedef int (*skw_at_handler)(struct skw_core *skw, void *param,
@@ -341,5 +341,39 @@ struct skw_tlv_set_normal_scan_with_acs {
 	u8 en;
 } __packed;
 
+//TLV 167
+struct skw_tlv_set_tid_tx_life_time {
+	u16 be_tx_life_time;
+	u16 bk_tx_life_time;
+	u16 vi_tx_life_time;
+	u16 vo_tx_life_time;
+} __packed;
+
 const void *skw_iw_handlers(void);
+
+#ifdef CONFIG_WEXT_PRIV
+u8 skw_wow_filter_remap_idx(u8 map_count);
+void skw_tx_dump_tcp_data(struct skw_iface *iface, struct sk_buff *skb);
+void skw_rx_dump_tcp_data(struct skw_iface *iface, struct sk_buff *skb);
+u32 skw_fill_tcpalive_offload_info(struct wiphy *wiphy, u8 *tcp_off);
+#else
+static inline u8 skw_wow_filter_remap_idx(u8 map_count)
+{
+	return 0;
+}
+
+static inline void skw_tx_dump_tcp_data(struct skw_iface *iface, struct sk_buff *skb)
+{
+}
+
+static inline void skw_rx_dump_tcp_data(struct skw_iface *iface, struct sk_buff *skb)
+{
+}
+
+static inline u32 skw_fill_tcpalive_offload_info(struct wiphy *wiphy, u8 *tcp_off)
+{
+	return 0;
+}
+#endif
+
 #endif

@@ -16,6 +16,15 @@
  ******************************************************************************/
 
 #include <linux/skbuff.h>
+#include <linux/version.h>
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 9, 0)
+#include <net/rps.h>
+#endif
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
+#include <net/netdev_rx_queue.h>
+#endif
 
 #include "skw_core.h"
 #include "skw_cfg80211.h"
@@ -58,13 +67,14 @@ static void skw_ap_acl_check(struct wiphy *wiphy, struct skw_iface *iface)
 	}
 }
 
-static void skw_work_async_adma_tx_free(struct skw_core *skw,
-				struct scatterlist *sglist, int nents)
+void skw_work_async_adma_tx_free(struct wiphy *wiphy,
+			struct scatterlist *sglist, int nents)
 {
 	int idx;
 	struct scatterlist *sg;
 	struct sk_buff *skb;
 	unsigned long *skb_addr, *sg_addr;
+	struct skw_core *skw = wiphy_priv(wiphy);
 
 	for_each_sg(sglist, sg, nents, idx) {
 		sg_addr = (unsigned long *)sg_virt(sg);
@@ -74,6 +84,7 @@ static void skw_work_async_adma_tx_free(struct skw_core *skw,
 		if (!virt_addr_valid(skb)) {
 			/* Invalid skb pointer */
 			skw_dbg("wrong address p_data:0x%lx from FW\n", (unsigned long)sg_addr);
+
 			continue;
 		}
 
@@ -96,8 +107,8 @@ int skw_init_rps_map(struct skw_iface *iface)
 	struct netdev_rx_queue *queue = iface->ndev->_rx;
 
 	map = kzalloc(max_t(unsigned int,
-			    RPS_MAP_SIZE(cpumask_weight(cpu_online_mask)), L1_CACHE_BYTES),
-		      GFP_KERNEL);
+			    RPS_MAP_SIZE(cpumask_weight(cpu_online_mask)),
+			    L1_CACHE_BYTES), GFP_KERNEL);
 	if (!map)
 		return -ENOMEM;
 
@@ -150,46 +161,77 @@ static int skw_work_process(struct wiphy *wiphy, struct skw_iface *iface,
 //	int *umask;
 	struct skw_mgmt_status *status;
 
-	if (!iface) {
-		ret = -ENOENT;
-		goto exit;
-	}
-
 	skw_log(SKW_WORK, "[%s]: iface: %d, %s (id: %d)\n",
 		SKW_TAG_WORK, iface ? iface->id : -1, name, work_id);
 
 	switch (work_id) {
 	case SKW_WORK_BA_ACTION:
+		if (!iface) {
+			skw_err("invalid iface, work id: %d\n", work_id);
+			break;
+		}
+
 		ret = skw_send_msg(wiphy, iface->ndev, SKW_CMD_BA_ACTION,
 				data, data_len, NULL, 0);
 		break;
 
 	case SKW_WORK_SCAN_TIMEOUT:
+		if (!iface) {
+			skw_err("invalid iface, work id: %d\n", work_id);
+			break;
+		}
+
 		skw_scan_done(skw, iface, true);
 		break;
 
 	case SKW_WORK_ACL_CHECK:
+		if (!iface) {
+			skw_err("invalid iface, work id: %d\n", work_id);
+			break;
+		}
+
 		skw_ap_acl_check(wiphy, iface);
 		break;
 
 	case SKW_WORK_SET_MC_ADDR:
+		if (!iface) {
+			skw_err("invalid iface, work id: %d\n", work_id);
+			break;
+		}
+
 		ret = skw_send_msg(wiphy, iface->ndev, SKW_CMD_SET_MC_ADDR,
 				data, data_len, NULL, 0);
 		break;
 
 	case SKW_WORK_SET_IP:
+		if (!iface) {
+			skw_err("invalid iface, work id: %d\n", work_id);
+			break;
+		}
+
 		ret = skw_send_msg(wiphy, iface->ndev, SKW_CMD_SET_IP,
 				data, data_len, NULL, 0);
 		break;
 
 	case SKW_WORK_TX_FREE:
 		node = data;
-		skw_work_async_adma_tx_free(skw, node->sg, node->nents);
+
+		if (!node) {
+			skw_err("invalid iface, work id: %d\n", work_id);
+			break;
+		}
+
+		skw_work_async_adma_tx_free(wiphy, node->sg, node->nents);
 
 		break;
 
 	case SKW_WORK_SETUP_TXBA:
 		ba = data;
+
+		if (!iface || !ba) {
+			skw_err("invalid iface, work id: %d\n", work_id);
+			break;
+		}
 
 		skw_dbg("%s, iface: %d, peer: %d, tid: %d\n",
 			name, iface->id, ba->peer_idx, ba->tid);
@@ -214,26 +256,26 @@ static int skw_work_process(struct wiphy *wiphy, struct skw_iface *iface,
 		break;
 
 	case SKW_WORK_TX_ETHER_DATA:
+		if (!iface) {
+			skw_err("invalid iface, work id: %d\n", work_id);
+			break;
+		}
+
 		ret = skw_send_msg(wiphy, iface->ndev, SKW_CMD_TX_DATA_FRAME,
 				data, data_len, NULL, 0);
 		break;
-#if 0
-	case SKW_WORK_RADAR_PULSE:
-		skw_dfs_radar_pulse_event(wiphy, iface, data, data_len);
-		break;
-#endif
 
 	case SKW_WORK_IFACE_RPS_INIT:
-#if 0
-#ifdef CONFIG_RPS
-		umask = (int *)data;
-		skw_init_rps_map(iface, *umask);
-#endif
-#endif
 		break;
 
 	case SKW_WORK_SPLIT_MGMT_TX_STATUS:
 		status = data;
+
+		if (!iface || !status) {
+			skw_err("invalid iface, work id: %d\n", work_id);
+			break;
+		}
+
 		skw_mgmt_tx_status(iface, status->mgmt_status_cookie,
 			status->mgmt_status_data, status->mgmt_status_data_len, true);
 
@@ -247,7 +289,6 @@ static int skw_work_process(struct wiphy *wiphy, struct skw_iface *iface,
 		break;
 	}
 
-exit:
 	return ret;
 }
 
@@ -268,7 +309,8 @@ static void skw_work(struct work_struct *work)
 	struct skw_core *skw = container_of(work, struct skw_core, work);
 	struct wiphy *wiphy = priv_to_wiphy(skw);
 
-	while (READ_ONCE(skw->work_data.flags) || skb_queue_len(&skw->work_data.work_list)) {
+	while (READ_ONCE(skw->work_data.flags) ||
+	       skb_queue_len(&skw->work_data.work_list)) {
 
 		if (test_bit(SKW_WORK_FLAG_RCU_FREE, &skw->work_data.flags)) {
 			struct rcu_head *head;
@@ -301,7 +343,7 @@ static void skw_work(struct work_struct *work)
 
 		skb = skb_dequeue(&skw->work_data.work_list);
 		cb = SKW_WORK_CB(skb);
-		if (skb && cb)
+		if (cb)
 			skw_work_process(wiphy, cb->iface, cb->id,
 				skb->data, skb->len, cb->name);
 
@@ -334,7 +376,7 @@ void skw_unlock_schedule(struct wiphy *wiphy)
 	//schedule_work(&skw->work);
 }
 
-#ifdef CONFIG_SWT6621S_GKI_DRV
+#ifdef CONFIG_SWT6621S_GKI
 void skw_call_rcu(void *core, struct rcu_head *head, rcu_callback_t func)
 {
 	struct skw_core *skw = core;
@@ -362,6 +404,9 @@ int __skw_queue_work(struct wiphy *wiphy, struct skw_iface *iface,
 	struct skw_core *skw = wiphy_priv(wiphy);
 	struct skw_work_cb *wcb;
 	struct sk_buff *skb;
+
+	if (!atomic_read(&skw->work_data.enabled))
+		return -EINVAL;
 
 	skb = dev_alloc_skb(dat_len);
 	if (!skb)
@@ -408,11 +453,15 @@ void skw_work_init(struct wiphy *wiphy)
 	skb_queue_head_init(&skw->work_data.work_list);
 	INIT_WORK(&skw->work, skw_work);
 	INIT_WORK(&skw->work_unlock, skw_work_unlock);
+
+	atomic_set(&skw->work_data.enabled, 1);
 }
 
 void skw_work_deinit(struct wiphy *wiphy)
 {
 	struct skw_core *skw = wiphy_priv(wiphy);
+
+	atomic_set(&skw->work_data.enabled, 0);
 
 	flush_work(&skw->work_unlock);
 	flush_work(&skw->work);

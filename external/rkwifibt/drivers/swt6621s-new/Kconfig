@@ -1,0 +1,3 @@
+source "drivers/net/wireless/rockchip_wlan/swt6621s/swtbt4l/Kconfig"
+source "drivers/net/wireless/rockchip_wlan/swt6621s/swt6621s_wifi/Kconfig"
+source "drivers/net/wireless/rockchip_wlan/swt6621s/seekwaveplatform_lite/Kconfig"

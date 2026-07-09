@@ -31,10 +31,14 @@
 #include "skw_rx.h"
 #include "skw_work.h"
 #include "skw_tx.h"
+#include "skw_iw.h"
 #include "trace.h"
+#include "skw_apf_interpreter.h"
+#include "skw_vendor.h"
 
-#define SKW_PN_U48(x)          (*(u64 *)(x) & 0xffffffffffff)
-#define SKW_PN_U32(x)          (*(u64 *)(x) & 0xffffffff)
+#define SKW_PN_U48(x)          ({u64 d = 0; memcpy(&d, x, 6); d & 0xffffffffffff; })
+#define SKW_PN_U32(x)          ({u64 d = 0; memcpy(&d, x, 4); d & 0xffffffff; })
+
 #define SKW_MSDU_HDR_LEN       6 /* ETH_HLEN - SKW_SNAP_HDR_LEN */
 
 static u8 rx_reorder_flag;
@@ -173,69 +177,6 @@ static inline struct skw_rx_desc *skw_rx_desc_hdr(struct sk_buff *skb)
 	return (struct skw_rx_desc *)(skb->data - SKW_SKB_RXCB(skb)->rx_desc_offset);
 }
 
-void skw_tcpopt_window_handle(struct sk_buff *skb)
-{
-	unsigned int tcphoff, tcp_hdrlen, length;
-	u8 *ptr;
-	__sum16	check;
-	struct tcphdr *tcph;
-	struct ethhdr *eth = eth_hdr(skb);
-	struct iphdr *iph = (struct iphdr *)(skb->data);
-
-	if (eth->h_proto == htons(ETH_P_IP) && iph->protocol == IPPROTO_TCP) {
-
-		if (skb->len < ntohs(iph->tot_len))
-			return;
-
-		tcphoff = iph->ihl * 4;
-		tcph = (struct tcphdr *)(skb->data + tcphoff);
-
-		if (!(tcp_flag_word(tcph)&TCP_FLAG_SYN))
-			return;
-
-		//skw_dbg("skb->len:%d tot_len:%d\n", skb->len, ntohs(iph->tot_len));
-
-		tcp_hdrlen = tcph->doff*4;
-		length = (tcph->doff-5)*4;
-		ptr = (u8 *)tcph + tcp_hdrlen - length;
-		while (length > 0) {
-			int opcode = *ptr++;
-			int opsize;
-
-			switch (opcode) {
-			case TCPOPT_EOL:
-				return;
-			case TCPOPT_NOP:	/* Ref: RFC 793 section 3.1 */
-				length--;
-				continue;
-			default:
-				if (length < 2)
-					return;
-				opsize = *ptr++;
-				if (opsize < 2) /* "silly options" */
-					return;
-				if (opsize > length)
-					return;	/* don't parse partial options */
-
-				if (opcode == TCPOPT_WINDOW
-					&& opsize == TCPOLEN_WINDOW) {
-					//skw_dbg("val:%d\n", *ptr);
-					if (*ptr < 6) {
-						*ptr = 6;
-						tcph->check = 0;
-						check = csum_partial(tcph, tcp_hdrlen, 0);
-						tcph->check = csum_tcpudp_magic(iph->saddr,
-							iph->daddr, tcp_hdrlen, IPPROTO_TCP, check);
-					}
-				}
-
-				ptr += opsize - 2;
-				length -= opsize;
-			}
-		}
-	}
-}
-
 /*
  * To verify HW checksum for ipv6
  */
@@ -321,6 +262,11 @@ static void skw_csum_verify(struct skw_rx_desc *desc, struct sk_buff *skb)
 	}
 }
 
+static inline bool skw_ipv6_addr_is_multicast(const struct in6_addr *addr)
+{
+	return (addr->s6_addr32[0] & htonl(0xFF000000)) == htonl(0xFF000000);
+}
+
 static void skw_rptr_hdl(struct skw_iface *iface, struct sk_buff *skb)
 {
 	int mcast;
@@ -355,15 +301,14 @@ static void skw_rptr_hdl(struct skw_iface *iface, struct sk_buff *skb)
 		if (ntohs(eth->h_proto) == ETH_P_IP) {
 			iph = (struct iphdr *)(skb->data + sizeof(struct ethhdr));
 
-			if (ipv4_is_multicast(iph->daddr) && !mcast) {
+			if (ipv4_is_multicast(iph->daddr) && !mcast)
 				ip_eth_mc_map(iph->daddr, eth->h_dest);
-			}
+
 		} else if (ntohs(eth->h_proto) == ETH_P_IPV6) {
 			ip6h = (struct ipv6hdr *)(skb->data + sizeof(struct ethhdr));
 
-			if (ipv6_addr_is_multicast(&ip6h->daddr) && !mcast) {
+			if (skw_ipv6_addr_is_multicast(&ip6h->daddr) && !mcast)
 				ipv6_eth_mc_map(&ip6h->daddr, eth->h_dest);
-			}
 		}
 	}
 }
@@ -371,14 +316,33 @@ static void skw_rptr_hdl(struct skw_iface *iface, struct sk_buff *skb)
 static void skw_deliver_skb(struct skw_iface *iface, struct sk_buff *skb)
 {
 	struct sk_buff *tx_skb = NULL;
-	struct ethhdr *eth = (struct ethhdr *)skb->data;
-	struct skw_rx_desc *desc = skw_rx_desc_hdr(skb);
-	int mcast;
-	unsigned int len = skb->len;
+	struct ethhdr *eth = NULL;
+	struct skw_rx_desc *desc = NULL;
+	int mcast = 0;
+	unsigned int len = 0;
 	int ret = NET_RX_DROP;
+
+	if (!skb)
+		return;
+
+	eth = (struct ethhdr *)skb->data;
+	desc = skw_rx_desc_hdr(skb);
+	len = skb->len;
 
 	if (ether_addr_equal(eth->h_source, iface->addr))
 		goto stats;
+
+//TODO  for optimal rx performance
+#if 0
+	spin_lock_bh(&iface->apf.lock);
+	if (iface->apf.apf_buff && !accept_packet(iface->apf.apf_buff, iface->apf.apf_program_len,
+		SKW_APF_BUFFER_LEN, skb->data, len, jiffies_to_msecs(jiffies - iface->apf.apf_time)/1000)) {
+		spin_unlock_bh(&iface->apf.lock);
+		skw_chip_detail(skw->idx, "APF rule: drop pkt, proto=0x%X.\n", ntohs(eth->h_proto));
+		goto stats;
+	}
+	spin_unlock_bh(&iface->apf.lock);
+#endif
 
 	if (unlikely(!desc->snap_match)) {
 		skw_detail("snap unmatch, sn: %d\n", desc->sn);
@@ -438,6 +402,7 @@ static void skw_deliver_skb(struct skw_iface *iface, struct sk_buff *skb)
 	ret = NET_RX_SUCCESS;
 
 	skw_detail("skb recv delta %lld us\n", ktime_to_us(net_timedelta(skb->tstamp)));
+	skw_rx_dump_tcp_data(iface, skb);
 
 	#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 18, 0)
 		netif_rx_ni(skb);
@@ -615,7 +580,7 @@ skw_rx_defragment(struct skw_core *skw, struct skw_iface *iface,
 		return NULL;
 
 	pskb = __skb_dequeue(&entry->skb_list);
-	if (!pskb)
+	if (pskb == NULL)
 		return NULL;
 
 	if (skb_tailroom(pskb) < entry->pending_len) {
@@ -677,10 +642,10 @@ static int skw_pn_allowed(struct skw_core *skw, struct skw_key *key, struct skw_
 		/* SKW_PN_U48(desc->pn) = 0 allow workaround some devices pn=0*/
 
 		/* failed that PN less than or equal to rx_pn */
-		skw_warn("seq: %d, rx_pn: %llu, pn: %llu\n",
-			desc->sn, rx_pn, pn);
+		skw_detail("seq: %d, pn: %llu, rx pn: %llu, queue: %d\n",
+			 desc->sn, rx_pn, pn, queue);
 
-		return -EINVAL;
+		return -ERANGE;
 	}
 
 	return 0;
@@ -694,6 +659,7 @@ static int skw_replay_detect(struct skw_core *skw, struct skw_iface *iface,
 	struct skw_key *key;
 	struct skw_key_conf *conf;
 	struct skw_peer_ctx *ctx;
+	struct skw_tid_rx *tid_rx;
 	struct skw_rx_desc *desc = skw_rx_desc_hdr(skb);
 
 	if (SKW_SKB_RXCB(skb)->skip_replay_detect)
@@ -705,17 +671,21 @@ static int skw_replay_detect(struct skw_core *skw, struct skw_iface *iface,
 		return -EINVAL;
 
 	if (desc->is_mc_addr) {
-		return 0;
-#if 0
+		key_idx = SKW_SKB_RXCB(skb)->gtk_idx;
+		if (key_idx > 3)
+			return 0;
+
 		conf = &iface->key_conf;
-		if (!conf->installed_bitmap)
+		if (!(conf->installed_bitmap & BIT(key_idx))) {
 			conf = &ctx->peer->gtk_conf;
-#endif
+			if (!(conf->installed_bitmap & BIT(key_idx)))
+				return 0;
+		}
 	} else {
 		conf = &ctx->peer->ptk_conf;
+		key_idx = skw_key_idx(conf->installed_bitmap);
 	}
 
-	key_idx = skw_key_idx(conf->installed_bitmap);
 	if (key_idx == SKW_INVALID_ID)
 		return 0;
 
@@ -743,19 +713,35 @@ static int skw_replay_detect(struct skw_core *skw, struct skw_iface *iface,
 	if (queue < 0)
 		return 0;
 
+	if (!desc->is_qos_data)
+		queue = SKW_NUM_TIDS - 1;
+
 	rcu_read_lock();
 
 	key = rcu_dereference(conf->key[key_idx]);
 	if (key) {
-#if 0
-		skw_detail("inst: %d, peer: %d, tid: %d, key_idx: %d, queue: %d, pn: 0x%llx, rx pn: 0x%llx\n",
-			desc->inst_id, desc->peer_idx, desc->tid, key_idx, queue,
-			SKW_PN_U48(key->rx_pn[queue]), SKW_PN_U48(desc->pn));
-#endif
-
 		ret = skw_pn_allowed(skw, key, desc, queue);
-		if (!ret)
+		if (!ret) {
 			memcpy(key->rx_pn[queue], desc->pn, SKW_PN_LEN);
+		} else {
+			u64 pn, rx_pn;
+
+			if (skw->hw.bus == SKW_BUS_SDIO && test_bit(SKW_FLAG_FW_PN_REUSE, &skw->flags)) {
+				pn = SKW_PN_U32(desc->pn);
+				rx_pn = SKW_PN_U32(key->rx_pn[queue]);
+			} else {
+				pn = SKW_PN_U48(desc->pn);
+				rx_pn = SKW_PN_U48(key->rx_pn[queue]);
+			}
+
+			skw_warn("inst: %d, peer: %d, tid: %d, mc: %d, key_idx: %d, queue: %d, pn: 0x%llx, rx pn: 0x%llx, gtk_idx: %d, ret: %lld\n",
+					desc->inst_id, desc->peer_idx, desc->tid, desc->is_mc_addr,
+					key_idx, queue, rx_pn, pn, atomic_read(&iface->gtk_idx), ret);
+
+			tid_rx = rcu_dereference(ctx->peer->reorder[desc->tid].tid_rx);
+			if (tid_rx)
+				tid_rx->stats.pn_err_cnt++;
+		}
 	}
 
 	rcu_read_unlock();
@@ -830,7 +816,7 @@ static void skw_set_reorder_timer(struct skw_tid_rx *tid_rx, u16 sn)
 	}
 
 	timeout = SKW_SKB_RXCB(skb_peek(list))->rx_time +
-		  msecs_to_jiffies(reorder->skw->config.global.reorder_timeout);
+		  msecs_to_jiffies(reorder->skw->config->global.reorder_timeout);
 
 	trace_skw_rx_set_reorder_timer(reorder->inst, reorder->peer_idx,
 				reorder->tid, sn, jiffies, timeout);
@@ -886,7 +872,7 @@ static inline bool is_skw_msdu_timeout(struct skw_core *skw, struct sk_buff_head
 
 	skb = skb_peek(list);
 	if (skb) {
-		timeout = SKW_SKB_RXCB(skb)->rx_time + msecs_to_jiffies(skw->config.global.reorder_timeout);
+		timeout = SKW_SKB_RXCB(skb)->rx_time + msecs_to_jiffies(skw->config->global.reorder_timeout);
 		if (time_after(jiffies, timeout))
 			return true;
 	}
@@ -900,6 +886,9 @@ static void skw_reorder_force_release(struct skw_tid_rx *tid_rx,
 {
 	u16 index, target;
 	struct sk_buff *skb, *pskb;
+	u8 inst = 0, peer_idx = 0;
+	u16 tid = 0;
+	u16 gap = 0;
 
 	if (!tid_rx)
 		return;
@@ -908,7 +897,13 @@ static void skw_reorder_force_release(struct skw_tid_rx *tid_rx,
 
 	smp_rmb();
 
-	if (timer_pending(&tid_rx->reorder->timer) &&
+	if (tid_rx->reorder) {
+		inst = tid_rx->reorder->inst;
+		peer_idx = tid_rx->reorder->peer_idx;
+		tid = tid_rx->reorder->tid;
+	}
+
+	if (tid_rx->reorder && timer_pending(&tid_rx->reorder->timer) &&
 	    atomic_read(&tid_rx->reorder->ref_cnt) == tid_rx->ref_cnt &&
 	    (ieee80211_sn_less(tid_rx->reorder->expired.sn, to_sn) ||
 	     ieee80211_sn_less(to_sn, tid_rx->win_start)))
@@ -921,9 +916,13 @@ static void skw_reorder_force_release(struct skw_tid_rx *tid_rx,
 		list = &tid_rx->reorder_buf[index];
 
 		if (!tid_rx->stored_num) {
+			gap += ieee80211_sn_sub(to_sn, tid_rx->win_start);
 			tid_rx->win_start = to_sn;
 			break;
 		}
+
+		if (skb_queue_empty(list))
+			gap++;
 
 		skb = skb_peek(list);
 		if (skb) {
@@ -948,12 +947,15 @@ static void skw_reorder_force_release(struct skw_tid_rx *tid_rx,
 
 		tid_rx->win_start = ieee80211_sn_inc(tid_rx->win_start);
 
-		trace_skw_rx_force_release(tid_rx->reorder->inst,
-					tid_rx->reorder->peer_idx,
-					tid_rx->reorder->tid,
+		trace_skw_rx_force_release(inst, peer_idx, tid,
 					index, tid_rx->win_start, target,
 					tid_rx->stored_num, reason);
 	}
+
+	if (reason == SKW_RELEASE_EXPIRED)
+		tid_rx->stats.expired_cnt += gap;
+	else if (reason == SKW_RELEASE_OOB)
+		tid_rx->stats.oob_cnt += gap;
 }
 
 /*
@@ -1000,11 +1002,11 @@ static void skw_reorder_release(struct skw_reorder_rx *reorder,
 		/* release timeout skb and reset reorder timer */
 		if (!release) {
 			if (!is_skw_msdu_timeout(reorder->skw, list)) {
-				skw_set_reorder_timer(tid_rx, win_start + i);
+				skw_set_reorder_timer(tid_rx, ieee80211_sn_add(win_start, i));
 				break;
 			}
 
-			skw_reorder_force_release(tid_rx, win_start + i,
+			skw_reorder_force_release(tid_rx, ieee80211_sn_add(win_start, i),
 					release_list, SKW_RELEASE_EXPIRED);
 			release = true;
 			continue;
@@ -1035,14 +1037,14 @@ static void skw_reorder_release(struct skw_reorder_rx *reorder,
 
 				trace_skw_rx_reorder_release(reorder->inst,
 						reorder->peer_idx, reorder->tid,
-						win_start, win_start + i,
+						win_start, ieee80211_sn_add(win_start, i),
 						index, tid_rx->win_start,
 						tid_rx->stored_num);
 
 			} else {
 				/* AMSDU not ready and expired */
 				if (!timer_pending(&reorder->timer))
-					skw_set_reorder_timer(tid_rx, win_start + i);
+					skw_set_reorder_timer(tid_rx, ieee80211_sn_add(win_start, i));
 
 				break;
 			}
@@ -1068,6 +1070,9 @@ static void skw_ampdu_reorder(struct skw_core *skw, struct skw_rx_desc *desc,
 	struct ethhdr *eth_hdr = NULL;
 
 #define SKW_RXCB_AMSDU_LAST    BIT(0)
+
+	if (!skb)
+		return;
 
 	if (!rx_reorder_flag) {
 		__skb_queue_tail(release_list, skb);
@@ -1133,6 +1138,7 @@ static void skw_ampdu_reorder(struct skw_core *skw, struct skw_rx_desc *desc,
 			   desc->peer_idx, desc->tid, win_start,
 			   desc->sn, desc->amsdu_idx, desc->msdu_filter);
 
+		tid_rx->stats.dup_cnt++;
 		drop = true;
 		goto out;
 	}
@@ -1291,8 +1297,10 @@ void skw_rx_todo(struct skw_list *todo_list)
 
 		skw_rx_handler(reorder->skw, &release);
 
+		spin_lock_bh(&reorder->todo.lock);
 		trace_skw_rx_expired_release(reorder->inst, reorder->peer_idx,
 					reorder->tid, reorder->todo.seq);
+		spin_unlock_bh(&reorder->todo.lock);
 	}
 
 }
@@ -1365,6 +1373,7 @@ static void skw_netif_monitor_rx(struct skw_core *skw, struct sk_buff *skb)
 {
 	struct skw_iface *iface;
 	struct skw_sniffer_desc *desc;
+	s16 flock_rssi0;
 	struct skw_radiotap_desc *skw_radio_desc;
 	u16 msdu_len;
 	int i;
@@ -1375,6 +1384,8 @@ static void skw_netif_monitor_rx(struct skw_core *skw, struct sk_buff *skb)
 	desc = (struct skw_sniffer_desc *) skb->data;
 
 	msdu_len = desc->mpdu_len;
+	flock_rssi0 = desc->phy_desc.flock_rssi0;
+
 	skw_detail("sniffer mode, len = %d\n", msdu_len);
 	if (unlikely(!msdu_len)) {
 		skw_detail("strip invalid pakcet\n");
@@ -1388,10 +1399,15 @@ static void skw_netif_monitor_rx(struct skw_core *skw, struct sk_buff *skb)
 	skw_radio_desc->radiotap_hdr.it_version = PKTHDR_RADIOTAP_VERSION;
 	skw_radio_desc->radiotap_hdr.it_pad = 0;
 	skw_radio_desc->radiotap_hdr.it_len = sizeof(struct skw_radiotap_desc);
-	skw_radio_desc->radiotap_hdr.it_present = BIT(IEEE80211_RADIOTAP_FLAGS);
+	skw_radio_desc->radiotap_hdr.it_present = cpu_to_le32(
+			(1 << IEEE80211_RADIOTAP_FLAGS) |
+			(1 << IEEE80211_RADIOTAP_DBM_ANTSIGNAL));
 
 	if (skw_radio_desc->radiotap_hdr.it_present & BIT(IEEE80211_RADIOTAP_FLAGS))
 		skw_radio_desc->radiotap_flag = IEEE80211_RADIOTAP_F_FCS;
+
+	skw_radio_desc->rt_antenna_signal = CalRssiVal(flock_rssi0);
+	skw_radio_desc->rt_antenna = 0;
 
 	for (i = 0; i < SKW_NR_IFACE; i++) {
 		iface = skw->vif.iface[i];
@@ -1428,6 +1444,7 @@ static void skw_rx_data_handler(struct skw_core *skw,
 	struct sk_buff_head release_list;
 	struct skw_rx_desc *desc;
 	struct sk_buff *skb;
+	struct skw_iface *iface = NULL;
 
 	__skb_queue_head_init(&release_list);
 
@@ -1453,6 +1470,12 @@ static void skw_rx_data_handler(struct skw_core *skw,
 
 			kfree_skb(skb);
 			continue;
+		}
+
+		if (desc->is_mc_addr) {
+			iface = to_skw_iface(skw, desc->inst_id);
+			if (iface)
+				SKW_SKB_RXCB(skb)->gtk_idx = atomic_read(&iface->gtk_idx);
 		}
 
 		msdu_offset = desc->msdu_offset -
@@ -1505,6 +1528,8 @@ static void skw_free_tid_rx(struct rcu_head *head)
 	__skb_queue_head_init(&release_list);
 	win_end = ieee80211_sn_add(tid_rx->win_start, tid_rx->win_size - 1);
 
+	tid_rx->reorder = NULL;
+
 	rcu_read_lock();
 
 	skw_reorder_force_release(tid_rx, win_end, &release_list,
@@ -1512,7 +1537,7 @@ static void skw_free_tid_rx(struct rcu_head *head)
 
 	rcu_read_unlock();
 
-	skw_rx_handler(tid_rx->reorder->skw, &release_list);
+	skw_rx_handler(tid_rx->skw, &release_list);
 
 	SKW_KFREE(tid_rx->reorder_buf);
 	SKW_KFREE(tid_rx);
@@ -1603,14 +1628,17 @@ int skw_add_tid_rx(struct skw_peer *peer, u16 tid, u16 ssn, u16 buf_size)
 	tid_rx->stored_num = 0;
 	tid_rx->reorder = reorder;
 	tid_rx->ref_cnt = atomic_read(&reorder->ref_cnt);
+	tid_rx->skw = peer->iface->skw;
 
 	reorder->inst = peer->iface->id;
 	reorder->peer_idx = peer->idx;
 	reorder->tid = tid;
 
+	spin_lock_bh(&reorder->todo.lock);
 	reorder->todo.seq = 0;
 	reorder->todo.actived = false;
 	reorder->todo.reason = SKW_RELEASE_INVALID;
+	spin_unlock_bh(&reorder->todo.lock);
 
 	reorder->skw = peer->iface->skw;
 	reorder->peer = peer;
@@ -1643,8 +1671,11 @@ int skw_del_tid_rx(struct skw_peer *peer, u16 tid)
 		else
 			todo_list = &reorder->skw->rx_todo_list;
 
+		spin_lock_bh(&reorder->todo.lock);
 		if (!list_empty(&reorder->todo.list))
 			skw_list_del(todo_list, &reorder->todo.list);
+
+		spin_unlock_bh(&reorder->todo.lock);
 	}
 
 	RCU_INIT_POINTER(reorder->tid_rx, NULL);
@@ -1656,7 +1687,7 @@ int skw_del_tid_rx(struct skw_peer *peer, u16 tid)
 	del_timer_sync(&reorder->timer);
 
 	if (tid_rx) {
-#ifdef CONFIG_SWT6621S_GKI_DRV
+#ifdef CONFIG_SWT6621S_GKI
 		skw_call_rcu(peer->iface->skw, &tid_rx->rcu_head, skw_free_tid_rx);
 #else
 		call_rcu(&tid_rx->rcu_head, skw_free_tid_rx);
@@ -1667,68 +1698,6 @@ int skw_del_tid_rx(struct skw_peer *peer, u16 tid)
 
 	return 0;
 }
-
-#ifdef SKW_RX_WORKQUEUE
-
-void skw_rx_worker(struct work_struct *work)
-{
-	unsigned long flags;
-	struct skw_core *skw;
-	struct sk_buff_head qlist;
-
-	skw = container_of(work, struct skw_core, rx_worker);
-	__skb_queue_head_init(&qlist);
-
-	while (skw->rx_todo_list.count || skb_queue_len(&skw->rx_dat_q)) {
-
-		skw_rx_todo(&skw->rx_todo_list);
-
-		if (skb_queue_empty(&skw->rx_dat_q))
-			return;
-
-		/*
-		 * data frame format:
-		 * RX_DESC_HEADER + ETHERNET
-		 */
-		spin_lock_irqsave(&skw->rx_dat_q.lock, flags);
-		skb_queue_splice_tail_init(&skw->rx_dat_q, &qlist);
-		spin_unlock_irqrestore(&skw->rx_dat_q.lock, flags);
-
-		skw_rx_data_handler(skw, &qlist);
-	}
-}
-
-static int __skw_rx_init(struct skw_core *skw)
-{
-	int cpu;
-	struct workqueue_attrs wq_attrs;
-
-	skw->rx_wq = alloc_workqueue("skw_rxwq.%d", WQ_UNBOUND | __WQ_ORDERED, 1, skw->idx);
-	if (!skw->rx_wq) {
-		skw_err("alloc skwrx_workqueue failed\n");
-		return -EFAULT;
-	}
-
-	memset(&wq_attrs, 0, sizeof(wq_attrs));
-	wq_attrs.nice = MIN_NICE;
-
-	apply_workqueue_attrs(skw->rx_wq, &wq_attrs);
-
-	INIT_WORK(&skw->rx_worker, skw_rx_worker);
-
-	queue_work(skw->rx_wq, &skw->rx_worker);
-
-	return 0;
-}
-
-static void __skw_rx_deinit(struct skw_core *skw)
-{
-	atomic_set(&skw->exit, 1);
-	cancel_work_sync(&skw->rx_worker);
-	destroy_workqueue(skw->rx_wq);
-}
-
-#else
 
 int skw_rx_process(struct skw_core *skw, struct sk_buff_head *rx_dat_q, struct skw_list *rx_todo_list)
 {
@@ -1789,7 +1758,7 @@ static int skw_rx_thread(void *data)
 }
 
 static void *skw_thread_thread(int (*threadfn)(void *data),
-		void *data, const char * namefmt, u8 id)
+		void *data, const char *namefmt, u8 id)
 {
 	void *thread = NULL;
 
@@ -1810,33 +1779,20 @@ static void *skw_thread_thread(int (*threadfn)(void *data),
 static int __skw_rx_init(struct skw_core *skw)
 {
 	skw->rx_thread = skw_thread_thread(skw_rx_thread, skw, "skw_rx.%d", skw->idx);
-	if (IS_ERR(skw->rx_thread)) {
+	if (IS_ERR(skw->rx_thread))
 		return PTR_ERR(skw->rx_thread);
-	}
-
-#if 0
-	init_dummy_netdev(&skw->dummy_dev);
-	skw_compat_netif_napi_add_weight(&skw->dummy_dev, &skw->napi_rx, skw_rx_poll_rx, 64);
-	napi_enable(&skw->napi_rx);
-#endif
 
 	return 0;
 }
 
 static void __skw_rx_deinit(struct skw_core *skw)
 {
-#if 0
-	napi_disable(&skw->napi_rx);
-	netif_napi_del(&skw->napi_rx);
-#endif
 	if (skw->rx_thread) {
 		atomic_set(&skw->exit, 1);
 		kthread_stop(skw->rx_thread);
 		skw->rx_thread = NULL;
 	}
 }
-
-#endif
 
 static inline u8
 skw_port_to_lmacid(struct skw_core *skw, int port, bool multi_dport)
@@ -1953,8 +1909,8 @@ int skw_rx_cb(int port, struct scatterlist *sglist,
 
 			case SKW_MSG_EVENT:
 				if (++skw->skw_event_sn != msg->seq) {
-					skw_warn("invalid event seq: %d, expect: %d\n",
-						 msg->seq, skw->skw_event_sn);
+					skw_warn("invalid event(id: %d) seq: %d, expect: %d\n",
+						 msg->id, msg->seq, skw->skw_event_sn);
 
 					skw_hw_assert(skw, false);
 					kfree_skb(skb);

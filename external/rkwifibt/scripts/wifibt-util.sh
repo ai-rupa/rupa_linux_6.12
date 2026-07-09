@@ -156,8 +156,8 @@ Broadcom	AP6356S	02d0:4356	bcmdhd.ko
 Broadcom	AP6398S	02d0:4359	bcmdhd.ko
 Broadcom	CYW4373	02d0:4373	cyw4373.ko
 Rockchip	RK960	0296:5349	rk960.ko:fw_no_sleep=1	suspend-reload
-SeekWave	SKW6621S 1ffe:6621	swt6621s_wifi.ko
-SeekWave	SKW6621S 3607:6621	swt6621s_wifi.ko
+SeekWave	SKW6621S 1ffe:6621	skw_sdio_lite.ko
+SeekWave	SKW6621S 3607:6621	skw_usb_lite.ko
 EOF
 	sed -i '1! s/[[:space:]]\+/\t/g' "$CHIPS_FILE"
 fi

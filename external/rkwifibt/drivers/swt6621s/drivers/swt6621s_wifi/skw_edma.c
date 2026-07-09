@@ -419,7 +419,7 @@ static void skw_edma_chn_deinit(struct skw_core *skw, struct skw_edma_chn *edma)
 {
 	struct skw_edma_node *node = NULL, *tmp = NULL;
 	unsigned long flags;
-	u8 direction = edma->direction ? DMA_FROM_DEVICE : DMA_TO_DEVICE;
+	u8 direction = 0;
 
 	// TODO: stop edma channel transmit
 
@@ -429,6 +429,8 @@ static void skw_edma_chn_deinit(struct skw_core *skw, struct skw_edma_chn *edma)
 	}
 
 	skw_dbg("chan: %d\n", edma->channel);
+
+	direction = edma->direction ? DMA_FROM_DEVICE : DMA_TO_DEVICE;
 
 	spin_lock_irqsave(&edma->edma_chan_lock, flags);
 	skw->hw_pdata->hw_channel_deinit(edma->channel);
@@ -762,6 +764,7 @@ static void skw_pci_edma_rx_data(struct skw_edma_chn *edma_chn, void *data, int 
 
 		if (unlikely(total_len > SKW_ADMA_BUFF_LEN)) {
 			skw_hw_assert(skw, false);
+
 			skw_warn("total len: %d\n", total_len);
 			skw_warn("rxc node address:%llx skb->data:%llx\n", virt_to_phys(data), virt_to_phys(skb->data));
 			skw_hex_dump("invalid rx skb:", skb->data, skb->len, true);

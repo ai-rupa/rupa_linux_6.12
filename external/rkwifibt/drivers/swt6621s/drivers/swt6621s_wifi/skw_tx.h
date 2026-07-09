@@ -76,7 +76,7 @@ struct skw_tx_desc_hdr {
 	u16 eth_type;
 
 	/* pading for address align */
-	u8 gap[0];
+	u8 gap[];
 } __packed;
 
 struct skw_tx_desc_conf {
@@ -123,11 +123,6 @@ static inline int skw_cmd_tx_allowed(unsigned long flags)
 	return skw_tx_allowed(flags);
 }
 
-#ifdef CONFIG_SWT6621S_SKB_RECYCLE
-void skw_recycle_skb_free(struct skw_core *skw, struct sk_buff *skb);
-int skw_recycle_skb_copy(struct skw_core *skw, struct sk_buff *skb_recycle, struct sk_buff *skb);
-struct sk_buff *skw_recycle_skb_get(struct skw_core *skw);
-#endif
 void skw_skb_kfree(struct skw_core *skw, struct sk_buff *skb);
 
 int skw_pcie_cmd_xmit(struct skw_core *skw, void *data, int data_len);

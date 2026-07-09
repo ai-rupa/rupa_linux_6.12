@@ -328,6 +328,7 @@ init_wifi()
 	case "$WIFIBT_VENDOR" in
 		Broadcom) try_insmod dhd_static_buf ;;
 		Realtek) try_insmod rtkm ;;
+		SeekWave) try_insmod swt6621s_wifi ;;
 	esac
 
 	do_insmod $(echo $WIFIBT_MODULE | tr ':' ' ') || return 1

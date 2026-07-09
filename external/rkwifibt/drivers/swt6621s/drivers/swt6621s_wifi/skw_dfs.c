@@ -438,7 +438,8 @@ static bool pulse_queue_enqueue(struct skw_core *skw, struct skw_pri_detector *p
 	return true;
 }
 
-int skw_dfs_add_pulse(struct wiphy *wiphy, struct net_device *dev, struct skw_pulse_info *pulse)
+int skw_dfs_add_pulse(struct wiphy *wiphy, struct net_device *dev,
+			struct skw_pulse_info *pulse)
 {
 	int i;
 	bool reset = false;
@@ -465,18 +466,18 @@ int skw_dfs_add_pulse(struct wiphy *wiphy, struct net_device *dev, struct skw_pu
 		}
 
 		if ((rule->width_min > pulse->width) || (rule->width_max < pulse->width)) {
-			skw_detail("invalid pulse width, (%d - %d), pulse width: %d\n",
+			skw_dev_detail(dev, "invalid pulse width, (%d - %d), pulse width: %d\n",
 				 rule->width_min, rule->width_max, pulse->width);
 			continue;
 		}
 
 		if (rule->chirp && rule->chirp != pulse->chirp) {
-			skw_detail("invalid chirp\n");
+			skw_dev_detail(dev, "invalid chirp\n");
 			continue;
 		}
 
 		if ((pulse->ts - cfg->pri.last_ts) < rule->max_pri_tolerance) {
-			skw_detail("invalid timestap, %lld - %lld = %lld, max: %d\n",
+			skw_dev_detail(dev, "invalid timestap, %lld - %lld = %lld, max: %d\n",
 				 pulse->ts, cfg->pri.last_ts, pulse->ts - cfg->pri.last_ts,
 				 rule->max_pri_tolerance);
 			continue;
@@ -490,11 +491,17 @@ int skw_dfs_add_pulse(struct wiphy *wiphy, struct net_device *dev, struct skw_pu
 
 		ps = pseq_handler_check_detection(cfg);
 		if (ps) {
-			skw_info("radar deteced, iface dfs flags: 0x%lx\n", iface->sap.dfs.flags);
+			skw_dev_info(dev, "radar detected, iface dfs flags: 0x%lx\n",
+				iface->sap.dfs.flags);
 
 			skw_dfs_deinit(wiphy, dev);
 
-			cfg80211_radar_event(wiphy, &skw->dfs.chan, GFP_KERNEL);
+			if (test_bit(SKW_DFS_FLAG_RADAR_EVT_RPT, &iface->sap.dfs.flags)) {
+					skw_dbg("will report radar event to up layer\n");
+					cfg80211_radar_event(wiphy, &skw->dfs.chan, GFP_KERNEL);
+			} else {
+					skw_dbg("will NOT report radar event to up layer\n");
+			}
 
 			break;
 		}
@@ -511,15 +518,19 @@ static void skw_dfs_cac_work(struct work_struct *work)
 	struct skw_iface *iface = container_of(dwk, struct skw_iface,
 						sap.dfs.cac_work);
 
-	skw_dbg("dev: %s finished\n", netdev_name(iface->ndev));
+	skw_dev_dbg(iface->ndev, "finished\n");
 
 	skw_wdev_lock(&iface->wdev);
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
+	if (iface->wdev.links[0].cac_started) {
+#else
 	if (iface->wdev.cac_started) {
+#endif
 		skw_dfs_stop_cac(priv_to_wiphy(iface->skw), iface->ndev);
 
-		cfg80211_cac_event(iface->ndev, &iface->skw->dfs.chan,
-				NL80211_RADAR_CAC_FINISHED, GFP_KERNEL);
+		skw_compat_cfg80211_cac_event(iface->ndev, &iface->skw->dfs.chan,
+				NL80211_RADAR_CAC_FINISHED, GFP_KERNEL, 0);
 	}
 
 	skw_wdev_unlock(&iface->wdev);
@@ -532,7 +543,7 @@ int skw_dfs_chan_init(struct wiphy *wiphy, struct net_device *dev,
 	struct skw_core *skw = wiphy_priv(wiphy);
 	struct skw_iface *iface = netdev_priv(dev);
 
-	skw_dbg("chan: %d, dfs region: %d, flags: 0x%lx\n",
+	skw_dev_dbg(dev, "chan: %d, dfs region: %d, flags: 0x%lx\n",
 		chandef->chan->hw_value, skw->dfs.region,
 		skw->dfs.flags);
 
@@ -542,7 +553,7 @@ int skw_dfs_chan_init(struct wiphy *wiphy, struct net_device *dev,
 	if (skw->dfs.flags) {
 		if (skw->dfs.chan.width != chandef->width ||
 		    skw->dfs.chan.chan != chandef->chan) {
-			skw_warn("current chan: %d, require chan: %d\n",
+			skw_dev_warn(dev, "current chan: %d, require chan: %d\n",
 				 skw->dfs.chan.chan->hw_value,
 				 chandef->chan->hw_value);
 
@@ -551,14 +562,14 @@ int skw_dfs_chan_init(struct wiphy *wiphy, struct net_device *dev,
 	}
 
 	if (skw->dfs.region >= ARRAY_SIZE(skw_radar_infos)) {
-		skw_err("invalid dfs region: %d\n", skw->dfs.region);
+		skw_dev_err(dev, "invalid dfs region: %d\n", skw->dfs.region);
 
 		return -EINVAL;
 	}
 
 	skw->dfs.info = &skw_radar_infos[skw->dfs.region];
 	if (!skw->dfs.info->nr_cfg || !skw->dfs.info->cfgs) {
-		skw_err("invalid, region: %d, nr_cfg: %d\n",
+		skw_dev_err(dev, "invalid, region: %d, nr_cfg: %d\n",
 			skw->dfs.region, skw->dfs.info->nr_cfg);
 
 		return -EINVAL;
@@ -589,7 +600,7 @@ int skw_dfs_start_cac(struct wiphy *wiphy, struct net_device *dev)
 	struct skw_core *skw = wiphy_priv(wiphy);
 	struct skw_iface *iface = netdev_priv(dev);
 
-	skw_dbg("%s\n", netdev_name(dev));
+	skw_dev_dbg(dev, "traced\n");
 
 	if (!skw->dfs.fw_enabled)
 		return -ENOTSUPP;
@@ -601,6 +612,7 @@ int skw_dfs_start_cac(struct wiphy *wiphy, struct net_device *dev)
 	cac.params.center_chn1 = skw_freq_to_chn(skw->dfs.chan.center_freq1);
 	cac.params.center_chn2 = skw_freq_to_chn(skw->dfs.chan.center_freq2);
 	cac.params.band_width = to_skw_bw(skw->dfs.chan.width);
+	cac.params.band = 1;
 	cac.params.region = skw->dfs.region;
 	cac.params.time_ms = iface->sap.dfs.cac_time_ms;
 
@@ -608,6 +620,7 @@ int skw_dfs_start_cac(struct wiphy *wiphy, struct net_device *dev)
 	if (!ret) {
 		set_bit(SKW_DFS_FLAG_CAC_MODE, &iface->sap.dfs.flags);
 		set_bit(SKW_DFS_FLAG_CAC_MODE, &skw->dfs.flags);
+		set_bit(SKW_DFS_FLAG_RADAR_EVT_RPT, &iface->sap.dfs.flags);
 	}
 
 	return ret;
@@ -619,7 +632,7 @@ int skw_dfs_stop_cac(struct wiphy *wiphy, struct net_device *dev)
 	struct skw_core *skw = wiphy_priv(wiphy);
 	struct skw_iface *iface = netdev_priv(dev);
 
-	skw_dbg("%s\n", netdev_name(dev));
+	skw_dev_dbg(dev, "traced\n");
 
 	if (!skw->dfs.fw_enabled)
 		return -ENOTSUPP;
@@ -640,7 +653,7 @@ int skw_dfs_start_monitor(struct wiphy *wiphy, struct net_device *dev)
 	struct skw_core *skw = wiphy_priv(wiphy);
 	struct skw_iface *iface = netdev_priv(dev);
 
-	skw_dbg("%s\n", netdev_name(dev));
+	skw_dev_dbg(dev, "traced\n");
 
 	if (!skw->dfs.fw_enabled)
 		return -ENOTSUPP;
@@ -663,7 +676,7 @@ int skw_dfs_stop_monitor(struct wiphy *wiphy, struct net_device *dev)
 	struct skw_core *skw = wiphy_priv(wiphy);
 	struct skw_iface *iface = netdev_priv(dev);
 
-	skw_dbg("%s\n", netdev_name(dev));
+	skw_dev_dbg(dev, "traced\n");
 
 	if (!skw->dfs.fw_enabled)
 		return -ENOTSUPP;
@@ -711,8 +724,8 @@ int skw_dfs_deinit(struct wiphy *wiphy, struct net_device *dev)
 
 		skw_dfs_stop_cac(wiphy, dev);
 
-		cfg80211_cac_event(dev, &skw->dfs.chan,
-				NL80211_RADAR_CAC_ABORTED, GFP_KERNEL);
+		skw_compat_cfg80211_cac_event(dev, &skw->dfs.chan,
+				NL80211_RADAR_CAC_ABORTED, GFP_KERNEL, 0);
 	}
 
 	if (test_bit(SKW_DFS_FLAG_MONITOR_MODE, &iface->sap.dfs.flags))

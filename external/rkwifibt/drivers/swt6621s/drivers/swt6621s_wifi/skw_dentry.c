@@ -20,15 +20,18 @@
 #include "skw_dentry.h"
 #include "skw_compat.h"
 #include "version.h"
+#include "skw_mdnsoffload.h"
+
+#define PROC_SKWIFI_NAME			"skwifid"
+
 
 static struct dentry *skw_debugfs_root;
 static struct proc_dir_entry *skw_proc_root;
 
-
 static int skw_proc_show(struct seq_file *seq, void *v)
 {
-#define SKW_CONFIG_INT(conf)    seq_printf(seq, "%s=%d\n", #conf, conf)
-#define SKW_CONFIG_STRING(conf) seq_printf(seq, "%s=\"%s\"\n", #conf, conf)
+#define SKW_CONFIG_INT(conf)      seq_printf(seq, "%s=%d\n", #conf, conf)
+#define SKW_CONFIG_STRING(conf)   seq_printf(seq, "%s=\"%s\"\n", #conf, conf)
 
 #define SKW_CONFIG_BOOL(conf)                                         \
 	do {                                                          \
@@ -37,7 +40,6 @@ static int skw_proc_show(struct seq_file *seq, void *v)
 		else                                                  \
 			seq_printf(seq, "# %s is not set\n", #conf);  \
 	} while (0)
-
 
 	seq_puts(seq, "\n");
 	seq_printf(seq, "Kernel Version:  \t%s\n"
@@ -53,7 +55,6 @@ static int skw_proc_show(struct seq_file *seq, void *v)
 	SKW_CONFIG_BOOL(CONFIG_SWT6621S_SAP_SME_EXT);
 	SKW_CONFIG_BOOL(CONFIG_SWT6621S_SCAN_RANDOM_MAC);
 	SKW_CONFIG_BOOL(CONFIG_SWT6621S_LEGACY_P2P);
-	SKW_CONFIG_BOOL(CONFIG_SWT6621S_TX_WORKQUEUE);
 	SKW_CONFIG_BOOL(CONFIG_SWT6621S_HIGH_PRIORITY);
 	SKW_CONFIG_BOOL(CONFIG_SWT6621S_VENDOR);
 	SKW_CONFIG_BOOL(CONFIG_SWT6621S_REGD_SELF_MANAGED);
@@ -71,7 +72,6 @@ static int skw_proc_show(struct seq_file *seq, void *v)
 	SKW_CONFIG_BOOL(CONFIG_SWT6621S_LOG_INFO);
 	SKW_CONFIG_BOOL(CONFIG_SWT6621S_LOG_DEBUG);
 	SKW_CONFIG_BOOL(CONFIG_SWT6621S_LOG_DETAIL);
-	SKW_CONFIG_BOOL(CONFIG_SWT6621S_SKB_RECYCLE);
 
 #ifdef CONFIG_SWT6621S_RX_REORDER_TIMEOUT
 	SKW_CONFIG_INT(CONFIG_SWT6621S_RX_REORDER_TIMEOUT);
@@ -168,7 +168,7 @@ struct proc_dir_entry *skw_procfs_file(struct proc_dir_entry *parent,
 
 int skw_dentry_init(void)
 {
-	skw_proc_root = proc_mkdir("skwifid", NULL);
+	skw_proc_root = proc_mkdir(PROC_SKWIFI_NAME, NULL);
 	if (!skw_proc_root)
 		pr_err("creat proc skwifid failed\n");
 
@@ -178,11 +178,15 @@ int skw_dentry_init(void)
 	if (IS_ERR(skw_debugfs_root))
 		skw_debugfs_root = NULL;
 
+	skw_mdns_offload_init(skw_proc_root, PROC_SKWIFI_NAME);
+
 	return 0;
 }
 
 void skw_dentry_deinit(void)
 {
+	skw_mdns_offload_deinit();
+
 	debugfs_remove_recursive(skw_debugfs_root);
 	proc_remove(skw_proc_root);
 }

@@ -663,14 +663,16 @@ TRACE_EVENT(skw_msg_rx,
 );
 
 TRACE_EVENT(skw_hw_adma_tx_done,
-	TP_PROTO(u8 num),
-	TP_ARGS(num),
+	    TP_PROTO(u8 num),
+	    TP_ARGS(num),
 
-	TP_STRUCT__entry(__field(u8, num)),
+	    TP_STRUCT__entry(__field(u8, num)),
 
-	TP_fast_assign(__entry->num = num;),
+	    TP_fast_assign(
+	    __entry->num = num;
+	    ),
 
-	TP_printk("num:%d", __entry->num)
+	    TP_printk("num:%d", __entry->num)
 );
 
 #endif

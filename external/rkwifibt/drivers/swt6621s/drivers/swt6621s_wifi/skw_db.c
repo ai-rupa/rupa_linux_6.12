@@ -15,6 +15,8 @@
  *
  ******************************************************************************/
 
+/* db.2025.10.07.txt */
+
 /*
  * DO NOT EDIT -- file generated from data in db.txt
  */
@@ -23,27 +25,24 @@
 #include <net/cfg80211.h>
 #include "skw_db.h"
 
-// database 2024.10.07
-
 static const struct ieee80211_regdomain regdom_XW = {
 	.alpha2 = "XW",
 	.reg_rules = {
+		REG_RULE_EXT(755, 928, 2, 0, 20, 0,
+			SKW_RRF_NO_IR | 0),
 		REG_RULE_EXT(2402, 2472, 40, 0, 20, 0, 0),
 		REG_RULE_EXT(2457, 2482, 20, 0, 20, 0,
 			SKW_RRF_AUTO_BW | 0),
-		REG_RULE_EXT(2474, 2494, 20, 0, 20, 0,
-			SKW_RRF_NO_OFDM | 0),
+		REG_RULE_EXT(2474, 2494, 20, 0, 20, 0, 0),
 		REG_RULE_EXT(5170, 5250, 80, 0, 20, 0,
 			SKW_RRF_AUTO_BW | 0),
 		REG_RULE_EXT(5250, 5330, 80, 0, 20, 0,
 			SKW_RRF_AUTO_BW | 0),
-		REG_RULE_EXT(5490, 5730, 160, 0, 20, 0,
-			SKW_RRF_AUTO_BW | 0),
-		REG_RULE_EXT(5735, 5835, 80, 0, 20, 0,
-			SKW_RRF_AUTO_BW | 0),
+		REG_RULE_EXT(5490, 5730, 160, 0, 20, 0, 0),
+		REG_RULE_EXT(5735, 5835, 80, 0, 20, 0, 0),
 		REG_RULE_EXT(57240, 63720, 2160, 0, 0, 0, 0),
 	},
-	.n_reg_rules = 8
+	.n_reg_rules = 9
 };
 
 static const struct ieee80211_regdomain regdom_00 = {
@@ -90,9 +89,11 @@ static const struct ieee80211_regdomain regdom_AD = {
 		REG_RULE_EXT(5470, 5725, 160, 0, 27, 0,
 			SKW_RRF_DFS | 0),
 		REG_RULE_EXT(5725, 5875, 80, 0, 14, 0, 0),
+		REG_RULE_EXT(5945, 6425, 320, 0, 23, 0,
+			SKW_RRF_NO_OUTDOOR | 0),
 		REG_RULE_EXT(57000, 66000, 2160, 0, 40, 0, 0),
 	},
-	.n_reg_rules = 6
+	.n_reg_rules = 7
 };
 
 static const struct ieee80211_regdomain regdom_AE = {
@@ -161,17 +162,22 @@ static const struct ieee80211_regdomain regdom_AL = {
 		REG_RULE_EXT(5470, 5725, 160, 0, 27, 0,
 			SKW_RRF_DFS | 0),
 		REG_RULE_EXT(5725, 5875, 80, 0, 14, 0, 0),
+		REG_RULE_EXT(5945, 6425, 320, 0, 23, 0,
+			SKW_RRF_NO_OUTDOOR | 0),
 	},
-	.n_reg_rules = 5
+	.n_reg_rules = 6
 };
 
 static const struct ieee80211_regdomain regdom_AM = {
 	.alpha2 = "AM",
 	.dfs_region = NL80211_DFS_ETSI,
 	.reg_rules = {
-		REG_RULE_EXT(2402, 2482, 40, 0, 20, 0, 0),
-		REG_RULE_EXT(5170, 5250, 20, 0, 18, 0, 0),
-		REG_RULE_EXT(5250, 5330, 20, 0, 18, 0,
+		REG_RULE_EXT(2400, 2483, 40, 0, 20, 0, 0),
+		REG_RULE_EXT(5150, 5350, 160, 0, 17, 0,
+			SKW_RRF_NO_OUTDOOR |
+			SKW_RRF_DFS | 0),
+		REG_RULE_EXT(5470, 5875, 160, 0, 17, 0,
+			SKW_RRF_NO_OUTDOOR |
 			SKW_RRF_DFS | 0),
 	},
 	.n_reg_rules = 3
@@ -244,9 +250,9 @@ static const struct ieee80211_regdomain regdom_AT = {
 		REG_RULE_EXT(5470, 5725, 160, 0, 27, 0,
 			SKW_RRF_DFS | 0),
 		REG_RULE_EXT(5725, 5875, 80, 0, 14, 0, 0),
-		REG_RULE_EXT(5945, 6425, 160, 0, 23, 0,
+		REG_RULE_EXT(5945, 6425, 320, 0, 23, 0,
 			SKW_RRF_NO_OUTDOOR | 0),
-		REG_RULE_EXT(57000, 66000, 2160, 0, 40, 0, 0),
+		REG_RULE_EXT(57000, 71000, 2160, 0, 40, 0, 0),
 	},
 	.n_reg_rules = 7
 };
@@ -307,8 +313,10 @@ static const struct ieee80211_regdomain regdom_AZ = {
 		REG_RULE_EXT(5250, 5330, 80, 0, 18, 0,
 			SKW_RRF_DFS |
 			SKW_RRF_AUTO_BW | 0),
+		REG_RULE_EXT(5945, 6425, 320, 0, 23, 0,
+			SKW_RRF_NO_OUTDOOR | 0),
 	},
-	.n_reg_rules = 3
+	.n_reg_rules = 4
 };
 
 static const struct ieee80211_regdomain regdom_BA = {
@@ -326,9 +334,11 @@ static const struct ieee80211_regdomain regdom_BA = {
 		REG_RULE_EXT(5470, 5725, 160, 0, 27, 0,
 			SKW_RRF_DFS | 0),
 		REG_RULE_EXT(5725, 5875, 80, 0, 14, 0, 0),
+		REG_RULE_EXT(5945, 6425, 320, 0, 23, 0,
+			SKW_RRF_NO_OUTDOOR | 0),
 		REG_RULE_EXT(57000, 66000, 2160, 0, 40, 0, 0),
 	},
-	.n_reg_rules = 6
+	.n_reg_rules = 7
 };
 
 static const struct ieee80211_regdomain regdom_BB = {
@@ -371,7 +381,7 @@ static const struct ieee80211_regdomain regdom_BE = {
 		REG_RULE_EXT(5470, 5725, 160, 0, 27, 0,
 			SKW_RRF_DFS | 0),
 		REG_RULE_EXT(5725, 5875, 80, 0, 14, 0, 0),
-		REG_RULE_EXT(5945, 6425, 160, 0, 23, 0,
+		REG_RULE_EXT(5945, 6425, 320, 0, 23, 0,
 			SKW_RRF_NO_OUTDOOR | 0),
 		REG_RULE_EXT(57000, 66000, 2160, 0, 40, 0, 0),
 	},
@@ -410,7 +420,7 @@ static const struct ieee80211_regdomain regdom_BG = {
 		REG_RULE_EXT(5470, 5725, 160, 0, 27, 0,
 			SKW_RRF_DFS | 0),
 		REG_RULE_EXT(5725, 5875, 80, 0, 14, 0, 0),
-		REG_RULE_EXT(5945, 6425, 160, 0, 23, 0,
+		REG_RULE_EXT(5945, 6425, 320, 0, 23, 0,
 			SKW_RRF_NO_OUTDOOR | 0),
 		REG_RULE_EXT(57000, 66000, 2160, 0, 40, 0, 0),
 	},
@@ -515,8 +525,7 @@ static const struct ieee80211_regdomain regdom_BR = {
 		REG_RULE_EXT(5725, 5850, 80, 0, 30, 0,
 			SKW_RRF_AUTO_BW | 0),
 		REG_RULE_EXT(5925, 7125, 320, 0, 12, 0,
-			SKW_RRF_NO_OUTDOOR |
-			SKW_RRF_NO_IR | 0),
+			SKW_RRF_NO_OUTDOOR | 0),
 		REG_RULE_EXT(57000, 71000, 2160, 0, 40, 0, 0),
 	},
 	.n_reg_rules = 7
@@ -553,6 +562,24 @@ static const struct ieee80211_regdomain regdom_BT = {
 			SKW_RRF_DFS | 0),
 	},
 	.n_reg_rules = 4
+};
+
+static const struct ieee80211_regdomain regdom_BW = {
+	.alpha2 = "BW",
+	.dfs_region = NL80211_DFS_ETSI,
+	.reg_rules = {
+		REG_RULE_EXT(2400, 2483, 40, 0, 20, 0, 0),
+		REG_RULE_EXT(5150, 5250, 80, 0, 23, 0,
+			SKW_RRF_AUTO_BW | 0),
+		REG_RULE_EXT(5250, 5350, 80, 0, 20, 0,
+			SKW_RRF_DFS |
+			SKW_RRF_AUTO_BW | 0),
+		REG_RULE_EXT(5470, 5725, 160, 0, 24, 0,
+			SKW_RRF_DFS | 0),
+		REG_RULE_EXT(5725, 5850, 80, 0, 24, 0,
+			SKW_RRF_DFS | 0),
+	},
+	.n_reg_rules = 5
 };
 
 static const struct ieee80211_regdomain regdom_BY = {
@@ -633,7 +660,7 @@ static const struct ieee80211_regdomain regdom_CH = {
 		REG_RULE_EXT(5470, 5725, 160, 0, 27, 0,
 			SKW_RRF_DFS | 0),
 		REG_RULE_EXT(5725, 5875, 80, 0, 14, 0, 0),
-		REG_RULE_EXT(5945, 6425, 160, 0, 23, 0,
+		REG_RULE_EXT(5945, 6425, 320, 0, 23, 0,
 			SKW_RRF_NO_OUTDOOR | 0),
 		REG_RULE_EXT(57000, 71000, 2160, 0, 40, 0, 0),
 	},
@@ -718,17 +745,24 @@ static const struct ieee80211_regdomain regdom_CR = {
 	.dfs_region = NL80211_DFS_FCC,
 	.reg_rules = {
 		REG_RULE_EXT(2402, 2482, 40, 0, 36, 0, 0),
-		REG_RULE_EXT(5170, 5250, 20, 0, 30, 0, 0),
-		REG_RULE_EXT(5250, 5330, 20, 0, 30, 0,
+		REG_RULE_EXT(5150, 5250, 80, 0, 30, 0,
+			SKW_RRF_AUTO_BW | 0),
+		REG_RULE_EXT(5250, 5350, 80, 0, 30, 0,
+			SKW_RRF_DFS |
+			SKW_RRF_AUTO_BW | 0),
+		REG_RULE_EXT(5470, 5730, 160, 0, 30, 0,
 			SKW_RRF_DFS | 0),
-		REG_RULE_EXT(5490, 5730, 20, 0, 30, 0,
-			SKW_RRF_DFS | 0),
-		REG_RULE_EXT(5735, 5835, 20, 0, 36, 0, 0),
-		REG_RULE_EXT(5875, 5925, 20, 0, 30, 0, 0),
+		REG_RULE_EXT(5730, 5850, 80, 0, 36, 0,
+			SKW_RRF_AUTO_BW | 0),
+		REG_RULE_EXT(5850, 5895, 40, 0, 36, 0,
+			SKW_RRF_AUTO_BW | 0),
+		REG_RULE_EXT(5895, 5925, 20, 0, 30, 0,
+			SKW_RRF_AUTO_BW | 0),
 		REG_RULE_EXT(5925, 7125, 320, 0, 30, 0,
 			SKW_RRF_NO_OUTDOOR | 0),
+		REG_RULE_EXT(57000, 71000, 2160, 0, 43, 0, 0),
 	},
-	.n_reg_rules = 7
+	.n_reg_rules = 9
 };
 
 static const struct ieee80211_regdomain regdom_CU = {
@@ -778,7 +812,7 @@ static const struct ieee80211_regdomain regdom_CY = {
 		REG_RULE_EXT(5470, 5725, 160, 0, 27, 0,
 			SKW_RRF_DFS | 0),
 		REG_RULE_EXT(5725, 5875, 80, 0, 14, 0, 0),
-		REG_RULE_EXT(5945, 6425, 160, 0, 23, 0,
+		REG_RULE_EXT(5945, 6425, 320, 0, 23, 0,
 			SKW_RRF_NO_OUTDOOR | 0),
 		REG_RULE_EXT(57000, 66000, 2160, 0, 40, 0, 0),
 	},
@@ -800,7 +834,7 @@ static const struct ieee80211_regdomain regdom_CZ = {
 		REG_RULE_EXT(5470, 5725, 160, 0, 27, 0,
 			SKW_RRF_DFS | 0),
 		REG_RULE_EXT(5725, 5875, 80, 0, 14, 0, 0),
-		REG_RULE_EXT(5945, 6425, 160, 0, 23, 0,
+		REG_RULE_EXT(5945, 6425, 320, 0, 23, 0,
 			SKW_RRF_NO_OUTDOOR | 0),
 		REG_RULE_EXT(57000, 66000, 2160, 0, 40, 0, 0),
 	},
@@ -822,7 +856,7 @@ static const struct ieee80211_regdomain regdom_DE = {
 		REG_RULE_EXT(5470, 5725, 160, 0, 27, 0,
 			SKW_RRF_DFS | 0),
 		REG_RULE_EXT(5725, 5875, 80, 0, 14, 0, 0),
-		REG_RULE_EXT(5945, 6425, 160, 0, 23, 0,
+		REG_RULE_EXT(5945, 6425, 320, 0, 23, 0,
 			SKW_RRF_NO_OUTDOOR | 0),
 		REG_RULE_EXT(57000, 66000, 2160, 0, 40, 0, 0),
 	},
@@ -844,7 +878,7 @@ static const struct ieee80211_regdomain regdom_DK = {
 		REG_RULE_EXT(5470, 5725, 160, 0, 27, 0,
 			SKW_RRF_DFS | 0),
 		REG_RULE_EXT(5725, 5875, 80, 0, 14, 0, 0),
-		REG_RULE_EXT(5945, 6425, 160, 0, 23, 0,
+		REG_RULE_EXT(5945, 6425, 320, 0, 23, 0,
 			SKW_RRF_NO_OUTDOOR | 0),
 		REG_RULE_EXT(57000, 66000, 2160, 0, 40, 0, 0),
 	},
@@ -921,6 +955,8 @@ static const struct ieee80211_regdomain regdom_EE = {
 	.alpha2 = "EE",
 	.dfs_region = NL80211_DFS_ETSI,
 	.reg_rules = {
+		REG_RULE_EXT(863, 868, 1, 0, 14, 0, 0),
+		REG_RULE_EXT(915, 919, 1, 0, 14, 0, 0),
 		REG_RULE_EXT(2400, 2483, 40, 0, 20, 0, 0),
 		REG_RULE_EXT(5150, 5250, 80, 0, 23, 0,
 			SKW_RRF_NO_OUTDOOR |
@@ -930,28 +966,36 @@ static const struct ieee80211_regdomain regdom_EE = {
 			SKW_RRF_DFS |
 			SKW_RRF_AUTO_BW | 0),
 		REG_RULE_EXT(5470, 5725, 160, 0, 27, 0,
-			SKW_RRF_DFS | 0),
-		REG_RULE_EXT(5725, 5875, 80, 0, 14, 0, 0),
-		REG_RULE_EXT(5945, 6425, 160, 0, 23, 0,
+			SKW_RRF_DFS |
+			SKW_RRF_AUTO_BW | 0),
+		REG_RULE_EXT(5725, 5875, 80, 0, 14, 0,
+			SKW_RRF_AUTO_BW | 0),
+		REG_RULE_EXT(5945, 6425, 320, 0, 23, 0,
 			SKW_RRF_NO_OUTDOOR | 0),
-		REG_RULE_EXT(57000, 66000, 2160, 0, 40, 0, 0),
+		REG_RULE_EXT(57000, 71000, 8640, 0, 40, 0, 0),
 	},
-	.n_reg_rules = 7
+	.n_reg_rules = 9
 };
 
 static const struct ieee80211_regdomain regdom_EG = {
 	.alpha2 = "EG",
 	.dfs_region = NL80211_DFS_ETSI,
 	.reg_rules = {
-		REG_RULE_EXT(2402, 2483, 40, 0, 20, 0, 0),
+		REG_RULE_EXT(2402, 2483, 40, 0, 20, 0,
+			SKW_RRF_NO_OUTDOOR | 0),
 		REG_RULE_EXT(5150, 5250, 80, 0, 23, 0,
-			SKW_RRF_AUTO_BW | 0),
+			SKW_RRF_AUTO_BW |
+			SKW_RRF_NO_OUTDOOR | 0),
 		REG_RULE_EXT(5250, 5350, 80, 0, 20, 0,
 			SKW_RRF_DFS |
-			SKW_RRF_AUTO_BW | 0),
-		REG_RULE_EXT(57000, 66000, 2160, 0, 40, 0, 0),
+			SKW_RRF_AUTO_BW |
+			SKW_RRF_NO_OUTDOOR | 0),
+		REG_RULE_EXT(5925, 6425, 320, 0, 24, 0,
+			SKW_RRF_NO_OUTDOOR | 0),
+		REG_RULE_EXT(57000, 66000, 2160, 0, 40, 0,
+			SKW_RRF_NO_OUTDOOR | 0),
 	},
-	.n_reg_rules = 4
+	.n_reg_rules = 5
 };
 
 static const struct ieee80211_regdomain regdom_ES = {
@@ -969,7 +1013,7 @@ static const struct ieee80211_regdomain regdom_ES = {
 		REG_RULE_EXT(5470, 5725, 160, 0, 27, 0,
 			SKW_RRF_DFS | 0),
 		REG_RULE_EXT(5725, 5875, 80, 0, 14, 0, 0),
-		REG_RULE_EXT(5945, 6425, 160, 0, 23, 0,
+		REG_RULE_EXT(5945, 6425, 320, 0, 23, 0,
 			SKW_RRF_NO_OUTDOOR | 0),
 		REG_RULE_EXT(57000, 66000, 2160, 0, 40, 0, 0),
 	},
@@ -1007,7 +1051,7 @@ static const struct ieee80211_regdomain regdom_FI = {
 		REG_RULE_EXT(5470, 5725, 160, 0, 27, 0,
 			SKW_RRF_DFS | 0),
 		REG_RULE_EXT(5725, 5875, 80, 0, 14, 0, 0),
-		REG_RULE_EXT(5945, 6425, 160, 0, 23, 0,
+		REG_RULE_EXT(5945, 6425, 320, 0, 23, 0,
 			SKW_RRF_NO_OUTDOOR | 0),
 		REG_RULE_EXT(57000, 66000, 2160, 0, 40, 0, 0),
 	},
@@ -1046,7 +1090,7 @@ static const struct ieee80211_regdomain regdom_FR = {
 		REG_RULE_EXT(5470, 5725, 160, 0, 27, 0,
 			SKW_RRF_DFS | 0),
 		REG_RULE_EXT(5725, 5875, 80, 0, 14, 0, 0),
-		REG_RULE_EXT(5945, 6425, 160, 0, 23, 0,
+		REG_RULE_EXT(5945, 6425, 320, 0, 23, 0,
 			SKW_RRF_NO_OUTDOOR | 0),
 		REG_RULE_EXT(57000, 71000, 2160, 0, 40, 0, 0),
 	},
@@ -1069,7 +1113,7 @@ static const struct ieee80211_regdomain regdom_GB = {
 			SKW_RRF_DFS | 0),
 		REG_RULE_EXT(5725, 5850, 80, 0, 23, 0,
 			SKW_RRF_NO_OUTDOOR | 0),
-		REG_RULE_EXT(5925, 6425, 160, 0, 24, 0,
+		REG_RULE_EXT(5925, 6425, 320, 0, 24, 0,
 			SKW_RRF_NO_OUTDOOR | 0),
 		REG_RULE_EXT(57000, 71000, 2160, 0, 40, 0, 0),
 	},
@@ -1103,9 +1147,11 @@ static const struct ieee80211_regdomain regdom_GE = {
 		REG_RULE_EXT(5250, 5330, 80, 0, 18, 0,
 			SKW_RRF_DFS |
 			SKW_RRF_AUTO_BW | 0),
+		REG_RULE_EXT(5945, 6425, 320, 0, 23, 0,
+			SKW_RRF_NO_OUTDOOR | 0),
 		REG_RULE_EXT(57000, 66000, 2160, 0, 40, 0, 0),
 	},
-	.n_reg_rules = 4
+	.n_reg_rules = 5
 };
 
 static const struct ieee80211_regdomain regdom_GF = {
@@ -1188,7 +1234,7 @@ static const struct ieee80211_regdomain regdom_GR = {
 		REG_RULE_EXT(5470, 5725, 160, 0, 27, 0,
 			SKW_RRF_DFS | 0),
 		REG_RULE_EXT(5725, 5875, 80, 0, 14, 0, 0),
-		REG_RULE_EXT(5945, 6425, 160, 0, 23, 0,
+		REG_RULE_EXT(5945, 6425, 320, 0, 23, 0,
 			SKW_RRF_NO_OUTDOOR | 0),
 		REG_RULE_EXT(57000, 66000, 2160, 0, 40, 0, 0),
 	},
@@ -1203,18 +1249,18 @@ static const struct ieee80211_regdomain regdom_GT = {
 			SKW_RRF_NO_OUTDOOR | 0),
 		REG_RULE_EXT(5470, 5725, 160, 0, 24, 0,
 			SKW_RRF_NO_OUTDOOR | 0),
-		REG_RULE_EXT(5725, 5850, 160, 0, 27, 0,
+		REG_RULE_EXT(5725, 5850, 80, 0, 27, 0,
 			SKW_RRF_NO_OUTDOOR | 0),
 		REG_RULE_EXT(5925, 6425, 320, 0, 23, 0,
 			SKW_RRF_NO_OUTDOOR |
 			SKW_RRF_AUTO_BW | 0),
-		REG_RULE_EXT(6425, 6525, 320, 0, 23, 0,
+		REG_RULE_EXT(6425, 6525, 80, 0, 23, 0,
 			SKW_RRF_NO_OUTDOOR |
 			SKW_RRF_AUTO_BW | 0),
 		REG_RULE_EXT(6525, 6875, 320, 0, 22, 0,
 			SKW_RRF_NO_OUTDOOR |
 			SKW_RRF_AUTO_BW | 0),
-		REG_RULE_EXT(6875, 7125, 320, 0, 22, 0,
+		REG_RULE_EXT(6875, 7125, 160, 0, 22, 0,
 			SKW_RRF_NO_OUTDOOR |
 			SKW_RRF_AUTO_BW | 0),
 		REG_RULE_EXT(57000, 66000, 2160, 0, 13, 0,
@@ -1308,7 +1354,7 @@ static const struct ieee80211_regdomain regdom_HR = {
 		REG_RULE_EXT(5470, 5725, 160, 0, 27, 0,
 			SKW_RRF_DFS | 0),
 		REG_RULE_EXT(5725, 5875, 80, 0, 14, 0, 0),
-		REG_RULE_EXT(5945, 6425, 160, 0, 23, 0,
+		REG_RULE_EXT(5945, 6425, 320, 0, 23, 0,
 			SKW_RRF_NO_OUTDOOR | 0),
 		REG_RULE_EXT(57000, 66000, 2160, 0, 40, 0, 0),
 	},
@@ -1347,7 +1393,7 @@ static const struct ieee80211_regdomain regdom_HU = {
 		REG_RULE_EXT(5470, 5725, 160, 0, 27, 0,
 			SKW_RRF_DFS | 0),
 		REG_RULE_EXT(5725, 5875, 80, 0, 14, 0, 0),
-		REG_RULE_EXT(5945, 6425, 160, 0, 23, 0,
+		REG_RULE_EXT(5945, 6425, 320, 0, 23, 0,
 			SKW_RRF_NO_OUTDOOR | 0),
 		REG_RULE_EXT(57000, 66000, 2160, 0, 40, 0, 0),
 	},
@@ -1356,16 +1402,19 @@ static const struct ieee80211_regdomain regdom_HU = {
 
 static const struct ieee80211_regdomain regdom_ID = {
 	.alpha2 = "ID",
-	.dfs_region = NL80211_DFS_JP,
 	.reg_rules = {
 		REG_RULE_EXT(2400, 2483, 40, 0, 27, 0,
 			SKW_RRF_NO_OUTDOOR | 0),
-		REG_RULE_EXT(5150, 5350, 80, 0, 23, 0,
+		REG_RULE_EXT(5150, 5350, 160, 0, 23, 0,
 			SKW_RRF_NO_OUTDOOR | 0),
 		REG_RULE_EXT(5725, 5825, 80, 0, 23, 0,
 			SKW_RRF_NO_OUTDOOR | 0),
+		REG_RULE_EXT(5925, 6425, 320, 0, 23, 0,
+			SKW_RRF_NO_OUTDOOR | 0),
+		REG_RULE_EXT(57000, 64000, 2160, 0, 40, 0,
+			SKW_RRF_NO_OUTDOOR | 0),
 	},
-	.n_reg_rules = 3
+	.n_reg_rules = 5
 };
 
 static const struct ieee80211_regdomain regdom_IE = {
@@ -1383,7 +1432,7 @@ static const struct ieee80211_regdomain regdom_IE = {
 		REG_RULE_EXT(5470, 5725, 160, 0, 27, 0,
 			SKW_RRF_DFS | 0),
 		REG_RULE_EXT(5725, 5875, 80, 0, 14, 0, 0),
-		REG_RULE_EXT(5945, 6425, 160, 0, 23, 0,
+		REG_RULE_EXT(5945, 6425, 320, 0, 23, 0,
 			SKW_RRF_NO_OUTDOOR | 0),
 		REG_RULE_EXT(57000, 66000, 2160, 0, 40, 0, 0),
 	},
@@ -1430,12 +1479,18 @@ static const struct ieee80211_regdomain regdom_IN = {
 
 static const struct ieee80211_regdomain regdom_IR = {
 	.alpha2 = "IR",
-	.dfs_region = NL80211_DFS_JP,
+	.dfs_region = NL80211_DFS_ETSI,
 	.reg_rules = {
-		REG_RULE_EXT(2402, 2482, 40, 0, 20, 0, 0),
-		REG_RULE_EXT(5735, 5835, 80, 0, 30, 0, 0),
+		REG_RULE_EXT(2400, 2483, 40, 0, 20, 0, 0),
+		REG_RULE_EXT(5150, 5250, 80, 0, 23, 0, 0),
+		REG_RULE_EXT(5250, 5350, 80, 0, 23, 0,
+			SKW_RRF_DFS |
+			SKW_RRF_NO_OUTDOOR | 0),
+		REG_RULE_EXT(5470, 5725, 160, 0, 27, 0,
+			SKW_RRF_DFS |
+			NL80211_RRF_NO_INDOOR | 0),
 	},
-	.n_reg_rules = 2
+	.n_reg_rules = 4
 };
 
 static const struct ieee80211_regdomain regdom_IS = {
@@ -1475,7 +1530,7 @@ static const struct ieee80211_regdomain regdom_IT = {
 		REG_RULE_EXT(5470, 5725, 160, 0, 27, 0,
 			SKW_RRF_DFS | 0),
 		REG_RULE_EXT(5725, 5875, 80, 0, 14, 0, 0),
-		REG_RULE_EXT(5945, 6425, 160, 0, 23, 0,
+		REG_RULE_EXT(5945, 6425, 320, 0, 23, 0,
 			SKW_RRF_NO_OUTDOOR | 0),
 		REG_RULE_EXT(57000, 66000, 2160, 0, 40, 0, 0),
 	},
@@ -1655,17 +1710,20 @@ static const struct ieee80211_regdomain regdom_KY = {
 	.alpha2 = "KY",
 	.dfs_region = NL80211_DFS_FCC,
 	.reg_rules = {
-		REG_RULE_EXT(2402, 2482, 40, 0, 20, 0, 0),
-		REG_RULE_EXT(5170, 5250, 80, 0, 24, 0,
+		REG_RULE_EXT(2400, 2483, 40, 0, 30, 0, 0),
+		REG_RULE_EXT(5150, 5250, 80, 0, 24, 0,
 			SKW_RRF_AUTO_BW | 0),
-		REG_RULE_EXT(5250, 5330, 80, 0, 24, 0,
+		REG_RULE_EXT(5250, 5350, 80, 0, 24, 0,
 			SKW_RRF_DFS |
 			SKW_RRF_AUTO_BW | 0),
-		REG_RULE_EXT(5490, 5730, 160, 0, 24, 0,
+		REG_RULE_EXT(5470, 5730, 160, 0, 24, 0,
 			SKW_RRF_DFS | 0),
-		REG_RULE_EXT(5735, 5835, 80, 0, 30, 0, 0),
+		REG_RULE_EXT(5725, 5875, 80, 0, 30, 0, 0),
+		REG_RULE_EXT(5925, 6425, 320, 0, 12, 0,
+			SKW_RRF_NO_OUTDOOR | 0),
+		REG_RULE_EXT(57000, 71000, 2160, 0, 40, 0, 0),
 	},
-	.n_reg_rules = 5
+	.n_reg_rules = 7
 };
 
 static const struct ieee80211_regdomain regdom_KZ = {
@@ -1685,9 +1743,11 @@ static const struct ieee80211_regdomain regdom_KZ = {
 			SKW_RRF_DFS | 0),
 		REG_RULE_EXT(5725, 5850, 80, 0, 20, 0,
 			SKW_RRF_NO_OUTDOOR | 0),
+		REG_RULE_EXT(5925, 6425, 320, 0, 23, 0,
+			SKW_RRF_NO_OUTDOOR | 0),
 		REG_RULE_EXT(57000, 66000, 2160, 0, 40, 0, 0),
 	},
-	.n_reg_rules = 6
+	.n_reg_rules = 7
 };
 
 static const struct ieee80211_regdomain regdom_LB = {
@@ -1792,7 +1852,7 @@ static const struct ieee80211_regdomain regdom_LT = {
 		REG_RULE_EXT(5470, 5725, 160, 0, 27, 0,
 			SKW_RRF_DFS | 0),
 		REG_RULE_EXT(5725, 5875, 80, 0, 14, 0, 0),
-		REG_RULE_EXT(5945, 6425, 160, 0, 23, 0,
+		REG_RULE_EXT(5945, 6425, 320, 0, 23, 0,
 			SKW_RRF_NO_OUTDOOR | 0),
 		REG_RULE_EXT(57000, 66000, 2160, 0, 40, 0, 0),
 	},
@@ -1814,7 +1874,7 @@ static const struct ieee80211_regdomain regdom_LU = {
 		REG_RULE_EXT(5470, 5725, 160, 0, 27, 0,
 			SKW_RRF_DFS | 0),
 		REG_RULE_EXT(5725, 5875, 80, 0, 14, 0, 0),
-		REG_RULE_EXT(5945, 6425, 160, 0, 23, 0,
+		REG_RULE_EXT(5945, 6425, 320, 0, 23, 0,
 			SKW_RRF_NO_OUTDOOR | 0),
 		REG_RULE_EXT(57000, 66000, 2160, 0, 40, 0, 0),
 	},
@@ -1836,7 +1896,7 @@ static const struct ieee80211_regdomain regdom_LV = {
 		REG_RULE_EXT(5470, 5725, 160, 0, 27, 0,
 			SKW_RRF_DFS | 0),
 		REG_RULE_EXT(5725, 5875, 80, 0, 14, 0, 0),
-		REG_RULE_EXT(5945, 6425, 160, 0, 23, 0,
+		REG_RULE_EXT(5945, 6425, 320, 0, 23, 0,
 			SKW_RRF_NO_OUTDOOR | 0),
 		REG_RULE_EXT(57000, 66000, 2160, 0, 40, 0, 0),
 	},
@@ -1874,8 +1934,10 @@ static const struct ieee80211_regdomain regdom_MC = {
 		REG_RULE_EXT(5470, 5725, 160, 0, 27, 0,
 			SKW_RRF_DFS | 0),
 		REG_RULE_EXT(5725, 5875, 80, 0, 14, 0, 0),
+		REG_RULE_EXT(5945, 6425, 320, 0, 23, 0,
+			SKW_RRF_NO_OUTDOOR | 0),
 	},
-	.n_reg_rules = 5
+	.n_reg_rules = 6
 };
 
 static const struct ieee80211_regdomain regdom_MD = {
@@ -1893,8 +1955,10 @@ static const struct ieee80211_regdomain regdom_MD = {
 		REG_RULE_EXT(5470, 5725, 160, 0, 27, 0,
 			SKW_RRF_DFS | 0),
 		REG_RULE_EXT(5725, 5875, 80, 0, 14, 0, 0),
+		REG_RULE_EXT(5945, 6425, 320, 0, 23, 0,
+			SKW_RRF_NO_OUTDOOR | 0),
 	},
-	.n_reg_rules = 5
+	.n_reg_rules = 6
 };
 
 static const struct ieee80211_regdomain regdom_ME = {
@@ -1912,8 +1976,10 @@ static const struct ieee80211_regdomain regdom_ME = {
 		REG_RULE_EXT(5470, 5725, 160, 0, 27, 0,
 			SKW_RRF_DFS | 0),
 		REG_RULE_EXT(5725, 5875, 80, 0, 14, 0, 0),
+		REG_RULE_EXT(5945, 6425, 320, 0, 23, 0,
+			SKW_RRF_NO_OUTDOOR | 0),
 	},
-	.n_reg_rules = 5
+	.n_reg_rules = 6
 };
 
 static const struct ieee80211_regdomain regdom_MF = {
@@ -1964,9 +2030,11 @@ static const struct ieee80211_regdomain regdom_MK = {
 		REG_RULE_EXT(5470, 5725, 160, 0, 27, 0,
 			SKW_RRF_DFS | 0),
 		REG_RULE_EXT(5725, 5875, 80, 0, 14, 0, 0),
+		REG_RULE_EXT(5945, 6425, 320, 0, 23, 0,
+			SKW_RRF_NO_OUTDOOR | 0),
 		REG_RULE_EXT(57000, 66000, 2160, 0, 40, 0, 0),
 	},
-	.n_reg_rules = 6
+	.n_reg_rules = 7
 };
 
 static const struct ieee80211_regdomain regdom_MN = {
@@ -2071,7 +2139,7 @@ static const struct ieee80211_regdomain regdom_MT = {
 		REG_RULE_EXT(5470, 5725, 160, 0, 27, 0,
 			SKW_RRF_DFS | 0),
 		REG_RULE_EXT(5725, 5875, 80, 0, 14, 0, 0),
-		REG_RULE_EXT(5945, 6425, 160, 0, 23, 0,
+		REG_RULE_EXT(5945, 6425, 320, 0, 23, 0,
 			SKW_RRF_NO_OUTDOOR | 0),
 		REG_RULE_EXT(57000, 66000, 2160, 0, 40, 0, 0),
 	},
@@ -2234,7 +2302,7 @@ static const struct ieee80211_regdomain regdom_NL = {
 		REG_RULE_EXT(5470, 5725, 160, 0, 27, 0,
 			SKW_RRF_DFS | 0),
 		REG_RULE_EXT(5725, 5875, 80, 0, 14, 0, 0),
-		REG_RULE_EXT(5945, 6425, 160, 0, 23, 0,
+		REG_RULE_EXT(5945, 6425, 320, 0, 23, 0,
 			SKW_RRF_NO_OUTDOOR | 0),
 		REG_RULE_EXT(57000, 66000, 2160, 0, 40, 0, 0),
 	},
@@ -2256,7 +2324,7 @@ static const struct ieee80211_regdomain regdom_NO = {
 		REG_RULE_EXT(5470, 5725, 160, 0, 27, 0,
 			SKW_RRF_DFS | 0),
 		REG_RULE_EXT(5725, 5875, 80, 0, 14, 0, 0),
-		REG_RULE_EXT(5945, 6425, 160, 0, 23, 0,
+		REG_RULE_EXT(5945, 6425, 320, 0, 23, 0,
 			SKW_RRF_NO_OUTDOOR | 0),
 		REG_RULE_EXT(57000, 71000, 2160, 0, 40, 0, 0),
 	},
@@ -2302,16 +2370,24 @@ static const struct ieee80211_regdomain regdom_OM = {
 	.alpha2 = "OM",
 	.dfs_region = NL80211_DFS_ETSI,
 	.reg_rules = {
-		REG_RULE_EXT(2402, 2482, 40, 0, 20, 0, 0),
-		REG_RULE_EXT(5170, 5250, 80, 0, 20, 0,
+		REG_RULE_EXT(2400, 2483, 40, 0, 20, 0,
+			SKW_RRF_NO_OUTDOOR | 0),
+		REG_RULE_EXT(5170, 5250, 80, 0, 23, 0,
 			SKW_RRF_AUTO_BW | 0),
-		REG_RULE_EXT(5250, 5330, 80, 0, 20, 0,
+		REG_RULE_EXT(5250, 5350, 80, 0, 20, 0,
 			SKW_RRF_DFS |
 			SKW_RRF_AUTO_BW | 0),
-		REG_RULE_EXT(5490, 5710, 160, 0, 27, 0,
+		REG_RULE_EXT(5470, 5725, 160, 0, 27, 0,
 			SKW_RRF_DFS | 0),
+		REG_RULE_EXT(5725, 5850, 80, 0, 28, 0,
+			SKW_RRF_DFS |
+			NL80211_RRF_NO_INDOOR | 0),
+		REG_RULE_EXT(5925, 6425, 320, 0, 23, 0,
+			SKW_RRF_NO_OUTDOOR | 0),
+		REG_RULE_EXT(57000, 66000, 2160, 0, 40, 0,
+			SKW_RRF_NO_OUTDOOR | 0),
 	},
-	.n_reg_rules = 4
+	.n_reg_rules = 7
 };
 
 static const struct ieee80211_regdomain regdom_PA = {
@@ -2428,7 +2504,7 @@ static const struct ieee80211_regdomain regdom_PL = {
 		REG_RULE_EXT(5470, 5725, 160, 0, 27, 0,
 			SKW_RRF_DFS | 0),
 		REG_RULE_EXT(5725, 5875, 80, 0, 14, 0, 0),
-		REG_RULE_EXT(5945, 6425, 160, 0, 23, 0,
+		REG_RULE_EXT(5945, 6425, 320, 0, 23, 0,
 			SKW_RRF_NO_OUTDOOR | 0),
 		REG_RULE_EXT(57000, 66000, 2160, 0, 40, 0, 0),
 	},
@@ -2483,7 +2559,7 @@ static const struct ieee80211_regdomain regdom_PT = {
 		REG_RULE_EXT(5470, 5725, 160, 0, 27, 0,
 			SKW_RRF_DFS | 0),
 		REG_RULE_EXT(5725, 5875, 80, 0, 14, 0, 0),
-		REG_RULE_EXT(5945, 6425, 160, 0, 23, 0,
+		REG_RULE_EXT(5945, 6425, 320, 0, 23, 0,
 			SKW_RRF_NO_OUTDOOR | 0),
 		REG_RULE_EXT(57000, 66000, 2160, 0, 40, 0, 0),
 	},
@@ -2520,8 +2596,10 @@ static const struct ieee80211_regdomain regdom_PY = {
 		REG_RULE_EXT(5490, 5730, 160, 0, 24, 0,
 			SKW_RRF_DFS | 0),
 		REG_RULE_EXT(5735, 5835, 80, 0, 30, 0, 0),
+		REG_RULE_EXT(5925, 6425, 320, 0, 12, 0,
+			SKW_RRF_NO_OUTDOOR | 0),
 	},
-	.n_reg_rules = 5
+	.n_reg_rules = 6
 };
 
 static const struct ieee80211_regdomain regdom_QA = {
@@ -2582,7 +2660,7 @@ static const struct ieee80211_regdomain regdom_RO = {
 		REG_RULE_EXT(5470, 5725, 160, 0, 27, 0,
 			SKW_RRF_DFS | 0),
 		REG_RULE_EXT(5725, 5875, 80, 0, 14, 0, 0),
-		REG_RULE_EXT(5945, 6425, 160, 0, 23, 0,
+		REG_RULE_EXT(5945, 6425, 320, 0, 23, 0,
 			SKW_RRF_NO_OUTDOOR | 0),
 		REG_RULE_EXT(57000, 66000, 2160, 0, 40, 0, 0),
 	},
@@ -2604,7 +2682,7 @@ static const struct ieee80211_regdomain regdom_RS = {
 		REG_RULE_EXT(5725, 5850, 80, 0, 24, 0,
 			SKW_RRF_DFS |
 			SKW_RRF_AUTO_BW | 0),
-		REG_RULE_EXT(5850, 5875, 80, 0, 24, 0,
+		REG_RULE_EXT(5850, 5875, 20, 0, 24, 0,
 			SKW_RRF_AUTO_BW | 0),
 		REG_RULE_EXT(5925, 6425, 320, 0, 23, 0,
 			SKW_RRF_NO_OUTDOOR | 0),
@@ -2679,7 +2757,7 @@ static const struct ieee80211_regdomain regdom_SE = {
 		REG_RULE_EXT(5470, 5725, 160, 0, 27, 0,
 			SKW_RRF_DFS | 0),
 		REG_RULE_EXT(5725, 5875, 80, 0, 14, 0, 0),
-		REG_RULE_EXT(5945, 6425, 160, 0, 23, 0,
+		REG_RULE_EXT(5945, 6425, 320, 0, 23, 0,
 			SKW_RRF_NO_OUTDOOR | 0),
 		REG_RULE_EXT(57000, 66000, 2160, 0, 40, 0, 0),
 	},
@@ -2721,7 +2799,7 @@ static const struct ieee80211_regdomain regdom_SI = {
 		REG_RULE_EXT(5470, 5725, 160, 0, 27, 0,
 			SKW_RRF_DFS | 0),
 		REG_RULE_EXT(5725, 5875, 80, 0, 14, 0, 0),
-		REG_RULE_EXT(5945, 6425, 160, 0, 23, 0,
+		REG_RULE_EXT(5945, 6425, 320, 0, 23, 0,
 			SKW_RRF_NO_OUTDOOR | 0),
 		REG_RULE_EXT(57000, 66000, 2160, 0, 40, 0, 0),
 	},
@@ -2743,7 +2821,7 @@ static const struct ieee80211_regdomain regdom_SK = {
 		REG_RULE_EXT(5470, 5725, 160, 0, 27, 0,
 			SKW_RRF_DFS | 0),
 		REG_RULE_EXT(5725, 5875, 80, 0, 14, 0, 0),
-		REG_RULE_EXT(5945, 6425, 160, 0, 23, 0,
+		REG_RULE_EXT(5945, 6425, 320, 0, 23, 0,
 			SKW_RRF_NO_OUTDOOR | 0),
 		REG_RULE_EXT(57000, 66000, 2160, 0, 40, 0, 0),
 	},
@@ -2798,12 +2876,51 @@ static const struct ieee80211_regdomain regdom_SV = {
 	.n_reg_rules = 5
 };
 
+static const struct ieee80211_regdomain regdom_SX = {
+	.alpha2 = "SX",
+	.dfs_region = NL80211_DFS_ETSI,
+	.reg_rules = {
+		REG_RULE_EXT(2400, 2483, 40, 0, 20, 0, 0),
+		REG_RULE_EXT(5150, 5250, 80, 0, 17, 0,
+			SKW_RRF_AUTO_BW | 0),
+		REG_RULE_EXT(5250, 5350, 80, 0, 21, 0,
+			SKW_RRF_DFS |
+			SKW_RRF_AUTO_BW | 0),
+		REG_RULE_EXT(5470, 5725, 160, 0, 24, 0,
+			SKW_RRF_DFS | 0),
+		REG_RULE_EXT(5725, 5875, 80, 0, 24, 0,
+			SKW_RRF_DFS | 0),
+	},
+	.n_reg_rules = 5
+};
+
 static const struct ieee80211_regdomain regdom_SY = {
 	.alpha2 = "SY",
+	.dfs_region = NL80211_DFS_ETSI,
 	.reg_rules = {
-		REG_RULE_EXT(2402, 2482, 40, 0, 20, 0, 0),
+		REG_RULE_EXT(2400, 2483, 40, 0, 20, 0,
+			SKW_RRF_NO_OUTDOOR | 0),
+		REG_RULE_EXT(5150, 5250, 80, 0, 23, 0,
+			SKW_RRF_NO_OUTDOOR |
+			SKW_RRF_AUTO_BW | 0),
+		REG_RULE_EXT(5250, 5350, 80, 0, 23, 0,
+			SKW_RRF_NO_OUTDOOR |
+			SKW_RRF_AUTO_BW |
+			SKW_RRF_DFS | 0),
+		REG_RULE_EXT(5470, 5725, 160, 0, 23, 0,
+			SKW_RRF_NO_OUTDOOR |
+			SKW_RRF_DFS | 0),
+		REG_RULE_EXT(5725, 5850, 80, 0, 23, 0,
+			SKW_RRF_NO_OUTDOOR |
+			SKW_RRF_AUTO_BW |
+			SKW_RRF_DFS | 0),
+		REG_RULE_EXT(5850, 5875, 20, 0, 23, 0,
+			SKW_RRF_NO_OUTDOOR |
+			SKW_RRF_AUTO_BW | 0),
+		REG_RULE_EXT(57000, 66000, 2160, 0, 40, 0,
+			SKW_RRF_NO_OUTDOOR | 0),
 	},
-	.n_reg_rules = 1
+	.n_reg_rules = 7
 };
 
 static const struct ieee80211_regdomain regdom_TC = {
@@ -2904,7 +3021,7 @@ static const struct ieee80211_regdomain regdom_TR = {
 			SKW_RRF_AUTO_BW | 0),
 		REG_RULE_EXT(5470, 5725, 160, 0, 27, 0,
 			SKW_RRF_DFS | 0),
-		REG_RULE_EXT(5945, 6425, 160, 0, 23, 0,
+		REG_RULE_EXT(5945, 6425, 320, 0, 23, 0,
 			SKW_RRF_NO_OUTDOOR | 0),
 		REG_RULE_EXT(57000, 66000, 2160, 0, 40, 0, 0),
 	},
@@ -2988,10 +3105,12 @@ static const struct ieee80211_regdomain regdom_UA = {
 			SKW_RRF_NO_OUTDOOR | 0),
 		REG_RULE_EXT(5725, 5850, 80, 0, 20, 0,
 			SKW_RRF_NO_OUTDOOR | 0),
+		REG_RULE_EXT(5945, 6425, 320, 0, 23, 0,
+			SKW_RRF_NO_OUTDOOR | 0),
 		REG_RULE_EXT(57000, 66000, 2160, 0, 16, 0,
 			SKW_RRF_NO_OUTDOOR | 0),
 	},
-	.n_reg_rules = 6
+	.n_reg_rules = 7
 };
 
 static const struct ieee80211_regdomain regdom_UG = {
@@ -3121,15 +3240,25 @@ static const struct ieee80211_regdomain regdom_VN = {
 	.alpha2 = "VN",
 	.dfs_region = NL80211_DFS_FCC,
 	.reg_rules = {
-		REG_RULE_EXT(2402, 2482, 40, 0, 20, 0, 0),
-		REG_RULE_EXT(5170, 5250, 80, 0, 17, 0, 0),
-		REG_RULE_EXT(5250, 5330, 80, 0, 24, 0,
-			SKW_RRF_DFS | 0),
-		REG_RULE_EXT(5490, 5730, 80, 0, 24, 0,
-			SKW_RRF_DFS | 0),
-		REG_RULE_EXT(5735, 5835, 80, 0, 30, 0, 0),
+		REG_RULE_EXT(2400, 2483, 40, 0, 23, 0, 0),
+		REG_RULE_EXT(5150, 5250, 80, 0, 23, 0,
+			SKW_RRF_NO_OUTDOOR |
+			SKW_RRF_AUTO_BW | 0),
+		REG_RULE_EXT(5250, 5350, 80, 0, 20, 0,
+			SKW_RRF_DFS |
+			SKW_RRF_AUTO_BW | 0),
+		REG_RULE_EXT(5470, 5725, 160, 0, 27, 0,
+			SKW_RRF_DFS |
+			SKW_RRF_AUTO_BW | 0),
+		REG_RULE_EXT(5725, 5850, 80, 0, 30, 0,
+			SKW_RRF_AUTO_BW | 0),
+		REG_RULE_EXT(5925, 6425, 320, 0, 23, 0,
+			SKW_RRF_NO_OUTDOOR |
+			SKW_RRF_AUTO_BW | 0),
+		REG_RULE_EXT(57000, 66000, 2160, 0, 40, 0,
+			SKW_RRF_NO_OUTDOOR | 0),
 	},
-	.n_reg_rules = 5
+	.n_reg_rules = 7
 };
 
 static const struct ieee80211_regdomain regdom_VU = {
@@ -3265,6 +3394,7 @@ const struct ieee80211_regdomain *skw_regdb[] = {
 	&regdom_BR,
 	&regdom_BS,
 	&regdom_BT,
+	&regdom_BW,
 	&regdom_BY,
 	&regdom_BZ,
 	&regdom_CA,
@@ -3386,6 +3516,7 @@ const struct ieee80211_regdomain *skw_regdb[] = {
 	&regdom_SN,
 	&regdom_SR,
 	&regdom_SV,
+	&regdom_SX,
 	&regdom_SY,
 	&regdom_TC,
 	&regdom_TD,

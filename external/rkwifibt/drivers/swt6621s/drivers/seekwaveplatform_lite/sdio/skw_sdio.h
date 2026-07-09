@@ -18,7 +18,7 @@
 #include <linux/scatterlist.h>
 #include <linux/slab.h>
 #include <linux/version.h>
-
+#include <linux/atomic.h>
 #include "../skwutil/skw_boot.h"
 #include "skw_sdio_log.h"
 #define skwsdio_log(fmt, args...) \
@@ -151,7 +151,7 @@ struct skw_sdio_data_t {
 	struct mutex service_mutex;
 	atomic_t resume_flag;
 	atomic_t online;
-	bool threads_exit;
+	atomic_t threads_exit;
 	bool adma_rx_enable;
 	bool pwrseq;
 	bool blk_size;
@@ -182,6 +182,8 @@ struct skw_sdio_data_t {
 	int cp_state;
 	int chip_en;
 	unsigned int chip_id[SKW_CHIP_ID_LENGTH];
+	unsigned int  cp_sdio_register0[4];
+	unsigned int  cp_sdio_register1[16];
 	struct seekwave_device *boot_data;
 	struct skw_log_data_t *log_data;
 	unsigned int service_state_map;
@@ -194,6 +196,7 @@ struct skw_sdio_data_t {
 	u8  cp_fifo_status;
 	int multi_sdio_drivers;
 	u8 cp_downloaded_flag;
+	bool is_host_nonremovable;	/* back Host capabilities */
 };
 
 struct debug_vars {
@@ -322,4 +325,6 @@ int skw_sdio_gpio_irq_pre_ops(void);
 int skw_sdio_chk_cp_gpio_cfg(void);
 void send_cp_wakeup_signal(struct skw_sdio_data_t *skw_sdio);
 int skw_sdio_smem_poweron(void); // for smem
+void kill_BT_rx_transfer(void);
+void skw_sdio_cp_dumpmem(void);
 #endif /* SKW_SDIO_H */

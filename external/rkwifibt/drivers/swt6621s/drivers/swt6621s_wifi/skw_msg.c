@@ -77,6 +77,7 @@ static int skw_event_disconnect(struct skw_core *skw, struct skw_iface *iface,
 	int ret = 0;
 	struct wiphy *wiphy = priv_to_wiphy(skw);
 	struct skw_discon_event_params *param = buf;
+	u16 times = 0;
 
 	skw_info("bssid: %pM, reason: %u\n", param->bssid, param->reason);
 
@@ -84,6 +85,19 @@ static int skw_event_disconnect(struct skw_core *skw, struct skw_iface *iface,
 		skw_warn("iface invalid\n");
 		return -EINVAL;
 	}
+
+	while (test_bit(SKW_FLAG_BLOCK_TX, &skw->flags)) {
+
+		if (test_bit(SKW_FLAG_FW_ASSERT, &skw->flags)) {
+			skw_dbg("fw assert(0x%lX)\n", skw->flags);
+			return 0;
+		}
+
+		if (times++ % 500 == 0)
+			skw_dbg("tx blocked(0x%lX),waiting...\n", skw->flags);
+
+		msleep(10);
+	};
 
 	skw_sta_leave(wiphy, iface->ndev, param->bssid,
 			param->reason, false);
@@ -133,11 +147,19 @@ static int skw_sta_rx_deauth(struct wiphy *wiphy, struct skw_iface *iface,
 
 	skw_sta_leave(wiphy, iface->ndev, mgmt->bssid, reason, false);
 
-	if (iface->sta.sme_external)
-		skw_compat_rx_mlme_mgmt(iface->ndev, buf, len);
-	else
+	if (iface->sta.sme_external) {
+		if (iface->sta.core.cbss) {
+			skw_compat_assoc_failure(iface->ndev,
+				iface->sta.core.cbss, false);
+
+			iface->sta.core.cbss = NULL;
+		} else {
+			skw_compat_rx_mlme_mgmt(iface->ndev, buf, len);
+		}
+	} else {
 		skw_disconnected(iface->ndev, reason, NULL, 0, true,
 			GFP_KERNEL);
+	}
 
 	return 0;
 }
@@ -269,12 +291,17 @@ static int skw_sta_rx_assoc(struct skw_iface *iface, int freq,
 	if (core->assoc_req_ie_len)
 		assoc_req_ie = core->assoc_req_ie;
 
-	if (iface->sta.sme_external)
-		skw_compat_rx_assoc_resp(iface->ndev, core->cbss, buf, len, 0,
+	if (iface->sta.sme_external) {
+		if (core->cbss) {
+			skw_compat_rx_assoc_resp(iface->ndev, core->cbss, buf, len, 0,
 				assoc_req_ie, core->assoc_req_ie_len);
-	else
+		} else {
+			skw_err("failed, cbss is null\n");
+		}
+	} else {
 		skw_mlme_sta_rx_assoc(iface, NULL, buf, len, assoc_req_ie,
 				core->assoc_req_ie_len);
+	}
 
 	core->cbss = NULL;
 
@@ -694,6 +721,42 @@ static int skw_get_bss_channel(struct ieee80211_mgmt *mgmt, int len)
 	return chn;
 }
 
+static bool skw_mgmt_check_ssid(struct skw_core *skw, struct skw_iface *iface,
+				 void *buf, int len)
+{
+	struct skw_mgmt_hdr *hdr = buf;
+	struct ieee80211_mgmt *mgmt = hdr->mgmt;
+	u8 ssid[IEEE80211_MAX_SSID_LEN + 1] = {0};
+	u16 ssid_len = 0;
+	const u8 *elmt_addr = NULL;
+	u16 ies_len = len - sizeof(struct skw_mgmt_hdr) -
+		offsetof(struct ieee80211_mgmt, u.probe_resp.variable);
+
+	elmt_addr = cfg80211_find_ie(WLAN_EID_SSID, (mgmt->u.beacon.variable), ies_len);
+	if (!elmt_addr)
+		return false;
+
+
+	ssid_len = elmt_addr[SKW_MAC_INFOELT_LEN_OFT];
+	if (ssid_len > IEEE80211_MAX_SSID_LEN) {
+		memcpy(ssid, (elmt_addr + SKW_MAC_INFOELT_INFO_OFT), IEEE80211_MAX_SSID_LEN);
+
+		skw_err("bssid=%pM, fcl=0x%X, ssid_len=%d, ssid=%s\n",
+			mgmt->bssid, mgmt->frame_control, ssid_len, ssid);
+
+		skw_hex_dump("scan_report error:", buf, len, false);
+
+		return false;
+	}
+
+	memcpy(ssid, (elmt_addr + SKW_MAC_INFOELT_INFO_OFT), ssid_len);
+
+	skw_log(SKW_SCAN, "[%s] bssid=%pM, fcl=0x%X, ssid_len=%d, ssid=%s\n",
+		SKW_TAG_SCAN, mgmt->bssid, mgmt->frame_control, ssid_len, ssid);
+
+	return true;
+}
+
 static int skw_event_scan_report(struct skw_core *skw, struct skw_iface *iface,
 				 void *buf, int len, struct skw_skb_rxcb *cb)
 {
@@ -724,6 +787,9 @@ static int skw_event_scan_report(struct skw_core *skw, struct skw_iface *iface,
 		skw_err("invalid, freq: %d, channel: %d\n", freq, hdr->chan);
 		return -EINVAL;
 	}
+
+	if (!skw_mgmt_check_ssid(skw, iface, buf, len))
+		return -EINVAL;
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 17, 0)
 	ts = ktime_to_timespec64(ktime_get_boottime());
@@ -850,8 +916,8 @@ static int skw_event_ba_action(struct skw_core *skw, struct skw_iface *iface,
 	switch (ba->action) {
 	case SKW_ADD_TX_BA:
 		if (ba->status_code) {
-			if (++ctx->peer->txba.tx_try[ba->tid] > 5)
-				ctx->peer->txba.blacklist |= BIT(ba->tid);
+			ctx->peer->txba.blacklist |= BIT(ba->tid);
+			ctx->peer->txba.tx_timeout[ba->tid] = jiffies + 5 * HZ;
 
 			SKW_CLEAR(ctx->peer->txba.bitmap, BIT(ba->tid));
 		}
@@ -861,7 +927,8 @@ static int skw_event_ba_action(struct skw_core *skw, struct skw_iface *iface,
 	case SKW_DEL_TX_BA:
 		if (ba->tid != SKW_INVALID_ID) {
 			SKW_CLEAR(ctx->peer->txba.bitmap, BIT(ba->tid));
-			ctx->peer->txba.tx_try[ba->tid] = 0;
+			SKW_CLEAR(ctx->peer->txba.blacklist, BIT(ba->tid));
+			ctx->peer->txba.tx_timeout[ba->tid] = 0;
 		} else {
 			memset(&ctx->peer->txba, 0x0, sizeof(ctx->peer->txba));
 		}
@@ -1139,7 +1206,7 @@ static int skw_event_cqm(struct skw_core *skw, struct skw_iface *iface,
 					memcpy(iface->sta.roam_data.target_bssid, cqm_info->bssid, ETH_ALEN);
 					iface->sta.roam_data.target_chn = cqm_info->chan;
 					skw_add_timer_work(skw, "cqm_scan_timeout", skw_cqm_scan_timeout,
-							iface, SKW_CQM_SCAN_TIMEOUT,
+							iface, msecs_to_jiffies(SKW_CQM_SCAN_TIMEOUT),
 							skw_cqm_scan_timeout, GFP_KERNEL);
 					iface->sta.roam_data.flags |= SKW_IFACE_STA_ROAM_FLAG_CQM_LOW;
 				}
@@ -1197,6 +1264,139 @@ static int skw_event_cqm(struct skw_core *skw, struct skw_iface *iface,
 	return 0;
 }
 
+#ifdef CONFIG_SKW6316_GKI
+static unsigned int skw_gki_get_mesh_hdrlen(u8 flags)
+{
+	int ae = flags & MESH_FLAGS_AE;
+	/* 802.11-2012, 8.2.4.7.3 */
+	switch (ae) {
+	default:
+	case 0:
+		return 6;
+	case MESH_FLAGS_AE_A4:
+		return 12;
+	case MESH_FLAGS_AE_A5_A6:
+		return 18;
+	}
+}
+
+static int skw_gki_80211_data_to_8023(struct sk_buff *skb, struct ethhdr *ehdr,
+				  const u8 *addr, enum nl80211_iftype iftype,
+				  u8 data_offset, bool is_amsdu)
+{
+	struct ieee80211_hdr *hdr = (struct ieee80211_hdr *) skb->data;
+	struct {
+		u8 hdr[ETH_ALEN] __aligned(2);
+		__be16 proto;
+	} payload;
+	struct ethhdr tmp;
+	u16 hdrlen;
+	u8 mesh_flags = 0;
+
+	if (unlikely(!ieee80211_is_data_present(hdr->frame_control)))
+		return -1;
+
+	hdrlen = ieee80211_hdrlen(hdr->frame_control) + data_offset;
+	if (skb->len < hdrlen + 8)
+		return -1;
+
+	memcpy(tmp.h_dest, ieee80211_get_DA(hdr), ETH_ALEN);
+	memcpy(tmp.h_source, ieee80211_get_SA(hdr), ETH_ALEN);
+
+	if (iftype == NL80211_IFTYPE_MESH_POINT)
+		skb_copy_bits(skb, hdrlen, &mesh_flags, 1);
+
+	mesh_flags &= MESH_FLAGS_AE;
+
+	switch (hdr->frame_control &
+		cpu_to_le16(IEEE80211_FCTL_TODS | IEEE80211_FCTL_FROMDS)) {
+	case cpu_to_le16(IEEE80211_FCTL_TODS):
+		if (unlikely(iftype != NL80211_IFTYPE_AP &&
+			     iftype != NL80211_IFTYPE_AP_VLAN &&
+			     iftype != NL80211_IFTYPE_P2P_GO))
+			return -1;
+		break;
+
+	case cpu_to_le16(IEEE80211_FCTL_TODS | IEEE80211_FCTL_FROMDS):
+		if (unlikely(iftype != NL80211_IFTYPE_WDS &&
+			     iftype != NL80211_IFTYPE_MESH_POINT &&
+			     iftype != NL80211_IFTYPE_AP_VLAN &&
+			     iftype != NL80211_IFTYPE_STATION))
+			return -1;
+		if (iftype == NL80211_IFTYPE_MESH_POINT) {
+			if (mesh_flags == MESH_FLAGS_AE_A4)
+				return -1;
+			if (mesh_flags == MESH_FLAGS_AE_A5_A6) {
+				skb_copy_bits(skb, hdrlen +
+					offsetof(struct ieee80211s_hdr, eaddr1),
+					tmp.h_dest, 2 * ETH_ALEN);
+			}
+			hdrlen += skw_gki_get_mesh_hdrlen(mesh_flags);
+		}
+		break;
+
+	case cpu_to_le16(IEEE80211_FCTL_FROMDS):
+		if ((iftype != NL80211_IFTYPE_STATION &&
+		     iftype != NL80211_IFTYPE_P2P_CLIENT &&
+		     iftype != NL80211_IFTYPE_MESH_POINT) ||
+		    (is_multicast_ether_addr(tmp.h_dest) &&
+		     ether_addr_equal(tmp.h_source, addr)))
+			return -1;
+		if (iftype == NL80211_IFTYPE_MESH_POINT) {
+			if (mesh_flags == MESH_FLAGS_AE_A5_A6)
+				return -1;
+			if (mesh_flags == MESH_FLAGS_AE_A4)
+				skb_copy_bits(skb, hdrlen +
+					offsetof(struct ieee80211s_hdr, eaddr1),
+					tmp.h_source, ETH_ALEN);
+			hdrlen += skw_gki_get_mesh_hdrlen(mesh_flags);
+		}
+
+		break;
+
+	case cpu_to_le16(0):
+		if (iftype != NL80211_IFTYPE_ADHOC &&
+		    iftype != NL80211_IFTYPE_STATION &&
+		    iftype != NL80211_IFTYPE_OCB)
+			return -1;
+
+		break;
+	}
+
+	skb_copy_bits(skb, hdrlen, &payload, sizeof(payload));
+	tmp.h_proto = payload.proto;
+
+	if (likely((!is_amsdu && ether_addr_equal(payload.hdr, rfc1042_header) &&
+		    tmp.h_proto != htons(ETH_P_AARP) &&
+		    tmp.h_proto != htons(ETH_P_IPX))))
+		/* remove RFC1042 or Bridge-Tunnel encapsulation and
+		 * replace EtherType
+		 */
+		hdrlen += ETH_ALEN + 2;
+	else
+		tmp.h_proto = htons(skb->len - hdrlen);
+
+	pskb_pull(skb, hdrlen);
+
+	if (!ehdr)
+		ehdr = skb_push(skb, sizeof(struct ethhdr));
+
+	memcpy(ehdr, &tmp, sizeof(tmp));
+
+	return 0;
+}
+#endif
+
+static int skw_80211_data_to_8023(struct sk_buff *skb, const u8 *addr,
+				 enum nl80211_iftype iftype)
+{
+#ifdef CONFIG_SKW6316_GKI
+	return skw_gki_80211_data_to_8023(skb, NULL, addr, iftype, 0, false);
+#else
+	return ieee80211_data_to_8023(skb, addr, iftype);
+#endif
+}
+
 static int skw_event_rx_unprotect_frame(struct skw_core *skw,
 				struct skw_iface *iface, void *buf,
 				int len, struct skw_skb_rxcb *cb)
@@ -1225,7 +1425,7 @@ static int skw_event_rx_unprotect_frame(struct skw_core *skw,
 
 		skw_put_skb_data(skb, buf, len);
 
-		if (ieee80211_data_to_8023(skb, iface->addr, iface->wdev.iftype)) {
+		if (skw_80211_data_to_8023(skb, iface->addr, iface->wdev.iftype)) {
 			skw_warn("build 8023 failed\n");
 
 			dev_kfree_skb_any(skb);
@@ -1431,10 +1631,12 @@ static int skw_event_tx_frame(struct skw_core *skw, struct skw_iface *iface,
 		skw_wdev_unlock(&iface->wdev);
 
 		if (is_skw_sta_mode(iface)) {
-			ht_cap_ie = cfg80211_find_ie(WLAN_EID_HT_CAPABILITY, core->assoc_req_ie, core->assoc_req_ie_len);
-
+			ht_cap_ie = cfg80211_find_ie(WLAN_EID_HT_CAPABILITY,
+					core->assoc_req_ie, core->assoc_req_ie_len);
 			if (ht_cap_ie)
-				skw_dbg("ht_cap: %2x  %2x  %2x  %2x\n", ht_cap_ie[0], ht_cap_ie[1], ht_cap_ie[2], ht_cap_ie[3]);
+				skw_dbg("ht_cap: %2x  %2x  %2x  %2x\n",
+					ht_cap_ie[0], ht_cap_ie[1], ht_cap_ie[2], ht_cap_ie[3]);
+
 			if (ht_cap_ie && (ht_cap_ie[2] & 0x2))
 				iface->sta.core.bss.ht_cap_chwidth = SKW_CHAN_WIDTH_40;
 			else if (ht_cap_ie && ht_cap_ie[2])
@@ -1514,9 +1716,6 @@ static int skw_event_dfs_radar_pulse(struct skw_core *skw,
 		skw_log(SKW_DFS, "[SKWIFI DFS] %s: [%d] inst: %d, width: %d, rssi: %d, chirp: %d, ts: 0x%llx\n",
 			__func__, i, iface->id, info.width, info.rssi, info.chirp, info.ts);
 
-		if (!info.width)
-			continue;
-
 		skw_dfs_add_pulse(priv_to_wiphy(skw), iface->ndev, &info);
 	}
 
@@ -1527,6 +1726,24 @@ static int skw_event_dpd_result_handler(struct skw_core *skw,
 		struct skw_iface *iface, void *buf, int len, struct skw_skb_rxcb *cb)
 {
 	skw_dpd_result_handler(skw, buf, len);
+
+	return 0;
+}
+
+static int skw_event_tcp_disconnect_handler(struct skw_core *skw,
+		struct skw_iface *iface, void *buf, int len, struct skw_skb_rxcb *cb)
+{
+	int i;
+	struct skw_event_tcp_disconnect_param *tcp_disconn_param = buf;
+
+	skw_dbg("event_tcp_disconncet %d\n", tcp_disconn_param->tcp_disconnect_num);
+
+	for (i = 0; i < tcp_disconn_param->tcp_disconnect_num; i++) {
+		skw_dbg("tcp_info_idx[%d] = %d\n",
+			i, tcp_disconn_param->tcp_info_idx[i]);
+	}
+
+	//TODO: handle tcp disconnect event
 
 	return 0;
 }
@@ -1551,7 +1768,7 @@ static int skw_local_ibss_connect(struct skw_core *skw,
 {
 	u16 chn;
 	int ret = 0;
-	struct skw_ibss_params params;
+	struct skw_ibss_params params = {0};
 
 	memcpy(params.ssid, iface->ibss.ssid, iface->ibss.ssid_len);
 	params.ssid_len = iface->ibss.ssid_len;
@@ -1651,6 +1868,7 @@ static const struct skw_event_func g_event_fn[] = {
 	FUNC_INIT(SKW_EVENT_NPI_MP_MODE, skw_event_mp_mode_handler),
 	FUNC_INIT(SKW_EVENT_RADAR_PULSE, skw_event_dfs_radar_pulse),
 	FUNC_INIT(SKW_EVENT_DPD_RESULT, skw_event_dpd_result_handler),
+	FUNC_INIT(SKW_EVENT_TCP_DISCONNECT, skw_event_tcp_disconnect_handler),
 	FUNC_INIT(SKW_EVENT_MAX, NULL),
 };
 
@@ -1668,16 +1886,15 @@ static inline void skw_cmd_lock(struct skw_core *skw, unsigned long flags)
 {
 	down(&skw->cmd.lock);
 
-	if (test_bit(SKW_CMD_FLAG_NO_WAKELOCK, &flags) ||
-	    test_bit(SKW_FLAG_SUSPEND_PREPARE, &skw->flags))
-		return;
-
-	__pm_stay_awake(skw->cmd.ws);
+	if (!test_bit(SKW_CMD_FLAG_NO_WAKELOCK, &flags) &&
+	    !test_bit(SKW_FLAG_SUSPEND_PREPARE, &skw->flags))
+		__pm_stay_awake(skw->cmd.ws);
 }
 
 static inline void skw_cmd_unlock(struct skw_core *skw, unsigned long flags)
 {
-	if (!(flags & BIT(SKW_CMD_FLAG_NO_WAKELOCK)))
+	if (!test_bit(SKW_CMD_FLAG_NO_WAKELOCK, &flags) &&
+	    !test_bit(SKW_FLAG_SUSPEND_PREPARE, &skw->flags))
 		__pm_relax(skw->cmd.ws);
 
 	up(&skw->cmd.lock);
@@ -1710,8 +1927,9 @@ static bool skw_cmd_allowed(struct skw_core *skw, int inst, int cmd, unsigned lo
 	if (iface && iface->ndev &&
 	    iface->ndev->ieee80211_ptr->iftype == NL80211_IFTYPE_MONITOR) {
 		if (cmd == SKW_CMD_SET_MONITOR_PARAM ||
-		    cmd == SKW_CMD_CLOSE_DEV ||
-		    cmd == SKW_CMD_OPEN_DEV)
+			cmd == SKW_CMD_CLOSE_DEV ||
+			cmd == SKW_CMD_SET_MC_ADDR ||
+			cmd == SKW_CMD_OPEN_DEV)
 			return true;
 
 		skw_warn("monitor cmd not allowed: %d\n", cmd);
@@ -1725,6 +1943,9 @@ static bool skw_cmd_allowed(struct skw_core *skw, int inst, int cmd, unsigned lo
 		cmd == SKW_CMD_SET_REGD ||
 		cmd == SKW_CMD_SET_MIB ||
 		cmd == SKW_CMD_DPD_ILC_GEAR_PARAM ||
+		cmd == SKW_CMD_RANDOM_MAC ||
+		cmd == SKW_CMD_SET_MC_ADDR ||
+		cmd == SKW_CMD_CLOSE_DEV ||
 		cmd == SKW_CMD_DPD_ILC_MARTIX_PARAM)
 		return true;
 
@@ -1836,7 +2057,7 @@ static int skw_set_cmd(struct skw_core *skw, int dev_id, int cmd,
 	skw->dbg.cmd[skw->dbg.cmd_idx].loop = 0;
 	atomic_set(&skw->dbg.loop, 0);
 
-	skw_log(SKW_CMD, "[%s] TX %s[%d], iface: %d, seq: %d, flags: 0x%lx,len = %d\n",
+	skw_log(SKW_CMD, "[%s] TX %s[%d], iface: %d, seq: %d, flags: 0x%lx, len = %d\n",
 		SKW_TAG_CMD, name, cmd, dev_id, skw->cmd.seq, skw->cmd.flags, data_len);
 	skw_hex_dump("cmd data", skw->cmd.data, skw->cmd.data_len, false);
 
@@ -2018,7 +2239,14 @@ int skw_cmd_ack_handler(struct skw_core *skw, void *data, int data_len)
 		return -EINVAL;
 	}
 
-	skw->cmd.status = msg_ack->data[0];
+	if (data_len < sizeof(struct skw_msg) + sizeof(u16)) {
+		skw_err("invalid len: %d\n", data_len);
+
+		return -EINVAL;
+	}
+
+	// skw->cmd.status = msg_ack->data[0];
+	memcpy(&skw->cmd.status, msg_ack->data, sizeof(u16));
 	skw->dbg.cmd[skw->dbg.cmd_idx].ack = skw_local_clock();
 
 	skw_log(SKW_CMD, "[%s] RX %s[%d], status = %d, used %d msec\n",

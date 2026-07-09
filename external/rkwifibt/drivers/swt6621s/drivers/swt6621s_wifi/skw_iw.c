@@ -22,17 +22,19 @@
 #include <linux/if_ether.h>
 #include <linux/ip.h>
 #include <net/cfg80211-wext.h>
-
+#include <linux/inet.h>
 #include "skw_core.h"
 #include "skw_cfg80211.h"
 #include "skw_iface.h"
+#include "skw_tx.h"
 #include "skw_iw.h"
 #include "skw_log.h"
+#include "skw_core_dbg.h"
 
 static int skw_iw_commit(struct net_device *dev, struct iw_request_info *info,
 			 union iwreq_data *wrqu, char *extra)
 {
-	skw_dbg("traced\n");
+	skw_dev_dbg(dev, "traced\n");
 
 	return 0;
 }
@@ -40,7 +42,7 @@ static int skw_iw_commit(struct net_device *dev, struct iw_request_info *info,
 static int skw_iw_get_name(struct net_device *dev, struct iw_request_info *info,
 			   union iwreq_data *wrqu, char *extra)
 {
-	skw_dbg("traced\n");
+	skw_dev_dbg(dev, "traced\n");
 
 	return 0;
 }
@@ -48,7 +50,7 @@ static int skw_iw_get_name(struct net_device *dev, struct iw_request_info *info,
 static int skw_iw_set_freq(struct net_device *dev, struct iw_request_info *info,
 			   union iwreq_data *wrqu, char *extra)
 {
-	skw_dbg("traced\n");
+	skw_dev_dbg(dev, "traced\n");
 
 	return 0;
 }
@@ -56,7 +58,7 @@ static int skw_iw_set_freq(struct net_device *dev, struct iw_request_info *info,
 static int skw_iw_get_freq(struct net_device *dev, struct iw_request_info *info,
 			   union iwreq_data *wrqu, char *extra)
 {
-	skw_dbg("traced\n");
+	skw_dev_dbg(dev, "traced\n");
 
 	return 0;
 }
@@ -64,7 +66,7 @@ static int skw_iw_get_freq(struct net_device *dev, struct iw_request_info *info,
 static int skw_iw_set_mode(struct net_device *dev, struct iw_request_info *info,
 			   union iwreq_data *wrqu, char *extra)
 {
-	skw_dbg("traced\n");
+	skw_dev_dbg(dev, "traced\n");
 
 	return 0;
 }
@@ -72,14 +74,14 @@ static int skw_iw_set_mode(struct net_device *dev, struct iw_request_info *info,
 static int skw_iw_get_mode(struct net_device *dev, struct iw_request_info *info,
 			   union iwreq_data *wrqu, char *extra)
 {
-	skw_dbg("traced\n");
+	skw_dev_dbg(dev, "traced\n");
 
 	return 0;
 }
 
 static struct iw_statistics *skw_get_wireless_stats(struct net_device *dev)
 {
-	skw_dbg("traced\n");
+	skw_dev_dbg(dev, "traced\n");
 
 	return NULL;
 }
@@ -109,6 +111,7 @@ static const iw_handler skw_iw_standard_handlers[] = {
 #define SKW_GET_LEN_1024                1024
 #define SKW_KEEP_BUF_SIZE               1024
 #define SKW_IW_WOW_BUF_SIZE             1024
+#define SKW_IW_OFFLOAD_KEEP_TCP_SIZE    1024
 
 /* max to 16 commands */
 #define SKW_IW_PRIV_SET                (SIOCIWFIRSTPRIV + 1)
@@ -118,14 +121,18 @@ static const iw_handler skw_iw_standard_handlers[] = {
 #define SKW_IW_PRIV_GET_80211MODE      (SIOCIWFIRSTPRIV + 7)
 #define SKW_IW_PRIV_KEEP_ALIVE         (SIOCIWFIRSTPRIV + 8)
 #define SKW_IW_PRIV_WOW_FILTER         (SIOCIWFIRSTPRIV + 9)
+#define SKW_IW_PRIV_OFFLOAD_TCP       (SIOCIWFIRSTPRIV + 10)
 
 #define SKW_IW_PRIV_LAST               SIOCIWLASTPRIV
 
+#define SKW_WOW_BUFF_LEN 	256
 static struct skw_keep_active_setup kp_set = {0,};
-static u8 skw_wow_flted[256];
+static u8 skw_wow_flted[SKW_WOW_BUFF_LEN];
 
-static int skw_keep_alive_add_checksum(u8 *buff, u32 len)
+static int skw_keep_alive_add_checksum(struct skw_keep_active_rule_data *rule, u32 len, u8 hw_flag)
 {
+	u8 *buff = rule->payload;
+	struct skw_tx_desc_conf *desc_conf;
 	u8 *ptr = buff;
 	struct iphdr *ip;
 	struct udphdr *udp;
@@ -144,14 +151,36 @@ static int skw_keep_alive_add_checksum(u8 *buff, u32 len)
 
 	udp_len = len - sizeof(struct ethhdr)
 		 - sizeof(struct iphdr);
-	sum1 = csum_partial(ptr,
-					udp_len, 0);
-	sum = csum_tcpudp_magic(ip->saddr, ip->daddr,
-				udp_len, IPPROTO_UDP, sum1);
-	udp->check = cpu_to_le16(sum);
 
-	skw_dbg("chsum %x %x  ip:%x %x sum1:%x udp_len:%d\n", ip->check, sum,
-		 ip->saddr, ip->daddr, sum1, udp_len);
+	if (hw_flag) {
+		sum1 = 0;
+		desc_conf = (struct skw_tx_desc_conf *)&rule->is_chksumed;
+		desc_conf->csum = 1;
+
+		if (IPPROTO_TCP == ip->protocol)
+			desc_conf->ip_prot = 1;
+		else
+			desc_conf->ip_prot = 0;
+
+		desc_conf->l4_hdr_offset = sizeof(struct iphdr) + sizeof(struct ethhdr);
+
+		sum = (u16)~csum_tcpudp_magic(ip->saddr, ip->daddr,
+				udp_len, IPPROTO_UDP, sum1);
+		udp->check = cpu_to_le16(sum);
+
+		skw_dbg("tx_desc_conf do: %d prot: %d offset: %d\n",
+			desc_conf->csum, desc_conf->ip_prot, desc_conf->l4_hdr_offset);
+	} else {
+		sum1 = csum_partial(ptr, udp_len, 0);
+
+		sum = csum_tcpudp_magic(ip->saddr, ip->daddr,
+				udp_len, IPPROTO_UDP, sum1);
+		udp->check = cpu_to_le16(sum);
+	}
+
+	skw_dbg("hw:%d chsum %x %x  ip:%x %x sum1:%x udp_len:%d\n",
+		hw_flag, ip->check, udp->check, ip->saddr, ip->daddr, sum1, udp_len);
+
 	return 0;
 }
 
@@ -180,15 +209,17 @@ static int skw_keep_active_rule_save(struct skw_core *skw,
 
 		if ((SKW_KEEPALIVE_NEEDCHKSUM_FLAG & flags) &&
 			!(SKW_KEEPALIVE_FWCHKSUM_FLAG & flags)) {
-			skw_keep_alive_add_checksum(kp_set.rule[idx]->data[0].payload,
+			skw_keep_alive_add_checksum(kp_set.rule[idx]->data,
 					kp_set.rule[idx]->payload_len
-					- sizeof(struct skw_keep_active_rule_data));
-			kp_set.rule[idx]->data[0].is_chksumed = 0;
+					- sizeof(struct skw_keep_active_rule_data), false);
+			kp_set.rule[idx]->data->is_chksumed = 0;
 		} else if ((SKW_KEEPALIVE_NEEDCHKSUM_FLAG & flags) &&
 				(SKW_KEEPALIVE_FWCHKSUM_FLAG & flags))
-			kp_set.rule[idx]->data[0].is_chksumed = 1;
+			skw_keep_alive_add_checksum(kp_set.rule[idx]->data,
+					kp_set.rule[idx]->payload_len
+					- sizeof(struct skw_keep_active_rule_data), true);
 		else
-			kp_set.rule[idx]->data[0].is_chksumed = 0;
+			kp_set.rule[idx]->data->is_chksumed = 0;
 
 		kp_set.flags[idx] = flags;
 	}
@@ -204,7 +235,7 @@ static int skw_keep_active_rule_save(struct skw_core *skw,
 	return 0;
 }
 
-static int skw_keep_active_disable_cmd(struct net_device *ndev)
+static int skw_keep_active_disable_cmd(struct net_device *dev)
 {
 	struct skw_spd_action_param spd;
 	int ret = 0;
@@ -213,16 +244,17 @@ static int skw_keep_active_disable_cmd(struct net_device *ndev)
 	spd.len = 0;
 
 	skw_hex_dump("dpdis:", &spd, sizeof(spd), true);
-	ret = skw_send_msg(ndev->ieee80211_ptr->wiphy, ndev,
-			 SKW_CMD_SET_SPD_ACTION, &spd, sizeof(spd), NULL, 0);
+	ret = skw_send_msg(dev->ieee80211_ptr->wiphy, dev,
+			   SKW_CMD_SET_SPD_ACTION, &spd, sizeof(spd), NULL, 0);
 	if (ret)
-		skw_err("failed, ret: %d\n", ret);
+		skw_dev_err(dev, "failed, ret: %d\n", ret);
 
 	return ret;
 }
 
-static int skw_keep_active_append_cmd(struct net_device *ndev,
-		 struct skw_core *skw, u32 idx_map, u32 idx)
+static int skw_keep_active_append_cmd(struct net_device *dev,
+				      struct skw_core *skw, u32 idx_map,
+				      u32 idx)
 {
 	int ret = 0;
 	u32 rules = 0;
@@ -236,7 +268,7 @@ static int skw_keep_active_append_cmd(struct net_device *ndev,
 
 	spd = SKW_ZALLOC(total, GFP_KERNEL);
 	if (!spd) {
-		skw_err("malloc failed, size: %d\n", total);
+		skw_dev_err(dev, "malloc failed, size: %d\n", total);
 		return -ENOMEM;
 	}
 
@@ -248,7 +280,7 @@ static int skw_keep_active_append_cmd(struct net_device *ndev,
 		idx = ffs(idx_map) - 1;
 
 		if (!kp_set.rule[idx]) {
-			skw_err("rule exception\n");
+			skw_dev_err(dev, "rule exception\n");
 			break;
 		}
 
@@ -275,21 +307,21 @@ static int skw_keep_active_append_cmd(struct net_device *ndev,
 
 	spd->sub_cmd = ACTION_EN_KEEPALIVE_APPEND;
 
-	skw_dbg("len:%d rule num:%d\n", len, rules);
+	skw_dev_dbg(dev, "len:%d rule num:%d\n", len, rules);
 	if (rules) {
 		skw_hex_dump("actvapd:", spd, len, true);
-		ret = skw_send_msg(ndev->ieee80211_ptr->wiphy, ndev,
-				SKW_CMD_SET_SPD_ACTION, spd, len, NULL, 0);
+		ret = skw_send_msg(dev->ieee80211_ptr->wiphy, dev,
+				   SKW_CMD_SET_SPD_ACTION, spd, len, NULL, 0);
 		if (ret)
-			skw_err("failed, ret: %d\n", ret);
+			skw_dev_err(dev, "failed, ret: %d\n", ret);
 	}
 
 	SKW_KFREE(spd);
 	return ret;
 }
 
-static int skw_keep_active_cmd(struct net_device *ndev, struct skw_core *skw,
-		 u8 en, u32 flags)
+static int skw_keep_active_cmd(struct net_device *dev, struct skw_core *skw,
+			       u8 en, u32 flags)
 {
 	int ret = 0, append = 0;
 	u32 idx_map, idx, rules = 0;
@@ -303,7 +335,7 @@ static int skw_keep_active_cmd(struct net_device *ndev, struct skw_core *skw,
 
 	spd = SKW_ZALLOC(total, GFP_KERNEL);
 	if (!spd) {
-		skw_err("malloc failed, size: %d\n", total);
+		skw_dev_err(dev, "malloc failed, size: %d\n", total);
 		return -ENOMEM;
 	}
 
@@ -317,7 +349,7 @@ static int skw_keep_active_cmd(struct net_device *ndev, struct skw_core *skw,
 		SKW_CLEAR(idx_map, BIT(idx));
 
 		if (!kp_set.rule[idx]) {
-			skw_err("rule exception\n");
+			skw_dev_err(dev, "rule exception\n");
 			break;
 		}
 
@@ -332,8 +364,6 @@ static int skw_keep_active_cmd(struct net_device *ndev, struct skw_core *skw,
 		offset += sizeof(struct skw_keep_active_rule)
 			+ kp_set.rule[idx]->payload_len;
 
-		SKW_CLEAR(idx_map, BIT(idx));
-
 		if (++rules >= (SKW_KEEPACTIVE_RULE_MAX >> 1)) {
 			append++;
 			break;
@@ -344,22 +374,22 @@ static int skw_keep_active_cmd(struct net_device *ndev, struct skw_core *skw,
 	spd->len = offset - sizeof(struct skw_spd_action_param);
 	len = offset;
 
-	ret = skw_keep_active_disable_cmd(ndev);
+	ret = skw_keep_active_disable_cmd(dev);
 
-	skw_dbg("len:%d rule num:%d\n", len, rules);
+	skw_dev_dbg(dev, "len:%d rule num:%d\n", len, rules);
 	if (rules) {
 		spd->sub_cmd = ACTION_EN_KEEPALIVE;
 		skw_hex_dump("actv:", spd, len, true);
-		ret = skw_send_msg(ndev->ieee80211_ptr->wiphy, ndev,
-				SKW_CMD_SET_SPD_ACTION, spd, len, NULL, 0);
+		ret = skw_send_msg(dev->ieee80211_ptr->wiphy, dev,
+				   SKW_CMD_SET_SPD_ACTION, spd, len, NULL, 0);
 		if (ret)
-			skw_err("failed, ret: %d\n", ret);
+			skw_dev_err(dev, "failed, ret: %d\n", ret);
 	}
 
 	SKW_KFREE(spd);
 
 	if (append)
-		ret = skw_keep_active_append_cmd(ndev, skw, idx_map, idx);
+		ret = skw_keep_active_append_cmd(dev, skw, idx_map, idx);
 
 	return ret;
 }
@@ -390,26 +420,26 @@ static int skw_keep_active_set(struct net_device *dev, u8 *param, int len)
 	if (hex) {
 		ch = strsep(&hex, "=");
 		if ((ch == NULL) || (strlen(ch) == 0)) {
-			skw_err("idx param\n");
+			skw_dev_err(dev, "idx param\n");
 			ret = -EFAULT;
 			goto error;
 		}
 
 		ch = strsep(&hex, ",");
 		if ((ch == NULL) || (strlen(ch) == 0)) {
-			skw_err("idx param\n");
+			skw_dev_err(dev, "idx param\n");
 			ret = -ERANGE;
 			goto error;
 		}
 
 		ret = kstrtou8(ch, 0, &idx);
 		if (ret) {
-			skw_err("idx param\n");
+			skw_dev_err(dev, "idx param\n");
 			ret = -EINVAL;
 			goto error;
 		}
 	} else {
-		skw_err("idx not found\n");
+		skw_dev_err(dev, "idx not found\n");
 		ret = -EFAULT;
 		goto error;
 	}
@@ -423,26 +453,26 @@ static int skw_keep_active_set(struct net_device *dev, u8 *param, int len)
 	if (hex) {
 		ch = strsep(&hex, "=");
 		if ((ch == NULL) || (strlen(ch) == 0)) {
-			skw_err("en param\n");
+			skw_dev_err(dev, "en param\n");
 			ret = -EFAULT;
 			goto error;
 		}
 
 		ch = strsep(&hex, ",");
 		if ((ch == NULL) || (strlen(ch) == 0)) {
-			skw_err("en param\n");
+			skw_dev_err(dev, "en param\n");
 			ret = -ERANGE;
 			goto error;
 		}
 
 		ret = kstrtou8(ch, 0, &en);
 		if (ret) {
-			skw_err("en param\n");
+			skw_dev_err(dev, "en param\n");
 			ret = -EINVAL;
 			goto error;
 		}
 	} else {
-		skw_err("en not found\n");
+		skw_dev_err(dev, "en not found\n");
 		ret = -EFAULT;
 		goto error;
 	}
@@ -454,21 +484,21 @@ static int skw_keep_active_set(struct net_device *dev, u8 *param, int len)
 	if (hex) {
 		ch = strsep(&hex, "=");
 		if ((ch == NULL) || (strlen(ch) == 0)) {
-			skw_err("period param\n");
+			skw_dev_err(dev, "period param\n");
 			ret = -EFAULT;
 			goto error;
 		}
 
 		ch = strsep(&hex, ",");
 		if ((ch == NULL) || (strlen(ch) == 0)) {
-			skw_err("period param\n");
+			skw_dev_err(dev, "period param\n");
 			ret = -ERANGE;
 			goto error;
 		}
 
 		ret = kstrtou32(ch, 0, &kp->keep_interval);
 		if (ret) {
-			skw_err("period param\n");
+			skw_dev_err(dev, "period param\n");
 			ret = -EINVAL;
 			goto error;
 		}
@@ -482,21 +512,21 @@ static int skw_keep_active_set(struct net_device *dev, u8 *param, int len)
 	if (hex) {
 		ch = strsep(&hex, "=");
 		if ((ch == NULL) || (strlen(ch) == 0)) {
-			skw_err("send cnt\n");
+			skw_dev_err(dev, "send cnt\n");
 			ret = -EFAULT;
 			goto error;
 		}
 
 		ch = strsep(&hex, ",");
 		if ((ch == NULL) || (strlen(ch) == 0)) {
-			skw_err("send cnt\n");
+			skw_dev_err(dev, "send cnt\n");
 			ret = -ERANGE;
 			goto error;
 		}
 
 		ret = kstrtou8(ch, 0, &send_cnt);
 		if (ret) {
-			skw_err("send cnt invalid value\n");
+			skw_dev_err(dev, "send cnt invalid value\n");
 			ret = -EINVAL;
 			goto error;
 		}
@@ -504,13 +534,13 @@ static int skw_keep_active_set(struct net_device *dev, u8 *param, int len)
 		kp->send_cnt = send_cnt;
 		if (kp->send_cnt <= 0) {
 			kp->send_cnt = SKW_KEEPACTIVE_RULE_SEND_CNT_DEF;
-			skw_err("send cnt is bigger than %d",
+			skw_dev_err(dev, "send cnt is bigger than %d",
 				SKW_KEEPACTIVE_RULE_SEND_CNT_MAX);
 		}
 
 		if (kp->send_cnt > SKW_KEEPACTIVE_RULE_SEND_CNT_MAX) {
 			kp->send_cnt = SKW_KEEPACTIVE_RULE_SEND_CNT_MAX;
-			skw_err("send cnt is bigger than %d",
+			skw_dev_err(dev, "send cnt is bigger than %d",
 				SKW_KEEPACTIVE_RULE_SEND_CNT_MAX);
 		}
 	} else
@@ -520,21 +550,21 @@ static int skw_keep_active_set(struct net_device *dev, u8 *param, int len)
 	if (hex) {
 		ch = strsep(&hex, "=");
 		if ((ch == NULL) || (strlen(ch) == 0)) {
-			skw_err("flags param\n");
+			skw_dev_err(dev, "flags param\n");
 			ret = -EFAULT;
 			goto error;
 		}
 
 		ch = strsep(&hex, ",");
 		if ((ch == NULL) || (strlen(ch) == 0)) {
-			skw_err("flags param\n");
+			skw_dev_err(dev, "flags param\n");
 			ret = -ERANGE;
 			goto error;
 		}
 
 		ret = kstrtou32(ch, 0, &flags);
 		if (ret) {
-			skw_err("flags param\n");
+			skw_dev_err(dev, "flags param\n");
 			ret = -EINVAL;
 			goto error;
 		}
@@ -547,12 +577,12 @@ static int skw_keep_active_set(struct net_device *dev, u8 *param, int len)
 	if (hex) {
 		ch = strsep(&hex, "=");
 		if ((ch == NULL) || (strlen(ch) == 0)) {
-			skw_err("pkt param\n");
+			skw_dev_err(dev, "pkt param\n");
 			ret = -EFAULT;
 			goto error;
 		}
 
-		result_val = kp->data[0].payload;
+		result_val = kp->data->payload;
 		while (1) {
 			u8 temp = 0;
 			char *cp = strchr(hex, ':');
@@ -564,13 +594,13 @@ static int skw_keep_active_set(struct net_device *dev, u8 *param, int len)
 
 			ret = kstrtou8(hex, 16, &temp);
 			if (ret) {
-				skw_err("pkt param\n");
+				skw_dev_err(dev, "pkt param\n");
 				ret = -EINVAL;
 				goto error;
 			}
 
 			if (temp > 255) {
-				skw_err("pkt param\n");
+				skw_dev_err(dev, "pkt param\n");
 				ret = -ERANGE;
 				goto error;
 			}
@@ -583,9 +613,9 @@ static int skw_keep_active_set(struct net_device *dev, u8 *param, int len)
 				break;
 
 			if (result_len + sizeof(*kp) +
-				sizeof(struct skw_keep_active_rule_data) >=
-				SKW_KEEPACTIVE_LENGTH_MAX) {
-				skw_err("len overload\n");
+			    sizeof(struct skw_keep_active_rule_data) >=
+			    SKW_KEEPACTIVE_LENGTH_MAX) {
+				skw_dev_err(dev, "len overload\n");
 				ret = -ENOSPC;
 				goto error;
 			}
@@ -598,8 +628,8 @@ static int skw_keep_active_set(struct net_device *dev, u8 *param, int len)
 	kp->payload_len = result_len + sizeof(struct skw_keep_active_rule_data);
 
 done:
-	skw_dbg("idx:%d en:%d pr:%d cnt:%d pkt:%d len:%d\n", idx, en,
-		 kp->keep_interval, kp->send_cnt, get_pkt, result_len);
+	skw_dev_dbg(dev, "idx:%d en:%d pr:%d cnt:%d pkt:%d len:%d\n", idx, en,
+		kp->keep_interval, kp->send_cnt, get_pkt, result_len);
 	skw_hex_dump("kp", kp, sizeof(*kp) + kp->payload_len, false);
 
 	if (!(kp->keep_interval && get_pkt))
@@ -607,20 +637,20 @@ done:
 
 	ret = skw_keep_active_rule_save(skw, kp, idx, en, flags);
 	if (ret) {
-		skw_err("save rule\n");
+		skw_dev_err(dev, "save rule\n");
 		goto error;
 	}
 
 	ret = skw_keep_active_cmd(dev, skw, en, flags);
 	if (ret) {
-		skw_err("send rule\n");
+		skw_dev_err(dev, "send rule\n");
 		goto error;
 	}
 
 	return 0;
 
 error:
-	skw_err("error:%d\n", ret);
+	skw_dev_err(dev, "error:%d\n", ret);
 	return ret;
 }
 
@@ -628,7 +658,7 @@ error:
 //iwpriv wlan0 wow_filter disable
 //iwpriv wlan0 wow_filter enable/enable_whitelist
 //iwpriv wlan0 wow_filter "list idx=0"
-static struct skw_wow_rules_set wow_rules_set = {0,0,0 };
+static struct skw_wow_rules_set wow_rules_set = {0, 0, 0};
 static struct skw_wow_user_rules wow_user_rules = {0,};
 
 static inline int ffs64(u64 x)
@@ -636,7 +666,7 @@ static inline int ffs64(u64 x)
 	int r = 1;
 
 	if (!x)
-	        return 0;
+		return 0;
 
 	if (!(x & 0xffffffffffffff)) {
 		x >>= 56;
@@ -691,8 +721,8 @@ static inline int ffs64(u64 x)
 	return r;
 }
 
-static int skw_send_wow_filter_append_cmd(struct net_device *ndev,
-	struct skw_core *skw, u64 idx_map)
+static int skw_send_wow_filter_append_cmd(struct net_device *dev,
+					  struct skw_core *skw, u64 idx_map)
 {
 	int ret = 0, append = 0;
 	u8 idx, rules = 0;
@@ -707,7 +737,7 @@ static int skw_send_wow_filter_append_cmd(struct net_device *ndev,
 
 	spd = SKW_ZALLOC(total, GFP_KERNEL);
 	if (!spd) {
-		skw_err("malloc failed, size: %d\n", total);
+		skw_dev_err(dev, "malloc failed, size: %d\n", total);
 		return -ENOMEM;
 	}
 
@@ -741,26 +771,52 @@ static int skw_send_wow_filter_append_cmd(struct net_device *ndev,
 	spd->len = sizeof(struct skw_wow_input_param) +
 		sizeof(struct skw_wow_rule) * wow_param->rule_num;
 
-	skw_dbg("wow_param->rule_num:%d len:%d %d\n", wow_param->rule_num, spd->len, total);
+	skw_dev_dbg(dev, "wow_param->rule_num:%d len:%d %d\n", wow_param->rule_num,
+		spd->len, total);
 
 	skw_hex_dump("append spd", spd, total, false);
 
-	ret = skw_msg_xmit(ndev->ieee80211_ptr->wiphy, 0,
-		 SKW_CMD_SET_SPD_ACTION, spd, total, NULL, 0);
+	ret = skw_msg_xmit(dev->ieee80211_ptr->wiphy, 0,
+			   SKW_CMD_SET_SPD_ACTION, spd, total, NULL, 0);
 	if (ret)
-		skw_err("failed, ret: %d\n", ret);
+		skw_dev_err(dev, "failed, ret: %d\n", ret);
 	else {
 		memset(skw_wow_flted, 0, sizeof(skw_wow_flted));
 		//memcpy(skw_wow_flted, param, len);   //TBD
 	}
 
 	if (append)
-		ret = skw_send_wow_filter_append_cmd(ndev, skw, idx_map);
+		ret = skw_send_wow_filter_append_cmd(dev, skw, idx_map);
+
+	SKW_KFREE(spd);
 
 	return ret;
 }
 
-static int skw_send_wow_filter_cmd(struct net_device *ndev, struct skw_core *skw)
+u8 skw_wow_filter_remap_idx(u8 count)
+{
+	u64 idx_map = 0;
+	u8 idx = 0, rules = 0;
+
+	if (count >= SKW_MAX_WOW_RULE_NUM)
+		return 0xff;
+
+	idx_map = wow_rules_set.en_bitmap;
+
+	while (idx_map) {
+		idx = ffs64(idx_map) - 1;
+		SKW_CLEAR(idx_map, (1ULL << idx));
+
+		if (rules++ == count)
+			break;
+	}
+
+	skw_dbg("to idx:%d, rules: %s\n", idx, wow_user_rules.rules[idx]);
+	return idx;
+}
+
+static int skw_send_wow_filter_cmd(struct net_device *dev,
+				   struct skw_core *skw)
 {
 	int ret = 0, append = 0;
 	u64 idx_map  = 0;
@@ -776,7 +832,7 @@ static int skw_send_wow_filter_cmd(struct net_device *ndev, struct skw_core *skw
 
 	spd = SKW_ZALLOC(total, GFP_KERNEL);
 	if (!spd) {
-		skw_err("malloc failed, size: %d\n", total);
+		skw_dev_err(dev, "malloc failed, size: %d\n", total);
 		return -ENOMEM;
 	}
 
@@ -812,37 +868,43 @@ static int skw_send_wow_filter_cmd(struct net_device *ndev, struct skw_core *skw
 	spd->len = sizeof(struct skw_wow_input_param) +
 		sizeof(struct skw_wow_rule) * wow_param->rule_num;
 
-	skw_dbg("wow_param->rule_num:%d len:%d total:%d\n",  wow_param->rule_num, spd->len, total);
+	skw_dev_dbg(dev, "wow_param->rule_num:%d len:%d total:%d\n", wow_param->rule_num,
+		spd->len, total);
 
 	skw_hex_dump("spd", spd, sizeof(struct skw_spd_action_param) + spd->len, false);
 
-	ret = skw_msg_xmit(ndev->ieee80211_ptr->wiphy, 0,
-		 SKW_CMD_SET_SPD_ACTION, spd, total, NULL, 0);
+	ret = skw_msg_xmit(dev->ieee80211_ptr->wiphy, 0,
+			   SKW_CMD_SET_SPD_ACTION, spd, total, NULL, 0);
 	if (ret)
-		skw_err("failed, ret: %d\n", ret);
+		skw_dev_err(dev, "failed, ret: %d\n", ret);
 	else {
 		memset(skw_wow_flted, 0, sizeof(skw_wow_flted));
 		//memcpy(skw_wow_flted, param, len);   //TBD
 	}
 
 	if (append)
-		ret = skw_send_wow_filter_append_cmd(ndev, skw, idx_map);
+		ret = skw_send_wow_filter_append_cmd(dev, skw, idx_map);
+
+	SKW_KFREE(spd);
 
 	return ret;
 }
 
-int skw_wow_filter_set(struct net_device *ndev, u8 *param, int len, char *resp, int *extra_len)
+int skw_wow_filter_set(struct net_device *dev, u8 *param, int len, char *resp,
+		       int *extra_len)
 {
 	u8 *ch, *result_val, rule_idx = 0;
-	char *hex,*tmp_ch, *ptr;
+	char *hex, *tmp_ch, *ptr;
 	struct skw_wow_rule *rule = NULL;
 	int pos = 0, ret = 0, offset, result_len = 0;
 	struct skw_pkt_pattern *ptn;
 	u8 *data;
 	u32 temp, resp_len = 0;
 	char help[] = "Usage:['list idx=0']|[disable]|[idx=0,pattern=6+10#23+!11][enable/enable_whitelist]";
-	struct skw_iface *iface = netdev_priv(ndev);
+	struct skw_iface *iface = netdev_priv(dev);
 	struct skw_core *skw = iface->skw;
+	char t_rule[SKW_MAX_WOW_USER_RULE_LEN] = {0};
+	u8 protocol = PAT_TYPE_ETH;
 
 	if (!param)
 		return -EINVAL;
@@ -851,6 +913,7 @@ int skw_wow_filter_set(struct net_device *ndev, u8 *param, int len, char *resp, 
 	if (!data)
 		return -ENOMEM;
 
+	len = (len >= SKW_IW_WOW_BUF_SIZE) ? SKW_IW_WOW_BUF_SIZE - 1 : len;
 	memcpy(data, param, len);
 	hex = data;
 	ptr = hex;
@@ -868,24 +931,24 @@ int skw_wow_filter_set(struct net_device *ndev, u8 *param, int len, char *resp, 
 		ret = kstrtou8(hex, 0, &rule_idx);
 		if (ret) {
 			resp_len = sprintf(resp, "ERROR: %s\n",
-				"list cmd idx param");
-			skw_err("idx param\n");
+					   "list cmd idx param");
+			skw_dev_err(dev, "idx param\n");
 			ret = -EINVAL;
 			goto free;
 		}
 
 		if (rule_idx >= SKW_MAX_WOW_RULE_NUM) {
 			resp_len = sprintf(resp, "ERROR: %s\n",
-				"list cmd idx param  is too big");
-			skw_err("rule_idx param:%d is too big\n", rule_idx);
+					   "list cmd idx param  is too big");
+			skw_dev_err(dev, "rule_idx param:%d is too big\n", rule_idx);
 			ret = -EINVAL;
 			goto free;
 		}
 
 		if (!((1ULL << rule_idx) & wow_user_rules.en_bitmap)) {
 			resp_len = sprintf(resp, "ERROR: %s\n",
-				"list cmd idx param  is unset");
-			skw_err("rule_idx param:%d is unset\n", rule_idx);
+					   "list cmd idx param  is unset");
+			skw_dev_err(dev, "rule_idx param:%d is unset\n", rule_idx);
 			ret = -EINVAL;
 			goto free;
 		}
@@ -901,9 +964,10 @@ int skw_wow_filter_set(struct net_device *ndev, u8 *param, int len, char *resp, 
 			ret = -EFAULT;
 			goto free;
 		}
-		ret = skw_wow_disable(ndev->ieee80211_ptr->wiphy);
+		ret = skw_wow_disable(dev->ieee80211_ptr->wiphy);
 		if (!ret) {
 			memset(skw_wow_flted, 0, sizeof(skw_wow_flted));
+			len = (len >= SKW_WOW_BUFF_LEN) ? SKW_WOW_BUFF_LEN - 1 : len;
 			memcpy(skw_wow_flted, param, len);
 			memset(&wow_rules_set, 0, sizeof(wow_rules_set));
 			memset(&wow_user_rules, 0, sizeof(wow_user_rules));
@@ -916,47 +980,83 @@ int skw_wow_filter_set(struct net_device *ndev, u8 *param, int len, char *resp, 
 	if (!strncmp(hex, "idx=", strlen("idx="))) {
 		ch = strsep(&hex, ",");
 		if ((ch == NULL) || (strlen(ch) == 0)) {
-			skw_err("idx param\n");
-			resp_len = sprintf(resp, "ERROR: %s\n",
-				 "idx param");
+			skw_dev_err(dev, "idx param\n");
+			resp_len = sprintf(resp, "ERROR: %s\n", "idx param");
 			ret = -ERANGE;
 			goto free;
 		}
 
 		tmp_ch = strsep((char **)&ch, "=");
 		if ((tmp_ch == NULL) || (strlen(tmp_ch) == 0)) {
-			skw_err("idx param\n");
-			resp_len = sprintf(resp, "ERROR: %s\n",
-				 "idx param");
+			skw_dev_err(dev, "idx param\n");
+			resp_len = sprintf(resp, "ERROR: %s\n", "idx param");
 			ret = -EFAULT;
 			goto free;
 		}
 
 		ret = kstrtou8(ch, 0, &rule_idx);
 		if (ret) {
-			skw_err("idx param\n");
-			resp_len = sprintf(resp, "ERROR: %s\n",
-				 "idx param");
+			skw_dev_err(dev, "idx param\n");
+			resp_len = sprintf(resp, "ERROR: %s\n", "idx param");
 			ret = -EINVAL;
 			goto free;
 		}
 
 		if (rule_idx >= SKW_MAX_WOW_RULE_NUM) {
 			resp_len = sprintf(resp, "ERROR: %s\n",
-				 "idx param is too big");
-			skw_err("rule_idx param:%d is too big\n", rule_idx);
+					   "idx param is too big");
+			skw_dev_err(dev, "rule_idx param:%d is too big\n", rule_idx);
 			ret = -EINVAL;
 			goto free;
 		}
 
-		//Store the rule
-		wow_user_rules.en_bitmap |=  (1ULL << rule_idx);
-
-		strncpy(wow_user_rules.rules[rule_idx], param, len);
+		//Store the temp rule
+		memset(t_rule, 0, SKW_MAX_WOW_USER_RULE_LEN);
+		strncpy(t_rule, param, min_t(int, SKW_MAX_WOW_USER_RULE_LEN, len));
 
 		//Translate the wow filter to skw rules
 		rule = &wow_rules_set.rules[rule_idx];
 		result_len = 0;
+
+		ret = strncmp(hex, "protocol=", strlen("protocol="));
+		if (!ret) {
+			ch = strsep(&hex, ",");
+			if ((ch == NULL) || (strlen(ch) == 0)) {
+				skw_dev_err(dev, "protocol param\n");
+				resp_len = sprintf(resp, "ERROR: %s\n",
+					 "protocol param");
+				ret = -ERANGE;
+				goto free;
+			}
+
+			tmp_ch = strsep((char **)&ch, "=");
+			if ((tmp_ch == NULL) || (strlen(tmp_ch) == 0)) {
+				skw_dev_err(dev, "protocol param\n");
+				resp_len = sprintf(resp, "ERROR: %s\n",
+					 "protocol param");
+				ret = -EFAULT;
+				goto free;
+			}
+
+			ret = kstrtou8(ch, 0, &protocol);
+			if (ret) {
+				skw_dev_err(dev, "protocol param\n");
+				resp_len = sprintf(resp, "ERROR: %s\n",
+					 "protocol param");
+				ret = -EINVAL;
+				goto free;
+			}
+
+			if (protocol > PAT_TYPE_TCP) {
+				resp_len = sprintf(resp, "ERROR: %s\n",
+						   "protocol param is too big");
+				skw_dev_err(dev, "protocol param:%d is too big\n",
+					protocol);
+				ret = -EINVAL;
+				goto free;
+			}
+		}
+		skw_dev_dbg(dev, "rule_idx: %u, protocol: %u\n", rule_idx, protocol);
 
 		ret = strncmp(hex, "pattern=", strlen("pattern="));
 		if (!ret) {
@@ -1002,7 +1102,7 @@ int skw_wow_filter_set(struct net_device *ndev, u8 *param, int len, char *resp, 
 					goto free;
 				}
 
-				ptn->type_offset = PAT_TYPE_ETH;
+				ptn->type_offset = protocol;
 				ptn->offset = offset;
 
 				ch = (u8 *)strsep(&hex, "+");
@@ -1016,10 +1116,10 @@ int skw_wow_filter_set(struct net_device *ndev, u8 *param, int len, char *resp, 
 
 				if (hex[0] == '!') {
 					ptn->op = PAT_OP_TYPE_DIFF;
-					ch = strsep(&hex, "!");
+					strsep(&hex, "!");
 				} else if (hex[0] == '*') {
 					ptn->op = PAT_OP_TYPE_CONTINUE_MATCH;
-					ch = strsep(&hex, "*");
+					strsep(&hex, "*");
 				}
 
 				pos = 0;
@@ -1072,19 +1172,24 @@ int skw_wow_filter_set(struct net_device *ndev, u8 *param, int len, char *resp, 
 					if (cp) {
 						*cp = 0;
 						cp++;
+						hex = cp;
+					} else {
+						hex += strlen(hex);
+						break;
 					}
-
-					hex = cp;
 				}
 
 				result_val += pos;
 				ptn->len = pos;
 
+				if (!hex)
+					break;
+
 				if (hex[2] == ',') {
 					hex += 2;
 					break;
 				} else if (hex[2] == '#')
-					ch = strsep(&hex, "#");
+					strsep(&hex, "#");
 			}
 		} else {
 			resp_len = sprintf(resp, "ERROR: %s\n",
@@ -1096,6 +1201,12 @@ int skw_wow_filter_set(struct net_device *ndev, u8 *param, int len, char *resp, 
 		rule->len = result_len;
 		wow_rules_set.en_bitmap |= (1ULL << rule_idx);
 		skw_hex_dump("rule", rule, sizeof(*rule), false);
+
+		//Store the rule
+		wow_user_rules.en_bitmap |=  (1ULL << rule_idx);
+		memset(wow_user_rules.rules[rule_idx], 0, SKW_MAX_WOW_USER_RULE_LEN);
+		strncpy(wow_user_rules.rules[rule_idx], t_rule, SKW_MAX_WOW_USER_RULE_LEN);
+
 		ret = 0;
 
 		goto free;
@@ -1109,7 +1220,7 @@ int skw_wow_filter_set(struct net_device *ndev, u8 *param, int len, char *resp, 
 	}
 
 	if (len != sizeof("enable") && len != sizeof("enable_whitelist")) {
-		skw_err("Error: enable");
+		skw_dev_err(dev, "Error: enable");
 		resp_len = sprintf(resp, "Error: enable\n");
 		ret = EINVAL;
 		goto free;
@@ -1123,10 +1234,10 @@ int skw_wow_filter_set(struct net_device *ndev, u8 *param, int len, char *resp, 
 		wow_rules_set.wow_flags |= SKW_WOW_BLACKLIST_FILTER;
 
 	//Send the rules to FW
-	ret = skw_send_wow_filter_cmd(ndev, skw);
+	ret = skw_send_wow_filter_cmd(dev, skw);
 	if (ret) {
 		resp_len = sprintf(resp, "Error: send filter cmd\n");
-		skw_err("Error: send filter cmd");
+		skw_dev_err(dev, "Error: send filter cmd");
 	}
 
 free:
@@ -1142,6 +1253,412 @@ free:
 	return 0;
 }
 
+//#define CONFIG_SKW_TCP_OFFLOAD_SUPPORT 1
+#ifdef CONFIG_SKW_TCP_OFFLOAD_SUPPORT
+static struct skw_tcp_keep_active_offload_set skw_tcp_offload = {0};
+
+void skw_rx_dump_tcp_data(struct skw_iface *iface, struct sk_buff *skb)
+{
+	struct skw_tcp_keepalive_info *tcpinfo;
+	struct ethhdr *eth = eth_hdr(skb);
+	unsigned int tcphoff;
+	struct iphdr *ip;
+	u8 ip_proto;
+	int j;
+
+	tcpinfo = skw_tcp_offload.tcpinfo;
+
+	if (eth->h_proto == htons(ETH_P_IP)) {
+		ip = (struct iphdr *)(skb->data);
+		tcphoff = ip->ihl * 4;
+
+		ip_proto = ip->protocol;
+
+		for (j = 0; j < SKW_MAX_TCPKEEP_OFFLOAD_INFO_NUM; j++) {
+			if (ip->protocol == IPPROTO_TCP &&
+			  ip->saddr == tcpinfo[j].ipaddr_peer &&
+			  ip->daddr == iface->sta.ipv4 &&
+			  iface->id == tcpinfo[j].inst_id) {
+				struct tcphdr *tcph;
+
+				tcph = (struct tcphdr *)(skb->data + tcphoff);
+
+				if (ntohs(tcph->dest) == tcpinfo[j].port_self &&
+					ntohs(tcph->source) == tcpinfo[j].port_peer) {
+					tcpinfo[j].seqnum_self = ntohl(tcph->ack_seq);
+					skw_ether_copy(tcpinfo[j].peer_addr, eth->h_source);
+				}
+			}
+		}
+	}
+}
+
+void skw_tx_dump_tcp_data(struct skw_iface *iface, struct sk_buff *skb)
+{
+	struct skw_tcp_keepalive_info *tcpinfo;
+	struct ethhdr *eth = eth_hdr(skb);
+	u16 eth_type = ntohs(eth->h_proto);
+	int j;
+
+	tcpinfo = skw_tcp_offload.tcpinfo;
+
+	if (eth_type == ETH_P_IP) {
+		struct iphdr *ip = ip_hdr(skb);
+		u8 ip_proto = ip->protocol;
+
+		for (j = 0; j < SKW_MAX_TCPKEEP_OFFLOAD_INFO_NUM; j++) {
+			if (ip_proto == IPPROTO_TCP &&
+			 ip->daddr == tcpinfo[j].ipaddr_peer &&
+			 ip->saddr == iface->sta.ipv4 &&
+			 iface->id == tcpinfo[j].inst_id) {
+				struct tcphdr *tcph = tcp_hdr(skb);
+
+				if (ntohs(tcph->dest) == tcpinfo[j].port_peer &&
+					ntohs(tcph->source) == tcpinfo[j].port_self) {
+					tcpinfo[j].acknum_self = ntohl(tcph->ack_seq);
+				}
+			}
+		}
+	}
+}
+
+u32 skw_fill_tcpalive_offload_info(struct wiphy *wiphy, u8 *tcp_off)
+{
+	int j, tcp_tlv_data_len = 0;
+	struct skw_tcp_keepalive_offload_tlv off_tlv = {0};
+
+	tcp_tlv_data_len += sizeof(off_tlv);
+
+	for (j = 0; j < SKW_MAX_TCPKEEP_OFFLOAD_INFO_NUM; j++) {
+		if (atomic_read(&skw_tcp_offload.enabled[j])) {
+			memcpy(tcp_off + tcp_tlv_data_len, &skw_tcp_offload.tcpinfo[j],
+					sizeof(struct skw_tcp_keepalive_info));
+			tcp_tlv_data_len += sizeof(struct skw_tcp_keepalive_info);
+			off_tlv.tcpinfo_num++;
+		}
+	}
+
+	memcpy(tcp_off, &off_tlv, sizeof(off_tlv));
+	skw_hex_dump("off_tlv", tcp_off, tcp_tlv_data_len, false);
+
+	return tcp_tlv_data_len;
+}
+
+int skw_offload_tcp_set(struct net_device *dev, char *param, int len,
+			char *resp, int *extra_len)
+{
+	u8 *ch, en = 0, idx;
+	char *hex = NULL;
+	struct skw_tcp_keepalive_info keep;
+	int ret = 0, temp1, temp2, resp_len = 0;
+	struct skw_iface *iface = netdev_priv(dev);
+	char help[] = "Usage:offload_tcp idx=1,en=1,interval=1500,probe=100:3,port=18888#192.168.0.166:52222";
+
+	hex = param;
+
+	hex = strstr(hex, "idx=");
+	if (hex) {
+		ch = strsep(&hex, "=");
+		if ((ch == NULL) || (strlen(ch) == 0)) {
+			skw_dev_err(dev, "idx param\n");
+			ret = -EFAULT;
+			goto error;
+		}
+
+		ch = strsep(&hex, ",");
+		if ((ch == NULL) || (strlen(ch) == 0)) {
+			skw_dev_err(dev, "idx param\n");
+			ret = -ERANGE;
+			goto error;
+		}
+
+		ret = kstrtou8(ch, 0, &idx);
+		if (ret) {
+			skw_dev_err(dev, "idx param\n");
+			ret = -EINVAL;
+			goto error;
+		}
+	} else {
+		skw_dev_err(dev, "idx not found\n");
+		ret = -EFAULT;
+		goto error;
+	}
+
+	if (!hex) {
+		ret = -EBADF;
+		goto error;
+	}
+
+	if (idx >= SKW_MAX_TCPKEEP_OFFLOAD_INFO_NUM) {
+		skw_dev_err(dev, "tcpinfo_num exceed\n");
+		resp_len = sprintf(resp, "ERROR: %s\n", "tcpinfo_num exceed\n");
+		ret = -EINVAL;
+		goto error;
+	}
+
+	hex = strstr(hex, "en=");
+	if (hex) {
+		ch = strsep(&hex, "=");
+		if ((ch == NULL) || (strlen(ch) == 0)) {
+			skw_dev_err(dev, "en param\n");
+			resp_len = sprintf(resp, "ERROR: %s\n", "en param\n");
+			ret = -EFAULT;
+			goto error;
+		}
+
+		ch = strsep(&hex, ",");
+		if ((ch == NULL) || (strlen(ch) == 0)) {
+			skw_dev_err(dev, "en param\n");
+			resp_len = sprintf(resp, "ERROR: %s\n", "en param\n");
+			ret = -ERANGE;
+			goto error;
+		}
+
+		ret = kstrtou8(ch, 0, &en);
+		if (ret) {
+			skw_dev_err(dev, "en param\n");
+			resp_len = sprintf(resp, "ERROR: %s\n", "en param\n");
+			ret = -EINVAL;
+			goto error;
+		}
+	} else {
+		skw_dev_err(dev, "en not found\n");
+		resp_len = sprintf(resp, "ERROR: %s\n", "en not found\n");
+		ret = -EFAULT;
+		goto error;
+	}
+
+	if (!hex)
+		goto done;
+
+	hex = strstr(hex, "interval=");
+	if (hex) {
+		ch = strsep(&hex, "=");
+		if ((ch == NULL) || (strlen(ch) == 0)) {
+			skw_dev_err(dev, "interval param\n");
+			resp_len = sprintf(resp,
+				"ERROR: %s\n",
+				"interval param\n");
+			ret = -EFAULT;
+			goto error;
+		}
+
+		ch = strsep(&hex, ",");
+		if ((ch == NULL) || (strlen(ch) == 0)) {
+			skw_dev_err(dev, "interval param\n");
+			resp_len = sprintf(resp,
+				"ERROR: %s\n",
+				"interval param\n");
+			ret = -ERANGE;
+			goto error;
+		}
+
+		ret = kstrtou16(ch, 0, &keep.interval_idle);
+		if (ret) {
+			skw_dev_err(dev, "interval param\n");
+			resp_len = sprintf(resp,
+				"ERROR: %s\n",
+				"interval param\n");
+			ret = -EINVAL;
+			goto error;
+		}
+	} else {
+		skw_dev_err(dev, "interval not found\n");
+		resp_len = sprintf(resp, "ERROR: %s\n", "interval not found\n");
+		ret = -EFAULT;
+		goto error;
+	}
+
+	if (!hex) {
+		ret = -EBADF;
+		goto error;
+	}
+
+	hex = strstr(hex, "probe=");
+	if (hex) {
+		ch = strsep(&hex, "=");
+		if ((ch == NULL) || (strlen(ch) == 0)) {
+			skw_dev_err(dev, "probe param\n");
+			resp_len = sprintf(resp,
+				"ERROR: %s\n",
+				"probe param\n");
+			ret = -EFAULT;
+			goto error;
+		}
+
+		ch = strsep(&hex, ":");
+		if ((ch == NULL) || (strlen(ch) == 0)) {
+			skw_dev_err(dev, "probe param\n");
+			resp_len = sprintf(resp,
+				"ERROR: %s\n",
+				"probe param\n");
+			ret = -ERANGE;
+			goto error;
+		}
+
+		ret = kstrtou16(ch, 0, &keep.probe_interval);
+		if (ret) {
+			skw_dev_err(dev, "probe param\n");
+			resp_len = sprintf(resp,
+				"ERROR: %s\n",
+				"probe param\n");
+			ret = -EINVAL;
+			goto error;
+		}
+
+		ch = strsep(&hex, ",");
+		if ((ch == NULL) || (strlen(ch) == 0)) {
+			skw_dev_err(dev, "probe param\n");
+			resp_len = sprintf(resp,
+				"ERROR: %s\n",
+				"probe param\n");
+			ret = -ERANGE;
+			goto error;
+		}
+
+		ret = kstrtou8(ch, 0, &keep.probe_count);
+		if (ret) {
+			skw_dev_err(dev, "probe param\n");
+			resp_len = sprintf(resp,
+				"ERROR: %s\n",
+				"probe param\n");
+			ret = -EINVAL;
+			goto error;
+		}
+	} else {
+		skw_dev_err(dev, "probe not found\n");
+		resp_len = sprintf(resp, "ERROR: %s\n", "probe not found\n");
+		ret = -EFAULT;
+		goto error;
+	}
+
+	if (!hex) {
+		ret = -EBADF;
+		goto error;
+	}
+
+	ret = strncmp(hex, "port=", strlen("port="));
+	if (!ret) {
+		ch = strsep(&hex, "=");
+		if ((ch == NULL) || (strlen(ch) == 0)) {
+			skw_dev_err(dev, "port param\n");
+			resp_len = sprintf(resp, "ERROR: %s\n", "port param\n");
+			ret = -EFAULT;
+			goto error;
+		}
+
+		while (hex < param + len - 1) {
+			ret = sscanf(hex, "%d#%d",
+				&temp1, &temp2);
+			if (ret != 2) {
+				ret = -EINVAL;
+				goto error;
+			}
+
+
+			ch = strsep(&hex, "#");
+			if ((ch == NULL) || (strlen(ch) == 0)) {
+				resp_len = sprintf(resp,
+					"ERROR: %s\n",
+					"match char #\n");
+				ret = -EINVAL;
+				goto error;
+			}
+
+			ret = kstrtou16(ch, 0, &keep.port_self);
+			if (ret) {
+				skw_dev_err(dev, "port_self param\n");
+				resp_len = sprintf(resp,
+					"ERROR: %s\n",
+					"port_self param\n");
+				ret = -EINVAL;
+				goto error;
+			}
+
+			ch = strsep(&hex, ":");
+			if ((ch == NULL) || (strlen(ch) == 0)) {
+				resp_len = sprintf(resp,
+					"ERROR: %s\n",
+					"match char :\n");
+				ret = -EINVAL;
+				goto error;
+			}
+
+			keep.ipaddr_peer = in_aton(ch);
+			if (keep.ipaddr_peer == 0) {
+				skw_dev_err(dev, "Invalid IPv4: %s", ch);
+				resp_len = sprintf(resp,
+					"ERROR:Invalid IPv4: %s\n", ch);
+				goto error;
+			}
+
+			ch = strsep(&hex, "+");
+
+			if ((ch == NULL) || (strlen(ch) == 0)) {
+				resp_len = sprintf(resp,
+					"ERROR: %s\n",
+					"match char #\n");
+				ret = -EINVAL;
+				goto error;
+			}
+
+			ret = kstrtou16(ch, 0, &keep.port_peer);
+			if (ret) {
+				skw_dev_err(dev, "port_peer param\n");
+				resp_len = sprintf(resp,
+					"ERROR: %s\n",
+					"port_peer param\n");
+				ret = -EINVAL;
+				goto error;
+			}
+
+			break;
+		}
+	} else {
+		resp_len = sprintf(resp, "ERROR: %s\n",
+			"port=\n");
+		ret = -EINVAL;
+		goto error;
+	}
+
+	keep.inst_id = iface->id;
+done:
+	if (en) {
+		atomic_set(&skw_tcp_offload.enabled[idx], 1);
+		memcpy(&skw_tcp_offload.tcpinfo[idx], &keep, sizeof(struct skw_tcp_keepalive_info));
+		skw_hex_dump("kp:", &keep, sizeof(struct skw_tcp_keepalive_info), false);
+	} else {
+		atomic_set(&skw_tcp_offload.enabled[idx], 0);
+		memset(&skw_tcp_offload.tcpinfo[idx], 0, sizeof(struct skw_tcp_keepalive_info));
+	}
+
+	skw_hex_dump("skw_tcp_offload:", &skw_tcp_offload, sizeof(skw_tcp_offload), false);
+
+error:
+	if (ret)
+		resp_len += sprintf(resp + resp_len, " %s\n", help);
+	else
+		resp_len += sprintf(resp + resp_len, "%s\n", "OK");
+
+	*extra_len = resp_len;
+
+	return ret;
+}
+#else
+void skw_rx_dump_tcp_data(struct skw_iface *iface, struct sk_buff *skb)
+{
+}
+
+void skw_tx_dump_tcp_data(struct skw_iface *iface, struct sk_buff *skb)
+{
+}
+
+u32 skw_fill_tcpalive_offload_info(struct wiphy *wiphy, u8 *tcp_off)
+{
+	return 0;
+}
+#endif
+
 static int skw_iwpriv_keep_alive(struct net_device *dev,
 			struct iw_request_info *info,
 			union iwreq_data *wrqu, char *extra)
@@ -1149,8 +1666,12 @@ static int skw_iwpriv_keep_alive(struct net_device *dev,
 	char *param = NULL;
 	char help[] = "ERROR useage:[idx=0,en=0/1,period=100,flags=0/1,pkt=7c:11]";
 	int ret = 0;
+	int len = wrqu->data.length;
 
-	WARN_ON(wrqu->data.length > SKW_KEEP_BUF_SIZE);
+	if (wrqu->data.length >= SKW_KEEP_BUF_SIZE) {
+		skw_err("data too long: %d\n", wrqu->data.length);
+		return -EINVAL;
+	}
 
 	param = SKW_ZALLOC(SKW_KEEP_BUF_SIZE, GFP_KERNEL);
 	if (!param) {
@@ -1158,20 +1679,20 @@ static int skw_iwpriv_keep_alive(struct net_device *dev,
 		goto out;
 	}
 
-	if (copy_from_user(param, wrqu->data.pointer, SKW_KEEP_BUF_SIZE)) {
-		skw_err("copy failed, length: %d\n",
-			wrqu->data.length);
+	if (copy_from_user(param, wrqu->data.pointer, wrqu->data.length)) {
+		skw_dev_err(dev, "copy failed, length: %d\n", wrqu->data.length);
 
 		ret = -EFAULT;
 		goto free;
 	}
 
-	skw_dbg("cmd: 0x%x, (len: %d)\n",
-		info->cmd, wrqu->data.length);
-	param[SKW_KEEP_BUF_SIZE - 1] = '\0';
-	skw_hex_dump("param:", param, SKW_KEEP_BUF_SIZE, false);
+	param[wrqu->data.length] = 0;
 
-	ret = skw_keep_active_set(dev, param, SKW_KEEP_BUF_SIZE);
+	skw_dev_dbg(dev, "cmd: 0x%x, (len: %d)\n", info->cmd, wrqu->data.length);
+	param[SKW_KEEP_BUF_SIZE - 1] = '\0';
+	skw_hex_dump("param:", param, len, false);
+
+	ret = skw_keep_active_set(dev, param, len);
 	if (ret)
 		memcpy(extra, help, sizeof(help));
 	else
@@ -1179,7 +1700,7 @@ static int skw_iwpriv_keep_alive(struct net_device *dev,
 
 	wrqu->data.length = SKW_GET_LEN_512;
 
-	skw_dbg("resp: %s\n", extra);
+	skw_dev_dbg(dev, "resp: %s\n", extra);
 
 free:
 	SKW_KFREE(param);
@@ -1205,18 +1726,64 @@ static int skw_iwpriv_wow_filter(struct net_device *dev,
 	}
 
 	if (copy_from_user(param, wrqu->data.pointer, SKW_IW_WOW_BUF_SIZE)) {
-		skw_err("copy failed, length: %d\n",
-			wrqu->data.length);
+		skw_dev_err(dev, "copy failed, length: %d\n", wrqu->data.length);
 
 		ret = -EFAULT;
 		goto free;
 	}
 
+	param[SKW_IW_WOW_BUF_SIZE - 1] = '\0';
 	skw_hex_dump("flt", param, SKW_IW_WOW_BUF_SIZE, false);
 
 	ret = skw_wow_filter_set(dev, param,
 		min_t(int, SKW_IW_WOW_BUF_SIZE, (int)wrqu->data.length),
 		extra, &extra_len);
+
+	wrqu->data.length = extra_len;
+
+free:
+	SKW_KFREE(param);
+
+out:
+	return ret;
+}
+
+static int skw_iwpriv_offload_keepalive(struct net_device *dev,
+			struct iw_request_info *info,
+			union iwreq_data *wrqu, char *extra)
+{
+	char *param;
+	int ret;
+	int extra_len;
+
+	WARN_ON(wrqu->data.length > SKW_IW_OFFLOAD_KEEP_TCP_SIZE);
+
+	param = SKW_ZALLOC(SKW_IW_OFFLOAD_KEEP_TCP_SIZE, GFP_KERNEL);
+	if (!param) {
+		ret = -ENOMEM;
+		goto out;
+	}
+
+	if (copy_from_user(param, wrqu->data.pointer, SKW_IW_OFFLOAD_KEEP_TCP_SIZE)) {
+		skw_dev_err(dev, "copy failed, length: %d\n", wrqu->data.length);
+
+		ret = -EFAULT;
+		goto free;
+	}
+
+	param[SKW_IW_OFFLOAD_KEEP_TCP_SIZE - 1] = '\0';
+	skw_hex_dump("ofl", param, SKW_IW_OFFLOAD_KEEP_TCP_SIZE, false);
+
+#ifdef CONFIG_SKW_TCP_OFFLOAD_SUPPORT
+	ret = skw_offload_tcp_set(dev, param,
+		min_t(int, SKW_IW_OFFLOAD_KEEP_TCP_SIZE, (int)wrqu->data.length),
+		extra, &extra_len);
+#else
+		extra_len = sprintf(extra,
+			"ERROR: %s\n",
+			"macro not defined\n");
+		ret = -EINVAL;
+#endif
 
 	wrqu->data.length = extra_len;
 
@@ -1289,7 +1856,7 @@ static int skw_iwpriv_mode(struct net_device *dev,
 			   union iwreq_data *wrqu, char *extra)
 {
 	int i;
-	char param[32] = {0};
+	char param[32 + 1] = { 0 };
 	struct skw_iface *iface = (struct skw_iface *)netdev_priv(dev);
 
 	struct skw_iw_wireless_mode {
@@ -1309,17 +1876,20 @@ static int skw_iwpriv_mode(struct net_device *dev,
 		{NULL, 0}
 	};
 
-	WARN_ON(sizeof(param) < wrqu->data.length);
+	if (wrqu->data.length >= sizeof(param)) {
+		skw_err("data too long: %d\n", wrqu->data.length);
+		return -EINVAL;
+	}
 
-	if (copy_from_user(param, wrqu->data.pointer, sizeof(param))) {
-		skw_err("copy failed, length: %d\n",
-			wrqu->data.length);
+	if (copy_from_user(param, wrqu->data.pointer, wrqu->data.length)) {
+		skw_dev_err(dev, "copy failed, length: %d\n", wrqu->data.length);
 
 		return -EFAULT;
 	}
 
-	param[31] = '\0';
-	skw_dbg("cmd: 0x%x, %s(len: %d)\n",
+	param[wrqu->data.length] = 0;
+
+	skw_dev_dbg(dev, "cmd: 0x%x, %s(len: %d)\n",
 		info->cmd, param, wrqu->data.length);
 
 	for (i = 0; modes[i].name; i++) {
@@ -1336,7 +1906,7 @@ static int skw_iwpriv_get_mode(struct net_device *dev,
 			struct iw_request_info *info,
 			union iwreq_data *wrqu, char *extra)
 {
-	skw_dbg("traced\n");
+	skw_dev_dbg(dev, "traced\n");
 	return 0;
 }
 
@@ -1357,6 +1927,39 @@ static int skw_iwpriv_help(struct skw_iface *iface, void *param, char *args,
 	return 0;
 }
 
+int skw_set_supp_band(struct wiphy *wiphy, u8 en_24g, u8 en_5g)
+{
+	int ret = 0;
+	u16 *plen;
+	struct skw_tlv_conf conf;
+	u8 val[3] = {0};
+
+	ret = skw_tlv_alloc(&conf, 128, GFP_KERNEL);
+	if (ret)
+		return ret;
+
+	plen = skw_tlv_reserve(&conf, 2);
+	if (!plen) {
+		skw_tlv_free(&conf);
+		return -ENOMEM;
+	}
+
+	val[0] = en_24g;
+	val[1] = en_5g;
+	if (skw_tlv_add(&conf, SKW_TLV_SET_SUPP_BAND, val, sizeof(val)))
+		skw_err("add SKW_TLV_SET_SUPP_BAND failed.\n");
+
+	if (conf.total_len) {
+		*plen = conf.total_len;
+		ret = skw_msg_xmit(wiphy, 0, SKW_CMD_SET_MIB, conf.buff,
+				conf.total_len, NULL, 0);
+	}
+
+	skw_tlv_free(&conf);
+
+	return ret;
+}
+
 static int skw_iwpriv_set_bandcfg(struct skw_iface *iface, void *param,
 		char *args, char *resp, int resp_len)
 {
@@ -1368,16 +1971,21 @@ static int skw_iwpriv_set_bandcfg(struct skw_iface *iface, void *param,
 
 	ret = kstrtou16(args, 10, &res);
 	if (!ret && res < 3) {
-		if (res == 0)
+		if (res == 0) {
 			iface->extend.scan_band_filter = 0;
-		else if (res == 1)
+			skw_set_supp_band(iface->wdev.wiphy, 1, 1);
+		} else if (res == 1) {
 			iface->extend.scan_band_filter = BIT(NL80211_BAND_2GHZ);
-		else if (res == 2)
+			skw_set_supp_band(iface->wdev.wiphy, 1, 0);
+		} else if (res == 2) {
 			iface->extend.scan_band_filter = BIT(NL80211_BAND_5GHZ);
+			skw_set_supp_band(iface->wdev.wiphy, 0, 1);
+		}
 
 		sprintf(resp, "ok");
-	} else
+	} else {
 		sprintf(resp, "failed");
+	}
 
 	return ret;
 }
@@ -1395,517 +2003,12 @@ static int skw_iwpriv_get_bandcfg(struct skw_iface *iface, void *param,
 	return 0;
 }
 
-int skw_set_cca_thre_ofdm(struct wiphy *wiphy, struct net_device *dev,
-								struct skw_cca_thre_ofdm *p_ofdm)
-
-{
-	int ret = 0;
-	u16 *plen;
-	struct skw_tlv_conf conf;
-
-	ret = skw_tlv_alloc(&conf, 512, GFP_KERNEL);
-	if (ret) {
-		skw_err("alloc failed\n");
-		return ret;
-	}
-
-	plen = skw_tlv_reserve(&conf, 2);
-	if (!plen) {
-		skw_err("reserve failed\n");
-		skw_tlv_free(&conf);
-		return -ENOMEM;
-	}
-
-	if (skw_tlv_add(&conf, SKW_MIB_SET_CCA_THRE_OFDM, p_ofdm, sizeof(struct skw_cca_thre_ofdm))) {
-		skw_err("add cca thre ofdm tlv failed\n");
-		skw_tlv_free(&conf);
-
-	return -EINVAL;
-	}
-
-	if (conf.total_len) {
-		*plen = conf.total_len;
-		ret = skw_send_msg(wiphy, dev, SKW_CMD_SET_MIB, conf.buff,
-		conf.total_len, NULL, 0);
-	if (ret)
-		skw_err("failed, ret: %d\n", ret);
-
-	}
-
-	skw_tlv_free(&conf);
-
-	return ret;
-}
-
-int skw_set_cca_thre_11b(struct wiphy *wiphy, struct net_device *dev,
-								struct skw_cca_thre_11b *p_cca_11b)
-
-{
-	int ret = 0;
-	u16 *plen;
-	struct skw_tlv_conf conf;
-
-	ret = skw_tlv_alloc(&conf, 512, GFP_KERNEL);
-	if (ret) {
-		skw_err("alloc failed\n");
-		return ret;
-	}
-
-	plen = skw_tlv_reserve(&conf, 2);
-	if (!plen) {
-		skw_err("reserve failed\n");
-		skw_tlv_free(&conf);
-		return -ENOMEM;
-	}
-
-	if (skw_tlv_add(&conf, SKW_MIB_SET_CCA_THRE_11B, p_cca_11b, sizeof(struct skw_cca_thre_11b))) {
-		skw_err("add cca thre 11b tlv failed\n");
-		skw_tlv_free(&conf);
-
-	return -EINVAL;
-	}
-
-	if (conf.total_len) {
-		*plen = conf.total_len;
-		ret = skw_send_msg(wiphy, dev, SKW_CMD_SET_MIB, conf.buff,
-		conf.total_len, NULL, 0);
-	if (ret)
-		skw_err("failed, ret: %d\n", ret);
-
-	}
-
-	skw_tlv_free(&conf);
-
-	return ret;
-}
-
-int skw_set_cca_thre_nowifi(struct wiphy *wiphy, struct net_device *dev,
-								struct skw_cca_thre_nowifi *p_nowifi)
-
-{
-	int ret = 0;
-	u16 *plen;
-	struct skw_tlv_conf conf;
-
-	ret = skw_tlv_alloc(&conf, 512, GFP_KERNEL);
-	if (ret) {
-		skw_err("alloc failed\n");
-		return ret;
-	}
-
-	plen = skw_tlv_reserve(&conf, 2);
-	if (!plen) {
-		skw_err("reserve failed\n");
-		skw_tlv_free(&conf);
-		return -ENOMEM;
-	}
-
-	if (skw_tlv_add(&conf, SKW_MIB_SET_CCA_THRE_NOWIFI, p_nowifi, sizeof(struct skw_cca_thre_nowifi))) {
-		skw_err("add cca thre nowifi tlv failed\n");
-		skw_tlv_free(&conf);
-
-	return -EINVAL;
-	}
-
-	if (conf.total_len) {
-		*plen = conf.total_len;
-		ret = skw_send_msg(wiphy, dev, SKW_CMD_SET_MIB, conf.buff,
-		conf.total_len, NULL, 0);
-	if (ret)
-		skw_err("failed, ret: %d\n", ret);
-
-	}
-
-	skw_tlv_free(&conf);
-
-	return ret;
-}
-
-
-int skw_set_edca_params(struct wiphy *wiphy, struct net_device *dev,
-								struct skw_edca_param_s *p_edca_params)
-
-{
-	int ret = 0;
-	u16 *plen;
-	struct skw_tlv_conf conf;
-
-	ret = skw_tlv_alloc(&conf, 512, GFP_KERNEL);
-	if (ret) {
-		skw_err("alloc failed\n");
-		return ret;
-	}
-
-	plen = skw_tlv_reserve(&conf, 2);
-	if (!plen) {
-		skw_err("reserve failed\n");
-		skw_tlv_free(&conf);
-		return -ENOMEM;
-	}
-
-	if (skw_tlv_add(&conf, SKW_MIB_SET_EDCA_PARAM, p_edca_params, sizeof(struct skw_edca_param_s))) {
-		skw_err("add max ppdu dur tlv failed\n");
-		skw_tlv_free(&conf);
-
-	return -EINVAL;
-	}
-
-	if (conf.total_len) {
-		*plen = conf.total_len;
-		ret = skw_send_msg(wiphy, dev, SKW_CMD_SET_MIB, conf.buff,
-		conf.total_len, NULL, 0);
-	if (ret)
-		skw_err("failed, ret: %d\n", ret);
-
-	}
-
-	skw_tlv_free(&conf);
-
-	return ret;
-}
-
-int skw_set_max_ppdu_dur(struct wiphy *wiphy, struct net_device *dev,
-			struct skw_max_ppdu_dur *p_mppdu_dur)
-{
-	int ret = 0;
-	u16 *plen;
-	struct skw_tlv_conf conf;
-
-	skw_dbg("idx: %d, max ppdu dur %d\n", p_mppdu_dur->idx, p_mppdu_dur->max_ppdu_dur);
-
-	ret = skw_tlv_alloc(&conf, 512, GFP_KERNEL);
-	if (ret) {
-		skw_err("alloc failed\n");
-		return ret;
-	}
-
-	plen = skw_tlv_reserve(&conf, 2);
-	if (!plen) {
-		skw_err("reserve failed\n");
-		skw_tlv_free(&conf);
-		return -ENOMEM;
-	}
-
-	if (skw_tlv_add(&conf, SKW_MIB_SET_MAX_PPDU_DUR, p_mppdu_dur, sizeof(struct skw_max_ppdu_dur))) {
-		skw_err("add max ppdu dur tlv failed\n");
-		skw_tlv_free(&conf);
-
-		return -EINVAL;
-	}
-
-	if (conf.total_len) {
-		*plen = conf.total_len;
-		ret = skw_send_msg(wiphy, dev, SKW_CMD_SET_MIB, conf.buff,
-				conf.total_len, NULL, 0);
-		if (ret)
-			skw_err("failed, ret: %d\n", ret);
-
-	}
-
-	skw_tlv_free(&conf);
-
-	return ret;
-}
-
-int skw_set_force_rts_rate(struct wiphy *wiphy, struct net_device *dev,
-			struct skw_force_rts_rate *rate)
-{
-	int ret = 0;
-	u16 *plen;
-	struct skw_tlv_conf conf;
-
-	skw_dbg("2.4G rate: %d, 5G rate %d\n", rate->rts_rate_24G, rate->rts_rate_5G);
-
-	ret = skw_tlv_alloc(&conf, 512, GFP_KERNEL);
-	if (ret) {
-		skw_err("alloc failed\n");
-		return ret;
-	}
-
-	plen = skw_tlv_reserve(&conf, 2);
-	if (!plen) {
-		skw_err("reserve force rts rate tlv failed\n");
-		skw_tlv_free(&conf);
-		return -ENOMEM;
-	}
-
-	if (skw_tlv_add(&conf, SKW_MIB_SET_FORCE_RTS_RATE, rate, sizeof(struct skw_force_rts_rate))) {
-		skw_err("add force rts rate tlv failed\n");
-		skw_tlv_free(&conf);
-
-		return -EINVAL;
-	}
-
-	if (conf.total_len) {
-		*plen = conf.total_len;
-		ret = skw_send_msg(wiphy, dev, SKW_CMD_SET_MIB, conf.buff,
-				conf.total_len, NULL, 0);
-		if (ret)
-			skw_err("failed, ret: %d\n", ret);
-
-	}
-
-	skw_tlv_free(&conf);
-
-	return ret;
-}
-
-int skw_set_force_rx_rsp_rate(struct wiphy *wiphy, struct net_device *dev,
-		struct skw_force_rx_rsp_rate *rate)
-{
-	int ret = 0;
-	u16 *plen;
-	struct skw_tlv_conf conf;
-
-	skw_dbg("11b long rate: %d, 11b short rate %d, ofdm rate %d\n", rate->rx_rsp_rate_11b_long,
-			rate->rx_rsp_rate_11b_short, rate->rx_rsp_rate_ofdm);
-
-	ret = skw_tlv_alloc(&conf, 512, GFP_KERNEL);
-	if (ret) {
-		skw_err("alloc failed\n");
-		return ret;
-	}
-
-	plen = skw_tlv_reserve(&conf, 2);
-	if (!plen) {
-		skw_err("reserve force rx rsp rate tlv failed\n");
-		skw_tlv_free(&conf);
-		return -ENOMEM;
-	}
-
-	if (skw_tlv_add(&conf, SKW_MIB_SET_FORCE_RX_RSP_RATE, rate, sizeof(struct skw_force_rx_rsp_rate))) {
-		skw_err("add force rx rsp rate tlv failed\n");
-		skw_tlv_free(&conf);
-
-		return -EINVAL;
-	}
-
-	if (conf.total_len) {
-		*plen = conf.total_len;
-		ret = skw_send_msg(wiphy, dev, SKW_CMD_SET_MIB, conf.buff,
-				conf.total_len, NULL, 0);
-		if (ret)
-			skw_err("failed, ret: %d\n", ret);
-
-	}
-
-	skw_tlv_free(&conf);
-
-	return ret;
-}
-
-int skw_set_scan_time_cmd(struct wiphy *wiphy, struct net_device *dev,
-			struct skw_set_scan_time *time)
-{
-	int ret = 0;
-	u16 *plen;
-	struct skw_tlv_conf conf;
-
-	skw_dbg("active dwell time: %d, bypass active scan auto time %d\n",
-		time->active_dwell_time, time->bypass_active_acan_auto_time);
-
-	ret = skw_tlv_alloc(&conf, 512, GFP_KERNEL);
-	if (ret) {
-		skw_err("alloc failed\n");
-		return ret;
-	}
-
-	plen = skw_tlv_reserve(&conf, 2);
-	if (!plen) {
-		skw_err("reserve scan time failed\n");
-		skw_tlv_free(&conf);
-		return -ENOMEM;
-	}
-
-	if (skw_tlv_add(&conf, SKW_MIB_SET_SCAN_TIME, time, sizeof(struct skw_set_scan_time))) {
-		skw_err("add scan time failed\n");
-		skw_tlv_free(&conf);
-
-		return -EINVAL;
-	}
-
-	if (conf.total_len) {
-		*plen = conf.total_len;
-		ret = skw_send_msg(wiphy, dev, SKW_CMD_SET_MIB, conf.buff,
-				conf.total_len, NULL, 0);
-		if (ret)
-			skw_err("failed, ret: %d\n", ret);
-	}
-
-	skw_tlv_free(&conf);
-
-	return ret;
-}
-
-int skw_set_tcp_disconn_wakeup_host(struct wiphy *wiphy, struct net_device *dev,
-			struct skw_set_tcpd_wakeup_host *flag)
-{
-	int ret = 0;
-	u16 *plen;
-	struct skw_tlv_conf conf;
-
-	skw_dbg("wakeup host:%d\n", flag->enable);
-
-	ret = skw_tlv_alloc(&conf, 512, GFP_KERNEL);
-	if (ret) {
-		skw_err("alloc failed\n");
-		return ret;
-	}
-
-	plen = skw_tlv_reserve(&conf, 2);
-	if (!plen) {
-		skw_err("reserve wakeup host flag failed\n");
-		skw_tlv_free(&conf);
-		return -ENOMEM;
-	}
-
-	if (skw_tlv_add(&conf, SKW_MIB_SET_TCP_DISCONN_WAKEUP_HOST, flag, sizeof(struct skw_set_tcpd_wakeup_host))) {
-		skw_err("add wakeup host flag failed\n");
-		skw_tlv_free(&conf);
-
-		return -EINVAL;
-	}
-
-	if (conf.total_len) {
-		*plen = conf.total_len;
-		ret = skw_send_msg(wiphy, dev, SKW_CMD_SET_MIB, conf.buff,
-				conf.total_len, NULL, 0);
-		if (ret)
-			skw_err("failed, ret: %d\n", ret);
-	}
-
-	skw_tlv_free(&conf);
-
-	return ret;
-}
-
-int skw_set_rc_min_rate(struct wiphy *wiphy, struct net_device *dev,
-			struct skw_set_rate_control_min_rate *rate)
-{
-	int ret = 0;
-	u16 *plen;
-	struct skw_tlv_conf conf;
-
-	skw_dbg("rc min rate:%d\n", rate->rstrict_min_rate);
-
-	ret = skw_tlv_alloc(&conf, 512, GFP_KERNEL);
-	if (ret) {
-		skw_err("alloc failed\n");
-		return ret;
-	}
-
-	plen = skw_tlv_reserve(&conf, 2);
-	if (!plen) {
-		skw_err("reserve rc min rate failed\n");
-		skw_tlv_free(&conf);
-		return -ENOMEM;
-	}
-
-	if (skw_tlv_add(&conf, SKW_MIB_SET_RATE_CTRL_MIN_RATE, rate, sizeof(struct skw_set_rate_control_min_rate))) {
-		skw_err("add rc min rate failed\n");
-		skw_tlv_free(&conf);
-
-		return -EINVAL;
-	}
-
-	if (conf.total_len) {
-		*plen = conf.total_len;
-		ret = skw_send_msg(wiphy, dev, SKW_CMD_SET_MIB, conf.buff,
-				conf.total_len, NULL, 0);
-		if (ret)
-			skw_err("failed, ret: %d\n", ret);
-	}
-
-	skw_tlv_free(&conf);
-
-	return ret;
-}
-
-int skw_set_rate_control_rate_change(struct wiphy *wiphy, struct net_device *dev,
-			struct skw_set_rate_control_rate_change *rate)
-{
-	int ret = 0;
-	u16 *plen;
-	struct skw_tlv_conf conf;
-
-	ret = skw_tlv_alloc(&conf, 512, GFP_KERNEL);
-	if (ret) {
-		skw_err("alloc failed\n");
-		return ret;
-	}
-
-	plen = skw_tlv_reserve(&conf, 2);
-	if (!plen) {
-		skw_err("reserve failed\n");
-		skw_tlv_free(&conf);
-		return -ENOMEM;
-	}
-
-	if (skw_tlv_add(&conf, SKW_MIB_SET_RATE_CTRL_RATE_CHANGE_PARAM, rate, sizeof(struct skw_set_rate_control_rate_change))) {
-		skw_err("add failed\n");
-		skw_tlv_free(&conf);
-
-		return -EINVAL;
-	}
-
-	if (conf.total_len) {
-		*plen = conf.total_len;
-		ret = skw_send_msg(wiphy, dev, SKW_CMD_SET_MIB, conf.buff,
-				conf.total_len, NULL, 0);
-		if (ret)
-			skw_err("failed, ret: %d\n", ret);
-	}
-
-	skw_tlv_free(&conf);
-
-	return ret;
-}
-
-int skw_set_rc_spe_rate(struct wiphy *wiphy, struct net_device *dev,
-		struct skw_set_rate_control_special_rate *rate)
-{
-	int ret = 0;
-	u16 *plen;
-	struct skw_tlv_conf conf;
-
-	ret = skw_tlv_alloc(&conf, 512, GFP_KERNEL);
-	if (ret) {
-		skw_err("alloc tlv failed\n");
-		return ret;
-	}
-
-	plen = skw_tlv_reserve(&conf, 2);
-	if (!plen) {
-		skw_err("reserve tlv failed\n");
-		skw_tlv_free(&conf);
-		return -ENOMEM;
-	}
-
-	if (skw_tlv_add(&conf, SKW_MIB_SET_RATE_CTRL_SPECIAL_FRM_RATE, rate, sizeof(struct skw_set_rate_control_special_rate))) {
-		skw_err("add tlv failed\n");
-		skw_tlv_free(&conf);
-
-		return -EINVAL;
-	}
-
-	if (conf.total_len) {
-		*plen = conf.total_len;
-		ret = skw_send_msg(wiphy, dev, SKW_CMD_SET_MIB, conf.buff,
-				conf.total_len, NULL, 0);
-		if (ret)
-			skw_err("failed, ret: %d\n", ret);
-	}
-
-	skw_tlv_free(&conf);
-
-	return ret;
-}
-
 static int skw_iwpriv_set_max_ppdu_dur(struct skw_iface *iface, void *param,
 	char *args, char *resp, int resp_len)
 {
 	int ret = 0;
 	char *p = NULL;
+	struct net_device *dev = iface->ndev;
 	struct skw_max_ppdu_dur max_ppdu_dur = {0};
 
 	if (!args)
@@ -1915,7 +2018,7 @@ static int skw_iwpriv_set_max_ppdu_dur(struct skw_iface *iface, void *param,
 
 	p = strchr(args, ',');
 	if (!p) {
-		skw_err("idx not found\n");
+		skw_dev_err(dev, "idx not found\n");
 		return -ENOTSUPP;
 	}
 
@@ -1929,7 +2032,7 @@ static int skw_iwpriv_set_max_ppdu_dur(struct skw_iface *iface, void *param,
 
 	p = p + strlen(",");
 	if (!p) {
-		skw_err("mppdu dur not found\n");
+		skw_dev_err(dev, "mppdu dur not found\n");
 		return -ENOTSUPP;
 	}
 
@@ -1969,7 +2072,8 @@ static int skw_iwpriv_set_max_ppdu_dur(struct skw_iface *iface, void *param,
 
 	skw_dbg("max ppdu dur idx %d, dur %d\n", max_ppdu_dur.idx, max_ppdu_dur.max_ppdu_dur);
 
-	ret = skw_set_max_ppdu_dur(iface->wdev.wiphy, iface->ndev, &max_ppdu_dur);
+	ret = skw_set_mib(iface->wdev.wiphy, iface->id, SKW_MIB_SET_MAX_PPDU_DUR,
+			  &max_ppdu_dur, sizeof(struct skw_max_ppdu_dur));
 	if (!ret)
 		sprintf(resp, "set max ppdu dur ok ");
 	else
@@ -1978,7 +2082,7 @@ static int skw_iwpriv_set_max_ppdu_dur(struct skw_iface *iface, void *param,
 	return ret;
 }
 
-static u16 skw_iwpriv_convert_string_to_u (char *ptr, u8 length)
+static u16 skw_iwpriv_convert_string_to_u(char *ptr, u8 length)
 {
 	char *buffer = NULL;
 	unsigned long num = 0;
@@ -1989,6 +2093,7 @@ static u16 skw_iwpriv_convert_string_to_u (char *ptr, u8 length)
 		skw_err("mem alloc failed\n");
 		return -ENOMEM;
 	}
+
 	memcpy(buffer, ptr, length);
 	buffer[length] = '\0';
 
@@ -2000,16 +2105,18 @@ static u16 skw_iwpriv_convert_string_to_u (char *ptr, u8 length)
 		} else if (num <= 0xFF) {
 			kfree(buffer);
 			return (u8)num;
-		} else {
-			skw_err("tred beyond u8 and u16\n");
-			kfree(buffer);
-			return -ERANGE;
 		}
-	} else {
-		skw_err("transfer fail\n");
+
+		skw_err("tred beyond u8 and u16\n");
 		kfree(buffer);
-		return -EINVAL;
+
+		return -ERANGE;
 	}
+
+	skw_err("transfer fail\n");
+	kfree(buffer);
+
+	return -EINVAL;
 }
 
 static u32 skw_iwpriv_convert_string_to_u32(char *ptr, unsigned int length)
@@ -2037,20 +2144,23 @@ static u32 skw_iwpriv_convert_string_to_u32(char *ptr, unsigned int length)
 			if (num <= 0xFFFFFFFF) {
 				kfree(buffer);
 				return (u32)num;
-			} else {
-				skw_err("value exceeds u32 range");
-				kfree(buffer);
-				return -ERANGE;
 			}
-		} else {
-			skw_err("hex conversion failed");
+
+			skw_err("value exceeds u32 range");
 			kfree(buffer);
-			return -EINVAL;
+
+			return -ERANGE;
 		}
-	} else {
-		skw_err("not a valid hex string");
+
+		skw_err("hex conversion failed");
+		kfree(buffer);
+
 		return -EINVAL;
 	}
+
+	skw_err("not a valid hex string");
+
+	return -EINVAL;
 }
 
 int skw_iwpriv_set_edca_params(struct skw_iface *iface, void *param,
@@ -2058,7 +2168,8 @@ int skw_iwpriv_set_edca_params(struct skw_iface *iface, void *param,
 {
 	int ret = 0;
 	char *p = NULL, *q = NULL;
-	struct skw_edca_param_s edca_params = {0};
+	struct net_device *dev = iface->ndev;
+	struct skw_edca_param_s edca_params = { 0 };
 	u8 parmas_len = 0;
 
 	if (!args)
@@ -2070,7 +2181,7 @@ int skw_iwpriv_set_edca_params(struct skw_iface *iface, void *param,
 	if (parmas_len == 1) {
 		ret = simple_strtol(args, NULL, 10);
 		if (!ret) {
-			skw_dbg(" not set edca params\n");
+			skw_dev_dbg(dev, " not set edca params\n");
 			edca_params.enable = 0;
 			goto SETPARA;
 		}
@@ -2081,7 +2192,7 @@ int skw_iwpriv_set_edca_params(struct skw_iface *iface, void *param,
 	} else if (parmas_len > 1) {
 		p = strchr(args, ',');
 		if (!p) {
-			skw_dbg("flag not found\n");
+			skw_dev_err(dev, "flag not found\n");
 			return -ENOTSUPP;
 		}
 
@@ -2106,7 +2217,7 @@ int skw_iwpriv_set_edca_params(struct skw_iface *iface, void *param,
 	//p = p + strlen(",");
 	q = strchr(p + 1, ',');
 	if (!p || !q) {
-		skw_err("AC_BE AciAifn not found\n");
+		skw_dev_err(dev, "AC_BE AciAifn not found\n");
 		return -ENOTSUPP;
 	}
 
@@ -2117,14 +2228,14 @@ int skw_iwpriv_set_edca_params(struct skw_iface *iface, void *param,
 		edca_params.ac_best_effort.aci_aifn = 0xFF;
 	}
 
-	skw_dbg("AC_BE Set AciAifn %d\n", edca_params.ac_best_effort.aci_aifn);
+	skw_dev_dbg(dev, "AC_BE Set AciAifn %d\n", edca_params.ac_best_effort.aci_aifn);
 
 	//return 0;
 	/** EcWminEcWmax **/
 	p = q;
 	q = strchr(p + 1, ',');
 	if (!p || !q) {
-		skw_err("AC_BE EcWminEcWmax not found\n");
+		skw_dev_err(dev, "AC_BE EcWminEcWmax not found\n");
 		return -ENOTSUPP;
 	}
 
@@ -2135,13 +2246,14 @@ int skw_iwpriv_set_edca_params(struct skw_iface *iface, void *param,
 		edca_params.ac_best_effort.ec_wmin_wmax = 0xFF;
 	}
 
-	skw_dbg("AC_BE Set EcWminEcWmax %d\n", edca_params.ac_best_effort.ec_wmin_wmax);
+	skw_dev_dbg(dev, "AC_BE Set EcWminEcWmax %d\n",
+		edca_params.ac_best_effort.ec_wmin_wmax);
 
 	/** TxopLimit **/
 	p = q;
 	q = strchr(p + 1, ',');
 	if (!p || !q) {
-		skw_err("AC_BE TxopLimit not found\n");
+		skw_dev_err(dev, "AC_BE TxopLimit not found\n");
 		return -ENOTSUPP;
 	}
 
@@ -2152,14 +2264,15 @@ int skw_iwpriv_set_edca_params(struct skw_iface *iface, void *param,
 		edca_params.ac_best_effort.txop_limit = 0xFFFF;
 	}
 
-	skw_dbg("AC_BE Set TxopLimit %d\n", edca_params.ac_best_effort.txop_limit);
+	skw_dev_dbg(dev, "AC_BE Set TxopLimit %d\n",
+		edca_params.ac_best_effort.txop_limit);
 
 	/* parse AC_BG parametes */
 	/** AciAifn **/
 	p = q;
 	q = strchr(p + 1, ',');
 	if (!p || !q) {
-		skw_err("AC_BG AciAifn not found\n");
+		skw_dev_err(dev, "AC_BG AciAifn not found\n");
 		return -ENOTSUPP;
 	}
 
@@ -2170,13 +2283,13 @@ int skw_iwpriv_set_edca_params(struct skw_iface *iface, void *param,
 		edca_params.ac_background.aci_aifn = 0xFF;
 	}
 
-	skw_dbg("AC_BG Set AciAifn %d\n", edca_params.ac_background.aci_aifn);
+	skw_dev_err(dev, "AC_BG Set AciAifn %d\n", edca_params.ac_background.aci_aifn);
 
 	/** EcWminEcWmax **/
 	p = q;
 	q = strchr(p + 1, ',');
 	if (!p || !q) {
-		skw_err("AC_BG EcWminEcWmax not found\n");
+		skw_dev_err(dev, "AC_BG EcWminEcWmax not found\n");
 		return -ENOTSUPP;
 	}
 
@@ -2187,13 +2300,14 @@ int skw_iwpriv_set_edca_params(struct skw_iface *iface, void *param,
 		edca_params.ac_background.ec_wmin_wmax = 0xFF;
 	}
 
-	skw_dbg("AC_BG Set EcWminEcWmax %d\n", edca_params.ac_background.ec_wmin_wmax);
+	skw_dev_err(dev, "AC_BG Set EcWminEcWmax %d\n",
+		edca_params.ac_background.ec_wmin_wmax);
 
 	/** TxopLimit **/
 	p = q;
 	q = strchr(p + 1, ',');
 	if (!p || !q) {
-		skw_err("AC_BG TxopLimit not found\n");
+		skw_dev_err(dev, "AC_BG TxopLimit not found\n");
 		return -ENOTSUPP;
 	}
 
@@ -2204,14 +2318,15 @@ int skw_iwpriv_set_edca_params(struct skw_iface *iface, void *param,
 		edca_params.ac_background.txop_limit = 0xFFFF;
 	}
 
-	skw_dbg("AC_BG Set TxopLimit %d\n", edca_params.ac_best_effort.txop_limit);
+	skw_dev_err(dev, "AC_BG Set TxopLimit %d\n",
+		edca_params.ac_best_effort.txop_limit);
 
 	/* parse AC_VIDEO parametes */
 	/** AciAifn **/
 	p = q;
 	q = strchr(p + 1, ',');
 	if (!p || !q) {
-		skw_err("AC_VIDEO AciAifn not found\n");
+		skw_dev_err(dev, "AC_VIDEO AciAifn not found\n");
 		return -ENOTSUPP;
 	}
 
@@ -2221,13 +2336,13 @@ int skw_iwpriv_set_edca_params(struct skw_iface *iface, void *param,
 		edca_params.ac_video.aci_aifn = 0xFF;
 	}
 
-	skw_dbg("AC_VIDEO Set AciAifn %d\n", edca_params.ac_video.aci_aifn);
+	skw_dev_err(dev, "AC_VIDEO Set AciAifn %d\n", edca_params.ac_video.aci_aifn);
 
 	/** EcWminEcWmax **/
 	p = q;
 	q = strchr(p + 1, ',');
 	if (!p || !q) {
-		skw_err("AC_VIDEO EcWminEcWmax not found\n");
+		skw_dev_err(dev, "AC_VIDEO EcWminEcWmax not found\n");
 		return -ENOTSUPP;
 	}
 
@@ -2237,13 +2352,14 @@ int skw_iwpriv_set_edca_params(struct skw_iface *iface, void *param,
 		edca_params.ac_video.ec_wmin_wmax = 0xFF;
 	}
 
-	skw_dbg("AC_VIDEO Set EcWminEcWmax %d\n", edca_params.ac_video.ec_wmin_wmax);
+	skw_dev_err(dev, "AC_VIDEO Set EcWminEcWmax %d\n",
+		edca_params.ac_video.ec_wmin_wmax);
 
 	/** TxopLimit **/
 	p = q;
 	q = strchr(p + 1, ',');
 	if (!p || !q) {
-		skw_err("AC_VIDEO TxopLimit not found\n");
+		skw_dev_err(dev, "AC_VIDEO TxopLimit not found\n");
 		return -ENOTSUPP;
 	}
 
@@ -2253,14 +2369,14 @@ int skw_iwpriv_set_edca_params(struct skw_iface *iface, void *param,
 		edca_params.ac_video.txop_limit = 0xFFFF;
 	}
 
-	skw_dbg("AC_VIDEO Set TxopLimit %d\n", edca_params.ac_video.txop_limit);
+	skw_dev_err(dev, "AC_VIDEO Set TxopLimit %d\n", edca_params.ac_video.txop_limit);
 
 	/* parse AC_VOICE parametes */
 	/** AciAifn **/
 	p = q;
 	q = strchr(p + 1, ',');
 	if (!p || !q) {
-		skw_err("AC_VOICE AciAifn not found\n");
+		skw_dev_err(dev, "AC_VOICE AciAifn not found\n");
 		return -ENOTSUPP;
 	}
 
@@ -2270,13 +2386,13 @@ int skw_iwpriv_set_edca_params(struct skw_iface *iface, void *param,
 		edca_params.ac_voice.aci_aifn = 0xFF;
 	}
 
-	skw_dbg("AC_VOICE Set AciAifn %d\n", edca_params.ac_voice.aci_aifn);
+	skw_dev_err(dev, "AC_VOICE Set AciAifn %d\n", edca_params.ac_voice.aci_aifn);
 
 	/** EcWminEcWmax **/
 	p = q;
 	q = strchr(p + 1, ',');
 	if (!p || !q) {
-		skw_err("AC_VOICE EcWminEcWmax not found\n");
+		skw_dev_err(dev, "AC_VOICE EcWminEcWmax not found\n");
 		return -ENOTSUPP;
 	}
 
@@ -2286,13 +2402,14 @@ int skw_iwpriv_set_edca_params(struct skw_iface *iface, void *param,
 		edca_params.ac_voice.ec_wmin_wmax = 0xFF;
 	}
 
-	skw_dbg("AC_VOICE Set EcWminEcWmax %d\n", edca_params.ac_voice.ec_wmin_wmax);
+	skw_dev_err(dev, "AC_VOICE Set EcWminEcWmax %d\n",
+		edca_params.ac_voice.ec_wmin_wmax);
 
 	/** TxopLimit **/
 	p = q;
 	q = strchr(p + 1, ',');
 	if (!p) {
-		skw_err("AC_VOICE TxopLimit not found\n");
+		skw_dev_err(dev, "AC_VOICE TxopLimit not found\n");
 		return -ENOTSUPP;
 	}
 
@@ -2302,10 +2419,11 @@ int skw_iwpriv_set_edca_params(struct skw_iface *iface, void *param,
 		edca_params.ac_voice.txop_limit = 0xFFFF;
 	}
 
-	skw_dbg("AC_VOICE Set TxopLimit %d\n", edca_params.ac_voice.txop_limit);
+	skw_dev_err(dev, "AC_VOICE Set TxopLimit %d\n", edca_params.ac_voice.txop_limit);
 
 SETPARA:
-	ret = skw_set_edca_params(iface->wdev.wiphy, iface->ndev, &edca_params);
+	ret = skw_set_mib(iface->wdev.wiphy, iface->id, SKW_MIB_SET_EDCA_PARAM,
+			  &edca_params, sizeof(struct skw_edca_param_s));
 	if (!ret)
 		sprintf(resp, "set edca params ok ");
 	else
@@ -2325,7 +2443,8 @@ static int skw_iwpriv_set_cca_thre_nowifi(struct skw_iface *iface, void *param,
 {
 	int ret = 0;
 	char *p = NULL;
-	struct skw_cca_thre_nowifi nowifi = {0};
+	struct net_device *dev = iface->ndev;
+	struct skw_cca_thre_nowifi nowifi = { 0 };
 	int temp_val = 0;
 
 	if (!args)
@@ -2335,17 +2454,19 @@ static int skw_iwpriv_set_cca_thre_nowifi(struct skw_iface *iface, void *param,
 
 	p = args;
 	if (!p) {
-		skw_err("nowifi not found\n");
+		skw_dev_err(dev, "nowifi not found\n");
 		return -ENOTSUPP;
-	} else {
-		skw_err("nowifi found %s\n", p);
-		temp_val = simple_strtol(p, NULL, 10);
-		if (temp_val >= 0 || temp_val < -255) {
-			skw_warn("The max CCA Thre NOWIFI is 0xFF\n");
-			return -EINVAL;
-		}
-		nowifi.val = 0 - temp_val;
 	}
+
+	skw_err("nowifi found %s\n", p);
+
+	temp_val = simple_strtol(p, NULL, 10);
+	if (temp_val >= 0 || temp_val < -255) {
+		skw_warn("The max CCA Thre NOWIFI is 0xFF\n");
+		return -EINVAL;
+	}
+
+	nowifi.val = 0 - temp_val;
 
 	skw_dbg("nowifi found %s\n", p);
 
@@ -2357,9 +2478,11 @@ static int skw_iwpriv_set_cca_thre_nowifi(struct skw_iface *iface, void *param,
 
 	nowifi.val = 0 - temp_val;
 
-	skw_dbg("Set CCA Thre NOWIFI %d\n", nowifi.val);
+	skw_dev_err(dev, "Set CCA Thre NOWIFI %d\n", nowifi.val);
 
-	ret = skw_set_cca_thre_nowifi(iface->wdev.wiphy, iface->ndev, &nowifi);
+	ret = skw_set_mib(iface->wdev.wiphy, iface->id,
+			SKW_MIB_SET_CCA_THRE_NOWIFI, &nowifi,
+			sizeof(struct skw_cca_thre_nowifi));
 	if (!ret)
 		sprintf(resp, "set CCA Thre NOWIFI ok ");
 	else
@@ -2373,7 +2496,8 @@ static int skw_iwpriv_set_cca_thre_11b(struct skw_iface *iface, void *param,
 {
 	int ret = 0;
 	char *p = NULL;
-	struct skw_cca_thre_11b cca_11b = {0};
+	struct net_device *dev = iface->ndev;
+	struct skw_cca_thre_11b cca_11b = { 0 };
 	int temp_val = 0;
 
 	if (!args)
@@ -2383,17 +2507,19 @@ static int skw_iwpriv_set_cca_thre_11b(struct skw_iface *iface, void *param,
 
 	p = args;
 	if (!p) {
-		skw_err("11b not found\n");
+		skw_dev_err(dev, "11b not found\n");
 		return -ENOTSUPP;
-	} else {
-		skw_err("11b found %s\n", p);
-		temp_val = simple_strtol(p, NULL, 10);
-		if (temp_val >= 0 || temp_val < -255) {
-			skw_warn("The max CCA Thre 11b is 0xFF\n");
-			return -EINVAL;
-		}
-		cca_11b.val = 0 - temp_val;
 	}
+
+	skw_err("11b found %s\n", p);
+
+	temp_val = simple_strtol(p, NULL, 10);
+	if (temp_val >= 0 || temp_val < -255) {
+		skw_warn("The max CCA Thre 11b is 0xFF\n");
+		return -EINVAL;
+	}
+
+	cca_11b.val = 0 - temp_val;
 
 	skw_dbg("11b found %s\n", p);
 
@@ -2407,7 +2533,8 @@ static int skw_iwpriv_set_cca_thre_11b(struct skw_iface *iface, void *param,
 
 	skw_dbg("Set CCA Thre 11b %d\n", cca_11b.val);
 
-	ret = skw_set_cca_thre_11b(iface->wdev.wiphy, iface->ndev, &cca_11b);
+	ret = skw_set_mib(iface->wdev.wiphy, iface->id, SKW_MIB_SET_CCA_THRE_11B,
+			&cca_11b, sizeof(struct skw_cca_thre_11b));
 	if (!ret)
 		sprintf(resp, "set CCA Thre 11b ok ");
 	else
@@ -2421,7 +2548,8 @@ static int skw_iwpriv_set_cca_thre_ofdm(struct skw_iface *iface, void *param,
 {
 	int ret = 0;
 	char *p = NULL;
-	struct skw_cca_thre_ofdm ofdm = {0};
+	struct net_device *dev = iface->ndev;
+	struct skw_cca_thre_ofdm ofdm = { 0 };
 	int temp_val = 0;
 
 	if (!args)
@@ -2431,17 +2559,19 @@ static int skw_iwpriv_set_cca_thre_ofdm(struct skw_iface *iface, void *param,
 
 	p = args;
 	if (!p) {
-		skw_err("ofdm not found\n");
+		skw_dev_err(dev, "ofdm not found\n");
 		return -ENOTSUPP;
-	} else {
-		skw_err("ofdm found %s\n", p);
-		temp_val = simple_strtol(p, NULL, 10);
-		if (temp_val >= 0 || temp_val < -255) {
-			skw_warn("The max CCA Thre ofdm is 0xFF\n");
-			return -EINVAL;
-		}
-		ofdm.val = 0 - temp_val;
 	}
+
+	skw_err("ofdm found %s\n", p);
+
+	temp_val = simple_strtol(p, NULL, 10);
+	if (temp_val >= 0 || temp_val < -255) {
+		skw_warn("The max CCA Thre ofdm is 0xFF\n");
+		return -EINVAL;
+	}
+
+	ofdm.val = 0 - temp_val;
 
 	skw_dbg("ofdm found %s\n", p);
 
@@ -2455,7 +2585,8 @@ static int skw_iwpriv_set_cca_thre_ofdm(struct skw_iface *iface, void *param,
 
 	skw_dbg("Set CCA Thre OFDM %d\n", ofdm.val);
 
-	ret = skw_set_cca_thre_ofdm(iface->wdev.wiphy, iface->ndev, &ofdm);
+	ret = skw_set_mib(iface->wdev.wiphy, iface->id, SKW_MIB_SET_CCA_THRE_OFDM,
+			  &ofdm, sizeof(struct skw_cca_thre_ofdm));
 	if (!ret)
 		sprintf(resp, "set CCA Thre ofdm ok ");
 	else
@@ -2563,7 +2694,8 @@ static int skw_iwpriv_set_force_rts_rate(struct skw_iface *iface, void *param,
 {
 	int ret = 0;
 	char *p = NULL, *q = NULL;
-	struct skw_force_rts_rate rts_rate = {0};
+	struct net_device *dev = iface->ndev;
+	struct skw_force_rts_rate rts_rate = { 0 };
 	u8 parmas_len = 0, val = 0;
 
 	if (!args)
@@ -2576,7 +2708,7 @@ static int skw_iwpriv_set_force_rts_rate(struct skw_iface *iface, void *param,
 	if (parmas_len == 1) {
 		ret = simple_strtol(args, NULL, 10);
 		if (!ret) {
-			skw_warn(" not force set rts rate\n");
+			skw_dev_warn(dev, " not force set rts rate\n");
 			rts_rate.enable = 0;
 			goto SETPARA;
 		}
@@ -2587,7 +2719,7 @@ static int skw_iwpriv_set_force_rts_rate(struct skw_iface *iface, void *param,
 	} else if (parmas_len > 1) {
 		p = strchr(args, ',');
 		if (!p) {
-			skw_err("flag not found\n");
+			skw_dev_err(dev, "flag not found\n");
 			return -ENOTSUPP;
 		}
 
@@ -2609,7 +2741,7 @@ static int skw_iwpriv_set_force_rts_rate(struct skw_iface *iface, void *param,
 
 	q = strchr(p + 1, ',');
 	if (!p || !q) {
-		skw_err("rts rate 2.4G not found\n");
+		skw_dev_err(dev, "rts rate 2.4G not found\n");
 		return -ENOTSUPP;
 	}
 
@@ -2621,12 +2753,12 @@ static int skw_iwpriv_set_force_rts_rate(struct skw_iface *iface, void *param,
 
 	rts_rate.rts_rate_24G = val;
 
-	skw_dbg("rts rate 2.4G: %d\n", rts_rate.rts_rate_24G);
+	skw_dev_dbg(dev, "rts rate 2.4G: %d\n", rts_rate.rts_rate_24G);
 
 	p = q;
 	q = strchr(p + 1, ',');
 	if (!p) {
-		skw_err("rts rate 5G not found\n");
+		skw_dev_err(dev, "rts rate 5G not found\n");
 		return -ENOTSUPP;
 	}
 
@@ -2637,10 +2769,11 @@ static int skw_iwpriv_set_force_rts_rate(struct skw_iface *iface, void *param,
 	}
 
 	rts_rate.rts_rate_5G = val;
-	skw_dbg("rts_rate_5G: %d\n", rts_rate.rts_rate_5G);
+	skw_dev_dbg(dev, "rts_rate_5G: %d\n", rts_rate.rts_rate_5G);
 
 SETPARA:
-	ret = skw_set_force_rts_rate(iface->wdev.wiphy, iface->ndev, &rts_rate);
+	ret = skw_set_mib(iface->wdev.wiphy, iface->id, SKW_MIB_SET_FORCE_RTS_RATE,
+			  &rts_rate, sizeof(struct skw_force_rts_rate));
 	if (!ret)
 		sprintf(resp, "set force rts rate ok ");
 	else
@@ -2659,23 +2792,24 @@ static int skw_iwpriv_set_force_rx_rsp_rate(struct skw_iface *iface, void *param
 {
 	int ret = 0;
 	char *p = NULL, *q = NULL;
+	struct net_device *dev = iface->ndev;
 	struct skw_force_rx_rsp_rate rate = {0};
 	u8 parmas_len = 0, val = 0;
 
 	if (!args)
 		return -EINVAL;
 
-	skw_dbg("skw_iwpriv_set_force_rts_rate args %s\n", args);
+	skw_dev_warn(dev, "skw_iwpriv_set_force_rts_rate args %s\n", args);
 
 	/* parse rts rate flag */
 	parmas_len = strlen(args);
 	if (parmas_len == 1) {
 		ret = simple_strtol(args, NULL, 10);
 		if (!ret) {
-			skw_warn(" not force set rx rsp rate\n");
+			skw_dev_warn(dev, " not force set rx rsp rate\n");
 			goto SETPARA;
 		} else if (ret == 1) {
-			skw_warn(" need more rate params\n");
+			skw_dev_warn(dev, " need more rate params\n");
 			goto SETFAIL;
 		} else {
 			goto SETFAIL;
@@ -2683,7 +2817,7 @@ static int skw_iwpriv_set_force_rx_rsp_rate(struct skw_iface *iface, void *param
 	} else if (parmas_len > 1) {
 		p = strchr(args, ',');
 		if (!p) {
-			skw_err("flag not found\n");
+			skw_dev_err(dev, "flag not found\n");
 			return -ENOTSUPP;
 		}
 
@@ -2705,7 +2839,7 @@ static int skw_iwpriv_set_force_rx_rsp_rate(struct skw_iface *iface, void *param
 
 	q = strchr(p + 1, ',');
 	if (!p || !q) {
-		skw_err("11b long not found\n");
+		skw_dev_err(dev, "11b long not found\n");
 		return -ENOTSUPP;
 	}
 
@@ -2716,12 +2850,12 @@ static int skw_iwpriv_set_force_rx_rsp_rate(struct skw_iface *iface, void *param
 	}
 
 	rate.rx_rsp_rate_11b_long = val;
-	skw_dbg("11b long rate: %d\n", rate.rx_rsp_rate_11b_long);
+	skw_dev_dbg(dev, "11b long rate: %d\n", rate.rx_rsp_rate_11b_long);
 
 	p = q;
 	q = strchr(p + 1, ',');
 	if (!p || !q) {
-		skw_err("11b short not found\n");
+		skw_dev_err(dev, "11b short not found\n");
 		return -ENOTSUPP;
 	}
 
@@ -2732,12 +2866,12 @@ static int skw_iwpriv_set_force_rx_rsp_rate(struct skw_iface *iface, void *param
 	}
 
 	rate.rx_rsp_rate_11b_short = val;
-	skw_dbg("11b short rate: %d\n", rate.rx_rsp_rate_11b_short);
+	skw_dev_dbg(dev, "11b short rate: %d\n", rate.rx_rsp_rate_11b_short);
 
 	p = q;
 	q = strchr(p + 1, ',');
 	if (!p) {
-		skw_err("ofdm not found\n");
+		skw_dev_err(dev, "ofdm not found\n");
 		return -ENOTSUPP;
 	}
 
@@ -2748,10 +2882,11 @@ static int skw_iwpriv_set_force_rx_rsp_rate(struct skw_iface *iface, void *param
 	}
 
 	rate.rx_rsp_rate_ofdm = val;
-	skw_dbg("ofdm: %d\n", rate.rx_rsp_rate_ofdm);
+	skw_dev_dbg(dev, "ofdm: %d\n", rate.rx_rsp_rate_ofdm);
 
 SETPARA:
-	ret = skw_set_force_rx_rsp_rate(iface->wdev.wiphy, iface->ndev, &rate);
+	ret = skw_set_mib(iface->wdev.wiphy, iface->id, SKW_MIB_SET_FORCE_RX_RSP_RATE,
+			  &rate, sizeof(struct skw_force_rx_rsp_rate));
 	if (!ret)
 		sprintf(resp, "set force rx rsp rate ok ");
 	else
@@ -2770,7 +2905,8 @@ static int skw_iwpriv_set_scan_time(struct skw_iface *iface, void *param,
 {
 	int ret = 0;
 	char *p = NULL, *q = NULL;
-	struct skw_set_scan_time time = {0};
+	struct net_device *dev = iface->ndev;
+	struct skw_set_scan_time time = { 0 };
 	u8 parmas_len = 0;
 	u16 val = 0;
 
@@ -2785,7 +2921,7 @@ static int skw_iwpriv_set_scan_time(struct skw_iface *iface, void *param,
 	p = args;
 	q = strchr(args, ',');
 	if (!q) {
-		skw_err("parameter error\n");
+		skw_dev_err(dev, "parameter error\n");
 		return -ENOTSUPP;
 	}
 
@@ -2798,11 +2934,11 @@ static int skw_iwpriv_set_scan_time(struct skw_iface *iface, void *param,
 		time.active_dwell_time = val;
 	}
 
-	skw_dbg("active dwell time: %d\n", time.active_dwell_time);
+	skw_dev_dbg(dev, "active dwell time: %d\n", time.active_dwell_time);
 
 	p = q + strlen(",");
 	if (!p) {
-		skw_warn("bypass active scan auto time flag not found\n");
+		skw_dev_warn(dev, "bypass active scan auto time flag not found\n");
 		return -ENOTSUPP;
 	}
 
@@ -2814,9 +2950,11 @@ static int skw_iwpriv_set_scan_time(struct skw_iface *iface, void *param,
 
 	time.bypass_active_acan_auto_time = val;
 
-	skw_dbg("bypass active scan auto time: %d\n", time.bypass_active_acan_auto_time);
+	skw_dev_dbg(dev, "bypass active scan auto time: %d\n",
+		time.bypass_active_acan_auto_time);
 
-	ret = skw_set_scan_time_cmd(iface->wdev.wiphy, iface->ndev, &time);
+	ret = skw_set_mib(iface->wdev.wiphy, iface->id, SKW_MIB_SET_SCAN_TIME,
+			  &time, sizeof(struct skw_set_scan_time));
 	if (!ret)
 		sprintf(resp, "set scan time ok ");
 	else
@@ -2829,34 +2967,36 @@ static int skw_iwpriv_set_tcpd_wakeup_host(struct skw_iface *iface, void *param,
 		char *args, char *resp, int resp_len)
 {
 	int ret = 0;
-	struct skw_set_tcpd_wakeup_host set_flag = {0};
+	struct net_device *dev = iface->ndev;
+	struct skw_set_tcpd_wakeup_host set_flag = { 0 };
 	u8 parmas_len = 0;
 
 	if (!args)
 		return -EINVAL;
 
-	skw_dbg("set_tcpd_wakeup_host args %s\n", args);
+	skw_dev_warn(dev, "set_tcpd_wakeup_host args %s\n", args);
 
 	parmas_len = strlen(args);
 	if (parmas_len == 1) {
 		ret = simple_strtol(args, NULL, 10);
 		if (!ret) {
-			skw_dbg("flag: %d\n", ret);
+			skw_dev_dbg(dev, "flag: %d\n", ret);
 			set_flag.enable = 0;
 		} else if (ret == 1) {
-			skw_dbg("flag: %d\n", ret);
+			skw_dev_dbg(dev, "flag: %d\n", ret);
 			set_flag.enable = 1;
 		} else {
 			goto SETFAIL;
 		}
 	} else if (parmas_len > 1) {
-		skw_err("params error\n");
+		skw_dev_err(dev, "params error\n");
 		goto SETFAIL;
 	}
 
-	skw_dbg("wakeup host: %d\n", set_flag.enable);
+	skw_dev_dbg(dev, "wakeup host: %d\n", set_flag.enable);
 
-	ret = skw_set_tcp_disconn_wakeup_host(iface->wdev.wiphy, iface->ndev, &set_flag);
+	ret = skw_set_mib(iface->wdev.wiphy, iface->id, SKW_MIB_SET_TCP_DISCONN_WAKEUP_HOST,
+			  &set_flag, sizeof(struct skw_set_tcpd_wakeup_host));
 	if (!ret)
 		sprintf(resp, "set tcp disc wakeup host ok ");
 	else
@@ -2874,14 +3014,15 @@ static int skw_iwpriv_set_rc_min_rate(struct skw_iface *iface, void *param,
 		char *args, char *resp, int resp_len)
 {
 	int ret = 0;
-	struct skw_set_rate_control_min_rate rate = {0};
+	struct net_device *dev = iface->ndev;
+	struct skw_set_rate_control_min_rate rate = { 0 };
 	u8 parmas_len = 0, val = 0;
 	char *p = NULL;
 
 	if (!args)
 		return -EINVAL;
 
-	skw_dbg("set_rc_min_rate args %s\n", args);
+	skw_dev_dbg(dev, "set_rc_min_rate args %s\n", args);
 
 	parmas_len = strlen(args);
 	if (!parmas_len)
@@ -2890,16 +3031,17 @@ static int skw_iwpriv_set_rc_min_rate(struct skw_iface *iface, void *param,
 	p = args;
 	val = (u8)skw_iwpriv_convert_string_to_u(p, parmas_len);
 	if (!skw_is_value_in_enum(val)) {
-		skw_dbg("val not valid %d\n", val);
+		skw_dev_dbg(dev, "val not valid %d\n", val);
 		goto SETFAIL;
 	}
 
 	rate.rstrict_min_rate = val;
-	skw_dbg("rc min rate: %d\n", rate.rstrict_min_rate);
+	skw_dev_dbg(dev, "rc min rate: %d\n", rate.rstrict_min_rate);
 
-	ret = skw_set_rc_min_rate(iface->wdev.wiphy, iface->ndev, &rate);
+	ret = skw_set_mib(iface->wdev.wiphy, iface->id, SKW_MIB_SET_RATE_CTRL_MIN_RATE,
+			  &rate, sizeof(struct skw_set_rate_control_min_rate));
 	if (!ret)
-		sprintf(resp, "set rc min rate ok");
+		sprintf(resp, "set rc min rate ok ");
 	else
 		sprintf(resp, "set rc min rate failed");
 
@@ -2916,65 +3058,66 @@ static int skw_iwpriv_set_rc_rate_change(struct skw_iface *iface, void *param,
 {
 	int ret = 0;
 	char *p = NULL, *q = NULL;
-	struct skw_set_rate_control_rate_change rate = {0};
+	struct net_device *dev = iface->ndev;
+	struct skw_set_rate_control_rate_change rate = { 0 };
 
 	if (!args)
 		return -EINVAL;
 
-	skw_dbg("set_rc_rate_change args %s\n", args);
+	skw_dev_dbg(dev, "set_rc_rate_change args %s\n", args);
 
 	//1/5 up rate class num
 	p = args;
 	q = strchr(args, ',');
 	if (!p || !q) {
-		skw_err("up rate class num not found\n");
+		skw_dev_err(dev, "up rate class num not found\n");
 		return -ENOTSUPP;
 	}
 
 	rate.up_rate_class_num = (u8)skw_iwpriv_convert_string_to_u(p, q - p);
 
-	skw_dbg("up_rate_class_num: %d\n", rate.up_rate_class_num);
+	skw_dev_dbg(dev, "up_rate_class_num: %d\n", rate.up_rate_class_num);
 
 	//2/5 down rate class num
 	p = q;
 	q = strchr(p + 1, ',');
 	if (!p || !q) {
-		skw_err("down rate class num not found\n");
+		skw_dev_err(dev, "down rate class num not found\n");
 		return -ENOTSUPP;
 	}
 
 	rate.down_rate_class_num = (u8)skw_iwpriv_convert_string_to_u(p + 1, q - p - 1);
 
-	skw_dbg("down_rate_class_num: %d\n", rate.down_rate_class_num);
+	skw_dev_dbg(dev, "down_rate_class_num: %d\n", rate.down_rate_class_num);
 
 	//3/5 hw rty limit
 	p = q;
 	q = strchr(p + 1, ',');
 	if (!p || !q) {
-		skw_err("hw rty limit not found\n");
+		skw_dev_err(dev, "hw rty limit not found\n");
 		return -ENOTSUPP;
 	}
 
 	rate.hw_rty_limit = (u8)skw_iwpriv_convert_string_to_u(p + 1, q - p - 1);
-	skw_dbg("hw_rty_limit: %d\n", rate.hw_rty_limit);
+	skw_dev_dbg(dev, "hw_rty_limit: %d\n", rate.hw_rty_limit);
 
 	//4/5 per rate hw rty limit
 	p = q;
 	q = strchr(p + 1, ',');
 	if (!p || !q) {
-		skw_err("per rate hw rty limit not found\n");
+		skw_dev_err(dev, "per rate hw rty limit not found\n");
 		return -ENOTSUPP;
 	}
 
 	rate.per_rate_hw_rty_limit = (u8)skw_iwpriv_convert_string_to_u(p + 1, q - p - 1);
 
-	skw_dbg("per rate hw_rty_limit: %d\n", rate.per_rate_hw_rty_limit);
+	skw_dev_dbg(dev, "per rate hw_rty_limit: %d\n", rate.per_rate_hw_rty_limit);
 
 	//5/5 per rate probe hw rty limit
 	p = q;
 	q = strchr(p + 1, ',');
 	if (!p) {
-		skw_err("per rate probe hw rty limit not found\n");
+		skw_dev_err(dev, "per rate probe hw rty limit not found\n");
 		return -ENOTSUPP;
 	}
 
@@ -2982,7 +3125,9 @@ static int skw_iwpriv_set_rc_rate_change(struct skw_iface *iface, void *param,
 
 	skw_dbg("per rate probe hw_rty_limit: %d\n", rate.per_rate_probe_hw_rty_limit);
 
-	ret = skw_set_rate_control_rate_change(iface->wdev.wiphy, iface->ndev, &rate);
+	ret = skw_set_mib(iface->wdev.wiphy, iface->id,
+			SKW_MIB_SET_RATE_CTRL_RATE_CHANGE_PARAM,
+			&rate, sizeof(struct skw_set_rate_control_rate_change));
 	if (!ret)
 		sprintf(resp, "set force rx rsp rate ok ");
 	else
@@ -2995,7 +3140,8 @@ static int skw_iwpriv_set_rc_spe_rate(struct skw_iface *iface, void *param,
 		char *args, char *resp, int resp_len)
 {
 	int ret = 0;
-	struct skw_set_rate_control_special_rate rate = {0};
+	struct net_device *dev = iface->ndev;
+	struct skw_set_rate_control_special_rate rate = { 0 };
 	u8 parmas_len = 0, val = 0;
 	char *p = NULL;
 
@@ -3009,14 +3155,15 @@ static int skw_iwpriv_set_rc_spe_rate(struct skw_iface *iface, void *param,
 	p = args;
 	val = (u8)skw_iwpriv_convert_string_to_u(p, parmas_len);
 	if (!skw_is_value_in_enum(val)) {
-		skw_dbg("val not valid %d\n", val);
+		skw_dev_dbg(dev, "val not valid %d\n", val);
 		goto SETFAIL;
 	}
 
 	rate.special_frm_rate = val;
-	skw_dbg("rc special rate: %d\n", rate.special_frm_rate);
+	skw_dev_dbg(dev, "rc special rate: %d\n", rate.special_frm_rate);
 
-	ret = skw_set_rc_spe_rate(iface->wdev.wiphy, iface->ndev, &rate);
+	ret = skw_set_mib(iface->wdev.wiphy, iface->id, SKW_MIB_SET_RATE_CTRL_SPECIAL_FRM_RATE,
+			  &rate, sizeof(struct skw_set_rate_control_special_rate));
 	if (!ret)
 		sprintf(resp, "set rc special rate ok ");
 	else
@@ -3040,19 +3187,19 @@ static int skw_generic_tlv_operation(struct wiphy *wiphy, struct net_device *dev
 
 	ret = skw_tlv_alloc(&conf, 512, GFP_KERNEL);
 	if (ret) {
-		skw_err("alloc tlv failed\n");
+		skw_dev_err(dev, "alloc tlv failed\n");
 		return ret;
 	}
 
 	plen = skw_tlv_reserve(&conf, 2);
 	if (!plen) {
-		skw_err("reserve tlv failed\n");
+		skw_dev_err(dev, "reserve tlv failed\n");
 		skw_tlv_free(&conf);
 		return -ENOMEM;
 	}
 
 	if (skw_tlv_add(&conf, tlv_type, param, param_len)) {
-		skw_err("add tlv failed\n");
+		skw_dev_err(dev, "add tlv failed\n");
 		skw_tlv_free(&conf);
 		return -EINVAL;
 	}
@@ -3064,15 +3211,15 @@ static int skw_generic_tlv_operation(struct wiphy *wiphy, struct net_device *dev
 					conf.total_len, &resp, sizeof(resp));
 
 			if (ret) {
-				skw_err("failed, ret: %d\n", ret);
+				skw_dev_err(dev, "failed, ret: %d\n", ret);
 				goto SETFAIL;
 			}
-			skw_dbg("read done val: 0x%08x\n", resp.val);
+			skw_dev_dbg(dev, "read done val: 0x%08x\n", resp.val);
 		} else {
 			ret = skw_send_msg(wiphy, dev, SKW_CMD_SET_MIB, conf.buff,
 					conf.total_len, NULL, 0);
 			if (ret) {
-				skw_err("failed, ret: %d\n", ret);
+				skw_dev_err(dev, "failed, ret: %d\n", ret);
 				goto SETFAIL;
 			}
 		}
@@ -3094,7 +3241,8 @@ static int skw_iwpriv_set_tx_lifetime(struct skw_iface *iface, void *param,
 		char *args, char *resp, int resp_len)
 {
 	int ret = 0;
-	struct skw_tlv_set_tx_lifetime lftm = {0};
+	struct net_device *dev = iface->ndev;
+	struct skw_tlv_set_tx_lifetime lftm = { 0 };
 	u8 parmas_len = 0;
 	char *p = NULL;
 
@@ -3107,8 +3255,7 @@ static int skw_iwpriv_set_tx_lifetime(struct skw_iface *iface, void *param,
 
 	p = args;
 	lftm.lifetime = skw_iwpriv_convert_string_to_u(p, parmas_len);
-
-	skw_dbg("set tx lifetime: %d\n", lftm.lifetime);
+	skw_dev_dbg(dev, "set tx lifetime: %d\n", lftm.lifetime);
 
 	ret = skw_set_tx_lifetime(iface->wdev.wiphy, iface->ndev, &lftm);
 	if (!ret)
@@ -3131,7 +3278,8 @@ static int skw_iwpriv_set_tx_retry_cnt(struct skw_iface *iface, void *param,
 		char *args, char *resp, int resp_len)
 {
 	int ret = 0;
-	struct skw_tlv_set_retry_cnt cnt = {0};
+	struct net_device *dev = iface->ndev;
+	struct skw_tlv_set_retry_cnt cnt = { 0 };
 	u8 parmas_len = 0;
 	char *p = NULL;
 
@@ -3145,7 +3293,7 @@ static int skw_iwpriv_set_tx_retry_cnt(struct skw_iface *iface, void *param,
 	p = args;
 	cnt.rtycnt = (u8)skw_iwpriv_convert_string_to_u(p, parmas_len);
 
-	skw_dbg("set tx retry cnt: %d\n", cnt.rtycnt);
+	skw_dev_dbg(dev, "set tx retry cnt: %d\n", cnt.rtycnt);
 
 	ret = skw_set_tx_retry_cnt(iface->wdev.wiphy, iface->ndev, &cnt);
 	if (!ret)
@@ -3168,7 +3316,8 @@ static int skw_iwpriv_set_tx_rts_thrd(struct skw_iface *iface, void *param,
 	char *args, char *resp, int resp_len)
 {
 	int ret = 0;
-	struct skw_tlv_set_tx_rts_thrd thrd = {0};
+	struct net_device *dev = iface->ndev;
+	struct skw_tlv_set_tx_rts_thrd thrd = { 0 };
 	u8 parmas_len = 0;
 	char *p = NULL;
 
@@ -3181,8 +3330,7 @@ static int skw_iwpriv_set_tx_rts_thrd(struct skw_iface *iface, void *param,
 
 	p = args;
 	thrd.rts_thrd = skw_iwpriv_convert_string_to_u(p, parmas_len);
-
-	skw_dbg("set tx rts thrd: %d\n", thrd.rts_thrd);
+	skw_dev_dbg(dev, "set tx rts thrd: %d\n", thrd.rts_thrd);
 
 	ret = skw_set_tx_rts_thrd(iface->wdev.wiphy, iface->ndev, &thrd);
 	if (!ret)
@@ -3206,6 +3354,7 @@ static int skw_iwpriv_set_rx_sepcial_80211_frame(struct skw_iface *iface, void *
 {
 	int ret = 0;
 	char *p = NULL, *q = NULL;
+	struct net_device *dev = iface->ndev;
 	struct skw_tlv_set_rx_special_80211_frame frm = {0};
 	u8 parmas_len = 0;
 
@@ -3253,24 +3402,24 @@ static int skw_iwpriv_set_rx_sepcial_80211_frame(struct skw_iface *iface, void *
 	p = q;
 	q = strchr(p + 1, ',');
 	if (!p || !q) {
-		skw_err("param error\n");
+		skw_dev_err(dev, "param error\n");
 		return -ENOTSUPP;
 	}
 
 	frm.type = (u8)skw_iwpriv_convert_string_to_u(p + 1, q - p - 1);
 
-	skw_dbg("type: %d\n", frm.type);
+	skw_dev_dbg(dev, "type: %d\n", frm.type);
 
 	p = q;
 	q = strchr(p + 1, ',');
 	if (!p) {
-		skw_err("sub type not found\n");
+		skw_dev_err(dev, "sub type not found\n");
 		return -ENOTSUPP;
 	}
 
 	frm.sub_type = (u8)skw_iwpriv_convert_string_to_u(p + 1, q - p - 1);
 
-	skw_dbg("sub type: %d\n", frm.sub_type);
+	skw_dev_dbg(dev, "sub type: %d\n", frm.sub_type);
 
 SETPARA:
 	ret = skw_set_rx_sepcial_80211_frame(iface->wdev.wiphy, iface->ndev, &frm);
@@ -3301,64 +3450,67 @@ static int skw_iwpriv_set_rx_update_nav(struct skw_iface *iface, void *param,
 {
 	int ret = 0;
 	char *p = NULL, *q = NULL;
-	struct skw_tlv_set_rx_update_nav nav = {0};
+	struct net_device *dev = iface->ndev;
+	struct skw_tlv_set_rx_update_nav nav = { 0 };
 	int temp_val = 0;
 
 	if (!args)
 		return -EINVAL;
 
-	skw_dbg("args %s\n", args);
+	skw_dev_dbg(dev, "args %s\n", args);
 
 	p = args;
 	q = strchr(args, ',');
-	if(!p || !q)
-	{
-		skw_err("parameter error\n");
+	if (!p || !q) {
+		skw_dev_err(dev, "parameter error\n");
 		return -ENOTSUPP;
-	} else {
-		skw_dbg("params found %s\n", p);
-		temp_val = simple_strtol(p, NULL, 10);
-		if (temp_val >= 0 || temp_val < -255) {
-			skw_warn("parameter error %d\n", temp_val);
-			return -EINVAL;
-		}
-		nav.intra_rssi = 0x80 | (0 - temp_val);
 	}
-	skw_dbg("intra rssi: %d\n", nav.intra_rssi);
+
+	skw_dbg("params found %s\n", p);
+
+	temp_val = simple_strtol(p, NULL, 10);
+	if (temp_val >= 0 || temp_val < -255) {
+		skw_warn("parameter error %d\n", temp_val);
+		return -EINVAL;
+	}
+
+	nav.intra_rssi = 0x80 | (0 - temp_val);
+
+	skw_dev_dbg(dev, "intra rssi: %d\n", nav.intra_rssi);
 
 	p = q;
 	q = strchr(p + 1, ',');
-	if(!p || !p)
-	{
-		skw_err("parameter error\n");
+	if (!p || !p) {
+		skw_dev_err(dev, "parameter error\n");
 		return -ENOTSUPP;
-	} else {
-		skw_dbg("params found %s\n", p + 1);
-		temp_val = simple_strtol(p + 1, NULL, 10);
-		if (temp_val >= 0 || temp_val < -255) {
-			skw_warn("parameter error %d\n", temp_val);
-			return -EINVAL;
-		}
-		nav.basic_rssi = 0x80 | (0 - temp_val);
 	}
-	skw_dbg("basic rssi: %d\n", nav.basic_rssi);
+
+	skw_dbg("params found %s\n", p + 1);
+	temp_val = simple_strtol(p + 1, NULL, 10);
+	if (temp_val >= 0 || temp_val < -255) {
+		skw_warn("parameter error %d\n", temp_val);
+		return -EINVAL;
+	}
+
+	nav.basic_rssi = 0x80 | (0 - temp_val);
+	skw_dev_dbg(dev, "basic rssi: %d\n", nav.basic_rssi);
 
 	p = q;
 	p = q + strlen(",");
-	if(!p)
-	{
-		skw_warn("nav max time not found\n");
+	if (!p) {
+		skw_dev_warn(dev, "nav max time not found\n");
 		return -ENOTSUPP;
-	} else {
-		 nav.nav_max_time = simple_strtol(p, NULL, 10);
 	}
-	skw_dbg("nav max time: %d\n", nav.nav_max_time);
+
+	nav.nav_max_time = simple_strtol(p, NULL, 10);
+
+	skw_dev_dbg(dev, "nav max time: %d\n", nav.nav_max_time);
 
 	ret = skw_set_rx_update_nav(iface->wdev.wiphy, iface->ndev, &nav);
 
-	if (!ret ) {
+	if (!ret)
 		sprintf(resp, "set ok ");
-	} else
+	else
 		sprintf(resp, "set failed");
 
 	return ret;
@@ -3378,53 +3530,54 @@ static int skw_iwpriv_set_apgo_timap(struct skw_iface *iface, void *param,
 {
 	int ret = 0;
 	char *p = NULL, *q = NULL;
-	struct skw_tlv_set_apgo_timap timap = {0};
+	struct net_device *dev = iface->ndev;
+	struct skw_tlv_set_apgo_timap timap = { 0 };
 
 	if (!args)
 		return -EINVAL;
 
-	skw_dbg("set_apgo_timap args %s\n", args);
+	skw_dev_warn(dev, "set_apgo_timap args %s\n", args);
 
 	p = args;
 	q = strchr(args, ',');
 	if (!p || !q) {
-		skw_err("parameter error\n");
+		skw_dev_err(dev, "parameter error\n");
 		return -ENOTSUPP;
 	}
 
 	timap.dtimforce0 = (u8)skw_iwpriv_convert_string_to_u(p, q - p);
-	skw_dbg("dtim force0: %d\n", timap.dtimforce0);
+	skw_dev_dbg(dev, "dtim force0: %d\n", timap.dtimforce0);
 
 	p = q;
 	q = strchr(p + 1, ',');
 	if (!p || !p) {
-		skw_err("parameter error\n");
+		skw_dev_err(dev, "parameter error\n");
 		return -ENOTSUPP;
 	}
 
 	timap.dtimforce1 = (u8)skw_iwpriv_convert_string_to_u(p + 1, q - p - 1);
 
-	skw_dbg("dtim force1: %d\n", timap.dtimforce1);
+	skw_dev_dbg(dev, "dtim force1: %d\n", timap.dtimforce1);
 
 	p = q;
 	q = strchr(p + 1, ',');
 	if (!p || !p) {
-		skw_err("parameter error\n");
+		skw_dev_err(dev, "parameter error\n");
 		return -ENOTSUPP;
 	}
 
 	timap.timforce0 = (u8)skw_iwpriv_convert_string_to_u(p + 1, q - p - 1);
-	skw_dbg("tim force0: %d\n", timap.timforce0);
+	skw_dev_dbg(dev, "tim force0: %d\n", timap.timforce0);
 
 	p = q;
 	q = strchr(p + 1, ',');
 	if (!p) {
-		skw_err("parameter error\n");
+		skw_dev_err(dev, "parameter error\n");
 		return -ENOTSUPP;
 	}
 
 	timap.timforce1 = (u8)skw_iwpriv_convert_string_to_u(p + 1, q - p - 1);
-	skw_dbg("tim force1: %d\n", timap.timforce1);
+	skw_dev_dbg(dev, "tim force1: %d\n", timap.timforce1);
 
 	ret = skw_set_apgo_timap(iface->wdev.wiphy, iface->ndev, &timap);
 	if (!ret)
@@ -3448,7 +3601,8 @@ static int skw_iwpriv_set_dbdc_disable(struct skw_iface *iface, void *param,
 		char *args, char *resp, int resp_len)
 {
 	int ret = 0;
-	struct skw_tlv_set_dbdc_disable set_flag = {0};
+	struct net_device *dev = iface->ndev;
+	struct skw_tlv_set_dbdc_disable set_flag = { 0 };
 	u8 parmas_len = 0;
 
 	if (!args)
@@ -3458,20 +3612,20 @@ static int skw_iwpriv_set_dbdc_disable(struct skw_iface *iface, void *param,
 	if (parmas_len == 1) {
 		ret = simple_strtol(args, NULL, 10);
 		if (!ret) {
-			skw_dbg("flag: %d\n", ret);
+			skw_dev_dbg(dev, "flag: %d\n", ret);
 			set_flag.disable = 0;
 		} else if (ret == 1) {
-			skw_dbg("flag: %d\n", ret);
+			skw_dev_dbg(dev, "flag: %d\n", ret);
 			set_flag.disable = 1;
 		} else {
 			goto SETFAIL;
 		}
 	} else if (parmas_len > 1) {
-		skw_err("params error\n");
+		skw_dev_err(dev, "params error\n");
 		goto SETFAIL;
 	}
 
-	skw_dbg("dbdc disable: %d\n", set_flag.disable);
+	skw_dev_dbg(dev, "dbdc disable: %d\n", set_flag.disable);
 
 	ret = skw_set_dbdc_disable(iface->wdev.wiphy, iface->ndev, &set_flag);
 	if (!ret)
@@ -3501,34 +3655,35 @@ static int skw_iwpriv_set_assign_address_val(struct skw_iface *iface, void *para
 {
 	int ret = 0;
 	char *p = NULL, *q = NULL;
-	struct skw_tlv_set_assign_addr_val params = {0};
+	struct net_device *dev = iface->ndev;
+	struct skw_tlv_set_assign_addr_val params = { 0 };
 	u8 parmas_len = 0, remain_len = 0;
 
 	if (!args)
 		return -EINVAL;
 
 	parmas_len = strlen(args);
-	skw_warn("args %s\n", args);
+	skw_dev_warn(dev, "args %s\n", args);
 
 	p = args;
 	q = strchr(args, ',');
 	if (!p || !q) {
-		skw_err("params error\n");
+		skw_dev_err(dev, "params error\n");
 		return -ENOTSUPP;
 	}
 
 	params.addr = skw_iwpriv_convert_string_to_u32(p, q - p);
-	skw_dbg("addr: 0x%08x\n", params.addr);
+	skw_dev_dbg(dev, "addr: 0x%08x\n", params.addr);
 
 	p = q;
 	remain_len = parmas_len - (q - p) - 1;
 	if (!p) {
-		skw_err("param error\n");
+		skw_dev_err(dev, "param error\n");
 		return -ENOTSUPP;
 	}
 
 	params.val = skw_iwpriv_convert_string_to_u32(p + 1, remain_len);
-	skw_dbg("val: 0x%08x\n", params.val);
+	skw_dev_dbg(dev, "val: 0x%08x\n", params.val);
 
 	ret = skw_set_assign_address_val(iface->wdev.wiphy, iface->ndev, &params);
 	if (!ret)
@@ -3587,9 +3742,12 @@ static int skw_iwpriv_read_addr(struct skw_iface *iface, void *param,
 
 //TLV 39 ageout thrd
 //
-static int skw_set_ageout_thrd(struct wiphy *wiphy, struct net_device *dev, struct skw_tlv_set_ageout_thrd *params)
+static int skw_set_ageout_thrd(struct wiphy *wiphy, struct net_device *dev,
+				struct skw_tlv_set_ageout_thrd *params)
 {
-	return skw_generic_tlv_operation(wiphy, dev, params, sizeof(struct skw_tlv_set_ageout_thrd), SKW_MIB_SET_AGEOUT_THOLD);
+	return skw_generic_tlv_operation(wiphy, dev, params,
+			sizeof(struct skw_tlv_set_ageout_thrd),
+			SKW_MIB_SET_AGEOUT_THOLD);
 }
 
 static int skw_iwpriv_set_ageout_thrd(struct skw_iface *iface, void *param,
@@ -3597,18 +3755,19 @@ static int skw_iwpriv_set_ageout_thrd(struct skw_iface *iface, void *param,
 {
 	int ret = 0;
 	char *p = NULL, *q = NULL;
-	struct skw_tlv_set_ageout_thrd thrd = {0};
+	struct net_device *dev = iface->ndev;
+	struct skw_tlv_set_ageout_thrd thrd = { 0 };
 	u16 temp_val = 0;
 
 	if (!args)
 		return -EINVAL;
 
-	skw_dbg("args %s\n", args);
+	skw_dev_dbg(dev, "args %s\n", args);
 
 	p = args;
 	q = strchr(args, ',');
 	if (!p || !q) {
-		skw_err("param err\n");
+		skw_dev_err(dev, "param err\n");
 		return -ENOTSUPP;
 	}
 
@@ -3619,13 +3778,12 @@ static int skw_iwpriv_set_ageout_thrd(struct skw_iface *iface, void *param,
 	} else {
 		thrd.ageout_kick_thrd  = temp_val;
 	}
-
 	skw_dbg("tbtt cnt, kick out %d\n", thrd.ageout_kick_thrd);
 
 	p = q;
 	p = q + strlen(",");
 	if (!p) {
-		skw_warn("param err\n");
+		skw_dev_warn(dev, "param err\n");
 		return -ENOTSUPP;
 	}
 
@@ -3651,55 +3809,69 @@ static int skw_iwpriv_set_ageout_thrd(struct skw_iface *iface, void *param,
 }
 
 //tlv 42
-static int skw_set_reported_cqm_interval(struct wiphy *wiphy, struct net_device *dev, struct skw_tlv_set_report_cqm_rssi_low_itvl *params)
+static int skw_set_reported_cqm_interval(struct wiphy *wiphy, struct net_device *dev,
+		struct skw_tlv_set_report_cqm_rssi_low_itvl *params)
 {
-	return skw_generic_tlv_operation(wiphy, dev, params, sizeof(struct skw_tlv_set_report_cqm_rssi_low_itvl), SKW_MIB_SET_REPORT_CQM_RSSI_LOW_INT);
+	return skw_generic_tlv_operation(wiphy, dev, params,
+			sizeof(struct skw_tlv_set_report_cqm_rssi_low_itvl),
+			SKW_MIB_SET_REPORT_CQM_RSSI_LOW_INT);
 }
 
 //tlv 54 ~ 57
-static int skw_set_ap_new_channel(struct wiphy *wiphy, struct net_device *dev, struct skw_tlv_set_ap_new_channel *params)
+static int skw_set_ap_new_channel(struct wiphy *wiphy, struct net_device *dev,
+		struct skw_tlv_set_ap_new_channel *params)
 {
-	return skw_generic_tlv_operation(wiphy, dev, params, sizeof(struct skw_tlv_set_ap_new_channel), SKW_MIB_SET_AP_NEW_CHAN);
+	return skw_generic_tlv_operation(wiphy, dev, params,
+			sizeof(struct skw_tlv_set_ap_new_channel),
+			SKW_MIB_SET_AP_NEW_CHAN);
 }
 
-static int skw_set_tx_retry_limit_en(struct wiphy *wiphy, struct net_device *dev, struct skw_tlv_set_tx_retry_limit_en *params)
+static int skw_set_tx_retry_limit_en(struct wiphy *wiphy, struct net_device *dev,
+			struct skw_tlv_set_tx_retry_limit_en *params)
 {
-	return skw_generic_tlv_operation(wiphy, dev, params, sizeof(struct skw_tlv_set_tx_retry_limit_en), SKW_MIB_SET_TX_RETRY_LIMIT_EN);
+	return skw_generic_tlv_operation(wiphy, dev, params,
+			sizeof(struct skw_tlv_set_tx_retry_limit_en),
+			SKW_MIB_SET_TX_RETRY_LIMIT_EN);
 }
 
-static int skw_partial_twt_sched(struct wiphy *wiphy, struct net_device *dev, struct skw_tlv_set_partial_twt_sched *params)
+static int skw_partial_twt_sched(struct wiphy *wiphy, struct net_device *dev,
+				struct skw_tlv_set_partial_twt_sched *params)
 {
-	return skw_generic_tlv_operation(wiphy, dev, params, sizeof(struct skw_tlv_set_partial_twt_sched), SKW_MIB_SET_PARTIAL_TWT_SCHED);
+	return skw_generic_tlv_operation(wiphy, dev, params,
+			sizeof(struct skw_tlv_set_partial_twt_sched),
+			SKW_MIB_SET_PARTIAL_TWT_SCHED);
 }
 
-static int skw_set_thm_thre(struct wiphy *wiphy, struct net_device *dev, struct skw_tlv_set_thm_thrd *params)
+static int skw_set_thm_thre(struct wiphy *wiphy, struct net_device *dev,
+			struct skw_tlv_set_thm_thrd *params)
 {
-	return skw_generic_tlv_operation(wiphy, dev, params, sizeof(struct skw_tlv_set_thm_thrd), SKW_MIB_SET_THM_THRD);
+	return skw_generic_tlv_operation(wiphy, dev, params,
+			sizeof(struct skw_tlv_set_thm_thrd), SKW_MIB_SET_THM_THRD);
 }
 
 static int skw_set_normal_scan_with_acs(struct wiphy *wiphy, struct net_device *dev,
-										struct skw_tlv_set_normal_scan_with_acs *params)
+				struct skw_tlv_set_normal_scan_with_acs *params)
 {
-	return skw_generic_tlv_operation(wiphy, dev, params, sizeof(struct skw_tlv_set_normal_scan_with_acs),
-									SKW_MIB_SET_NORMAL_SCAN_WITH_ACS);
+	return skw_generic_tlv_operation(wiphy, dev, params,
+			sizeof(struct skw_tlv_set_normal_scan_with_acs),
+			SKW_MIB_SET_NORMAL_SCAN_WITH_ACS);
 }
 
-extern int skw_set_dot11r_mib(struct wiphy *wiphy, struct net_device *dev, bool enable);
-
 static int skw_set_scan_send_probe_req_cnt(struct wiphy *wiphy, struct net_device *dev,
-										u8 cnt)
+		u8 cnt)
 {
 	return skw_generic_tlv_operation(wiphy, dev, &cnt, 1,
-								SKW_MIB_SET_SCAN_SEND_PROBE_REQ_CNT);
+			SKW_MIB_SET_SCAN_SEND_PROBE_REQ_CNT);
 }
 
 static int skw_iwpriv_set_params(struct skw_iface *iface, void *param,
-								char *args, char *resp, int resp_len)
+				char *args, char *resp, int resp_len)
 {
 	int ret = 0;
 	char *p = NULL, *q = NULL;
 	u32 params[16] = {0};
 	u32 params_num = 0;
+	struct net_device *dev = iface->ndev;
 	struct skw_tlv_set_ap_new_channel new_chan = {0};
 	struct skw_tlv_set_tx_retry_limit_en txr_limit = {0};
 	struct skw_tlv_set_report_cqm_rssi_low_itvl itvl = {0};
@@ -3711,7 +3883,7 @@ static int skw_iwpriv_set_params(struct skw_iface *iface, void *param,
 	if (!args)
 		return -EINVAL;
 
-	skw_dbg("args %s\n", args);
+	skw_dev_dbg(dev, "args %s\n", args);
 
 	p = args;
 
@@ -3720,129 +3892,136 @@ static int skw_iwpriv_set_params(struct skw_iface *iface, void *param,
 		params_num++;
 
 		q = strchr(p, ',');
-		if (!q) {
+		if (!q)
 			break;
-		}
 
 		p = q + 1; /* move past the comma */
 	}
 
 	if (params_num < 2) {
-		skw_warn("params error, at least 2\n");
+		skw_dev_warn(dev, "params error, at least 2\n");
 		return -ENOTSUPP;
 	}
 
 	switch (params[0]) {
-		case 1:
-			if (params_num != 6) {
-				skw_warn("params error, need 6 totally\n");
-				return -EINVAL;
-			}
+	case 1:
+		if (params_num != 6) {
+			skw_dev_warn(dev, "params error, need 6 totally\n");
+			return -EINVAL;
+		}
 
-			new_chan.chan = params[1];
-			new_chan.center_chan = params[2];
-			new_chan.center_two_chan = params[3];
-			new_chan.bw = params[4];
-			new_chan.band = params[5];
+		new_chan.chan = params[1];
+		new_chan.center_chan = params[2];
+		new_chan.center_two_chan = params[3];
+		new_chan.bw = params[4];
+		new_chan.band = params[5];
 
-			ret = skw_set_ap_new_channel(iface->wdev.wiphy, iface->ndev, &new_chan);
-			skw_dbg("set ap new chan done\n");
+		ret = skw_set_ap_new_channel(iface->wdev.wiphy, iface->ndev, &new_chan);
+		skw_dev_dbg(dev, "set ap new chan done\n");
 
-			break;
+		break;
 
-		case 2:
-			if (params_num != 2) {
-				skw_warn("params error, need 2 totally\n");
-				return -EINVAL;
-			}
+	case 2:
+		if (params_num != 2) {
+			skw_dev_warn(dev, "params error, need 2 totally\n");
+			return -EINVAL;
+		}
 
-			ret = skw_set_dot11r_mib(iface->wdev.wiphy, iface->ndev, (bool)params[1]);
-			skw_dbg("set 11r mib done\n");
-			break;
+		skw_set_mib_bool(iface->wdev.wiphy, iface->id,
+				 SKW_MIB_SET_11R_TLV_ID, !!params[1]);
 
-		case 3:
-			if (params_num != 4) {
-				skw_warn("params error, need 4 totally\n");
-				return -EINVAL;
-			}
+		skw_dev_dbg(dev, "set 11r mib done\n");
+		break;
 
-			txr_limit.short_retry_check_en = !!params[1];
-			txr_limit.long_retry_check_en = !!params[2];
-			txr_limit.ampdu_retry_check_en = !!params[3];
+	case 3:
+		if (params_num != 4) {
+			skw_dev_warn(dev, "params error, need 4 totally\n");
+			return -EINVAL;
+		}
 
-			ret = skw_set_tx_retry_limit_en(iface->wdev.wiphy, iface->ndev,&txr_limit);
-			skw_dbg("set tx retry limit done\n");
+		txr_limit.short_retry_check_en = !!params[1];
+		txr_limit.long_retry_check_en = !!params[2];
+		txr_limit.ampdu_retry_check_en = !!params[3];
 
-			break;
+		ret = skw_set_tx_retry_limit_en(iface->wdev.wiphy, iface->ndev, &txr_limit);
+		skw_dev_dbg(dev, "set tx retry limit done\n");
 
-		case 4:
-			if (params_num != 3) {
-				skw_warn("params error, need 3 totally\n");
-				return -EINVAL;
-			}
+		break;
 
-			itvl.report_cqm_low_intvl_min_dur = params[1];
-			itvl.report_cqm_low_intvl_max_dur = params[2];
+	case 4:
+		if (params_num != 3) {
+			skw_dev_warn(dev, "params error, need 3 totally\n");
+			return -EINVAL;
+		}
 
-			ret = skw_set_reported_cqm_interval(iface->wdev.wiphy, iface->ndev,&itvl);
-			skw_dbg("set report cqm interval done\n");
-			break;
+		itvl.report_cqm_low_intvl_min_dur = params[1];
+		itvl.report_cqm_low_intvl_max_dur = params[2];
 
-		case 5:
-			if (params_num != 3) {
-				skw_warn("params error, need 3 totally\n");
-				return -EINVAL;
-			}
+		ret = skw_set_reported_cqm_interval(iface->wdev.wiphy, iface->ndev, &itvl);
+		skw_dev_dbg(dev, "set report cqm interval done\n");
+		break;
 
-			thrd.thm_high_thrd_tx_suspend = (s16)params[1];
-			thrd.thm_low_thrd_tx_resume = (s16)params[2];
+	case 5:
+		if (params_num != 3) {
+			skw_dev_warn(dev, "params error, need 3 totally\n");
+			return -EINVAL;
+		}
 
-			ret = skw_set_thm_thre(iface->wdev.wiphy, iface->ndev, &thrd);
-			skw_dbg("set thm thre done\n");
+		thrd.thm_high_thrd_tx_suspend = (s16)params[1];
+		thrd.thm_low_thrd_tx_resume = (s16)params[2];
 
-			break;
+		ret = skw_set_thm_thre(iface->wdev.wiphy, iface->ndev, &thrd);
+		skw_dev_dbg(dev, "set thm thre done\n");
 
-		case 6:
-			if (params_num != 7) {
-				skw_warn("params error, need 7 totally\n");
-				return -EINVAL;
-			}
+		break;
 
-			twt_params.en = params[1];
-			twt_params.start_time_l = params[2];
-			twt_params.start_time_h = params[3];
-			twt_params.interval = params[4];
-			twt_params.duration = params[5];
-			twt_params.duration_unit = params[6];
-			twt_params.sub_type = params[7];
+	case 6:
+		if (params_num != 7) {
+			skw_warn("params error, need 7 totally\n");
+			return -EINVAL;
+		}
 
-			ret = skw_partial_twt_sched(iface->wdev.wiphy, iface->ndev, &twt_params);
-			skw_dbg("set partial twt sched done\n");
+		twt_params.en = params[1];
+		twt_params.start_time_l = params[2];
+		twt_params.start_time_h = params[3];
+		twt_params.interval = params[4];
+		twt_params.duration = params[5];
+		twt_params.duration_unit = params[6];
+		twt_params.sub_type = params[7];
 
-			break;
-		case 59:
-			if (params_num != 2) {
-				skw_warn("params error, need 2 totally\n");
-				return -EINVAL;
-			}
+		ret = skw_partial_twt_sched(iface->wdev.wiphy, iface->ndev, &twt_params);
 
-			normal_scan_params.en = params[1];
-			ret = skw_set_normal_scan_with_acs(iface->wdev.wiphy, iface->ndev, &normal_scan_params);
-			skw_dbg("set normal scan with acs %d done\n", normal_scan_params.en);
+		skw_dev_dbg(dev, "set partial twt sched done\n");
 
-			break;
-		case 62:
-			if (params_num != 2) {
-				skw_warn("params error, need 2 totally    \n");
-				return -EINVAL;
-			}
-			send_probe_req_cnt = params[1];
-			ret = skw_set_scan_send_probe_req_cnt(iface->wdev.wiphy, iface->ndev, send_probe_req_cnt);
-			skw_dbg("set scan send probe req cnt %d done\n", send_probe_req_cnt);
-			break;
+		break;
+	case 59:
+		if (params_num != 2) {
+			skw_dev_warn(dev, "params error, need 2 totally\n");
+			return -EINVAL;
+		}
 
-		default:
-			return -ENOTSUPP;
+		normal_scan_params.en = params[1];
+		ret = skw_set_normal_scan_with_acs(iface->wdev.wiphy,
+				iface->ndev, &normal_scan_params);
+
+		skw_dbg("set normal scan with acs %d done\n",
+			normal_scan_params.en);
+
+		break;
+	case 62:
+		if (params_num != 2) {
+			skw_warn("params error, need 2 totally\n");
+			return -EINVAL;
+		}
+		send_probe_req_cnt = params[1];
+		ret = skw_set_scan_send_probe_req_cnt(iface->wdev.wiphy,
+				iface->ndev, send_probe_req_cnt);
+
+		skw_dbg("set scan send probe req cnt %d done\n", send_probe_req_cnt);
+		break;
+
+	default:
+		return -ENOTSUPP;
 	}
 
 	if (!ret)
@@ -3853,10 +4032,114 @@ static int skw_iwpriv_set_params(struct skw_iface *iface, void *param,
 	return ret;
 }
 
+static int skw_iwpriv_set_tid_tx_life_time(struct skw_iface *iface, void *param,
+	char *args, char *resp, int resp_len)
+{
+	int ret = 0;
+	char *p = NULL, *q = NULL;
+	struct skw_tlv_set_tid_tx_life_time l_time = {0};
+
+	if (!args)
+		return -EINVAL;
+
+	skw_dbg("tid_tx_life_time args %s\n", args);
+
+	p = args;
+	q = strchr(args, ',');
+	if (!p || !q) {
+		skw_err("be l_time not found\n");
+		return -ENOTSUPP;
+	}
+
+	l_time.be_tx_life_time = (u16)skw_iwpriv_convert_string_to_u(p, q - p);
+
+	skw_dbg("be_tx_life_time: %d\n", l_time.be_tx_life_time);
+
+	p = q;
+	q = strchr(p + 1, ',');
+	if (!p || !q) {
+		skw_err("bk l_time not found\n");
+		return -ENOTSUPP;
+	}
+
+	l_time.bk_tx_life_time = (u16)skw_iwpriv_convert_string_to_u(p + 1, q - p - 1);
+
+	skw_dbg("bk_tx_life_time: %d\n", l_time.bk_tx_life_time);
+
+	p = q;
+	q = strchr(p + 1, ',');
+	if (!p || !q) {
+		skw_err("vi l_time not found\n");
+		return -ENOTSUPP;
+	}
+
+	l_time.vi_tx_life_time = (u16)skw_iwpriv_convert_string_to_u(p + 1, q - p - 1);
+	skw_dbg("vi_tx_life_time: %d\n", l_time.vi_tx_life_time);
+
+	p = q;
+	q = strchr(p + 1, ',');
+	if (!p || !q) {
+		skw_err("vo l_time not found\n");
+		return -ENOTSUPP;
+	}
+
+	l_time.vo_tx_life_time = (u16)skw_iwpriv_convert_string_to_u(p + 1, q - p - 1);
+
+	skw_dbg("vo_tx_life_time: %d\n", l_time.vo_tx_life_time);
+
+	ret = skw_set_mib(iface->wdev.wiphy,
+			  iface->id,
+			  SKW_MIB_SET_AC_TX_LIFE_TIME,
+			  &l_time,
+			  sizeof(struct skw_tlv_set_tid_tx_life_time));
+	if (!ret)
+		sprintf(resp, "set tid tx l_time ok ");
+	else
+		sprintf(resp, "set tid tx l_time failed");
+
+	return ret;
+}
+
+static int skw_iwpriv_set_dfs_radar_evt_rpt(struct skw_iface *iface, void *param,
+		char *args, char *resp, int resp_len)
+{
+	u16 res;
+	int ret;
+
+	if (args == NULL)
+		return -EINVAL;
+
+	ret = kstrtou16(args, 10, &res);
+	if (!ret && res < 2) {
+		if (res == 0)
+			clear_bit(SKW_DFS_FLAG_RADAR_EVT_RPT, &iface->sap.dfs.flags);
+		else if (res == 1)
+			set_bit(SKW_DFS_FLAG_RADAR_EVT_RPT, &iface->sap.dfs.flags);
+
+		sprintf(resp, "ok");
+	} else
+		sprintf(resp, "failed");
+
+	return ret;
+}
+
+static int skw_iwpriv_get_dfs_radar_evt_rpt(struct skw_iface *iface, void *param,
+		char *args, char *resp, int resp_len)
+{
+	if (test_bit(SKW_DFS_FLAG_RADAR_EVT_RPT, &iface->sap.dfs.flags))
+		sprintf(resp, "rdevt=1");
+	else
+		sprintf(resp, "rdevt=0");
+
+	return 0;
+}
+
+
 static struct skw_iwpriv_cmd skw_iwpriv_set_cmds[] = {
 	/* keep first */
 	{"help", skw_iwpriv_help, "usage"},
 	{"bandcfg", skw_iwpriv_set_bandcfg, "bandcfg=0/1/2"},
+	{"rdevt", skw_iwpriv_set_dfs_radar_evt_rpt, "rdevt=0/1"},
 	{"mppdudur", skw_iwpriv_set_max_ppdu_dur, "mppdudur=0~5,1~65535"},
 	{"edca", skw_iwpriv_set_edca_params, "edca=0,x(13 total)"},
 	{"ccanowifi", skw_iwpriv_set_cca_thre_nowifi, "ccanowifi=-u8"},
@@ -3880,6 +4163,7 @@ static struct skw_iwpriv_cmd skw_iwpriv_set_cmds[] = {
 	{"rdaddr", skw_iwpriv_read_addr, "rdaddr=0x12345678"},
 	{"ageout", skw_iwpriv_set_ageout_thrd, "ageout=u8,u8"},
 	{"params", skw_iwpriv_set_params, "params=index,val1,val2,val3,..."}, //for tlv42 and 54~57,59
+	{"tidtxlifetm", skw_iwpriv_set_tid_tx_life_time, "tidtxlifetm=u16,u16,u16,u16"},
 
 	/*keep last*/
 	{NULL, NULL, NULL}
@@ -3888,8 +4172,8 @@ static struct skw_iwpriv_cmd skw_iwpriv_set_cmds[] = {
 static struct skw_iwpriv_cmd skw_iwpriv_get_cmds[] = {
 	/* keep first */
 	{"help", skw_iwpriv_help, "usage"},
-
 	{"bandcfg", skw_iwpriv_get_bandcfg, "bandcfg"},
+	{"rdevt", skw_iwpriv_get_dfs_radar_evt_rpt, "rdevt"},
 
 	/*keep last*/
 	{NULL, NULL, NULL}
@@ -3919,15 +4203,21 @@ static int skw_iwpriv_set(struct net_device *dev,
 	struct skw_iwpriv_cmd *iwpriv_cmd;
 	struct skw_iface *iface = (struct skw_iface *)netdev_priv(dev);
 
-	WARN_ON(sizeof(param) < wrqu->data.length);
+	if (wrqu->data.length >= sizeof(param)) {
+		skw_err("data too long: %d\n", wrqu->data.length);
+		return -EINVAL;
+	}
 
-	if (copy_from_user(param, wrqu->data.pointer, sizeof(param))) {
-		skw_err("copy failed, length: %d\n",
-			wrqu->data.length);
+	if (copy_from_user(param, wrqu->data.pointer, wrqu->data.length)) {
+		skw_dev_err(dev, "copy failed, length: %d\n", wrqu->data.length);
 
 		return -EFAULT;
 	}
-	param[127] = '\0';
+
+	param[wrqu->data.length] = 0;
+
+	skw_dev_dbg(dev, "cmd: 0x%x, %s(len: %d)\n",
+		info->cmd, param, wrqu->data.length);
 
 	token = strchr(param, '=');
 	if (!token) {
@@ -3939,19 +4229,21 @@ static int skw_iwpriv_set(struct net_device *dev,
 	}
 
 	iwpriv_cmd = skw_iwpriv_cmd_match(skw_iwpriv_set_cmds, param, key_len);
-	if (iwpriv_cmd)
+	if (iwpriv_cmd) {
 		ret = iwpriv_cmd->handler(iface, iwpriv_cmd, args,
-				extra, SKW_GET_LEN_512);
-	else
+			extra, SKW_GET_LEN_512);
+		if (ret < 0)
+			sprintf(extra, " usage: %s\n", iwpriv_cmd->help_info);
+	} else {
 		ret = skw_iwpriv_help(iface, skw_iwpriv_set_cmds, NULL,
-				extra, SKW_GET_LEN_512);
-
-	if (ret < 0)
-		sprintf(extra, " usage: %s\n", iwpriv_cmd->help_info);
+			extra, SKW_GET_LEN_512);
+		if (ret < 0)
+			sprintf(extra, " usage: %s\n", skw_iwpriv_set_cmds->help_info);
+	}
 
 	wrqu->data.length = SKW_GET_LEN_1024;
 
-	skw_dbg("resp: %s\n", extra);
+	skw_dev_dbg(dev, "resp: %s\n", extra);
 
 	return 0;
 }
@@ -3966,15 +4258,14 @@ static int skw_iwpriv_get(struct net_device *dev,
 	struct skw_iface *iface = (struct skw_iface *)netdev_priv(dev);
 
 	if (copy_from_user(cmd, wrqu->data.pointer, sizeof(cmd))) {
-		skw_err("copy failed, length: %d\n",
-			wrqu->data.length);
+		skw_dev_err(dev, "copy failed, length: %d\n", wrqu->data.length);
 
 		return -EFAULT;
 	}
 
-	skw_dbg("cmd: 0x%x, %s(len: %d)\n", info->cmd, cmd, wrqu->data.length);
+	skw_dev_dbg(dev, "cmd: 0x%x, %s(len: %d)\n", info->cmd, cmd, wrqu->data.length);
 
-	cmd[127] = '\0';
+	cmd[sizeof(cmd) - 1] = '\0';
 	priv_cmd = skw_iwpriv_cmd_match(skw_iwpriv_get_cmds, cmd, strlen(cmd));
 	if (priv_cmd)
 		ret = priv_cmd->handler(iface, priv_cmd, NULL, extra,
@@ -3985,7 +4276,7 @@ static int skw_iwpriv_get(struct net_device *dev,
 
 	wrqu->data.length = SKW_GET_LEN_512;
 
-	skw_dbg("resp: %s\n", extra);
+	skw_dev_dbg(dev, "resp: %s\n", extra);
 
 	return ret;
 }
@@ -4002,12 +4293,12 @@ static int skw_iwpriv_at(struct net_device *dev,
 	BUG_ON(sizeof(cmd) < len);
 
 	if (copy_from_user(cmd, wrqu->data.pointer, sizeof(cmd))) {
-		skw_err("copy failed, length: %d\n", len);
+		skw_dev_err(dev, "copy failed, length: %d\n", len);
 
 		return -EFAULT;
 	}
 
-	skw_dbg("cmd: %s, len: %d\n", cmd, len);
+	skw_dev_dbg(dev, "cmd: %s, len: %d\n", cmd, len);
 
 	if (len + 2 > sizeof(cmd))
 		return -EINVAL;
@@ -4020,7 +4311,7 @@ static int skw_iwpriv_at(struct net_device *dev,
 
 	wrqu->data.length = SKW_GET_LEN_512;
 
-	skw_dbg("resp: %s", extra);
+	skw_dev_dbg(dev, "resp: %s", extra);
 
 	return ret;
 }
@@ -4068,6 +4359,12 @@ static struct iw_priv_args skw_iw_priv_args[] = {
 		IW_PRIV_TYPE_CHAR | SKW_GET_LEN_512,
 		"wow_filter",
 	},
+	{
+		SKW_IW_PRIV_OFFLOAD_TCP,
+		IW_PRIV_TYPE_CHAR | SKW_SET_LEN_1024,
+		IW_PRIV_TYPE_CHAR | SKW_GET_LEN_512,
+		"offload_tcp",
+	},
 	{0, 0, 0, {0} }
 };
 
@@ -4082,6 +4379,7 @@ static const iw_handler skw_iw_priv_handlers[] = {
 	skw_iwpriv_get_mode,
 	skw_iwpriv_keep_alive,
 	skw_iwpriv_wow_filter,
+	skw_iwpriv_offload_keepalive,
 	//skw_iwpriv_get_wow_filter,
 };
 #endif
@@ -4103,7 +4401,7 @@ const void *skw_iw_handlers(void)
 #ifdef CONFIG_WIRELESS_EXT
 	return &skw_iw_ops;
 #else
-	skw_info("CONFIG_WIRELESS_EXT not enabled\n");
+	skw_info("CONFIG_WIRELESS_EXT disabled\n");
 	return NULL;
 #endif
 }

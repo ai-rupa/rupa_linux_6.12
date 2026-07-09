@@ -2,6 +2,7 @@
 obj-$(CONFIG_WLAN_VENDOR_SWT6621S) += swt6621s_wifi.o
 
 swt6621s_wifi-objs += skw_core.o
+swt6621s_wifi-objs += skw_core_dbg.o
 swt6621s_wifi-objs += skw_iface.o
 swt6621s_wifi-objs += skw_cfg80211.o
 swt6621s_wifi-objs += skw_msg.o
@@ -21,6 +22,8 @@ swt6621s_wifi-objs += skw_recovery.o
 swt6621s_wifi-objs += skw_vendor.o
 swt6621s_wifi-objs += trace.o
 swt6621s_wifi-objs += skw_db.o
+swt6621s_wifi-objs += skw_apf_interpreter.o
+swt6621s_wifi-objs += skw_mdnsoffload.o
 
 # swt6621s_wifi-$(CONFIG_SWT6621S_CALIB_DPD) += skw_calib.o
 # swt6621s_wifi-$(CONFIG_SWT6621S_EDMA) += skw_edma.o
@@ -30,11 +33,11 @@ swt6621s_wifi-$(CONFIG_SWT6621S_TDLS) += skw_tdls.o
 ccflags-y += -DCONFIG_SWT6621S_STA_SME_EXT
 ccflags-y += -DCONFIG_SWT6621S_SAP_SME_EXT
 ccflags-y += -DCONFIG_SWT6621S_SCAN_RANDOM_MAC
-ccflags-y += -DCONFIG_SWT6621S_TX_WORKQUEUE
 ccflags-y += -DCONFIG_SWT6621S_HIGH_PRIORITY
 ccflags-y += -DCONFIG_SWT6621S_CALIB_APPEND_BUS_ID
 ccflags-y += -DCONFIG_SWT6621S_CALIB_APPEND_MODULE_ID
-
+ccflags-y += -Wno-missing-prototypes -Wno-missing-declarations
+ccflags-y += -Wno-stringop-overread -Wno-stringop-overflow
 ifneq ($(CONFIG_SWT6621S_EXTERNAL_REGDB),y)
 ccflags-y += -DCONFIG_SWT6621S_REGD_SELF_MANAGED
 endif
@@ -47,12 +50,16 @@ ifneq ($(filter y,$(CONFIG_ANDROID_BINDER_IPC) $(CONFIG_SKW_ANDROID)),)
 ccflags-y += -D__SKW_ANDROID__
 endif
 
-ifneq ($(skw_extra_flags),)
-ccflags-y += $(skw_extra_flags)
+ifeq ($(CONFIG_GKI_HACKS_TO_FIX),y)
+ccflags-y += -DCONFIG_SKW6316_GKI
 endif
 
 ifneq ($(skw_extra_symbols),)
 KBUILD_EXTRA_SYMBOLS += $(skw_extra_symbols)
+endif
+
+ifneq ($(skw_extra_flags),)
+ccflags-y += $(skw_extra_flags)
 endif
 
 ccflags-y += -I$(srctree)/include/linux/platform_data/

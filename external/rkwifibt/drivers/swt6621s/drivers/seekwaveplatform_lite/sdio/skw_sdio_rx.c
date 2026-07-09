@@ -266,6 +266,10 @@ void skw_get_port_statistic(char *buffer, int size)
 				i, sdio_ports[i].rx_count, sdio_ports[i].rx_packet,
 				sdio_ports[i].total, sdio_ports[i].sent_packet);
 	}
+
+	if (assert_context_size != 0) {
+		ret += sprintf(&buffer[ret], "sdio_assert_context: [ %s ]", assert_context);
+	}
 }
 
 unsigned int crc_16_l_calc(char *buf_ptr,unsigned int len)
@@ -351,7 +355,7 @@ void skw_sdio_exception_work(struct work_struct *work)
 	struct skw_sdio_data_t *skw_sdio = skw_sdio_get_data();
 	skw_sdio_info(" entern..cp_state = %d.\n", skw_sdio->cp_state);
 	mutex_lock(&skw_sdio->except_mutex);
-	if(skw_sdio->cp_state!=1)
+	if(skw_sdio->cp_state!=1) //ap assert command has been sent
 	{
 		skw_sdio_warn("cp assert already\n");
 		mutex_unlock(&skw_sdio->except_mutex);
@@ -560,11 +564,13 @@ static int force_cp_wakeup(void)
 static int skw_sdio_dump(unsigned int address, void *buf, unsigned int len)
 {
 	int ret = 0;
+	struct skw_sdio_data_t *skw_sdio = skw_sdio_get_data();
 	ret = skw_sdio_smem_poweron();
 	if (ret != 0) {
 		skw_sdio_err(" pweron fail ret:%d, addr=0x%x\n", ret, address);
 		return ret;
 	}
+	send_cp_wakeup_signal(skw_sdio);
 	ret = skw_sdio_dt_read(address, buf, len);
 	if (ret != 0) {
 		skw_sdio_err(" dt read fail ret:%d, addr=0x%x\n", ret, address);
@@ -760,7 +766,7 @@ static int skw_sdio_handle_packet(struct skw_sdio_data_t *skw_sdio,
 			skw_sdio->device_active = 1;
 			complete(&skw_sdio->download_done);
 		} else if (!strncmp((char *)cmd, "BSPASSERT", 9)){
-			sprintf(firmware_version, "%s:%s\n", firmware_version, cmd);
+			//sprintf(firmware_version, "%s:%s\n", firmware_version, cmd);
 			debug_infos.cp_assert_time = skw_local_clock();
 #ifdef CONFIG_SEEKWAVE_PLD_RELEASE
 			if(!skw_sdio->cp_state && sdio_ports[log_port_num].state != PORT_STATE_OPEN)
@@ -782,8 +788,11 @@ static int skw_sdio_handle_packet(struct skw_sdio_data_t *skw_sdio,
 			skw_sdio->cp_state=1;/*cp except set value*/
 			mutex_unlock(&skw_sdio->except_mutex);
 			skw_sdio->service_state_map = 0;
-			memset(assert_context, 0, 1024);
-			assert_context_size = 0;
+			if (assert_context_size == 0) {
+				memset(assert_context, 0, 1024);
+				assert_context_size = strlen(cmd);
+				sprintf(assert_context, "cmd: [ %s ], ", cmd);
+			}
 			modem_notify_event(DEVICE_ASSERT_EVENT);
 			skw_sdio_err(" bsp assert !!!\n");
 		}else if (header->len==20 && !strncmp(cmd, "DUMPDONE",8)){
@@ -986,7 +995,7 @@ static int skw_sdio2_handle_packet(struct skw_sdio_data_t *skw_sdio,
 			skw_sdio->device_active = 1;
 			complete(&skw_sdio->download_done);
 		} else if (!strncmp((char *)cmd, "BSPASSERT", 9)) {
-			sprintf(firmware_version, "%s:%s\n", firmware_version, cmd);
+			//sprintf(firmware_version, "%s:%s\n", firmware_version, cmd);
 			debug_infos.cp_assert_time = skw_local_clock();
 #ifdef CONFIG_SEEKWAVE_PLD_RELEASE
 			if(!skw_sdio->cp_state && sdio_ports[log_port_num].state != PORT_STATE_OPEN)
@@ -1009,8 +1018,11 @@ static int skw_sdio2_handle_packet(struct skw_sdio_data_t *skw_sdio,
 			skw_sdio->cp_state=1;/*cp except set value*/
 			mutex_unlock(&skw_sdio->except_mutex);
 			skw_sdio->service_state_map = 0;
-			memset(assert_context, 0, 1024);
-			assert_context_size = 0;
+			if (assert_context_size == 0) {
+				memset(assert_context, 0, 1024);
+				assert_context_size = strlen(cmd);
+				sprintf(assert_context, "cmd: [ %s ], ", cmd);
+			}
 			modem_notify_event(DEVICE_ASSERT_EVENT);
 			skw_sdio_err(" bsp assert !!!\n");
 		}else if (header->len==20 && !strncmp(cmd, "DUMPDONE",8)){
@@ -1066,6 +1078,9 @@ static int skw_sdio2_handle_packet(struct skw_sdio_data_t *skw_sdio,
 
 			if(!skw_sdio->boot_data->first_dl_flag){
 				skw_sdio_gpio_irq_pre_ops();
+#ifdef CONFIG_SKW_FREE_FIRMWARE_MEM_SUPPORT
+				skw_sdio->boot_data->skw_fw_release();
+#endif
 			}
 			if(!skw_sdio->cp_state)
 				complete(&skw_sdio->download_done);
@@ -1118,7 +1133,7 @@ static int skw_sdio2_handle_packet(struct skw_sdio_data_t *skw_sdio,
 		addr = (char *)(header+1);
 		data = (u32 *) addr;
 		if(((data[2] & 0xffff) != port->next_seqno) && header->len > 12) {
-			skw_sdio_err("portno:%d, packet lost recv seqno=%d expected %d\n", port->channel,
+			skw_sdio_warn("portno:%d, packet lost recv seqno=%d expected %d\n", port->channel,
 					data[2] & 0xffff, port->next_seqno);
 			port->next_seqno = (data[2] & 0xffff);
 		}
@@ -1250,7 +1265,7 @@ static int skw_sdio_adma_parser(struct skw_sdio_data_t *skw_sdio, struct scatter
 				(max_pac_size - sizeof(struct skw_packet_header))) ||
 				(header->len == 0)) {
 				if (channel!=0xff)
-					skw_sdio_err("%s invalid header[%d]len[%d]: 0x%x 0x%x\n",
+					skw_sdio_dbg("%s invalid header[%d]len[%d]: 0x%x 0x%x\n",
 						__func__,  header->channel, header->len, data[0], data[1]);
 				skw_page_frag_free(header);
 				continue;
@@ -1271,7 +1286,7 @@ static int skw_sdio_adma_parser(struct skw_sdio_data_t *skw_sdio, struct scatter
 		}
 	}
 	if (channel >= max_ch_num)
-		skw_sdio_err("line: %d channel number error %d %d\n", __LINE__, channel, max_ch_num);
+		skw_sdio_warn("line: %d channel number error %d %d\n", __LINE__, channel, max_ch_num);
 	if (debug_infos.last_irq_time && (channel > 0 && channel < max_ch_num)) {
 		debug_infos.chn_last_irq_time[channel][debug_infos.chn_irq_cnt[channel] % CHN_IRQ_RECORD_NUM] = debug_infos.last_irq_time;
 		debug_infos.chn_irq_cnt[channel]++;
@@ -1299,9 +1314,6 @@ static int skw_sdio2_adma_parser(struct skw_sdio_data_t *skw_sdio, struct scatte
 
 		skw_sdio_dbg("[%d]:protno:%d len:0x%0x 0x%08X 0x%08X : 0x%08X 0x%08x 0x%08X\n",
 			i,      header->channel, header->len, data[2], data[3], data[5], data[6], data[7]);
-		skw_port_log(header->channel, "%s[%d]:ch:%d len:0x%0x 0x%08X 0x%08X : 0x%08X 0x%08x 0x%08X\n", __func__,
-			i,	header->channel, header->len, data[2], data[3], data[5], data[6], data[7]);
-
 		channel = header->channel;
 
 		if (!header->eof && (channel < max_ch_num) && header->len) {
@@ -1311,7 +1323,7 @@ static int skw_sdio2_adma_parser(struct skw_sdio_data_t *skw_sdio, struct scatte
 				(max_pac_size - sizeof(struct skw_packet2_header))) ||
 				(header->len == 0)) {
 				if (channel!=0xff)
-					skw_sdio_err("%s invalid header[%d]len[%d]: 0x%x 0x%x\n",
+					skw_sdio_dbg("%s invalid header[%d]len[%d]: 0x%x 0x%x\n",
 						__func__,  header->channel, header->len, data[0], data[1]);
 				skw_page_frag_free(header);
 				continue;
@@ -1320,14 +1332,14 @@ static int skw_sdio2_adma_parser(struct skw_sdio_data_t *skw_sdio, struct scatte
 			skw_sdio2_handle_packet(skw_sdio, sgs+i, header, channel);
 		} else {
 			if (channel!=0xff)
-				skw_sdio_err("%s[%d]:ch:%d len:0x%0x 0x%08X 0x%08X : 0x%08X 0x%08x 0x%08X\n", __func__,
+				skw_sdio_dbg("%s[%d]:ch:%d len:0x%0x 0x%08X 0x%08X : 0x%08X 0x%08x 0x%08X\n", __func__,
 				i,	header->channel, header->len, data[2], data[3], data[5], data[6], data[7]);
 			skw_page_frag_free(header);
 			continue;
 		}
 	}
 	if (channel >= max_ch_num && channel!=0xff)
-		skw_sdio_err("line: %d channel number error %d %d\n", __LINE__, channel, max_ch_num);
+		skw_sdio_dbg("line: %d channel number error %d %d\n", __LINE__, channel, max_ch_num);
 	if (debug_infos.last_irq_time && (channel > 0 && channel < max_ch_num)) {
 		debug_infos.chn_last_irq_time[channel][debug_infos.chn_irq_cnt[channel] % CHN_IRQ_RECORD_NUM] = debug_infos.last_irq_time;
 		debug_infos.chn_irq_cnt[channel]++;
@@ -1364,18 +1376,18 @@ static int skw_sdio_sdma_parser(char *data_buf, int total)
 		parse_len += MAX_PAC_SIZE;
 		if ((channel >= max_ch_num) || (current_len == 0) ||
 			(current_len > (max_pac_size - sizeof(struct skw_packet_header)))) {
-			skw_sdio_err("%s skip [%d]len[%d]\n",__func__, header->channel, current_len);
-			break;
+			skw_sdio_err("%s skip [%d]len[%d] parse_len:%d\n",__func__, header->channel, current_len,parse_len);
+		}else{
+		    skw_sdio->rx_packer_cnt++;
+		    skw_sdio_handle_packet(skw_sdio, NULL, header, channel);
 		}
-		skw_sdio->rx_packer_cnt++;
-		skw_sdio_handle_packet(skw_sdio, NULL, header, channel);
 		skw_port_log(header->channel, "the -header->len----%d\n", current_len);
 		/* pointer to next packet header*/
 		p += MAX_PAC_SIZE;
 		header = (struct skw_packet_header *)p;
 	}
 	if (channel >= max_ch_num)
-		skw_sdio_err("line: %d channel number error %d %d\n", __LINE__, channel, max_ch_num);
+		skw_sdio_dbg("line: %d channel number error %d %d\n", __LINE__, channel, max_ch_num);
 	if (debug_infos.last_irq_time && (channel > 0 && channel < max_ch_num)) {
 		debug_infos.chn_last_irq_time[channel][debug_infos.chn_irq_cnt[channel] % CHN_IRQ_RECORD_NUM] = debug_infos.last_irq_time;
 		debug_infos.chn_irq_cnt[channel]++;
@@ -1407,25 +1419,23 @@ static int skw_sdio2_sdma_parser(char *data_buf, int total)
 
 		skw_sdio_dbg("ch:%d len:0x%0x 0x%08X 0x%08X : 0x%08X 0x%08x 0x%08X\n",
 			header->channel, header->len, data[1], data[2], data[3],data[4], data[5]);
-		skw_port_log(header->channel, "ch:%d len:0x%0x 0x%08X 0x%08X : 0x%08X 0x%08x 0x%08X\n",
-				header->channel, header->len, data[1], data[2], data[3], data[4], data[5]);
 		channel = header->channel;
 		current_len = header->len;
 		parse_len += MAX2_PAC_SIZE;
 		if ((channel >= max_ch_num) || (current_len == 0) ||
 			(current_len > (max_pac_size - sizeof(struct skw_packet2_header)))) {
-			skw_sdio_err("%s skip [%d]len[%d]\n",__func__, header->channel, current_len);
-			break;
+			skw_sdio_err("%s skip [%d]len[%d]parse_len:%d\n",__func__, header->channel, current_len,parse_len);
+		}else{
+		    skw_sdio->rx_packer_cnt++;
+		    skw_sdio2_handle_packet(skw_sdio, NULL, header, channel);
 		}
-		skw_sdio->rx_packer_cnt++;
-		skw_sdio2_handle_packet(skw_sdio, NULL, header, channel);
 		skw_port_log(header->channel, "the -header->len----%d\n", current_len);
 		/* pointer to next packet header*/
 		p +=  MAX2_PAC_SIZE;
 		header = (struct skw_packet2_header *)p;
 	}
 	if (channel >= max_ch_num)
-		skw_sdio_err("line: %d channel number error %d %d\n", __LINE__, channel, max_ch_num);
+		skw_sdio_dbg("line: %d channel number error %d %d\n", __LINE__, channel, max_ch_num);
 	if (debug_infos.last_irq_time && (channel > 0 && channel < max_ch_num)) {
 		debug_infos.chn_last_irq_time[channel][debug_infos.chn_irq_cnt[channel] % CHN_IRQ_RECORD_NUM] = debug_infos.last_irq_time;
 		debug_infos.chn_irq_cnt[channel]++;
@@ -1494,40 +1504,40 @@ int skw_sdio_rx_thread(void *p)
 	skw_sdio_sdma_set_nsize(0);
 	skw_sdio_adma_set_packet_num(1);
 	skw_sdio->cp_fifo_status = 0;
-	while (1) {
+	while (!kthread_should_stop()) {
 		/* Wait the semaphore */
 		skw_sdio_rx_down(skw_sdio);
 		if (!debug_infos.cp_assert_time) {
 			debug_infos.last_rx_read_times[debug_infos.rx_read_cnt % CHN_IRQ_RECORD_NUM] = skw_local_clock();
 			debug_infos.rx_read_cnt++;
 		}
-		if (skw_sdio->threads_exit) {
+		if (atomic_read(&skw_sdio->threads_exit)) {
 			skw_sdio_err("line %d threads exit\n",__LINE__);
-			break;
+			msleep(100);
+			continue;
 		}
 		if (!SKW_CARD_ONLINE(skw_sdio)) {
 			skw_sdio_unlock_rx_ws(skw_sdio);
-			skw_sdio_err("line %d not have card\n",__LINE__);
+			skw_sdio_warn("line %d not have card\n",__LINE__);
 			continue;
 		}
 		skw_resume_check();
 		if (skw_sdio->irq_type == SKW_SDIO_EXTERNAL_IRQ) {
 			int value = gpio_get_value(skw_sdio->gpio_in);
 			if(value == 0) {
-				skw_sdio_err("line %d gpio_in:%d\n",__LINE__, value);
+				skw_sdio_warn("line %d gpio_in:%d\n",__LINE__, value);
 				skw_sdio_unlock_rx_ws(skw_sdio);
 				continue;
 			}
 			ret = skw_sdio_readb(SKW_SDIO_CP2AP_FIFO_IND, &fifo_ind);
 			if(ret) {
-				skw_sdio_err("line %d sdio cmd52 read fail ret:%d\n",__LINE__, ret);
+				skw_sdio_warn("line %d sdio cmd52 read fail ret:%d\n",__LINE__, ret);
 				skw_sdio_unlock_rx_ws(skw_sdio);
 				continue;
 			}
 			skw_sdio_dbg("line:%d cp fifo status(%d,%d) ret=%d\n",
 					__LINE__,fifo_ind, skw_sdio->cp_fifo_status, ret);
-			if (!ret && !fifo_ind)
-				skw_sdio_dbg("cp fifo ret -- %d \n", ret);
+
 			if(fifo_ind == skw_sdio->cp_fifo_status && !is_timeout_kick) {
 				skw_sdio_info("line:%d cp fifo status(%d,%d) ret=%d\n",
 						__LINE__,fifo_ind, skw_sdio->cp_fifo_status, ret);
@@ -1560,8 +1570,14 @@ receive_again:
 				skw_sdio_err("prepare adma buffer fail\n");
 				goto submit_packets;
 			}
-			ret = skw_sdio_adma_read(skw_sdio, sgs, buf_num + 1,
+			if (skw_sdio->power_off) {
+				skw_sdio_err("line %d device power off\n", __LINE__);
+				rx_nsize = 0;
+				ret = -EIO;
+			} else {
+				ret = skw_sdio_adma_read(skw_sdio, sgs, buf_num + 1,
 					buf_num * max_pac_size+nsize_offset);
+			}
 			if (ret != 0) {
 				kfree(sgs);
 				sgs = NULL;
@@ -1701,7 +1717,13 @@ static int close_sdio_port(int id)
 	complete(&port->rx_done);
 	return 0;
 }
+void kill_BT_rx_transfer(void)
+{
+	int i;
 
+	for (i=SDIO2_BT_CMD_PORT; i<SDIO2_WIFI_CMD_PORT; i++)
+		close_sdio_port(i);
+}
 void send_host_suspend_indication(struct skw_sdio_data_t *skw_sdio)
 {
 	uint32_t value = 0;
@@ -1784,7 +1806,7 @@ int try_to_wakeup_modem(int portno)
 		else
 			send_cp_wakeup_signal(skw_sdio);
 		local_irq_restore(flags);
-		ret = wait_for_completion_interruptible_timeout(&skw_sdio->device_wakeup, HZ/100);
+		ret = wait_for_completion_interruptible_timeout(&skw_sdio->device_wakeup, msecs_to_jiffies(5));
 		if (ret < 0) {
 			skw_sdio->tx_req_map &= ~(1<<portno);
 			return -ETIMEDOUT;
@@ -1795,7 +1817,7 @@ int try_to_wakeup_modem(int portno)
 		local_irq_save(flags);
 		send_cp_wakeup_signal(skw_sdio);
 		local_irq_restore(flags);
-		ret = wait_for_completion_interruptible_timeout(&skw_sdio->device_wakeup, HZ/100);
+		ret = wait_for_completion_interruptible_timeout(&skw_sdio->device_wakeup, msecs_to_jiffies(5));
 		if (ret < 0) {
 			skw_sdio->tx_req_map &= ~(1<<portno);
 			return -ETIMEDOUT;
@@ -2071,7 +2093,7 @@ static int send_data(int portno, char *buffer, int size)
 			port->tx_flow_ctrl++;
 			if(sdio_ports[portno].state != PORT_STATE_ASST) {
 				ret = wait_for_completion_interruptible_timeout(&port->tx_done, 
-						msecs_to_jiffies(100));
+						msecs_to_jiffies(500));
 				if(!ret && port->tx_flow_ctrl) {
 					skw_sdio_info("%s ret=%d:%d and retry again\n", __func__, ret, port->tx_flow_ctrl);
 					port->tx_flow_ctrl--;
@@ -2369,7 +2391,7 @@ int wifi_send_cmd(int portno, struct scatterlist *sg, int sg_num, int total)
 	if(!port->state)
 		return -EIO;
 	data = (u32 *)sg_virt(sg);
-	for(i=0; i<2; i++) {
+	for(i=0; i<5; i++) {
 		try_to_wakeup_modem(portno);
 		ret = skw_sdio_adma_write(portno, sg, sg_num, total);
 		if(!ret)
@@ -2446,7 +2468,7 @@ static int bt_service_start(void)
 	ret=skw_sdio->boot_data->bt_start();
 	skw_sdio->service_index_map = SKW_BT;
 	start_poll = ktime_get();
-	skw_sdio_info("the start service time =%lld", ktime_sub(start_poll, cur));
+	skw_sdio_info("the start service time =%lld", ktime_to_us(ktime_sub(start_poll, cur)));
 	mutex_unlock(&skw_sdio->service_mutex);
 #else
 	if(skw_sdio->boot_data==NULL ||(skw_sdio->service_state_map & (1<<BT_SERVICE)))
@@ -2601,8 +2623,14 @@ void kick_rx_thread(void)
  ********************************************************************* */
 static int skw_sdio_bluetooth_log(int disable)
 {
+	struct skw_sdio_data_t *skw_sdio = skw_sdio_get_data();
 	int ret = 0;
 	skw_sdio_info("Enter\n");
+
+	if (skw_sdio->cp_state) {
+		skw_sdio_warn(" cp not ready!!\n");
+		return -EBUSY;
+	}
 	if (disable) {
 		skw_sdio_info("disable the CP log \n");
 		disable = 0x10;
@@ -2779,7 +2807,6 @@ int skw_sdio_bind_platform_driver(struct sdio_func *func)
 		dev_err(&func->dev, "failed to allocate %s TX buffer\n", ucom_pdata.port_name);
 		return -ENOMEM;
 	}
-#ifndef CONFIG_BT_SEEKWAVE
 	/*
 	*	creaete LOOPCHECK device
 	*/
@@ -2819,10 +2846,11 @@ int skw_sdio_bind_platform_driver(struct sdio_func *func)
 	}
 	port->write_buffer = kzalloc(port->length , GFP_KERNEL);
 	if(port->write_buffer == NULL) {
+		kfree(port->read_buffer);
+		port->read_buffer = NULL;
 		dev_err(&func->dev, "failed to allocate %s TX buffer\n", ucom_pdata.port_name);
 		return -ENOMEM;
 	}
-#endif
 #if 0
 	if(skw_cp_ver == SKW_SDIO_V20){
 	/*
@@ -3049,13 +3077,6 @@ int skw_sdio_bind_btseekwave_driver(struct sdio_func *func)
 	}
 	port = &sdio_ports[ucom_pdata.data_port];
 	port->state = PORT_STATE_IDLE;
-	ret = platform_device_add(pdev);
-	if(ret) {
-		dev_err(&func->dev, "failt to register platform device\n");
-		platform_device_put(pdev);
-		return ret;
-	}
-	port->pdev = pdev;
 	port->channel = ucom_pdata.data_port;
 	port->length = SDIO_BUFFER_SIZE;
 	port->write_buffer = kzalloc(port->length , GFP_KERNEL);
@@ -3100,6 +3121,15 @@ int skw_sdio_bind_btseekwave_driver(struct sdio_func *func)
 	} else {
 		skw_sdio_info("alloc %s TX buffer success\n", ucom_pdata.port_name);
 	}
+	port = &sdio_ports[ucom_pdata.data_port];
+	ret = platform_device_add(pdev);
+	if(ret) {
+		dev_err(&func->dev, "failt to register platform device\n");
+		platform_device_put(pdev);
+		return ret;
+	}
+	port->pdev = pdev;
+
 	return ret;
 }
 #else
@@ -3377,31 +3407,32 @@ static int skw_sdio_unbind_sdio_port_driver(struct sdio_func *func, int portno)
 int skw_sdio_unbind_platform_driver(struct sdio_func *func)
 {
 	int ret;
-
+	skw_sdio_dbg("+++\n");
 	ret = skw_sdio_unbind_sdio_port_driver(func, SDIO2_BSP_ATC_PORT);
 	if(skw_cp_ver == SKW_SDIO_V20) {
 		ret |= skw_sdio_unbind_sdio_port_driver(func, SDIO2_BSP_LOG_PORT);
-#ifndef CONFIG_BT_SEEKWAVE
 		ret |= skw_sdio_unbind_sdio_port_driver(func, SDIO2_LOOPCHECK_PORT);
-#endif
 	} else {
 		ret |= skw_sdio_unbind_sdio_port_driver(func, BSP_LOG_PORT);
 		ret |= skw_sdio_unbind_sdio_port_driver(func, LOOPCHECK_PORT);
 	}
+	skw_sdio_dbg("---\n");
 	return ret;
 }
 
 int skw_sdio_unbind_WIFI_driver(struct sdio_func *func)
 {
 	int ret;
-
+	skw_sdio_dbg("+++\n");
 	ret = skw_sdio_unbind_sdio_port_driver(func, SDIO2_WIFI_CMD_PORT);
+	skw_sdio_info("---\n");
 	return ret;
 }
 
 int skw_sdio_unbind_BT_driver(struct sdio_func *func)
 {
 	int ret = 0;
+	skw_sdio_dbg("+++\n");
 	if (skw_cp_ver == SKW_SDIO_V20) {
 		ret = skw_sdio_unbind_sdio_port_driver(func, SDIO2_BT_DATA_PORT);
 		ret |= skw_sdio_unbind_sdio_port_driver(func, SDIO2_BT_CMD_PORT);
@@ -3415,5 +3446,6 @@ int skw_sdio_unbind_BT_driver(struct sdio_func *func)
 		ret |= skw_sdio_unbind_sdio_port_driver(func, BT_CMD_PORT);
 		ret |= skw_sdio_unbind_sdio_port_driver(func, BT_AUDIO_PORT);
 	}
+	skw_sdio_dbg("---\n");
 	return ret;
 }

@@ -26,6 +26,7 @@
 #include "skw_regd.h"
 #include "version.h"
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
 const struct nla_policy
 skw_set_country_policy[SKW_SET_COUNTRY_RULES] = {
 	[SKW_ATTR_SET_COUNTRY] = {.type = NLA_STRING},
@@ -41,52 +42,6 @@ skw_get_version_policy[SKW_GET_VERSION_RULES] = {
 	[SKW_ATTR_VERSION_DRIVER] = {.type = NLA_U32},
 	[SKW_ATTR_VERSION_FIRMWARE] = {.type = NLA_U32},
 };
-
-#if 0
-static int skw_vendor_dbg_reset_logging(struct wiphy *wiphy,
-	struct wireless_dev *wdev, const void  *data, int len)
-{
-	int ret = SKW_OK;
-
-	skw_dbg("Enter\n");
-
-	return ret;
-}
-
-static int skw_vendor_set_p2p_rand_mac(struct wiphy *wiphy,
-		struct wireless_dev *wdev, const void *data, int len)
-{
-	int type;
-	//struct skw_iface *iface = netdev_priv(wdev->netdev);
-	u8 mac_addr[6] = {0};
-
-	skw_dbg("set skw mac addr\n");
-	type = nla_type(data);
-
-	if (type == SKW_ATTR_DRIVER_RAND_MAC) {
-		memcpy(mac_addr, nla_data(data), 6);
-		skw_dbg("mac:%pM\n", mac_addr);
-	}
-
-	return 0;
-}
-
-static int skw_vendor_set_rand_mac_oui(struct wiphy *wiphy,
-		struct wireless_dev *wdev, const void *data, int len)
-{
-	char *oui = nla_data(data);
-	struct skw_iface *iface = SKW_WDEV_TO_IFACE(wdev);
-
-	if (!oui || (nla_len(data) != DOT11_OUI_LEN))
-		return -EINVAL;
-
-	skw_dbg("%02x:%02x:%02x\n", oui[0], oui[1], oui[2]);
-
-	memcpy(iface->rand_mac_oui, oui, DOT11_OUI_LEN);
-
-	return 0;
-}
-#endif
 
 static int skw_vendor_cmd_reply(struct wiphy *wiphy, const void *data, int len)
 {
@@ -126,20 +81,72 @@ static int skw_vendor_get_wake_reason_stats(struct wiphy *wiphy,
 	return 0;
 }
 
-static int skw_vendor_get_apf_capabilities(struct wiphy *wiphy,
+static int skw_vendor_get_apf_capa(struct wiphy *wiphy,
 		struct wireless_dev *wdev, const void *data, int len)
 {
 	struct sk_buff *skb;
+
+	skw_dbg("iftype: %s\n", skw_iftype_name(wdev->iftype));
 
 	skb = cfg80211_vendor_cmd_alloc_reply_skb(wiphy, NLMSG_DEFAULT_SIZE);
 	if (!skb)
 		return -ENOMEM;
 
-	if (nla_put_u32(skb, SKW_ATTR_APF_VERSION, 4) ||
-	    nla_put_u32(skb, SKW_ATTR_APF_MAX_LEN, 1024)) {
+	if (nla_put_u32(skb, SKW_ATTR_APF_VERSION, SKW_APF_VER) ||
+	    nla_put_u32(skb, SKW_ATTR_APF_MAX_LEN, SKW_APF_BUFFER_LEN)) {
 		kfree_skb(skb);
 		return -ENOMEM;
 	}
+
+	return cfg80211_vendor_cmd_reply(skb);
+}
+
+static int skw_vendor_set_apf(struct wiphy *wiphy, struct wireless_dev *wdev,
+				const void *data, int len)
+{
+	struct skw_iface *iface = netdev_priv(wdev->netdev);
+
+	skw_dbg("iftype: %s, len: %d\n", skw_iftype_name(wdev->iftype), len);
+
+	spin_lock_bh(&iface->apf.lock);
+	if (!iface->apf.apf_buff)
+		iface->apf.apf_buff = SKW_ZALLOC(SKW_APF_BUFFER_LEN, GFP_ATOMIC);
+
+	if (!iface->apf.apf_buff) {
+		spin_unlock_bh(&iface->apf.lock);
+		return -ENOMEM;
+	}
+
+	skw_hex_dump("apf", data, len, false);
+
+	len = len > SKW_APF_BUFFER_LEN  ? SKW_APF_BUFFER_LEN : len;
+	memcpy(iface->apf.apf_buff, data, len);
+	iface->apf.apf_program_len = len;
+	iface->apf.apf_time = jiffies;
+	spin_unlock_bh(&iface->apf.lock);
+
+	return 0;
+}
+
+static int skw_vendor_get_apf(struct wiphy *wiphy, struct wireless_dev *wdev,
+				const void *data, int len)
+{
+	struct sk_buff *skb;
+	struct skw_iface *iface = netdev_priv(wdev->netdev);
+
+	skw_dbg("iftype: %s\n", skw_iftype_name(wdev->iftype));
+
+	skb = cfg80211_vendor_cmd_alloc_reply_skb(wiphy, NLMSG_DEFAULT_SIZE);
+	if (!skb)
+		return -ENOMEM;
+
+	spin_lock_bh(&iface->apf.lock);
+	if (!iface->apf.apf_buff || nla_put_nohdr(skb, SKW_APF_BUFFER_LEN, iface->apf.apf_buff)) {
+		spin_unlock_bh(&iface->apf.lock);
+		kfree_skb(skb);
+		return -ENOMEM;
+	}
+	spin_unlock_bh(&iface->apf.lock);
 
 	return cfg80211_vendor_cmd_reply(skb);
 }
@@ -251,6 +258,18 @@ static int skw_vendor_get_version(struct wiphy *wiphy, struct wireless_dev *wdev
 	return skw_vendor_cmd_reply(wiphy, version, sizeof(version));
 }
 
+static unsigned int skw_get_num_supported_channels(struct wiphy *wiphy)
+{
+	enum nl80211_band band;
+	unsigned int n_channels = 0;
+
+	for (band = 0; band < NUM_NL80211_BANDS; band++)
+		if (wiphy->bands[band])
+			n_channels += wiphy->bands[band]->n_channels;
+
+	return n_channels;
+}
+
 static int skw_vendor_get_usable_channels(struct wiphy *wiphy,
 			struct wireless_dev *wdev, const void *data, int len)
 {
@@ -262,9 +281,11 @@ static int skw_vendor_get_usable_channels(struct wiphy *wiphy,
 
 	skw_dbg("band_mask: 0x%x\n", req->band_mask);
 
-	max = ieee80211_get_num_supported_channels(wiphy);
+	max = skw_get_num_supported_channels(wiphy);
 
-	chans = SKW_ZALLOC(max * sizeof(*chans), GFP_KERNEL);
+ 	//chans = SKW_ZALLOC(max * sizeof(*chans), GFP_KERNEL);
+  size_t alloc_size = max * sizeof(*chans);
+  chans = SKW_ZALLOC(alloc_size, GFP_KERNEL);
 	if (!chans)
 		return -ENOMEM;
 
@@ -428,9 +449,17 @@ static struct wiphy_vendor_command skw_vendor_cmds[] = {
 			SKW_VENDOR_DEFAULT_FLAGS,
 			skw_vendor_get_logger_feature,
 			VENDOR_CMD_RAW_DATA, 0),
-	SKW_VENDOR_CMD(OUI_GOOGLE, SKW_VID_GET_APF_CAPABILITIES,
+	SKW_VENDOR_CMD(OUI_GOOGLE, SKW_VID_GET_APF_CAPA,
 			SKW_VENDOR_DEFAULT_FLAGS,
-			skw_vendor_get_apf_capabilities,
+			skw_vendor_get_apf_capa,
+			VENDOR_CMD_RAW_DATA, 0),
+	SKW_VENDOR_CMD(OUI_GOOGLE, SKW_VID_SET_APF,
+			SKW_VENDOR_DEFAULT_FLAGS,
+			skw_vendor_set_apf,
+			VENDOR_CMD_RAW_DATA, 0),
+	SKW_VENDOR_CMD(OUI_GOOGLE, SKW_VID_GET_APF,
+			SKW_VENDOR_DEFAULT_FLAGS,
+			skw_vendor_get_apf,
 			VENDOR_CMD_RAW_DATA, 0),
 	SKW_VENDOR_CMD(OUI_GOOGLE, SKW_VID_GET_USABLE_CHANS,
 			SKW_VENDOR_DEFAULT_FLAGS,
@@ -475,21 +504,16 @@ static struct nl80211_vendor_cmd_info skw_vendor_events[] = {
 
 void skw_vendor_init(struct wiphy *wiphy)
 {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
 	wiphy->vendor_commands = skw_vendor_cmds;
 	wiphy->n_vendor_commands = ARRAY_SIZE(skw_vendor_cmds);
 	wiphy->vendor_events = skw_vendor_events;
 	wiphy->n_vendor_events = ARRAY_SIZE(skw_vendor_events);
-#else
-	skw_dbg("cmd: %d, event: %d\n", ARRAY_SIZE(skw_vendor_cmds),
-		ARRAY_SIZE(skw_vendor_events));
-#endif
 }
 
 void skw_vendor_deinit(struct wiphy *wiphy)
 {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
 	wiphy->vendor_commands = NULL;
 	wiphy->n_vendor_commands = 0;
-#endif
 }
+
+#endif

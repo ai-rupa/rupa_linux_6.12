@@ -8,12 +8,18 @@
 #include <linux/uaccess.h>
 #include <linux/workqueue.h>
 #include <linux/scatterlist.h>
- #include <linux/notifier.h>
+#include <linux/notifier.h>
 #include <linux/platform_device.h>
+#include <linux/sched.h>
+#include <linux/dynamic_debug.h>
 #include "skw_boot.h"
 #include "skw_log_to_file.h"
+#include "skw_btlog.h"
+//#define KBUILD_MODNAME "skw_user_com"
 #define UCOM_PORTNO_MAX		13
+#define SKW_ERR_RESTART -1000
 #define UCOM_DEV_PM_OPS NULL
+extern int skw_log_size;
 int cp_exception_sts=0;
 static int log_start;
 static unsigned int tmp_chipid = 0;
@@ -36,15 +42,20 @@ struct ucom_dev	{
 	struct notifier_block notifier;
 };
 static struct ucom_dev *ucoms[UCOM_PORTNO_MAX];
+struct ucom_dev *original_ucom = NULL;
 static char *dump_memory_buffer;
 static int  dump_buffer_size, dump_log_size;
+static int skw_log_stop = 0;
 #include "skw_dump_mem.c"
 static int user_boot_open(struct inode *ip, struct file *fp)
 {
 	struct cdev *char_dev;
 	int ret = -EIO, i;
 	struct ucom_dev *ucom=NULL;
-
+	if (cp_exception_sts == DEVICE_DISCONNECT_EVENT) {
+		skwboot_log("%s line:%d cp_exception_sts:%d !!\n", __func__,__LINE__,cp_exception_sts);
+		return -EIO;
+	}
 	char_dev = ip->i_cdev;
 	for(i=0; i< UCOM_PORTNO_MAX; i++) {
 		if(ucoms[i] && (ucoms[i]->devno == char_dev->dev)) {
@@ -65,6 +76,12 @@ static int user_boot_open(struct inode *ip, struct file *fp)
 		if (ret == 0) {
 			atomic_inc(&ucom->open);
 			fp->private_data = ucom;
+#if SKWBT_LOG_PORT_EN
+			if(!strncmp(ucom->pdata->port_name, "BTBOOT", 6))
+			{
+				skwbt_log_port_set_bt_open(1);
+			}
+#endif
 		}
 	}
 	skwboot_log("Open user_boot device: ret=%d task %d\n", ret, (int)current->pid);
@@ -75,14 +92,18 @@ static int user_boot_open(struct inode *ip, struct file *fp)
 static int user_boot_release(struct inode *ip, struct file *fp)
 {
 	struct ucom_dev *ucom = fp->private_data;
-	int count=100;
-	while(cp_exception_sts &&count--)
-		msleep(10);
+		skwboot_log("cp_state = %d\n", cp_exception_sts);
 
 	if(ucom){
 		if(!cp_exception_sts)
 			ucom->pdata->close_port(ucom->portno);
 		atomic_dec(&ucom->open);
+#if SKWBT_LOG_PORT_EN
+		if(!strncmp(ucom->pdata->port_name, "BTBOOT", 6))
+		{
+			skwbt_log_port_set_bt_open(0);
+		}
+#endif
 	}
 
 	return 0;
@@ -115,6 +136,7 @@ static int ucom_open(struct inode *ip, struct file *fp)
 		if (atomic_read(&ucom->open)==1) {
 			init_waitqueue_head(&ucom->wq);
 			spin_lock_init(&ucom->lock);
+			ucom->tx_busy = ucom->rx_busy = 0;//clear tx_rx_busy flag when open
 			ucom->pdata->open_port(ucom->portno, NULL, NULL);
 		}
 		fp->private_data = ucom;
@@ -142,10 +164,10 @@ static int ucom_release(struct inode *ip, struct file *fp)
 			break;
 	}
 	fp->private_data = NULL;
+	skwboot_log("%s enter...\n", __func__);
 	if(ucom && (i<UCOM_PORTNO_MAX)) {
 		skwboot_log("%s: ucom%p %s(0x%x)\n", __func__, ucom, ucom->pdata->port_name, ucom->devno);
 		if (atomic_read(&ucom->open)) {
-			atomic_dec(&ucom->open);
 			// Don't close LOG/AT port once open it, otherwise RX transfer lost.
 			if (strncmp(ucom->pdata->port_name, "LOG", 3) &&
 			    strncmp(ucom->pdata->port_name, "ATC", 3))
@@ -153,6 +175,7 @@ static int ucom_release(struct inode *ip, struct file *fp)
 			else if (!log_start && !strncmp(ucom->pdata->port_name, "LOG", 3))
 				ucom->pdata->close_port(ucom->portno);
 			wake_up(&ucom->wq);
+			atomic_dec(&ucom->open);
 		} else
 			kfree(ucom);
 	}
@@ -175,7 +198,33 @@ static ssize_t ucom_read(struct file *fp, char __user *buf, size_t count, loff_t
 	if (!strncmp(ucom->pdata->port_name, "LOG", 3) && dump_log_size) {
 		return skw_ucom_dump_from_buffer(buf, count, pos);
 	}
-
+	if (!strncmp(ucom->pdata->port_name, "LOG", 3) && *pos >= skw_log_size)
+		return 0;
+	if (ucom->portno==2) {
+		if(cp_exception_sts==4) {
+			cp_exception_sts = 5; // wait for plugin device.
+			original_ucom = ucom;
+			skwboot_log("BT_state=disconnected wait for device restart\n");
+			ret = wait_event_interruptible(ucom->wq,!cp_exception_sts);
+			return -SKW_ERR_RESTART;
+		}	else if (cp_exception_sts==5) {
+		        original_ucom = ucom;
+			ret = wait_event_interruptible(ucom->wq,!cp_exception_sts);
+			skwboot_log(" firmware restart done :device resetarted\n");
+			return -SKW_ERR_RESTART;
+		}	else if (cp_exception_sts || atomic_read(&ucom->open)==0) {
+			skwboot_log("BT_state=%d\n",cp_exception_sts);
+			return -EIO;
+		}
+	}
+	if ( !strncmp(ucom->pdata->port_name, "LOG", 3)) {
+		if (skw_log_stop) {
+			skw_log_stop = 0;
+			return 0;
+		}
+		if(*pos > skw_log_size)
+			return 0;
+	}
 	spin_lock_irqsave(&ucom->lock, flags);
 	if(ucom->rx_busy) {
 		spin_unlock_irqrestore(&ucom->lock, flags);
@@ -190,6 +239,13 @@ static ssize_t ucom_read(struct file *fp, char __user *buf, size_t count, loff_t
 	data = (uint32_t *)ucom->rx_buf;
 
 	if(ret > 0) {
+#if SKWBT_LOG_PORT_EN
+		if((strncmp(ucom->pdata->port_name, "BTCMD", 5) == 0) || (strncmp(ucom->pdata->port_name, "BTDATA", 6) == 0)
+			|| (strncmp(ucom->pdata->port_name, "BTAUDIO", 7) == 0) || (strncmp(ucom->pdata->port_name, "BTISOC", 6) == 0))
+		{
+			skwbt_log_port_data_write(1, ucom->rx_buf, ret);
+		}
+#endif
 		r = ret;
 		if(ret > count)
 			ret = copy_to_user(buf, ucom->rx_buf, count);
@@ -197,8 +253,16 @@ static ssize_t ucom_read(struct file *fp, char __user *buf, size_t count, loff_t
 			ret = copy_to_user(buf, ucom->rx_buf, ret);
 		if(ret > 0)
 			return -EFAULT;
-	} else	r = ret;
-	pr_debug("%s %s ret = %d\n", __func__,current->comm, (int)r);
+		*pos += r;
+	} else {
+		if(cp_exception_sts==4) {
+			cp_exception_sts = 5; // wait for plugin device.
+			skwboot_log("BT_state=disconnected , state=%d ,ret=NODEV\n",cp_exception_sts);
+			return -ENODEV;
+		}
+		r = ret;
+	}
+	//pr_debug("%s %s ret = %d\n", __func__,current->comm, (int)r);
 	return r;
 }
 
@@ -225,8 +289,10 @@ static ssize_t ucom_write(struct file *fp, const char __user *buf, size_t count,
 			size =  ucom->pdata->max_buffer_size;
 		else
 			size = count;
-		if(copy_from_user(ucom->tx_buf, buf, size))
+		if(copy_from_user(ucom->tx_buf, buf, size)){
+			ucom->tx_busy = 0;
 			return -EFAULT;
+		}
 
 		if(ucom->pdata->port_name && !strncmp(ucom->pdata->port_name, "LOG", 3)){
 			if(!strncmp(ucom->tx_buf, "START", 5)){
@@ -238,6 +304,7 @@ static ssize_t ucom_write(struct file *fp, const char __user *buf, size_t count,
 				skwboot_log("%s STOP log to file \n", __func__);
 				skw_modem_log_exit();
 				log_start = 0;
+				skw_log_stop = 1;
 			}
 			else
 				skwboot_log("%s LOG write string:%s \n", __func__, ucom->tx_buf);
@@ -248,6 +315,14 @@ static ssize_t ucom_write(struct file *fp, const char __user *buf, size_t count,
 			 ucom->tx_buf[size++] = 0x0D;
 			 ucom->tx_buf[size++] = 0x0A;
 			 count += 2;
+		} else if (ucom->pdata->port_name) {
+#if SKWBT_LOG_PORT_EN
+			if((strncmp(ucom->pdata->port_name, "BTCMD", 5) == 0) || (strncmp(ucom->pdata->port_name, "BTDATA", 6) == 0)
+				|| (strncmp(ucom->pdata->port_name, "BTAUDIO", 7) == 0) || (strncmp(ucom->pdata->port_name, "BTISOC", 6) == 0))
+			{
+				skwbt_log_port_data_write(0, ucom->tx_buf, count);
+			}
+#endif
 		}
 		ret = ucom->pdata->hw_sdma_tx(ucom->portno, ucom->tx_buf, size);
 
@@ -260,7 +335,7 @@ static ssize_t ucom_write(struct file *fp, const char __user *buf, size_t count,
 		buf += ret;
 	}
 	ucom->tx_busy = 0;
-	pr_debug("%s %s ret = %d\n", __func__,current->comm,(int)r);
+	//pr_debug("%s %s ret = %d\n", __func__,current->comm,(int)r);
 	return r;
 }
 
@@ -274,7 +349,7 @@ static long ucom_ioctl(struct file *fp, unsigned int cmd, unsigned long arg)
 			break;
 	}
 	if((i<UCOM_PORTNO_MAX) && atomic_read(&ucom->open)) {
-		skwboot_log("%s ucom_%p rx_busy=%d\n", __func__, ucom, ucom->rx_busy);
+		skwboot_log("%s ucom_%p rx_busy=%d tx_busy=%d\n", __func__, ucom, ucom->rx_busy, ucom->tx_busy);
 		if (ucom->pdata && ucom->rx_busy)
 			ucom->pdata->close_port(ucom->portno);
 	}
@@ -374,7 +449,11 @@ static int skw_ucom_probe(struct platform_device *pdev)
 
 	mutex_lock(&ucom_mutex);
 	if(skw_com_class == NULL) {
+#if (KERNEL_VERSION(6, 4, 0) <= LINUX_VERSION_CODE)
+		skw_com_class = class_create("btcom");
+#else
 		skw_com_class = class_create(THIS_MODULE, "btcom");
+#endif
 		if(IS_ERR(skw_com_class)) {
 			skwboot_log("skw_ucom_probe: class prt = %p\n", skw_com_class);
 			ret =  PTR_ERR(skw_com_class);
@@ -435,12 +514,27 @@ static int skw_ucom_probe(struct platform_device *pdev)
 			log_start = skw_modem_log_init(ucom->pdata, NULL, (void *)ucom);
 #endif
 		}
+		else if(!strncmp(ucom->pdata->port_name, "BTCMD", 5))
+		{
+#if SKWBT_LOG_PORT_EN
+			skwbt_log_port_set_pdata(ucom->pdata);
+#endif
+		}
+		else if(!strncmp(ucom->pdata->port_name, "BTBOOT", 6))
+		{
+#if SKWBT_LOG_PORT_EN
+			skwbt_log_port_init();
+#endif
+		}
 		return 0;
 	}
 	return -EINVAL;
 }
-
+#if  LINUX_VERSION_CODE >= KERNEL_VERSION(6, 11, 0)
+static void skw_ucom_remove(struct platform_device *pdev)
+#else
 static int skw_ucom_remove(struct platform_device *pdev)
+#endif
 {
 	struct device *dev = &pdev->dev;
 	struct sv6160_platform_data *pdata = dev->platform_data;
@@ -460,7 +554,15 @@ static int skw_ucom_remove(struct platform_device *pdev)
 			if (ucom->rx_busy) {
 				ucom->pdata->close_port(ucom->portno);
 			}
-			cp_exception_sts = 0;
+#if SKWBT_LOG_PORT_EN
+			skwbt_log_port_set_pdata(NULL);
+#endif
+		}
+		else if(!strncmp(ucom->pdata->port_name, "BTBOOT", 6))
+		{
+#if SKWBT_LOG_PORT_EN
+			skwbt_log_port_exit();
+#endif
 		}
 		if (!strncmp(ucom->pdata->port_name, "ATC", 3)) {
 			skw_bt_state_event_deinit(ucom);
@@ -499,8 +601,11 @@ static int skw_ucom_remove(struct platform_device *pdev)
 	if (i >= UCOM_PORTNO_MAX && skw_com_class) {
 		class_destroy(skw_com_class);
 		skw_com_class = NULL;
+		cp_exception_sts = 0;
 	}
+#if  LINUX_VERSION_CODE < KERNEL_VERSION(6, 11, 0)
 	return 0;
+#endif
 }
 
 static struct platform_driver skw_ucom_driver = {
@@ -525,7 +630,7 @@ int skw_ucom_init(void)
 void skw_ucom_exit(void)
 {
 	if (dump_memory_buffer)
-		kfree(dump_memory_buffer);
+		vfree(dump_memory_buffer);
 	dump_memory_buffer  = NULL;
 	dump_log_size = 0;
 	cp_exception_sts=0;

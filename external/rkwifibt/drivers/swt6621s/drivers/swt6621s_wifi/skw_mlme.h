@@ -80,7 +80,7 @@ int skw_mlme_sta_rx_mgmt(struct skw_iface *iface, int freq, int signal,
 int skw_process_auth_response(struct skw_iface *iface, int freq,
 			int signal, void *frame, int frame_len);
 int skw_ap_mgmt_handler(struct skw_iface *iface, void *frame, int frame_len);
-void skw_mlme_ap_del_sta(struct wiphy *wiphy, struct net_device *ndev,
+void skw_mlme_ap_del_sta(struct wiphy *wiphy, struct net_device *dev,
 			 const u8 *addr, u8 force);
 int skw_mlme_ap_rx_mgmt(struct skw_iface *iface, u16 fc, int freq,
 			int signal, void *frame, int frame_len);

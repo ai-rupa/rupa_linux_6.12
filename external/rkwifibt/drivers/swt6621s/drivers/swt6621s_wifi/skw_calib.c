@@ -81,7 +81,7 @@ static int skw_dpd_chn_to_index(u16 chn, u8 bw)
 }
 
 int skw_dpd_set_coeff_params(struct wiphy *wiphy,
-	struct net_device *ndev, u8 chn, u8 center_chan,
+	struct net_device *dev, u8 chn, u8 center_chan,
 	u8 center_chan2, u8 bandwidth)
 {
 

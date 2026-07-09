@@ -251,19 +251,19 @@ static bool skw_chandef_to_operating_class(struct cfg80211_chan_def *chandef,
 	return false;
 }
 
-static void skw_tdls_add_link_ie(struct net_device *ndev, struct sk_buff *skb,
+static void skw_tdls_add_link_ie(struct net_device *dev, struct sk_buff *skb,
 		const u8 *peer, bool initiator)
 {
-	struct skw_iface *iface = netdev_priv(ndev);
+	struct skw_iface *iface = netdev_priv(dev);
 	struct ieee80211_tdls_lnkie *lnk;
 	const u8 *src_addr, *dst_addr;
 
 	if (initiator) {
-		src_addr = ndev->dev_addr;
+		src_addr = dev->dev_addr;
 		dst_addr = peer;
 	} else {
 		src_addr = peer;
-		dst_addr = ndev->dev_addr;
+		dst_addr = dev->dev_addr;
 	}
 
 	lnk = (struct ieee80211_tdls_lnkie *)skb_put(skb, sizeof(*lnk));
@@ -276,11 +276,11 @@ static void skw_tdls_add_link_ie(struct net_device *ndev, struct sk_buff *skb,
 	memcpy(lnk->resp_sta, dst_addr, ETH_ALEN);
 }
 
-static int skw_add_srates_ie(struct net_device *ndev, struct sk_buff *skb,
+static int skw_add_srates_ie(struct net_device *dev, struct sk_buff *skb,
 		bool need_basic, enum nl80211_band band)
 {
 	struct ieee80211_supported_band *sband;
-	struct skw_iface *iface = netdev_priv(ndev);
+	struct skw_iface *iface = netdev_priv(dev);
 	int rate, shift = 0;
 	u8 i, rates, *pos;
 	//u32 basic_rates = sdata->vif.bss_conf.basic_rates;
@@ -322,7 +322,7 @@ static int skw_add_srates_ie(struct net_device *ndev, struct sk_buff *skb,
 	return 0;
 }
 
-static int skw_add_ext_srates_ie(struct net_device *ndev,
+static int skw_add_ext_srates_ie(struct net_device *dev,
 				struct sk_buff *skb, bool need_basic,
 				enum nl80211_band band)
 {
@@ -332,7 +332,7 @@ static int skw_add_ext_srates_ie(struct net_device *ndev,
 	//u32 basic_rates = sdata->vif.bss_conf.basic_rates;
 	u32 basic_rates = 0xFFFF;
 	u32 rate_flags = 0;
-	struct skw_iface *iface = netdev_priv(ndev);
+	struct skw_iface *iface = netdev_priv(dev);
 
 	//rate_flags = ieee80211_chandef_rate_flags(&sdata->vif.bss_conf.chandef);
 	//shift = ieee80211_vif_get_shift(&sdata->vif);
@@ -375,14 +375,14 @@ static int skw_add_ext_srates_ie(struct net_device *ndev,
 }
 
 static u8
-skw_tdls_add_subband(struct net_device *ndev, struct sk_buff *skb,
+skw_tdls_add_subband(struct net_device *dev, struct sk_buff *skb,
 		u16 start, u16 end, u16 spacing)
 {
 	u8 subband_cnt = 0, ch_cnt = 0;
 	struct ieee80211_channel *ch;
 	struct cfg80211_chan_def chandef;
 	int i, subband_start;
-	struct skw_iface *iface = netdev_priv(ndev);
+	struct skw_iface *iface = netdev_priv(dev);
 	struct wiphy *wiphy = iface->wdev.wiphy;
 
 	for (i = start; i <= end; i += spacing) {
@@ -432,7 +432,7 @@ skw_tdls_add_subband(struct net_device *ndev, struct sk_buff *skb,
 }
 
 static void
-skw_tdls_add_supp_channels(struct net_device *ndev, struct sk_buff *skb)
+skw_tdls_add_supp_channels(struct net_device *dev, struct sk_buff *skb)
 {
 	/*
 	 * Add possible channels for TDLS. These are channels that are allowed
@@ -449,16 +449,16 @@ skw_tdls_add_supp_channels(struct net_device *ndev, struct sk_buff *skb)
 	 */
 
 	/* 2GHz, with 5MHz spacing */
-	subband_cnt = skw_tdls_add_subband(ndev, skb, 2412, 2472, 5);
+	subband_cnt = skw_tdls_add_subband(dev, skb, 2412, 2472, 5);
 
 	/* 5GHz, with 20MHz spacing */
-	subband_cnt += skw_tdls_add_subband(ndev, skb, 5000, 5825, 20);
+	subband_cnt += skw_tdls_add_subband(dev, skb, 5000, 5825, 20);
 
 	/* length */
 	*pos = 2 * subband_cnt;
 }
 
-static void skw_tdls_add_ext_capab(struct net_device *ndev,
+static void skw_tdls_add_ext_capab(struct net_device *dev,
 				struct sk_buff *skb)
 {
 	u8 cap;
@@ -470,7 +470,7 @@ static void skw_tdls_add_ext_capab(struct net_device *ndev,
 	//bool buffer_sta = ieee80211_hw_check(&local->hw,
 	//				     SUPPORTS_TDLS_BUFFER_STA);
 #ifdef WLAN_EXT_CAPA8_TDLS_WIDE_BW_ENABLED
-	struct skw_iface *iface = netdev_priv(ndev);
+	struct skw_iface *iface = netdev_priv(dev);
 	enum nl80211_band band = iface->sta.core.bss.channel->band;
 	struct ieee80211_supported_band *sband = iface->wdev.wiphy->bands[band];
 	bool vht = sband && sband->vht_cap.vht_supported;
@@ -567,18 +567,18 @@ skw_add_wmm_ie(struct skw_iface *iface, struct sk_buff *skb,
 }
 
 static void
-skw_tdls_add_oper_classes(struct net_device *ndev, struct sk_buff *skb)
+skw_tdls_add_oper_classes(struct net_device *dev, struct sk_buff *skb)
 {
 	u8 *pos;
 	u8 op_class;
 	int freq;
-	struct skw_iface *iface = netdev_priv(ndev);
+	struct skw_iface *iface = netdev_priv(dev);
 	struct cfg80211_chan_def chandef;
 	struct ieee80211_channel *channel, *bss_chn;
 
 	bss_chn = iface->sta.core.bss.channel;
 	freq = ieee80211_channel_to_frequency(bss_chn->hw_value, bss_chn->band);
-	channel = ieee80211_get_channel(ndev->ieee80211_ptr->wiphy, freq);
+	channel = ieee80211_get_channel(dev->ieee80211_ptr->wiphy, freq);
 
 	cfg80211_chandef_create(&chandef, channel, NL80211_CHAN_NO_HT);
 
@@ -593,66 +593,8 @@ skw_tdls_add_oper_classes(struct net_device *ndev, struct sk_buff *skb)
 	*pos++ = op_class; /* give current operating class as alternate too */
 }
 
-#if 0
-u8 *skw_ie_build_ht_cap(u8 *pos, struct ieee80211_sta_ht_cap *ht_cap,
-			      u16 cap)
-{
-	__le16 tmp;
-
-	*pos++ = WLAN_EID_HT_CAPABILITY;
-	*pos++ = sizeof(struct ieee80211_ht_cap);
-	memset(pos, 0, sizeof(struct ieee80211_ht_cap));
-
-	/* capability flags */
-	tmp = cpu_to_le16(cap);
-	memcpy(pos, &tmp, sizeof(u16));
-	pos += sizeof(u16);
-
-	/* AMPDU parameters */
-	*pos++ = ht_cap->ampdu_factor |
-		 (ht_cap->ampdu_density <<
-			IEEE80211_HT_AMPDU_PARM_DENSITY_SHIFT);
-
-	/* MCS set */
-	memcpy(pos, &ht_cap->mcs, sizeof(ht_cap->mcs));
-	pos += sizeof(ht_cap->mcs);
-
-	/* extended capabilities */
-	pos += sizeof(__le16);
-
-	/* BF capabilities */
-	pos += sizeof(__le32);
-
-	/* antenna selection */
-	pos += sizeof(u8);
-
-	return pos;
-}
-
-u8 *ieee80211_ie_build_vht_cap(u8 *pos, struct ieee80211_sta_vht_cap *vht_cap,
-			       u32 cap)
-{
-	__le32 tmp;
-
-	*pos++ = WLAN_EID_VHT_CAPABILITY;
-	*pos++ = sizeof(struct ieee80211_vht_cap);
-	memset(pos, 0, sizeof(struct ieee80211_vht_cap));
-
-	/* capability flags */
-	tmp = cpu_to_le32(cap);
-	memcpy(pos, &tmp, sizeof(u32));
-	pos += sizeof(u32);
-
-	/* VHT MCS set */
-	memcpy(pos, &vht_cap->vht_mcs, sizeof(vht_cap->vht_mcs));
-	pos += sizeof(vht_cap->vht_mcs);
-
-	return pos;
-}
-#endif
-
 static void
-skw_tdls_add_setup_start_ies(struct net_device *ndev, struct sk_buff *skb,
+skw_tdls_add_setup_start_ies(struct net_device *dev, struct sk_buff *skb,
 		const u8 *peer, u32 peer_cap, u8 action_code, bool initiator,
 		const u8 *ies, size_t ies_len)
 {
@@ -660,14 +602,14 @@ skw_tdls_add_setup_start_ies(struct net_device *ndev, struct sk_buff *skb,
 	//struct ieee80211_sta_ht_cap ht_cap;
 	//struct ieee80211_sta_vht_cap vht_cap;
 	size_t offset = 0, noffset;
-	struct skw_iface *iface = netdev_priv(ndev);
+	struct skw_iface *iface = netdev_priv(dev);
 	//u8 *pos;
 	enum nl80211_band band;
 
 	if (iface->sta.core.bss.channel) {
 		band = iface->sta.core.bss.channel->band;
 	} else {
-		skw_err("bss is null\n");
+		skw_dev_err(dev, "bss is null\n");
 		return;
 	}
 
@@ -675,9 +617,9 @@ skw_tdls_add_setup_start_ies(struct net_device *ndev, struct sk_buff *skb,
 	if (!sband)
 		return;
 
-	skw_add_srates_ie(ndev, skb, false, band);
-	skw_add_ext_srates_ie(ndev, skb, false, band);
-	skw_tdls_add_supp_channels(ndev, skb);
+	skw_add_srates_ie(dev, skb, false, band);
+	skw_add_ext_srates_ie(dev, skb, false, band);
+	skw_tdls_add_supp_channels(dev, skb);
 
 	/* Add any custom IEs that go before Extended Capabilities */
 	if (ies_len) {
@@ -694,7 +636,7 @@ skw_tdls_add_setup_start_ies(struct net_device *ndev, struct sk_buff *skb,
 		offset = noffset;
 	}
 
-	skw_tdls_add_ext_capab(ndev, skb);
+	skw_tdls_add_ext_capab(dev, skb);
 
 	/* add the QoS element if we support it */
 	if (action_code != WLAN_PUB_ACTION_TDLS_DISCOVER_RES)
@@ -720,8 +662,8 @@ skw_tdls_add_setup_start_ies(struct net_device *ndev, struct sk_buff *skb,
 		offset = noffset;
 	}
 
-	skw_tdls_add_oper_classes(ndev, skb);
-	skw_tdls_add_link_ie(ndev, skb, peer, initiator);
+	skw_tdls_add_oper_classes(dev, skb);
+	skw_tdls_add_link_ie(dev, skb, peer, initiator);
 
 	/* add any remaining IEs */
 	if (ies_len) {
@@ -731,12 +673,12 @@ skw_tdls_add_setup_start_ies(struct net_device *ndev, struct sk_buff *skb,
 }
 
 static void
-skw_tdls_add_setup_cfm_ies(struct net_device *ndev,
+skw_tdls_add_setup_cfm_ies(struct net_device *dev,
 			struct sk_buff *skb, const u8 *peer,
 			u32 peer_cap, bool initiator,
 			const u8 *extra_ies, size_t extra_ies_len)
 {
-	struct skw_iface *iface = netdev_priv(ndev);
+	struct skw_iface *iface = netdev_priv(dev);
 	size_t offset = 0, noffset;
 	struct ieee80211_supported_band *sband = NULL;
 	enum nl80211_band band;
@@ -781,7 +723,7 @@ skw_tdls_add_setup_cfm_ies(struct net_device *ndev,
 		offset = noffset;
 	}
 
-	skw_tdls_add_link_ie(ndev, skb, peer, initiator);
+	skw_tdls_add_link_ie(dev, skb, peer, initiator);
 
 	/* add any remaining IEs */
 	if (extra_ies_len) {
@@ -790,7 +732,7 @@ skw_tdls_add_setup_cfm_ies(struct net_device *ndev,
 	}
 }
 
-static void skw_tdls_add_chan_switch_req_ies(struct net_device *ndev,
+static void skw_tdls_add_chan_switch_req_ies(struct net_device *dev,
 				       struct sk_buff *skb, const u8 *peer,
 				       bool initiator, const u8 *extra_ies,
 				       size_t extra_ies_len, u8 oper_class,
@@ -821,7 +763,7 @@ static void skw_tdls_add_chan_switch_req_ies(struct net_device *ndev,
 		offset = noffset;
 	}
 
-	skw_tdls_add_link_ie(ndev, skb, peer, initiator);
+	skw_tdls_add_link_ie(dev, skb, peer, initiator);
 
 	/* add any remaining IEs */
 	if (extra_ies_len) {
@@ -831,7 +773,7 @@ static void skw_tdls_add_chan_switch_req_ies(struct net_device *ndev,
 #endif
 }
 
-static void skw_tdls_add_ies(struct net_device *ndev, struct sk_buff *skb,
+static void skw_tdls_add_ies(struct net_device *dev, struct sk_buff *skb,
 		const u8 *peer, u8 action, u16 status_code, u32 peer_cap,
 		bool initiator, const u8 *ies, size_t ies_len)
 {
@@ -841,12 +783,12 @@ static void skw_tdls_add_ies(struct net_device *ndev, struct sk_buff *skb,
 	case WLAN_TDLS_SETUP_RESPONSE:
 	case WLAN_PUB_ACTION_TDLS_DISCOVER_RES:
 		if (status_code == 0)
-			skw_tdls_add_setup_start_ies(ndev, skb, peer, peer_cap,
+			skw_tdls_add_setup_start_ies(dev, skb, peer, peer_cap,
 				action, initiator, ies, ies_len);
 		break;
 	case WLAN_TDLS_SETUP_CONFIRM:
 		if (status_code == 0)
-			skw_tdls_add_setup_cfm_ies(ndev, skb, peer, peer_cap,
+			skw_tdls_add_setup_cfm_ies(dev, skb, peer, peer_cap,
 				initiator, ies, ies_len);
 		break;
 	case WLAN_TDLS_TEARDOWN:
@@ -855,10 +797,10 @@ static void skw_tdls_add_ies(struct net_device *ndev, struct sk_buff *skb,
 			skw_put_skb_data(skb, ies, ies_len);
 
 		if (status_code == 0 || action == WLAN_TDLS_TEARDOWN)
-			skw_tdls_add_link_ie(ndev, skb, peer, initiator);
+			skw_tdls_add_link_ie(dev, skb, peer, initiator);
 		break;
 	case WLAN_TDLS_CHANNEL_SWITCH_REQUEST:
-		skw_tdls_add_chan_switch_req_ies(ndev, skb, peer,
+		skw_tdls_add_chan_switch_req_ies(dev, skb, peer,
 			initiator, ies, ies_len, 0, NULL);
 		break;
 	default:
@@ -867,7 +809,7 @@ static void skw_tdls_add_ies(struct net_device *ndev, struct sk_buff *skb,
 }
 
 static int
-skw_tdls_build_send_encap_data(struct net_device *ndev,
+skw_tdls_build_send_encap_data(struct net_device *dev,
 		const u8 *peer, u8 action_code, u8 dialog_token,
 		u16 status_code, u32 peer_cap, struct sk_buff *skb,
 		bool initiator, const u8 *ies, size_t ies_len)
@@ -879,7 +821,7 @@ skw_tdls_build_send_encap_data(struct net_device *ndev,
 	td = (struct ieee80211_tdls_data *)skb_put(skb, offset);
 
 	memcpy(td->da, peer, ETH_ALEN);
-	memcpy(td->sa, ndev->dev_addr, ETH_ALEN);
+	memcpy(td->sa, dev->dev_addr, ETH_ALEN);
 	td->ether_type = cpu_to_be16(ETH_P_TDLS);
 	td->payload_type = WLAN_TDLS_SNAP_RFTYPE;
 
@@ -952,7 +894,7 @@ skw_tdls_build_send_encap_data(struct net_device *ndev,
 		return -EINVAL;
 	}
 
-	skw_tdls_add_ies(ndev, skb, peer, action_code, status_code, peer_cap,
+	skw_tdls_add_ies(dev, skb, peer, action_code, status_code, peer_cap,
 		initiator, ies, ies_len);
 
 	return dev_queue_xmit(skb);
@@ -971,7 +913,7 @@ skw_tdls_build_send_direct(struct net_device *dev,
 	int ret, total_len;
 	struct skw_mgmt_tx_param *param;
 
-	skw_dbg("Enter\n");
+	skw_dev_dbg(dev, "Enter\n");
 	mgmt = skw_put_skb_zero(skb, 24);
 	memcpy(mgmt->da, peer, ETH_ALEN);
 	skw_ether_copy(mgmt->sa, iface->addr);
@@ -999,14 +941,15 @@ skw_tdls_build_send_direct(struct net_device *dev,
 	skw_tdls_add_ies(dev, skb, peer, action_code, status_code, 0,
 		initiator, ies, ies_len);
 
-	skw_dbg("sending tdls discover response\n");
+	skw_dev_dbg(dev, "sending tdls discover response\n");
 
 	total_len = sizeof(*param) + skb->len;
 	param = SKW_ZALLOC(total_len, GFP_KERNEL);
 	if (!param)
 		return -ENOMEM;
 
-	param->channel = 0xFF;
+	param->band = iface->sta.core.bss.channel->band;
+	param->channel = iface->sta.core.bss.channel->hw_value;
 	param->wait = 0;
 	param->dont_wait_for_ack = 0;
 	param->cookie = 0;
@@ -1025,7 +968,7 @@ skw_tdls_build_send_direct(struct net_device *dev,
 	return ret;
 }
 
-int skw_tdls_build_send_mgmt(struct skw_core *skw, struct net_device *ndev,
+int skw_tdls_build_send_mgmt(struct skw_core *skw, struct net_device *dev,
 			const u8 *peer, u8 action_code, u8 dialog_token,
 			u16 status_code, u32 peer_cap, bool initiator,
 			const u8 *ies, size_t ies_len)
@@ -1051,10 +994,10 @@ int skw_tdls_build_send_mgmt(struct skw_core *skw, struct net_device *ndev,
 		  ies_len +
 		  sizeof(struct ieee80211_tdls_lnkie);
 
-	skw_dbg("skb_headroom: %u skb_len: %u ies_len: %lu\n",
+	skw_dev_dbg(dev, "skb_headroom: %u skb_len: %u ies_len: %lu\n",
 		skw->skb_headroom, skb_len, (long)ies_len);
 
-	skb = netdev_alloc_skb(ndev, skb_len);
+	skb = netdev_alloc_skb(dev, skb_len);
 	if (!skb)
 		return -ENOMEM;
 
@@ -1068,13 +1011,13 @@ int skw_tdls_build_send_mgmt(struct skw_core *skw, struct net_device *ndev,
 	case WLAN_TDLS_DISCOVERY_REQUEST:
 	case WLAN_TDLS_CHANNEL_SWITCH_REQUEST:
 	case WLAN_TDLS_CHANNEL_SWITCH_RESPONSE:
-		ret = skw_tdls_build_send_encap_data(ndev, peer,
+		ret = skw_tdls_build_send_encap_data(dev, peer,
 				action_code, dialog_token, status_code,
 				peer_cap, skb, initiator, ies, ies_len);
 		break;
 
 	case WLAN_PUB_ACTION_TDLS_DISCOVER_RES:
-		ret = skw_tdls_build_send_direct(ndev, peer, action_code,
+		ret = skw_tdls_build_send_direct(dev, peer, action_code,
 				dialog_token, status_code, skb, initiator,
 				ies, ies_len);
 		break;

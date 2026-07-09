@@ -64,7 +64,7 @@ skw_mlme_ap_get_client(struct skw_iface *iface, const u8 *addr)
 	spin_lock_bh(&iface->sap.mlme_client_list.lock);
 
 	list_for_each_entry(tmp, &iface->sap.mlme_client_list.list, list) {
-		if (tmp && ether_addr_equal(addr, tmp->addr)) {
+		if (ether_addr_equal(addr, tmp->addr)) {
 			client = tmp;
 			break;
 		}
@@ -109,19 +109,16 @@ void skw_mlme_ap_remove_client(struct skw_iface *iface, const u8 *addr)
 	}
 }
 
-void skw_mlme_ap_del_sta(struct wiphy *wiphy, struct net_device *ndev,
+void skw_mlme_ap_del_sta(struct wiphy *wiphy, struct net_device *dev,
 			 const u8 *addr, u8 force)
 {
 	int ret = -1;
 
-	skw_dbg("sta: %pM\n", addr);
+	skw_dev_dbg(dev, "sta: %pM\n", addr);
 
-	ret = skw_del_station(wiphy, ndev, addr, 12, 3);
-	if (ret) {
-		skw_err("failed, ret: %d\n", ret);
-		return;
-	}
-
+	ret = skw_del_station(wiphy, dev, addr, 12, 3);
+	if (ret)
+		skw_dev_err(dev, "failed, ret: %d\n", ret);
 }
 
 static void skw_mlme_ap_auth_timeout(void *data)
@@ -145,28 +142,6 @@ static void skw_mlme_ap_auth_timeout(void *data)
 		return;
 	}
 }
-
-#if 0
-void skw_flush_sta_info(struct skw_iface *iface)
-{
-	LIST_HEAD(flush_list);
-	struct skw_client *sta;
-
-	spin_lock_bh(&iface->sap.sta_lock);
-	list_replace_init(&iface->sap.mlme_client_list, &flush_list);
-	spin_unlock_bh(&iface->sap.sta_lock);
-
-	// fixme:
-	// deauth all sta
-	while (!list_empty(&flush_list)) {
-		sta = list_first_entry(&flush_list, struct skw_client, list);
-		list_del(&sta->list);
-		skw_dbg("sta: %pM, state: %d\n", sta->addr, sta->state);
-		// skw_mlle_ap_state_event(sta, SKW_STATE_NONE);
-		SKW_KFREE(sta);
-	}
-}
-#endif
 
 int skw_mgmt_frame_with_reason(struct skw_iface *iface, u8 *da, u64 *cookie, u8 *bssid,
 			struct ieee80211_channel *ch, u16 stype, u16 reason, bool switchover)
@@ -207,9 +182,10 @@ static void skw_mlme_ap_auth_cb(struct skw_iface *iface,
 {
 	u16 status;
 
-	skw_dbg("client: %pM, ack: %d\n", client->addr, ack);
 	if (!client)
 		return;
+
+	skw_dbg("client: %pM, ack: %d\n", client->addr, ack);
 
 	status = le16_to_cpu(mgmt->u.auth.status_code);
 
@@ -291,33 +267,35 @@ void skw_mlme_ap_tx_status(struct skw_iface *iface, u64 cookie,
 	skw_dbg("iface: %d, da: %pM, ack: %d, cookie: %lld\n",
 		iface->id, mgmt->da, ack, cookie);
 
-	client = skw_mlme_ap_get_client(iface, mgmt->da);
-	if (!client || client->cookie != cookie) {
-		skw_dbg("cfg80211 tx status, cookie: %lld\n", cookie);
-		goto report;
+	if (!iface->sap.sme_external) {
+		client = skw_mlme_ap_get_client(iface, mgmt->da);
+		if (!client || client->cookie != cookie) {
+			skw_dbg("cfg80211 tx status, cookie: %lld\n", cookie);
+			goto report;
+		}
+
+		fc = SKW_MGMT_SFC(mgmt->frame_control);
+
+		switch (fc) {
+		case IEEE80211_STYPE_AUTH:
+			skw_mlme_ap_auth_cb(iface, client, mgmt, frame_len, !!ack);
+			break;
+
+		case IEEE80211_STYPE_REASSOC_RESP:
+			reassoc = 1;
+			/* fall through */
+			skw_fallthrough;
+		case IEEE80211_STYPE_ASSOC_RESP:
+			skw_mlme_ap_assoc_cb(iface, client, mgmt, frame_len,
+						!!ack, reassoc);
+			break;
+
+		default:
+			break;
+		}
+
+		return;
 	}
-
-	fc = SKW_MGMT_SFC(mgmt->frame_control);
-
-	switch (fc) {
-	case IEEE80211_STYPE_AUTH:
-		skw_mlme_ap_auth_cb(iface, client, mgmt, frame_len, !!ack);
-		break;
-
-	case IEEE80211_STYPE_REASSOC_RESP:
-		reassoc = 1;
-		/* fall through */
-		skw_fallthrough;
-	case IEEE80211_STYPE_ASSOC_RESP:
-		skw_mlme_ap_assoc_cb(iface, client, mgmt, frame_len,
-				     !!ack, reassoc);
-		break;
-
-	default:
-		break;
-	}
-
-	return;
 
 report:
 	cfg80211_mgmt_tx_status(&iface->wdev, cookie, frame, frame_len,
@@ -343,7 +321,6 @@ static int skw_mlme_ap_auth_reply(struct skw_iface *iface,
 		    ie_len;
 
 	reply = SKW_ZALLOC(frame_len, GFP_KERNEL);
-
 	if (!reply)
 		return -ENOMEM;
 
@@ -369,50 +346,6 @@ static int skw_mlme_ap_auth_reply(struct skw_iface *iface,
 
 	return ret;
 }
-
-#if 0
-static int skw_ap_auth_shared_key(struct skw_client *sta, u16 trans_action)
-{
-	u16 status;
-	u8 *challenge;
-
-	switch (trans_action) {
-	case 1:
-		sta->challenge = SKW_ZALLOC(WLAN_AUTH_CHALLENGE_LEN,
-				GFP_KERNEL);
-		if (IS_ERR(sta->challenge)) {
-			status = WLAN_STATUS_UNSPECIFIED_FAILURE;
-			goto reply;
-		}
-
-		/* Generate challenge text */
-		get_random_bytes(sta->challenge,
-				WLAN_AUTH_CHALLENGE_LEN);
-
-		status = WLAN_STATUS_SUCCESS;
-		break;
-
-	case 3:
-		challenge = &mgmt->u.auth.variable[2];
-
-		if (memcmp(sta->challenge, challenge,
-			   WLAN_AUTH_CHALLENGE_LEN) == 0) {
-			status = WLAN_STATUS_SUCCESS;
-			SKW_KFREE(sta->challenge);
-		} else {
-			status = WLAN_STATUS_CHALLENGE_FAIL;
-		}
-
-		break;
-
-	default:
-		status = WLAN_STATUS_UNKNOWN_AUTH_TRANSACTION;
-		break;
-	}
-
-	return status;
-}
-#endif
 
 static int skw_mlme_ap_auth_handler(struct skw_iface *iface, int freq,
 				int signal, void *frame, int frame_len)
@@ -510,7 +443,9 @@ static int skw_mlme_ap_auth_handler(struct skw_iface *iface, int freq,
 	case WLAN_AUTH_SHARED_KEY:
 		switch (trans_action) {
 		case 1:
-			client->challenge = SKW_ZALLOC(WLAN_AUTH_CHALLENGE_LEN, GFP_KERNEL);
+
+			client->challenge = SKW_ZALLOC(WLAN_AUTH_CHALLENGE_LEN,
+					GFP_KERNEL);
 			if (!client->challenge) {
 				status = WLAN_STATUS_UNSPECIFIED_FAILURE;
 				goto reply;
@@ -568,107 +503,10 @@ reply:
 	return 0;
 }
 
-#if 0
-static int skw_ap_parse_element(struct skw_80211_element *element,
-				const u8 *ies, u32 ie_len)
-{
-	const struct element *elem;
-
-	return 0;
-
-	for_each_element(elem, ies, ie_len) {
-		switch (elem->id) {
-		case WLAN_EID_SSID:
-			// element->ssid = elem->data;
-			// element->ssid_len = elem->data;
-			break;
-
-		case WLAN_EID_SUPP_RATES:
-			break;
-		case WLAN_EID_EXT_SUPP_RATES:
-			break;
-		case WLAN_EID_RSN:
-			break;
-		case WLAN_EID_PWR_CAPABILITY:
-			break;
-		case WLAN_EID_SUPPORTED_CHANNELS:
-			break;
-		case WLAN_EID_HT_CAPABILITY:
-			break;
-		case WLAN_EID_HT_OPERATION:
-			break;
-		case WLAN_EID_VHT_CAPABILITY:
-			break;
-		case WLAN_EID_VHT_OPERATION:
-			break;
-		case WLAN_EID_EXT_CAPABILITY:
-			break;
-		case WLAN_EID_MIC:
-			break;
-		case WLAN_EID_SUPPORTED_REGULATORY_CLASSES:
-			break;
-		default:
-			break;
-		}
-	}
-
-	return 0;
-}
-
-static u16 skw_ap_check_ssid(struct skw_iface *iface,
-			     const u8 *ssid, int ssid_len)
-{
-	if (!ssid ||
-	    ssid_len != iface->sap.ssid_len ||
-	    memcmp(ssid, iface->sap.ssid, iface->sap.ssid_len) != 0)
-		return WLAN_STATUS_UNSPECIFIED_FAILURE;
-
-	return WLAN_STATUS_SUCCESS;
-}
-
-static u16 skw_ap_check_wmm(struct skw_client *sta, const u8 *wmm_ie, int len)
-{
-#define SKW_WMM_IE_LEN  24
-	struct skw_wmm_info {
-		u8 oui[3];
-		u8 oui_type;
-		u8 oui_subtype;
-		u8 version;
-		u8 qos_info;
-	} __packed;
-
-	struct skw_wmm_info *wmm = (struct skw_wmm_info *)wmm_ie;
-
-	if (len != SKW_WMM_IE_LEN ||
-	    wmm->oui_subtype != 0 ||
-	    wmm->version != 1)
-		return WLAN_STATUS_UNSPECIFIED_FAILURE;
-
-	return WLAN_STATUS_SUCCESS;
-}
-#endif
 static u16 skw_mlme_ap_check_assoc_ie(struct skw_iface *iface,
 				 struct skw_client *client,
 				 const u8 *ie, int ie_len)
 {
-	// skw_hex_dump("rx assoc ie", ie, ie_len, false);
-	// struct skw_80211_element e;
-
-	//memset(&ie, 0x0, sizeof(e));
-	// skw_ap_parse_element(&e, ie, ie_len);
-
-#if 0
-	/* check ssid */
-	if (skw_ap_check_ssid(iface, e.ssid, e.ssid_len))
-		return WLAN_STATUS_UNSPECIFIED_FAILURE;
-
-	/* check wmm */
-	if (skw_ap_check_wmm(sta, e.wmm, e.wmm_len))
-		return WLAN_STATUS_UNSPECIFIED_FAILURE;
-
-	/* check ext capa */
-	/* check support rate */
-#endif
 	return 0;
 }
 
@@ -695,19 +533,7 @@ static u8 *skw_mlme_ap_add_rate(struct wiphy *wiphy,
 	/* basic rate */
 	sband = wiphy->bands[iface->sap.cfg.channel->band];
 	rate = sband->bitrates;
-#if 0
-	enum ieee80211_rate_flags mandatory;
 
-	if (sband->band == NL80211_BAND_2GHZ) {
-		if (scan_width == NL80211_BSS_CHAN_WIDTH_5 ||
-		    scan_width == NL80211_BSS_CHAN_WIDTH_10)
-			mandatory = IEEE80211_RATE_MANDATORY_G;
-		else
-			mandatory = IEEE80211_RATE_MANDATORY_B;
-	} else {
-		mandatory = IEEE80211_RATE_MANDATORY_A;
-	}
-#endif
 	*pos++ = WLAN_EID_SUPP_RATES;
 	*pos++ = SKW_BASIC_RATE_COUNT;
 	for (i = 0; i < SKW_BASIC_RATE_COUNT; i++)
@@ -741,9 +567,12 @@ static u8 *skw_mlme_ap_add_ht_cap(struct skw_iface *iface, u8 *ies)
 	u8 *pos = ies;
 	int len = sizeof(struct ieee80211_ht_cap);
 
+	if (!iface->sap.cfg.ht_cap)
+		return ies;
+
 	*pos++ = WLAN_EID_HT_CAPABILITY;
 	*pos++ = len;
-	memcpy(pos, &iface->sap.cfg.ht_cap, len);
+	memcpy(pos, iface->sap.cfg.ht_cap, len);
 
 	return pos + len;
 }
@@ -1026,11 +855,7 @@ int skw_mlme_ap_rx_mgmt(struct skw_iface *iface, u16 fc, int freq,
 			skw_mlme_ap_del_sta(iface->wdev.wiphy,
 					    iface->ndev, client->addr, false);
 		}
-#if 0
-		skw_add_timer_work("idle_release", skw_mlme_ap_auth_timeout,
-				   client, SKW_AP_IDLE_TIMEOUT,
-				   client, GFP_KERNEL);
-#endif
+
 		break;
 
 	case IEEE80211_STYPE_REASSOC_REQ:
@@ -1059,42 +884,6 @@ int skw_mlme_ap_rx_mgmt(struct skw_iface *iface, u16 fc, int freq,
 
 	return 0;
 }
-
-#if 0
-int skw_send_deauth_frame(struct wiphy *wiphy, struct net_device *netdev,
-			int reason_code)
-{
-	int ret;
-	int size;
-	char *buff = NULL;
-	struct skw_core *skw;
-	struct skw_disconnect_param *deauth_param = NULL;
-
-	skw = wiphy_priv(wiphy);
-
-	size = sizeof(struct skw_disconnect_param);
-	buff = SKW_ZALLOC(size, GFP_KERNEL);
-	if (IS_ERR_OR_NULL(buff)) {
-		skw_err("Malloc disconnect param for deauth failed\n");
-		return -ENOMEM;
-	}
-
-	deauth_param = (struct skw_disconnect_param *)buff;
-	deauth_param->type = SKW_DISCONNECT_SEND_DEAUTH;
-	deauth_param->local_state_change = true;
-	deauth_param->reason_code = reason_code;
-	deauth_param->ie_len = 0;
-
-	ret = skw_send_msg(wiphy, netdev, SKW_CMD_DISCONNECT, buff,
-			size, NULL, 0);
-	if (ret)
-		skw_err("Deauth failed ret:%d\n", ret);
-
-	SKW_KFREE(buff);
-
-	return ret;
-}
-#endif
 
 static int skw_mlme_sta_ft_event(struct skw_iface *iface, void *buf, int len)
 {

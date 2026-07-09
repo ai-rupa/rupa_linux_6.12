@@ -1,7 +1,6 @@
 config WLAN_VENDOR_SWT6621S
 	tristate "SWT6621S chipset support"
 	depends on CFG80211
-	select CFG80211_WEXT_EXPORT
 	help
 	This module adds support for SeekWave 802.11ax wireless adapter chipset.
 
@@ -90,12 +89,6 @@ config SWT6621S_PROJECT_NAME
 	default "SEEKWAVE"
 	help
 	Set Default Project Name
-
-config SWT6621S_NOT_WAKEUP_HOST
-	bool "SWT6621S Wakeup Host Enable"
-	default n
-	help
-	Say Y here to support wakeup host
 
 config SWT6621S_WDS
 	bool "SWT6621S Wds Support"

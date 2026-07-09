@@ -104,7 +104,7 @@
 		compatible = "gpio-leds";
 		work_led: work {
 			gpios = <&gpio4 RK_PB5 GPIO_ACTIVE_HIGH>;
-			linux,default-trigger = "heartbeat";
+			default-state = "on";
 		};
 
 		bz_led: bz {

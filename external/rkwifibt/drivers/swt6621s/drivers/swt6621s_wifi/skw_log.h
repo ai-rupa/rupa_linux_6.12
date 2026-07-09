@@ -83,6 +83,26 @@ unsigned long skw_log_level(void);
 #define skw_detail(fmt, ...) \
 	skw_log(SKW_DETAIL, "[%s] %s: "fmt, SKW_TAG_DETAIL, __func__, ##__VA_ARGS__)
 
+#define skw_dev_err(dev, fmt, ...) \
+	skw_log(SKW_ERROR, "[%s] %s@%s: "fmt, SKW_TAG_ERROR, netdev_name(dev), \
+		__func__, ##__VA_ARGS__)
+
+#define skw_dev_warn(dev, fmt, ...) \
+	skw_log(SKW_WARN, "[%s] %s.%s: "fmt, SKW_TAG_WARN, netdev_name(dev), \
+		__func__, ##__VA_ARGS__)
+
+#define skw_dev_info(dev, fmt, ...) \
+	skw_log(SKW_INFO, "[%s] %s.%s: "fmt, SKW_TAG_INFO, netdev_name(dev), \
+		__func__, ##__VA_ARGS__)
+
+#define skw_dev_dbg(dev, fmt, ...) \
+	skw_log(SKW_DEBUG, "[%s] %s.%s: "fmt, SKW_TAG_DEBUG, netdev_name(dev), \
+		__func__, ##__VA_ARGS__)
+
+#define skw_dev_detail(dev, fmt, ...) \
+	skw_log(SKW_DETAIL, "[%s] %s.%s: "fmt, SKW_TAG_DETAIL, netdev_name(dev), \
+		__func__, ##__VA_ARGS__)
+
 #define skw_hex_dump(prefix, buf, len, force)                                    \
 	do {                                                                     \
 		if ((skw_log_level() & SKW_DUMP) || force) {                     \

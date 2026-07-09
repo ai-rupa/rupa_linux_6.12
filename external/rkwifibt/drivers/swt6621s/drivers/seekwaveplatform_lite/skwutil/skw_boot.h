@@ -22,6 +22,7 @@
 #include <linux/platform_device.h>
 #include <linux/completion.h>
 #include <linux/workqueue.h>
+#include <linux/vmalloc.h>
 #if  KERNEL_VERSION(4, 13, 0) <= LINUX_VERSION_CODE
 #include <uapi/linux/sched/types.h>
 #else
@@ -209,21 +210,25 @@ enum skw_subsys{
 };
 
 struct seekwave_device {
-	struct  platform_device *pdev;
+	struct platform_device *pdev;
 	char *skw_nv_name;
 	char *iram_file_path;
 	char *dram_file_path;
 	char *iram_img_data;
 	char *dram_img_data;
-	char *dl_base_img;//
+	char *dl_base_img; //
 	char *nv_mem_data;
 	char *nv_mem_cmfg_data;
 	char *nv_mem_pnfg_data;
-	int  (*wifi_start)(void);
-	int  (*bt_start)(void);
-	int  (*wifi_stop)(void);
-	int  (*bt_stop)(void);
-	int  (*skw_dloader_module)(int service_index);
+	int (*wifi_start)(void);
+	int (*bt_start)(void);
+	int (*wifi_stop)(void);
+	int (*bt_stop)(void);
+	int (*skw_dloader_module)(int service_index);
+#ifdef CONFIG_SKW_FREE_FIRMWARE_MEM_SUPPORT
+	int (*skw_fw_request)(void);
+	void (*skw_fw_release)(void);
+#endif
 	u32 nv_mem_cmfg_size;
 	u32 nv_mem_pnfg_size;
 	unsigned short iram_crc_val;
@@ -237,14 +242,14 @@ struct seekwave_device {
 	unsigned int dram_dl_size;
 	unsigned int dram_crc_offset;
 	unsigned int dram_crc_en;
-	unsigned int setup_addr;//setup address
-	unsigned int save_setup_addr;//send the setup address register
+	unsigned int setup_addr; //setup address
+	unsigned int save_setup_addr; //send the setup address register
 	unsigned int first_dl_flag;
 	unsigned int first_boot_flag;
 	unsigned int dl_module;
-	unsigned int dma_type_addr;//1:ADMA,2:SDMA
-	unsigned int dma_type;//1:ADMA,2:SDMA
-	unsigned int slp_disable;//0:disable,1:enable
+	unsigned int dma_type_addr; //1:ADMA,2:SDMA
+	unsigned int dma_type; //1:ADMA,2:SDMA
+	unsigned int slp_disable; //0:disable,1:enable
 	unsigned int slp_disable_addr;
 	unsigned int head_addr;
 	unsigned int tail_addr;
@@ -266,9 +271,10 @@ struct seekwave_device {
 	unsigned int bt_antenna;
 	unsigned int dl_offset_addr;
 	unsigned int dl_base_addr;
-	unsigned int dl_addr;//
+	unsigned int dl_addr; //
 	unsigned int dl_acount_addr;
 	unsigned int dl_size;
+	unsigned int pulse_width;
 	int img_size;
 	int bsp_index_count;
 	int bt_index_count;
@@ -276,18 +282,17 @@ struct seekwave_device {
 	int all_dl_count;
 	int bt_dl_count;
 	int wifi_dl_count;
-	int host_gpio;/*GPIO0_A3*/
-	int chip_gpio;/*GPIO2_D2*/
-	int chip_en;/*GPIO0_B1*/
+	int host_gpio; /*GPIO0_A3*/
+	int chip_gpio; /*GPIO2_D2*/
+	int chip_en; /*GPIO0_B1*/
 	int bt_service_state;
 	int wifi_service_state;
 	int service_ops;
 	int dl_done_signal;
-	int gpio_out;//host wakeup gpio0:/*GPIO0_A3*/,chip_wakeup gpio2:/*GPIO2_D2*/
-	int gpio_in;//host wakeup gpio 0
+	int gpio_out; //host wakeup gpio0:/*GPIO0_A3*/,chip_wakeup gpio2:/*GPIO2_D2*/
+	int gpio_in; //host wakeup gpio 0
 	int gpio_val;
 	int gpio_next_val;
-
 };
 void seekwave_boot_exit(void);
 int seekwave_boot_init(char *chip_id);

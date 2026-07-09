@@ -26,6 +26,7 @@
 
 #define SKW_DFS_FLAG_CAC_MODE                 1
 #define SKW_DFS_FLAG_MONITOR_MODE             2
+#define SKW_DFS_FLAG_RADAR_EVT_RPT            3
 
 struct skw_pri_detector {
 	u64 last_ts;
@@ -71,7 +72,7 @@ struct skw_cac_params {
 	u8 center_chn1;
 	u8 center_chn2;
 	u8 band_width;
-
+	u8 band;
 	u32 time_ms;
 	u8 region;
 } __packed;
@@ -93,7 +94,7 @@ struct skw_pulse_data {
 struct skw_radar_pulse {
 	u8 nr_pulse;
 	u8 resv;
-	struct skw_pulse_data data[0];
+	struct skw_pulse_data data[];
 } __packed;
 
 struct skw_pulse_info {
@@ -128,7 +129,7 @@ int skw_dfs_add_pulse(struct wiphy *wiphy, struct net_device *dev,
 			struct skw_pulse_info *pulse);
 
 int skw_dfs_start_cac(struct wiphy *wiphy, struct net_device *dev);
-int skw_dfs_stop_cac(struct wiphy *wiphy, struct net_device *ndev);
+int skw_dfs_stop_cac(struct wiphy *wiphy, struct net_device *dev);
 int skw_dfs_start_monitor(struct wiphy *wiphy, struct net_device *dev);
 int skw_dfs_stop_monitor(struct wiphy *wiphy, struct net_device *dev);
 int skw_dfs_init(struct wiphy *wiphy, struct net_device *dev);
@@ -151,7 +152,7 @@ static inline int skw_dfs_start_cac(struct wiphy *wiphy, struct net_device *dev)
 	return -ENOTSUPP;
 }
 
-static inline int skw_dfs_stop_cac(struct wiphy *wiphy, struct net_device *ndev)
+static inline int skw_dfs_stop_cac(struct wiphy *wiphy, struct net_device *dev)
 {
 	return 0;
 }

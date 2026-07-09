@@ -396,7 +396,12 @@ static ssize_t skw_recovery_debug_write(struct file *fp, const char __user *buff
 		skw_sdio_recovery_debug(1);
 	else if (!strncmp("enable", cmd, 6))
 		skw_sdio_recovery_debug(0);
-
+	else if (!strncmp("logon", cmd, 5))
+		skw_sdio_cp_log_disable(0);
+	else if (!strncmp("logoff", cmd, 6))
+		skw_sdio_cp_log_disable(1);
+	else if (!strncmp("dump", cmd, 4))
+		skw_sdio_cp_dumpmem();
 	return len;
 }
 
@@ -582,7 +587,7 @@ void skw_sdio_create_debug_files(void)
 	skw_sdio_proc_init_ex("Version", 0666, &skw_version_proc_fops, NULL);
 	skw_sdio_proc_init_ex("Statistic", 0666, &skw_port_statistic_proc_fops, NULL);
 	skw_sdio_proc_init_ex("config", 0666, &skw_config_proc_fops, NULL);
-	skw_sdio_proc_init_ex("recovery", 0666, &skw_recovery_debug_proc_fops, NULL);
+	skw_sdio_proc_init_ex("debug", 0666, &skw_recovery_debug_proc_fops, NULL);
 	skw_sdio_proc_init_ex("BT_ANT", 0666, &skw_bluetooth_antenna_proc_fops, NULL);
 	skw_sdio_proc_init_ex("BT_UART1", 0666, &skw_bluetooth_UART1_proc_fops, NULL);
 	skw_sdio_proc_init_ex("WiFi", 0666, &skw_sdio_wifi_proc_fops, NULL);

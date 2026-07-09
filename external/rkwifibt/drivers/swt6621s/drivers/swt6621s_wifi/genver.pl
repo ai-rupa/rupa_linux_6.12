@@ -5,7 +5,7 @@ use POSIX qw(strftime);
 use File::Basename;
 
 $skw_branch = "swt6621s_dev";
-$skw_version = "2.0.250611.022f652";
+$skw_version = "2.0.260508.678a92e";
 
 $output = shift;
 open (OUTPUT, ">$output") || die "$0 : can't open $output for writing\n";
