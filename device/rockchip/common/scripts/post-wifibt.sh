@@ -422,7 +422,9 @@ build_wifibt()
 		cp $RKWIFIBT_DIR/firmware/seekwave/usb/* \
 			$TARGET_DIR/lib/firmware/	
 		cp $RKWIFIBT_DIR/firmware/seekwave/sdio/* \
-			$TARGET_DIR/lib/firmware/				
+			$TARGET_DIR/lib/firmware/	
+		cp $RKWIFIBT_DIR/drivers/swt6621s/drivers/swtbt4l/*.nvbin \
+			$TARGET_DIR/lib/firmware/					
 		cp $RKWIFIBT_DIR/drivers/swt6621s/drivers/swt6621s_wifi/*.ko \
 			$TARGET_DIR/lib/modules/
 		cp $RKWIFIBT_DIR/drivers/swt6621s/drivers/swtbt4l/*.ko \

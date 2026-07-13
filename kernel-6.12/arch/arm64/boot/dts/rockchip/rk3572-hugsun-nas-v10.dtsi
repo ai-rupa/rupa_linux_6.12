@@ -31,6 +31,12 @@
 	};
 	*/	
 
+	sdio_pwrseq: sdio-pwrseq {
+		compatible = "mmc-pwrseq-simple";
+		pinctrl-names = "default";
+		pinctrl-0 = <&wifi_poweren_gpio>;
+	};
+
 	usb3_switch: usb3-switch {
 		compatible = "broadchip,bct4360", "gpio-sbu-mux";
 		select-gpios = <&gpio1 RK_PD4 GPIO_ACTIVE_HIGH>;
@@ -105,12 +111,42 @@
 
 	wireless_wlan: wireless-wlan {
 		compatible = "wlan-platdata";
-		wifi_chip_type = "ap6275p";
+		wifi_chip_type = "";
 		pinctrl-names = "default";
 		pinctrl-0 = <&wifi_host_wake_irq>;
 		WIFI,host_wake-gpios = <&gpio0 RK_PB2 GPIO_ACTIVE_HIGH>;
 		WIFI,poweren-gpios = <&gpio1 RK_PC6 GPIO_ACTIVE_HIGH>;
 		status = "okay";
+	};
+};
+
+&bigcore_thermal {
+	governing-policy = "step_wise";
+
+	trips {
+		pwm_fan0: pwm-fan0 {
+			temperature = <55000>;
+			hysteresis = <2000>;
+			type = "active";
+		};
+
+		pwm_fan1: pwm-fan1 {
+			temperature = <65000>;
+			hysteresis = <2000>;
+			type = "active";
+		};
+	};
+
+	cooling-maps {
+		map1 {
+			trip = <&pwm_fan0>;
+			cooling-device = <&pwm_fan 2 4>;
+		};
+
+		map2 {
+			trip = <&pwm_fan1>;
+			cooling-device = <&pwm_fan 5 6>;
+		};
 	};
 };
 
@@ -263,7 +299,10 @@
 		wifi_host_wake_irq: wifi-host-wake-irq {
 			rockchip,pins = <0 RK_PB2 RK_FUNC_GPIO &pcfg_pull_down>;
 		};
-
+		
+		wifi_poweren_gpio: wifi-poweren-gpio {
+			rockchip,pins = <1 RK_PC6 RK_FUNC_GPIO &pcfg_pull_up>;
+		};
 	};
 
 	pwn_fan {
@@ -299,7 +338,19 @@
 	vref-supply = <&vccio_1v8_s0>;
 };
 
-&sdmmc0 {
+&sdmmc1 {
+	max-frequency = <200000000>;
+	no-sd;
+	no-mmc;
+	bus-width = <4>;
+	cap-sd-highspeed;
+	cap-sdio-irq;
+	keep-power-in-suspend;
+	mmc-pwrseq = <&sdio_pwrseq>;
+	non-removable;
+	pinctrl-names = "default";
+	pinctrl-0 = <&sdmmc1_bus4_pins &sdmmc1_clk_pins &sdmmc1_cmd_pins>;
+	sd-uhs-sdr104;
 	status = "okay";
 };
 
@@ -344,3 +395,5 @@
 	dr_mode = "host";
 	status = "okay";
 };
+
+

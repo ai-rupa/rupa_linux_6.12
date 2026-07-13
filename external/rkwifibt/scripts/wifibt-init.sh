@@ -206,6 +206,18 @@ init_bt_rtk_usb()
 	done
 }
 
+# Blocked init for SeekWave BT
+init_bt_skw6621()
+{
+	do_insmod skwbt || return 1
+
+	[ "$WIFIBT_BT_TTY" ] || return
+	which rk_hciattach >/dev/null
+
+	rk_hciattach -n -s 115200 "$WIFIBT_BT_TTY" rockchip 3000000 flow nosleep \
+		11:22:33:44:55:66
+}
+
 # Blocked re-init
 do_init_bt()
 {
@@ -228,6 +240,7 @@ do_init_bt()
 	case "$WIFIBT_VENDOR" in
 		Rockchip) init_bt_rk_uart;;
 		Broadcom) init_bt_brcm_uart;;
+		SeekWave) init_bt_skw6621;;
 		Realtek)
 			if [ "$WIFIBT_BT_TTY" ]; then
 				init_bt_rtk_usb
@@ -292,6 +305,9 @@ insmod_bt()
 	try_insmod btbcm
 
 	try_insmod hci_uart
+
+	#SeekWave BT
+	try_insmod skwbt
 }
 
 start_bt()

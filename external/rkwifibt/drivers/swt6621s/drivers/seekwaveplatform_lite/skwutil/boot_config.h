@@ -46,7 +46,7 @@
 #define  HOST_WAKEUP_GPIO_IN 	10
 #define  MODEM_WAKEUP_GPIO_OUT  3
 #else
-#define  MODEM_ENABLE_GPIO   	-1 /*wifi_chip power on gpio num*/
+#define  MODEM_ENABLE_GPIO   	54 /*hugsun rk3572 nas*/ /*wifi_chip power on gpio num*/
 #define  HOST_WAKEUP_GPIO_IN 	-1 /*host wake gpio num*/
 #define  MODEM_WAKEUP_GPIO_OUT  -1 /*chip wake gpio num*/
 #endif

@@ -110,7 +110,7 @@
 		bz_led: bz {
 			gpios = <&gpio3 RK_PD6 GPIO_ACTIVE_HIGH>;
 			default-state = "off";
-		};		
+		};	
 	};
 
 	spdif_rx0_dc: spdif-rx0-dc {
