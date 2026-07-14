@@ -13,13 +13,13 @@
 		compatible = "pwm-fan";
 		pwms = <&pwm1_6ch_5 0 40000 PWM_POLARITY_INVERTED>;
 		#cooling-cells = <2>;
-		cooling-levels = <0 120 150 180 210 240 255>;
+		cooling-levels = <255 170 85 0>;
 		fan-supply = <&vcc5v0_sys_s5>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&fan_tach>;	
 		interrupt-parent = <&gpio0>;
 		interrupts = <RK_PC4 IRQ_TYPE_EDGE_RISING>;
-		pulses-per-revolution = <4>;
+		pulses-per-revolution = <2>;
 	};	
 
 	/*
@@ -121,16 +121,16 @@
 };
 
 &bigcore_thermal {
-	governing-policy = "step_wise";
+	sustainable-power = <5000>;
 
 	trips {
-		pwm_fan0: pwm-fan0 {
-			temperature = <55000>;
+		pwm_fan_low: pwm-fan-low {
+			temperature = <50000>;
 			hysteresis = <2000>;
 			type = "active";
 		};
 
-		pwm_fan1: pwm-fan1 {
+		pwm_fan_high: pwm-fan-high {
 			temperature = <65000>;
 			hysteresis = <2000>;
 			type = "active";
@@ -138,14 +138,14 @@
 	};
 
 	cooling-maps {
-		map1 {
-			trip = <&pwm_fan0>;
-			cooling-device = <&pwm_fan 2 4>;
+		map0 {
+			trip = <&pwm_fan_low>;
+			cooling-device = <&pwm_fan 1 1>;
 		};
 
-		map2 {
-			trip = <&pwm_fan1>;
-			cooling-device = <&pwm_fan 5 6>;
+		map1 {
+			trip = <&pwm_fan_high>;
+			cooling-device = <&pwm_fan 2 3>;
 		};
 	};
 };
@@ -299,7 +299,7 @@
 		wifi_host_wake_irq: wifi-host-wake-irq {
 			rockchip,pins = <0 RK_PB2 RK_FUNC_GPIO &pcfg_pull_down>;
 		};
-		
+
 		wifi_poweren_gpio: wifi-poweren-gpio {
 			rockchip,pins = <1 RK_PC6 RK_FUNC_GPIO &pcfg_pull_up>;
 		};
@@ -314,7 +314,7 @@
 
 &pwm1_6ch_5 {
 	pinctrl-0 = <&pwm1m0_ch5_pins>;
-	status = "disabled";
+	status = "okay";
 };
 
 &route_hdmi {
