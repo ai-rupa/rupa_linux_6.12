@@ -1285,6 +1285,7 @@ XCamReturn RkAiqAeHandleInt::prepare() {
     ae_config_int->nr_switch = sharedCom->snsDes.nr_switch;
     ae_config_int->dcg_ratio = sharedCom->snsDes.dcg_ratio;
     ae_config_int->spd_ratio = sharedCom->snsDes.spd_ratio;
+    ae_config_int->exp_offset = sharedCom->snsDes.exp_offset;
 
 #ifdef DISABLE_HANDLE_ATTRIB
     mCfgMutex.lock();
@@ -1698,6 +1699,9 @@ XCamReturn RkAiqAeHandleInt::genIspResult(RkAiqFullParams* params, RkAiqFullPara
         ae_post_rk->ae_post_res_rk.HDCIris.zoomPos = iris_param->HDCIris.zoomPos;
         cur_params->mIrisParams = params->mIrisParams;
     }
+
+    iris_param->PIris.step = ae_proc->new_ae_exp->Iris.PIris.step;
+    iris_param->PIris.update = ae_proc->new_ae_exp->Iris.PIris.update;
 
     // meas
     if (useStatsApiCfg) {

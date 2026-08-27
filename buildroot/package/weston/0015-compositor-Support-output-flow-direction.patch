@@ -1,0 +1,322 @@
+From 51ffc2a41d767b596a5784f6f89778fc71cf9433 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Wed, 27 Apr 2022 18:05:28 +0800
+Subject: [PATCH 15/98] compositor: Support output flow direction
+
+Use WESTON_OUTPUT_FLOW environment to set output arrangement:
+horizontal: place outputs horizontally (default)
+vertical: place outputs vertically
+same-as: all outputs at (0,0)
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ clients/desktop-shell.c       | 21 ++++++++++++++
+ desktop-shell/shell.c         | 27 +++++++++++++-----
+ frontend/main.c               | 11 ++++++++
+ include/libweston/libweston.h | 11 ++++++++
+ libweston/compositor.c        | 53 ++++++++++++++++++-----------------
+ 5 files changed, 90 insertions(+), 33 deletions(-)
+
+diff --git a/clients/desktop-shell.c b/clients/desktop-shell.c
+index 0722e954..54ba1063 100644
+--- a/clients/desktop-shell.c
++++ b/clients/desktop-shell.c
+@@ -137,6 +137,8 @@ struct output {
+ 	int y;
+ 	struct panel *panel;
+ 	struct background *background;
++
++	struct desktop *desktop;
+ };
+ 
+ struct panel_launcher {
+@@ -1350,10 +1352,28 @@ output_handle_geometry(void *data,
+                        int transform)
+ {
+ 	struct output *output = data;
++	struct desktop *desktop = output->desktop;
++	struct wl_surface *surface;
+ 
+ 	output->x = x;
+ 	output->y = y;
+ 
++	/* HACK: Only primary output gets panel in vertical flow */
++	if (y && output->panel) {
++		/* HACK: Re-set panel to destroy it */
++		surface = window_get_wl_surface(output->panel->window);
++		weston_desktop_shell_set_panel(desktop->shell,
++					       output->output, surface);
++	}
++
++	/* HACK: Create panel based on output_init() */
++	if (!y && !output->panel && desktop->want_panel) {
++		output->panel = panel_create(desktop, output);
++		surface = window_get_wl_surface(output->panel->window);
++		weston_desktop_shell_set_panel(desktop->shell,
++					       output->output, surface);
++	}
++
+ 	if (output->panel)
+ 		window_set_buffer_transform(output->panel->window, transform);
+ 	if (output->background)
+@@ -1424,6 +1444,7 @@ create_output(struct desktop *desktop, uint32_t id)
+ 	if (!output)
+ 		return;
+ 
++	output->desktop = desktop;
+ 	output->output =
+ 		display_bind(desktop->display, id, &wl_output_interface, 2);
+ 	output->server_output_id = id;
+diff --git a/desktop-shell/shell.c b/desktop-shell/shell.c
+index 48c7b3eb..75b1fa07 100644
+--- a/desktop-shell/shell.c
++++ b/desktop-shell/shell.c
+@@ -889,9 +889,14 @@ constrain_position(struct weston_move_grab *move)
+ 	    WESTON_DESKTOP_SHELL_PANEL_POSITION_TOP) {
+ 		struct shell_output *shoutput = NULL;
+ 
+-		if (surface->output)
++		if (surface->output) {
+ 			shoutput = weston_output_get_shell_private(surface->output);
+ 
++			/* HACK: Only primary output gets panel in vertical flow */
++			if (!surface->output->pos.c.y)
++				return c;
++		}
++
+ 		get_output_work_area(shsurf->shell, shoutput, &area);
+ 		geometry =
+ 			weston_desktop_surface_get_geometry(shsurf->desktop_surface);
+@@ -2784,6 +2789,19 @@ desktop_shell_set_panel(struct wl_client *client,
+ 	struct weston_head *head = weston_head_from_resource(output_resource);
+ 	char *label;
+ 
++	if (!head)
++		return;
++
++	sh_output = weston_output_get_shell_private(head->output);
++
++	if (surface == sh_output->panel_surface) {
++		/* HACK: Re-set panel to destroy it */
++		weston_desktop_shell_send_configure(resource, 0,
++						    surface_resource,
++						    0, 0);
++		return;
++	}
++
+ 	if (surface->committed) {
+ 		wl_resource_post_error(surface_resource,
+ 				       WL_DISPLAY_ERROR_INVALID_OBJECT,
+@@ -2791,12 +2809,6 @@ desktop_shell_set_panel(struct wl_client *client,
+ 		return;
+ 	}
+ 
+-	if (!head)
+-		return;
+-
+-	surface->output = head->output;
+-	sh_output = weston_output_get_shell_private(surface->output);
+-
+ 	if (sh_output->panel_surface) {
+ 		wl_resource_post_error(surface_resource,
+ 				       WL_DISPLAY_ERROR_INVALID_OBJECT,
+@@ -2804,6 +2816,7 @@ desktop_shell_set_panel(struct wl_client *client,
+ 		return;
+ 	}
+ 
++	surface->output = head->output;
+ 	surface->committed = panel_committed;
+ 	surface->committed_private = sh_output;
+ 
+diff --git a/frontend/main.c b/frontend/main.c
+index 7c311bd5..00e87eb8 100644
+--- a/frontend/main.c
++++ b/frontend/main.c
+@@ -5175,6 +5175,7 @@ wet_main(int argc, char *argv[], const struct weston_testsuite_data *test_data)
+ 	void *wet_xwl = NULL;
+ 	sigset_t mask;
+ 	struct sigaction action;
++	char *buf;
+ 
+ 	bool wait_for_debugger = false;
+ 	struct wl_protocol_logger *protologger = NULL;
+@@ -5347,6 +5348,16 @@ wet_main(int argc, char *argv[], const struct weston_testsuite_data *test_data)
+ 		goto out;
+ 	}
+ 
++	wet.compositor->output_flow = WESTON_OUTPUT_FLOW_HORIZONTAL;
++
++	buf = getenv("WESTON_OUTPUT_FLOW");
++	if (buf) {
++		if (!strcmp(buf, "vertical"))
++			wet.compositor->output_flow = WESTON_OUTPUT_FLOW_VERTICAL;
++		else if (!strcmp(buf, "same-as"))
++			wet.compositor->output_flow = WESTON_OUTPUT_FLOW_SAME_AS;
++	}
++
+ 	protocol_scope =
+ 		weston_log_ctx_add_log_scope(log_ctx, "proto",
+ 					     "Wayland protocol dump for all clients.\n",
+diff --git a/include/libweston/libweston.h b/include/libweston/libweston.h
+index 2bb673be..3ab97725 100644
+--- a/include/libweston/libweston.h
++++ b/include/libweston/libweston.h
+@@ -1374,6 +1374,12 @@ struct weston_dmabuf_feedback_format_table;
+ struct weston_renderer;
+ struct weston_content_update;
+ 
++enum weston_output_flow {
++	WESTON_OUTPUT_FLOW_HORIZONTAL,
++	WESTON_OUTPUT_FLOW_VERTICAL,
++	WESTON_OUTPUT_FLOW_SAME_AS,
++};
++
+ /** Main object, container-like structure which aggregates all other objects.
+  *
+  * \ingroup compositor
+@@ -1566,6 +1572,8 @@ struct weston_compositor {
+ 	struct wl_listener client_created_listener;
+ 	uint64_t client_counter;
+ 	uint64_t internal_id_counter;
++
++	enum weston_output_flow output_flow;
+ };
+ 
+ struct weston_solid_buffer_values {
+@@ -2872,6 +2880,9 @@ uint64_t
+ weston_client_new_internal_id(struct weston_compositor *compositor,
+ 			      struct weston_client *client);
+ 
++void
++weston_compositor_reflow_outputs(struct weston_compositor *compositor);
++
+ #ifdef  __cplusplus
+ }
+ #endif
+diff --git a/libweston/compositor.c b/libweston/compositor.c
+index 8ceddde4..aa664789 100644
+--- a/libweston/compositor.c
++++ b/libweston/compositor.c
+@@ -611,10 +611,6 @@ weston_mode_switch_finish(struct weston_output *output,
+ 					       mode_changed, scale_changed);
+ }
+ 
+-static void
+-weston_compositor_reflow_outputs(struct weston_compositor *compositor,
+-				struct weston_output *resized_output, int delta_width);
+-
+ /** Set up the native mode for an output
+  *
+  * \param output     The weston_output object
+@@ -655,7 +651,6 @@ weston_output_mode_set_native(struct weston_output *output,
+ {
+ 	int ret;
+ 	int mode_changed = 0, scale_changed = 0;
+-	int32_t old_width;
+ 
+ 	if (!output->switch_mode)
+ 		return -1;
+@@ -671,14 +666,13 @@ weston_output_mode_set_native(struct weston_output *output,
+ 		}
+ 	}
+ 
+-	old_width = output->width;
+ 	weston_output_copy_native_mode(output, mode);
+ 	output->native_scale = scale;
+ 
+ 	weston_mode_switch_finish(output, mode_changed, scale_changed);
+ 
+ 	if (mode_changed || scale_changed) {
+-		weston_compositor_reflow_outputs(output->compositor, output, output->width - old_width);
++		weston_compositor_reflow_outputs(output->compositor);
+ 
+ 		wl_signal_emit(&output->compositor->output_resized_signal, output);
+ 	}
+@@ -7308,36 +7302,39 @@ weston_head_get_destroy_listener(struct weston_head *head,
+ 	return wl_signal_get(&head->destroy_signal, notify);
+ }
+ 
+-/* Move other outputs when one is resized so the space remains contiguous. */
+-static void
+-weston_compositor_reflow_outputs(struct weston_compositor *compositor,
+-				struct weston_output *resized_output, int delta_width)
++WL_EXPORT void
++weston_compositor_reflow_outputs(struct weston_compositor *compositor)
+ {
+ 	struct weston_output *output;
++	int next_x, next_y;
+ 
+ 	if (compositor->output_flow_dirty)
+ 		return;
+ 
+-	if (!delta_width)
+-		return;
+-
++	next_x = next_y = 0;
+ 	wl_list_for_each(output, &compositor->output_list, link) {
+-		struct weston_coord_global pos = output->pos;
++		struct weston_coord_global pos;
+ 
+-		/* Since outputs are in a horizontal line, reflow any to the
+-		 * right of the removed output.
+-		 *
+-		 * There's an easter egg here - with mirrored outputs, there
+-		 * may still be an output at the same place as the removed
+-		 * output, and we don't want to move its contents, so we use
+-		 * <= here.
+-		 */
+-		if (pos.c.x <= resized_output->pos.c.x)
++		if (output->destroying || output->mirror_of)
+ 			continue;
+ 
+-		pos.c.x += delta_width;
++		pos.c = weston_coord(next_x, next_y);
+ 		weston_output_set_position(output, pos);
++
++		if (compositor->output_flow == WESTON_OUTPUT_FLOW_HORIZONTAL)
++			next_x += output->width;
++		else if (compositor->output_flow == WESTON_OUTPUT_FLOW_VERTICAL)
++			next_y += output->height;
+ 	}
++
++	wl_list_for_each(output, &compositor->output_list, link) {
++		if (!output->mirror_of)
++			continue;
++
++		weston_output_set_position(output, output->mirror_of->pos);
++	}
++
++	compositor->view_list_needs_rebuild = true;
+ }
+ 
+ /** Transform a region from global to output coordinates
+@@ -7949,7 +7946,7 @@ weston_compositor_remove_output(struct weston_output *output)
+ 
+ 	weston_presentation_feedback_discard_list(&output->feedback_list);
+ 
+-	weston_compositor_reflow_outputs(compositor, output, -output->width);
++	weston_compositor_reflow_outputs(compositor);
+ 
+ 	wl_list_remove(&output->link);
+ 	wl_list_insert(compositor->pending_output_list.prev, &output->link);
+@@ -8030,6 +8027,8 @@ weston_output_set_transform(struct weston_output *output,
+ 
+ 	weston_output_update_matrix(output);
+ 
++	weston_compositor_reflow_outputs(output->compositor);
++
+ 	/* Notify clients of the change for output transform. */
+ 	wl_list_for_each(head, &output->head_list, output_link) {
+ 		wl_resource_for_each(resource, &head->resource_list) {
+@@ -8533,6 +8532,8 @@ weston_output_enable(struct weston_output *output)
+ 		   output->name, head_names);
+ 	free(head_names);
+ 
++	weston_compositor_reflow_outputs(output->compositor);
++
+ 	return 0;
+ }
+ 
+-- 
+2.39.5
+

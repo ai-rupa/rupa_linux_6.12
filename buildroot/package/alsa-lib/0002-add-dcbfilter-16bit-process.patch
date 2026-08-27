@@ -1,17 +1,17 @@
-From e9f6ad9b0b7f208f0431d20dbf13b669143cc39d Mon Sep 17 00:00:00 2001
+From eb3246d572b4147b62fa1a3d935c0a046c5e03e8 Mon Sep 17 00:00:00 2001
 From: Yu YongZhen <yuyz@rock-chips.com>
 Date: Fri, 11 May 2018 14:45:40 +0800
-Subject: [PATCH 2/4] add dcbfilter 16bit process
+Subject: [PATCH 2/5] add dcbfilter 16bit process
 
 ---
  src/pcm/pcm.c | 169 +++++++++++++++++++++++++++++++++++++++++++++++++-
  1 file changed, 168 insertions(+), 1 deletion(-)
 
 diff --git a/src/pcm/pcm.c b/src/pcm/pcm.c
-index 9aec52d..a2eb529 100644
+index 11b1510..598a660 100644
 --- a/src/pcm/pcm.c
 +++ b/src/pcm/pcm.c
-@@ -692,6 +692,168 @@ static int pcm_state_to_error(snd_pcm_state_t state)
+@@ -704,6 +704,168 @@ static int pcm_state_to_error(snd_pcm_state_t state)
  			  P_STATE(PAUSED) | \
  			  P_STATE(DRAINING))
  
@@ -180,7 +180,7 @@ index 9aec52d..a2eb529 100644
  /* check whether the PCM is in the unexpected state */
  static int bad_pcm_state(snd_pcm_t *pcm, unsigned int supported_states,
  			 unsigned int noop_states)
-@@ -1646,7 +1808,12 @@ snd_pcm_sframes_t snd_pcm_readi(snd_pcm_t *pcm, void *buffer, snd_pcm_uframes_t
+@@ -1661,7 +1823,12 @@ snd_pcm_sframes_t snd_pcm_readi(snd_pcm_t *pcm, void *buffer, snd_pcm_uframes_t
  	err = bad_pcm_state(pcm, P_STATE_RUNNABLE, 0);
  	if (err < 0)
  		return err;
@@ -195,5 +195,5 @@ index 9aec52d..a2eb529 100644
  
  /**
 -- 
-2.20.1
+2.39.5
 

@@ -526,8 +526,18 @@ RkAiqCore::prepare(const rk_aiq_exposure_sensor_descriptor* sensor_des,
 
     if ((mState == RK_AIQ_CORE_STATE_STOPED) ||
             (mState == RK_AIQ_CORE_STATE_PREPARED)) {
-        mAlogsComSharedParams.conf_type |= RK_AIQ_ALGO_CONFTYPE_KEEPSTATUS;
-        LOGD_ANALYZER("prepare from stopped, should keep algo status !");
+        int hdr_mode = 0;
+        if (mode == RK_AIQ_WORKING_MODE_NORMAL) {
+            hdr_mode = 0;
+        } else if (RK_AIQ_HDR_IS_HDR2(mode)) {
+            hdr_mode = 1;
+        } else if (RK_AIQ_HDR_IS_HDR3(mode)) {
+            hdr_mode = 2;
+        }
+        if (mAlogsComSharedParams.hdr_mode == hdr_mode) {
+            mAlogsComSharedParams.conf_type |= RK_AIQ_ALGO_CONFTYPE_KEEPSTATUS;
+            LOGD_ANALYZER("prepare from stopped, should keep algo status !");
+        }
     }
     if(mode == RK_AIQ_WORKING_MODE_NORMAL) {
         mAlogsComSharedParams.hdr_mode = 0;
@@ -588,45 +598,19 @@ RkAiqCore::prepare(const rk_aiq_exposure_sensor_descriptor* sensor_des,
         //(sensor_des->isp_acq_height % 16 == 0));
         uint32_t extended_pixel = mHwInfo.multi_isp_extended_pixel;
         RkAiqResourceTranslatorV3x* translator = static_cast<RkAiqResourceTranslatorV3x*>(mTranslator.ptr());
-        uint32_t size = sensor_des->isp_acq_width * sensor_des->isp_acq_height;
-        int isp_unite_mode = translator->GetIspUniteMode();
-        if (isp_unite_mode == RK_AIQ_ISP_UNITE_MODE_FOUR_GRID) {
-            translator->SetMultiIspMode(true)
-            .SetPicInfo({0, 0, sensor_des->isp_acq_width, sensor_des->isp_acq_height})
-            .SetLeftIspRect(
-            {0, 0, sensor_des->isp_acq_width / 2 + extended_pixel, sensor_des->isp_acq_height / 2 + extended_pixel})
-            .SetRightIspRect({sensor_des->isp_acq_width / 2 - extended_pixel, 0,
-                              sensor_des->isp_acq_width / 2 + extended_pixel,
-                              sensor_des->isp_acq_height / 2 + extended_pixel})
-            .SetBottomLeftIspRect({0, sensor_des->isp_acq_height / 2 - extended_pixel,
-                                   sensor_des->isp_acq_width / 2 + extended_pixel,
-                                   sensor_des->isp_acq_height / 2 + extended_pixel})
-            .SetBottomRightIspRect({sensor_des->isp_acq_width / 2 - extended_pixel,
-                                    sensor_des->isp_acq_height / 2 - extended_pixel,
-                                    sensor_des->isp_acq_width / 2 + extended_pixel,
-                                    sensor_des->isp_acq_height / 2 + extended_pixel});
-        } else if (isp_unite_mode == RK_AIQ_ISP_UNITE_MODE_TWO_GRID) {
-            translator->SetMultiIspMode(true)
-            .SetPicInfo({0, 0, sensor_des->isp_acq_width, sensor_des->isp_acq_height})
-            .SetLeftIspRect(
-            {0, 0, sensor_des->isp_acq_width / 2 + extended_pixel, sensor_des->isp_acq_height})
-            .SetRightIspRect({sensor_des->isp_acq_width / 2 - extended_pixel, 0,
-                              sensor_des->isp_acq_width / 2 + extended_pixel,
-                              sensor_des->isp_acq_height});
-        } else {
-            translator->SetMultiIspMode(true)
-            .SetPicInfo({0, 0, sensor_des->isp_acq_width, sensor_des->isp_acq_height})
-            .SetLeftIspRect({0, 0, sensor_des->isp_acq_width, sensor_des->isp_acq_height})
-            .SetRightIspRect({0, 0, sensor_des->isp_acq_width, sensor_des->isp_acq_height});
-        }
+        RkAiqResourceTranslatorV3x::Rectangle rect = {
+            0, 0, sensor_des->isp_acq_width, sensor_des->isp_acq_height};
+        translator->SetPicInfo(rect);
         RkAiqResourceTranslatorV3x::Rectangle f = translator->GetPicInfo();
         RkAiqResourceTranslatorV3x::Rectangle l = translator->GetLeftIspRect();
         RkAiqResourceTranslatorV3x::Rectangle r = translator->GetRightIspRect();
         LOGK_ANALYZER(
             "Set Multi-ISP mode Translator info :"
+            "mode: %d, "
             " F: { %u, %u, %u, %u }"
             " L: { %u, %u, %u, %u }"
             " R: { %u, %u, %u, %u }",
+            translator->GetIspUniteMode(),
             f.x, f.y, f.w, f.h, l.x, l.y, l.w, l.h, r.x, r.y, r.w, r.h);
         mAlogsComSharedParams.is_multi_isp_mode = mHwInfo.is_multi_isp_mode;
         mAlogsComSharedParams.multi_isp_extended_pixels = extended_pixel;
@@ -776,6 +760,9 @@ RkAiqCore::analyzeInternal(enum rk_aiq_core_analyze_type_e grp_type)
     for (auto& algoHdl : algo_list) {
         RkAiqHandle* curHdl = algoHdl.ptr();
         bool got_buffer     = false;
+        if (grp_type == RK_AIQ_CORE_ANALYZE_AFD) {
+            got_buffer = true;
+        }
         while (curHdl) {
             if (curHdl->getEnable()) {
                 int type = curHdl->getAlgoType();
@@ -1160,11 +1147,6 @@ RkAiqCore::getAiqParamsBuffer(RkAiqFullParams* aiqParams, int type, uint32_t fra
     case RK_AIQ_ALGO_TYPE_ACAC:
 #if RKAIQ_HAVE_CAC
         NEW_PARAMS_BUFFER(Cac, cac);
-#endif
-        break;
-    case RK_AIQ_ALGO_TYPE_AFD:
-#if RKAIQ_HAVE_AFD
-        NEW_PARAMS_BUFFER(Afd, afd);
 #endif
         break;
     case RK_AIQ_ALGO_TYPE_ARGBIR:
@@ -2985,9 +2967,6 @@ void RkAiqCore::newAiqParamsPool()
             case RK_AIQ_ALGO_TYPE_ADRC:
                 mAiqIspDrcParamsPool = new RkAiqIspDrcParamsPool("RkAiqIspDrcParamsPool", RkAiqCore::DEFAULT_POOL_SIZE);
                 break;
-            case RK_AIQ_ALGO_TYPE_AFD:
-                mAiqIspAfdParamsPool        = new RkAiqIspAfdParamsPool("RkAiqIspAfdParams", RkAiqCore::DEFAULT_POOL_SIZE);
-                break;
             case RK_AIQ_ALGO_TYPE_ARGBIR:
 #if RKAIQ_HAVE_RGBIR_REMOSAIC
                 mAiqIspRgbirParamsPool = new RkAiqIspRgbirParamsPool("RkAiqIspRgbirParamsPool",
@@ -3591,7 +3570,7 @@ RkAiqCore::handleVicapScaleBufs(const SmartPtr<VideoBuffer> &buffer)
             mVicapBufs->info.ready = true;
         }
     }
-    if (mVicapBufs->info.ready && mVicapBufs->info.frame_id > 2) {
+    if (mVicapBufs->info.ready) {
         mVicapBufs->info.bpp = bpp;
         SmartPtr<BufferProxy> bp = new BufferProxy(mVicapBufs);
         RkAiqCoreVdBufMsg msg(XCAM_MESSAGE_VICAP_POLL_SCL_OK,
@@ -3703,6 +3682,9 @@ RkAiqCore::newAiqGroupAnayzer()
 
     for (auto it : groupMaps) {
         LOGI_ANALYZER("req >>>>> : 0x%llx", it.first);
+        if (it.second->getType() == RK_AIQ_CORE_ANALYZE_AFD) {
+            continue;
+        }
         mFullParamReqGroupsMasks |= 1ULL << it.first;
     }
 
@@ -3992,6 +3974,9 @@ RkAiqCore::register3Aalgo(void* algoDes, void *cbs)
 
     for (auto it : groupMaps) {
         LOGI_ANALYZER("req >>>>> : 0x%llx", it.first);
+        if (it.second->getType() == RK_AIQ_CORE_ANALYZE_AFD) {
+            continue;
+        }
         mFullParamReqGroupsMasks |= 1ULL << it.first;
     }
     return ret;
@@ -4044,6 +4029,45 @@ RkAiqCore::setTranslaterIspUniteMode(RkAiqIspUniteMode mode) {
     }
 
     return XCAM_RETURN_NO_ERROR;
+}
+
+namespace {
+
+RkAiqResourceTranslatorV3x::Rectangle
+toTranslatorRect(const Rectangle_t& r) {
+    return {r.x, r.y, r.w, r.h};
+}
+
+} // namespace
+
+XCamReturn
+RkAiqCore::setTranslaterIspUniteInfo(RkAiqIspUniteInfo_t* info) {
+    if (!info)
+        return XCAM_RETURN_ERROR_PARAM;
+    if (mTranslator.ptr()) {
+        RkAiqResourceTranslatorV3x* translator =
+            static_cast<RkAiqResourceTranslatorV3x*>(mTranslator.ptr());
+        translator->SetIspUniteInfo(*info);
+        translator->SetIspUniteMode(info->mode);
+        if (info->mode != RK_AIQ_ISP_UNITE_MODE_NORMAL) {
+            translator->SetMultiIspMode(true);
+            if (info->mode < RK_AIQ_ISP_UNITE_MODE_3X3) {
+                translator->SetLeftIspRect(toTranslatorRect(info->isp_rect[0][0]));
+                translator->SetRightIspRect(toTranslatorRect(info->isp_rect[0][1]));
+                translator->SetBottomLeftIspRect(toTranslatorRect(info->isp_rect[1][0]));
+                translator->SetBottomRightIspRect(toTranslatorRect(info->isp_rect[1][1]));
+            }
+        }
+    }
+
+    return XCAM_RETURN_NO_ERROR;
+}
+
+void
+RkAiqCore::setVcpSclInfoCb(bool en, int ratio) {
+    if (mCb) {
+        mCb->rkAiqSetVcpSclInfo(en, ratio);
+    }
 }
 
 } //namespace RkCam

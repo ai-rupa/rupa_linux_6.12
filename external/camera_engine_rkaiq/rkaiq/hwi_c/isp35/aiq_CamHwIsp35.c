@@ -57,7 +57,17 @@ static void CamHwIsp35_updateEffParams(AiqCamHwBase_t* pCamHw, void* params, voi
     pDstEff->lsc_cfg      = pCamHw->_mIspParamsCvt->mLatestLscCfg;
     pDstEff->lsc_en       = (pCamHw->_mIspParamsCvt->mCvtedIsp35Prams->module_ens & ISP2X_MODULE_LSC);
 
-    if (!pCamHw->_airms_en || !pCamHw->mSnsDes.compr_bit) {
+    bool use_isp_wbgain = !pCamHw->_airms_en || pCamHw->airms_wbgain_mode == AIRMS_WBGAIN_APPLY_ISP;
+    bool no_sensor_compr = !pCamHw->mSnsDes.compr_bit;
+
+    /**
+     * @brief: determine whether to update effect params for bls and awb gain config
+     *
+     * @use_isp_wbgain: set awb gain by isp wbgain in airms mode
+     * @no_sensor_compr: no sensor compression
+     * @mIsVicapVirtualSensor: set awb gain by real sensor in preview-capture mode
+     */
+    if ((use_isp_wbgain && no_sensor_compr) || pCamHw->mIsVicapVirtualSensor) {
         pDstEff->bls_cfg      = pCamHw->_mIspParamsCvt->mLatestBlsCfg;
         pDstEff->awb_gain_cfg = pCamHw->_mIspParamsCvt->mLatestWbGainCfg;
     } else {

@@ -15,6 +15,7 @@
 #include "tools/common.config"
 #include "tools/test.config"
 #include "gui/weston.config"
+#include "ota/update_engine.config"
 BR2_PACKAGE_SLT_GPU_LIGHT=y
 BR2_TARGET_GENERIC_HOSTNAME="px30_64"
 BR2_TARGET_GENERIC_ISSUE="Welcome to PX30 Buildroot"

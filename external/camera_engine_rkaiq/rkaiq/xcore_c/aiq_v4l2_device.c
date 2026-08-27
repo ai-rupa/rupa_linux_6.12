@@ -340,6 +340,7 @@ int AiqV4l2Device_init(AiqV4l2Device_t* v4l2_dev, const char* name) {
     v4l2_dev->_buf_count     = XCAM_V4L2_DEFAULT_BUFFER_COUNT;
     v4l2_dev->_fd            = -1;
     v4l2_dev->_mplanes_count = FMT_NUM_PLANES;
+    v4l2_dev->_auto_qbuf     = true;
     if (name) v4l2_dev->_name = strndup(name, XCAM_MAX_STR_SIZE);
 
     aiqMutex_init(&v4l2_dev->_buf_mutex);
@@ -443,6 +444,16 @@ bool AiqV4l2Device_setBufCnt(AiqV4l2Device_t* v4l2_dev, uint32_t buf_count) {
         return false;
     }
     v4l2_dev->_buf_count = buf_count;
+    return true;
+}
+
+bool AiqV4l2Device_setAutoQbuf(AiqV4l2Device_t* v4l2_dev, bool enable) {
+    if (AiqV4l2Device_isActivated(v4l2_dev)) {
+        XCAM_LOG_WARNING("device(%s) set auto qbuf failed - device is active", v4l2_dev->_name);
+        return false;
+    }
+    v4l2_dev->_auto_qbuf = enable;
+    XCAM_LOG_INFO("device(%s) auto qbuf %s", v4l2_dev->_name, enable ? "enabled" : "disabled");
     return true;
 }
 
@@ -779,7 +790,7 @@ XCamReturn AiqV4l2Device_start(AiqV4l2Device_t* v4l2_dev, bool prepared) {
         ret = _v4l_init_buffer_pool(v4l2_dev);
         XCAM_FAIL_RETURN(ERROR, ret == XCAM_RETURN_NO_ERROR, ret, "device(%s) start failed",
                          (v4l2_dev->_name));
-        if (!V4L2_TYPE_IS_OUTPUT(v4l2_dev->_buf_type) &&
+        if (v4l2_dev->_auto_qbuf && !V4L2_TYPE_IS_OUTPUT(v4l2_dev->_buf_type) &&
             (v4l2_dev->_buf_type != V4L2_BUF_TYPE_META_OUTPUT)) {
             // queue all buffers
             for (i = 0; i < v4l2_dev->_buf_count; ++i) {
@@ -903,10 +914,10 @@ XCamReturn AiqV4l2Device_prepare(AiqV4l2Device_t* v4l2_dev) {
     XCAM_FAIL_RETURN(ERROR, ret == XCAM_RETURN_NO_ERROR, ret, "device(%s) start failed",
                      (v4l2_dev->_name));
 #ifndef USE_RAWSTREAM_LIB
-    if (!V4L2_TYPE_IS_OUTPUT(v4l2_dev->_buf_type) &&
+    if (v4l2_dev->_auto_qbuf && !V4L2_TYPE_IS_OUTPUT(v4l2_dev->_buf_type) &&
         (v4l2_dev->_buf_type != V4L2_BUF_TYPE_META_OUTPUT)) {
 #else
-    if (!V4L2_TYPE_IS_OUTPUT(v4l2_dev->_buf_type) &&
+    if (v4l2_dev->_auto_qbuf && !V4L2_TYPE_IS_OUTPUT(v4l2_dev->_buf_type) &&
         (v4l2_dev->_memory_type != V4L2_MEMORY_DMABUF) &&
         (v4l2_dev->_buf_type != V4L2_BUF_TYPE_META_OUTPUT)) {
 #endif
@@ -1023,9 +1034,15 @@ AiqV4l2Buffer_t* AiqV4l2Device_dqbuf(AiqV4l2Device_t* v4l2_dev) {
     AiqV4l2Buffer_setTimestamp(buf, v4l2_buf.timestamp);
     AiqV4l2Buffer_setTimecode(buf, v4l2_buf.timecode);
     AiqV4l2Buffer_setSequence(buf, v4l2_buf.sequence);
+    /*
+     * NOTE: queued flag is managed externally (e.g. by AiqV4l2Device_returnBuf),
+     * so do not clear it here on dequeue.
+     */
+#if 0
     if (!V4L2_TYPE_IS_OUTPUT(v4l2_dev->_buf_type) &&
         (v4l2_dev->_buf_type != V4L2_BUF_TYPE_META_OUTPUT))
         AiqV4l2Buffer_setQueued(buf, false);
+#endif
     if (V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE == v4l2_dev->_buf_type ||
         V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE == v4l2_dev->_buf_type) {
         AiqV4l2Buffer_setLength(buf, v4l2_buf.m.planes[0].length);
@@ -1122,8 +1139,12 @@ XCamReturn AiqV4l2Device_returnBuf(AiqV4l2Device_t* v4l2_dev, AiqV4l2Buffer_t* b
         if (!v4l2_dev->_active) {
             AiqV4l2Buffer_reset(buf);
         } else {
-            aiqMutex_unlock(&v4l2_dev->_buf_mutex);
-            return AiqV4l2Device_qbuf(v4l2_dev, buf, true);
+            if (!v4l2_dev->_auto_qbuf) {
+                AiqV4l2Buffer_reset(buf);
+            } else {
+                aiqMutex_unlock(&v4l2_dev->_buf_mutex);
+                return AiqV4l2Device_qbuf(v4l2_dev, buf, true);
+            }
         }
     }
 

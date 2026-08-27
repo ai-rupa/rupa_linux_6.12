@@ -17,7 +17,7 @@ endif
 
 define INPUT_EVENT_DAEMON_BUILD_CMDS
 	touch $(@D)/input-event-table.h
-	$(TARGET_MAKE_ENV) $(MAKE) CC="$(TARGET_CC)" CFLAGS="$(TARGET_CFLAGS)" \
+	$(TARGET_MAKE_ENV) $(MAKE) CC="$(TARGET_CC)" CFLAGS="$(TARGET_CFLAGS) -std=gnu99" \
 		LDFLAGS="$(INPUT_EVENT_DAEMON_LDFLAGS)" -C $(@D)
 endef
 

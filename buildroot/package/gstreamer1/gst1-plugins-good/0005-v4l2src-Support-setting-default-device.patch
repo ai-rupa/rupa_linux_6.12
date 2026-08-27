@@ -1,4 +1,4 @@
-From 2ae7131897ccf6e29c4640e72268c7eb3af8e871 Mon Sep 17 00:00:00 2001
+From 6fdd77d2e2e439482dbc8da68db542ddf2621644 Mon Sep 17 00:00:00 2001
 From: Jeffy Chen <jeffy.chen@rock-chips.com>
 Date: Wed, 11 May 2022 15:21:44 +0800
 Subject: [PATCH 05/12] v4l2src: Support setting default device

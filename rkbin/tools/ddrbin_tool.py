@@ -13,19 +13,33 @@ import platform
 import struct
 from datetime import datetime
 
-version_max = 6
+version_max = 7
 update_key_list = []
+
+# DDR parameter group size in words for different versions
+# Used for multi-group configuration validation
+DDR_GROUP_SIZE_WORDS = {
+    7: {
+        'si_info': 20,      # lp4_si_info, lp4x_si_info, lp5_si_info
+        'template_info': 18, # lp4_4x_template_info, lp5_5x_template_info
+    },
+    # Add future versions here when needed
+    # 8: {
+    #     'si_info': 24,
+    #     'template_info': 20,
+    # },
+}
 
 chip_info = 'null'
 chip_list = ['px30', 'px30s', 'px3se', 'px5', 'rk1808', 'rk2118', 'rk312x', 'rk3126', 'rk3128',
     'rk3128h', 'rk322x', 'rk3228a', 'rk3228b', 'rk3228h', 'rk322xh', 'rk3229', 'rk3308', 'rk3288',
     'rk3326', 'rk3326s', 'rk3328', 'rk3368', 'rk3399', 'rk3506', 'rk3528', 'rk356x', 'rk3562',
-    'rk3566', 'rk3568', 'rk3576', 'rk3588', 'rv1103', 'rv1103b', 'rv1106', 'rv1108', 'rv1109',
+    'rk3566', 'rk3568', 'rk3572', 'rk3576', 'rk3588', 'rv1103', 'rv1103b', 'rv1106', 'rv1108', 'rv1109',
     'rv1126', 'rv1126b', 'rk3538']
 
 version_old_list = ['rk322xh', 'rk3328', 'rk3318']
 
-# struct rk3528_ca_skew
+# word0 = skew_freq_mhz, words1-8 = ca_skew_0 to ca_skew_7
 rk3528_ca_skew = {
     'skew_freq': 0,
     'ca_skew_0': 0,
@@ -38,12 +52,238 @@ rk3528_ca_skew = {
     'ca_skew_7': 0,
 }
 
-# struct rk3528_skew_info
+
+def create_skew_info_for_platform(chip, skew_sub_version=0):
+    """
+    Create a skew_info structure for a specific platform based on its DDR type support.
+
+    The structure is:
+    - skew_sub_version: 1 word (if non-zero, enables platform-specific DDR type layout)
+    - For each supported DDR type (in order): 9 words (skew_freq + ca_skew_0-7)
+
+    Args:
+        chip: Platform chip name
+        skew_sub_version: Value from original binary (default 0 for legacy format)
+
+    Returns:
+        Dictionary with skew_sub_version and DDR type-specific CA skew data
+    """
+    ddr_types = get_platform_ddr_types(chip)
+    skew_info = {'skew_sub_version': skew_sub_version}
+
+    for ddr_type in ddr_types:
+        key = DDR_TYPE_TO_KEY.get(ddr_type)
+        if key:
+            skew_info[key] = rk3528_ca_skew.copy()
+
+    return skew_info
+
+
+# struct rk3528_skew_info (backward compatible, supports DDR3, DDR4, LPDDR3)
 rk3528_skew_info = {
     'skew_sub_version': 0,
-    'ddr3' : rk3528_ca_skew.copy(),
-    'ddr4' : rk3528_ca_skew.copy(),
-    'lp3' : rk3528_ca_skew.copy(),
+    'ddr3': rk3528_ca_skew.copy(),
+    'ddr4': rk3528_ca_skew.copy(),
+    'lp3': rk3528_ca_skew.copy(),
+}
+
+# ============================================================================
+# ============================================================================
+# Platform CA Skew Mapping Configuration
+# Format: 'SIGNAL_NAME': (register_index, bit_shift, mask)
+# register_index: 0-7 correspond to ca_skew_0 to ca_skew_7
+# bit_shift: 24=[31:24], 16=[23:16], 8=[15:8], 0=[7:0]
+#
+# Special key '_enabled': If present and False, this DDR type is disabled for the platform
+# ============================================================================
+
+# RK3528/RK3538 CA Skew Mapping (supports DDR3, DDR4, LPDDR3)
+RK3528_CA_SKEW_MAPPING = {
+    'DDR3': {
+        'CA0': (2, 8, 0xFF), 'CA1': (0, 0, 0xFF), 'CA2': (1, 24, 0xFF),
+        'CA3': (1, 8, 0xFF), 'CA4': (1, 16, 0xFF), 'CA5': (2, 24, 0xFF),
+        'CA6': (1, 0, 0xFF), 'CA7': (2, 0, 0xFF), 'CA8': (3, 16, 0xFF),
+        'CA9': (0, 24, 0xFF), 'CA10': (3, 24, 0xFF), 'CA11': (2, 16, 0xFF),
+        'CA12': (4, 0, 0xFF), 'CA13': (0, 8, 0xFF), 'CA14': (0, 16, 0xFF),
+        'CA15': (5, 16, 0xFF), 'RAS': (5, 8, 0xFF), 'CAS': (7, 24, 0xFF),
+        'BA0': (5, 24, 0xFF), 'BA1': (3, 0, 0xFF), 'BA2': (4, 8, 0xFF),
+        'WE': (6, 8, 0xFF), 'CKE0': (4, 24, 0xFF), 'CKE1': (5, 0, 0xFF),
+        'CKN': (6, 24, 0xFF), 'CKP': (6, 16, 0xFF), 'ODT0': (3, 8, 0xFF),
+        'ODT1': (6, 0, 0xFF), 'CS0': (7, 0, 0xFF), 'CS1': (7, 16, 0xFF),
+        'RESETN': (7, 8, 0xFF),
+    },
+    'DDR4': {
+        'CA0': (0, 24, 0xFF), 'CA1': (0, 16, 0xFF), 'CA2': (0, 8, 0xFF), 'CA3': (0, 0, 0xFF),
+        'CA4': (1, 24, 0xFF), 'CA5': (1, 16, 0xFF), 'CA6': (1, 8, 0xFF), 'CA7': (1, 0, 0xFF),
+        'CA8': (2, 24, 0xFF), 'CA9': (2, 16, 0xFF), 'CA10': (2, 8, 0xFF), 'CA11': (2, 0, 0xFF),
+        'CA12': (3, 24, 0xFF), 'CA13': (3, 16, 0xFF), 'CA14': (3, 8, 0xFF), 'CA15': (3, 0, 0xFF),
+        'CA16': (4, 24, 0xFF), 'CA17': (4, 16, 0xFF), 'BA0': (4, 8, 0xFF), 'BA1': (4, 0, 0xFF),
+        'BG0': (5, 24, 0xFF), 'BG1': (5, 16, 0xFF), 'CKE0': (5, 8, 0xFF), 'CKE1': (5, 0, 0xFF),
+        'CKN': (6, 24, 0xFF), 'CKP': (6, 16, 0xFF), 'ODT0': (6, 8, 0xFF), 'ODT1': (6, 0, 0xFF),
+        'CS0': (7, 24, 0xFF), 'CS1': (7, 16, 0xFF), 'RESETN': (7, 8, 0xFF), 'ACTN': (7, 0, 0xFF),
+    },
+    'LPDDR3': {
+        'CA0': (3, 0, 0xFF), 'CA1': (4, 0, 0xFF), 'CA2': (2, 16, 0xFF),
+        'CA3': (3, 16, 0xFF), 'CA4': (3, 24, 0xFF), 'CA5': (1, 24, 0xFF),
+        'CA6': (2, 24, 0xFF), 'CA7': (2, 0, 0xFF), 'CA8': (5, 24, 0xFF),
+        'CA9': (7, 0, 0xFF), 'CKE0': (4, 8, 0xFF), 'CKE1': (5, 0, 0xFF),
+        'CKN': (6, 24, 0xFF), 'CKP': (6, 16, 0xFF), 'ODT0': (6, 8, 0xFF),
+        'ODT1': (6, 0, 0xFF), 'ODT2': (0, 24, 0xFF), 'ODT3': (0, 8, 0xFF),
+        'CS0': (7, 16, 0xFF), 'CS1': (7, 24, 0xFF), 'CS2': (1, 8, 0xFF),
+        'CS3': (3, 8, 0xFF),
+    },
+}
+
+# RV1126B CA Skew Mapping (supports DDR3, DDR4 only - LPDDR3 disabled)
+RV1126B_CA_SKEW_MAPPING = {
+    'DDR3': {
+        'CA3': (0, 24, 0xFF), 'BA1': (0, 16, 0xFF), 'CA9': (0, 8, 0xFF), 'CA15': (0, 0, 0xFF),
+        'CA6': (1, 24, 0xFF), 'CA12': (1, 16, 0xFF), 'BA2': (1, 8, 0xFF), 'CA4': (1, 0, 0xFF),
+        'CA1': (2, 24, 0xFF), 'CA5': (2, 16, 0xFF), 'CA8': (2, 8, 0xFF), 'CA7': (2, 0, 0xFF),
+        'RAS': (3, 24, 0xFF), 'CA13': (3, 16, 0xFF), 'CA14': (3, 8, 0xFF), 'CA10': (3, 0, 0xFF),
+        'CA11': (4, 24, 0xFF), 'CS1': (4, 8, 0xFF), 'WE': (4, 0, 0xFF),
+        'ODT1': (5, 24, 0xFF), 'CA2': (5, 16, 0xFF), 'CAS': (5, 8, 0xFF),
+        'CKN': (6, 24, 0xFF), 'CKP': (6, 16, 0xFF), 'CS0': (6, 8, 0xFF), 'CA0': (6, 0, 0xFF),
+        'ODT0': (7, 24, 0xFF), 'BA0': (7, 16, 0xFF), 'RESETN': (7, 8, 0xFF), 'CKE0': (7, 0, 0xFF),
+    },
+    'DDR4': {
+        'CA0': (0, 24, 0xFF), 'CA1': (0, 16, 0xFF), 'CA2': (0, 8, 0xFF), 'CA3': (0, 0, 0xFF),
+        'CA4': (1, 24, 0xFF), 'CA5': (1, 16, 0xFF), 'CA6': (1, 8, 0xFF), 'CA7': (1, 0, 0xFF),
+        'CA8': (2, 24, 0xFF), 'CA9': (2, 16, 0xFF), 'CA10': (2, 8, 0xFF), 'CA11': (2, 0, 0xFF),
+        'CA12': (3, 24, 0xFF), 'CA13': (3, 16, 0xFF), 'CA14': (3, 8, 0xFF), 'CA15': (3, 0, 0xFF),
+        'CA16': (4, 24, 0xFF), 'CA17': (4, 16, 0xFF), 'BA0': (4, 8, 0xFF), 'BA1': (4, 0, 0xFF),
+        'BG0': (5, 24, 0xFF), 'BG1': (5, 16, 0xFF), 'CKE0': (5, 8, 0xFF),
+        'CKN': (6, 24, 0xFF), 'CKP': (6, 16, 0xFF), 'ODT0': (6, 8, 0xFF), 'ODT1': (6, 0, 0xFF),
+        'CS0': (7, 24, 0xFF), 'CS1': (7, 16, 0xFF), 'RESETN': (7, 8, 0xFF), 'ACTN': (7, 0, 0xFF),
+    },
+    # LPDDR3 is defined but disabled for RV1126B
+    'LPDDR3': {
+        '_enabled': False,  # Disable LPDDR3 for this platform
+        'CA3': (0, 24, 0xFF), 'CA9': (0, 8, 0xFF),
+        'CA6': (1, 24, 0xFF), 'CA4': (1, 0, 0xFF),
+        'CA1': (2, 24, 0xFF), 'CA5': (2, 16, 0xFF), 'CA8': (2, 8, 0xFF), 'CA7': (2, 0, 0xFF),
+        'CS1': (4, 8, 0xFF),
+        'ODT1': (5, 24, 0xFF), 'CA2': (5, 16, 0xFF),
+        'CKN': (6, 24, 0xFF), 'CKP': (6, 16, 0xFF), 'CS0': (6, 8, 0xFF), 'CA0': (6, 0, 0xFF),
+        'ODT0': (7, 24, 0xFF), 'CKE0': (7, 0, 0xFF),
+    },
+}
+
+
+# Platform mapping registry
+PLATFORM_CA_SKEW_MAPPINGS = {
+    'rk3528': RK3528_CA_SKEW_MAPPING,
+    'rk3538': RK3528_CA_SKEW_MAPPING,
+    'rv1126b': RV1126B_CA_SKEW_MAPPING,
+}
+
+
+def get_ca_skew_position(chip, ddr_type_key, signal_name):
+    """
+    Get the position and shift for a CA skew signal based on platform-specific mapping.
+
+    Args:
+        chip: Platform chip name (e.g., 'rk3528', 'rv1126b')
+        ddr_type_key: DDR type key ('ddr3', 'ddr4', 'lp3')
+        signal_name: Signal name (e.g., 'CA15', 'RAS', 'BA0')
+
+    Returns:
+        Tuple of (position, shift) or None if not found
+        position: 'ddr3_ca_skew_X' format
+        shift: bit shift value (0, 8, 16, or 24)
+
+    Example:
+        get_ca_skew_position('rv1126b', 'ddr3', 'CA15') -> ('ddr3_ca_skew_0', 0)
+        get_ca_skew_position('rk3528', 'ddr3', 'CA15') -> ('ddr3_ca_skew_5', 16)
+    """
+    mapping = PLATFORM_CA_SKEW_MAPPINGS.get(chip)
+    if not mapping:
+        return None
+
+    # Convert ddr_type_key to mapping key (e.g., 'ddr3' -> 'DDR3')
+    ddr_type_map = {'ddr3': 'DDR3', 'ddr4': 'DDR4', 'lp3': 'LPDDR3'}
+    ddr_type = ddr_type_map.get(ddr_type_key)
+
+    if not ddr_type or ddr_type not in mapping:
+        return None
+
+    signal_mapping = mapping[ddr_type].get(signal_name)
+    if not signal_mapping:
+        return None
+
+    register_index, bit_shift, mask = signal_mapping
+    position = '%s_ca_skew_%d' % (ddr_type_key, register_index)
+
+    return (position, bit_shift)
+
+
+def get_platform_ddr_types(chip):
+    """
+    Get the list of supported DDR types for a specific platform.
+    The order determines the layout of CA skew info in binary.
+
+    Args:
+        chip: Platform chip name (e.g., 'rk3528', 'rv1126b')
+
+    Returns:
+        List of DDR type strings (e.g., ['DDR3', 'DDR4', 'LPDDR3'])
+    """
+    mapping = PLATFORM_CA_SKEW_MAPPINGS.get(chip)
+    if not mapping:
+        return ['DDR3', 'DDR4', 'LPDDR3']  # Default
+
+    # Filter out disabled DDR types
+    ddr_types = []
+    for key in ['DDR3', 'DDR4', 'LPDDR3']:
+        if key in mapping:
+            # Check if explicitly disabled
+            ddr_config = mapping[key]
+            if isinstance(ddr_config, dict) and ddr_config.get('_enabled') is False:
+                continue
+            ddr_types.append(key)
+
+    return ddr_types
+
+
+def get_ddr_type_index(chip, ddr_type):
+    """
+    Get the index of a DDR type for a specific platform.
+    Used to calculate the offset in skew_index.
+
+    Args:
+        chip: Platform chip name
+        ddr_type: DDR type string (e.g., 'DDR3', 'DDR4', 'LPDDR3')
+
+    Returns:
+        Index of the DDR type (0-based), or -1 if not supported
+    """
+    ddr_types = get_platform_ddr_types(chip)
+    try:
+        return ddr_types.index(ddr_type)
+    except ValueError:
+        return -1
+
+def get_ddr_type_by_index(chip, index):
+    """
+    Get the DDR type string by index for a specific platform.
+
+    Args:
+        chip: Platform chip name
+        index: 0-based index
+
+    Returns:
+        DDR type string, or None if index is out of range
+    """
+    ddr_types = get_platform_ddr_types(chip)
+    if 0 <= index < len(ddr_types):
+        return ddr_types[index]
+    return None
+
+# Mapping from DDR type to internal key name used in skew_info dictionaries
+DDR_TYPE_TO_KEY = {
+    'DDR3': 'ddr3',
+    'DDR4': 'ddr4',
+    'LPDDR3': 'lp3',
 }
 
 # struct index_info, u8
@@ -97,6 +337,10 @@ sdram_head_info_index_v5 = {
 
 sdram_head_info_index_v6 = {
     'uart_iomux_index_u16' : perf_index_info.copy(),
+}
+
+# struct sdram_head_info_index_v7
+sdram_head_info_index_v7 = {
 }
 
 # struct global_info
@@ -154,6 +398,52 @@ lp4_info = {
     'cs_drv_ca_odt_info' : 0,
     'vref_when_odten' : 0,
     'vref_when_odtoff' : 0,
+}
+
+# struct lp45_si_info_v7 (20 words = 0x50 bytes)
+lp45_si_info_v7 = {
+    'ddr_freq0_1' : 0,
+    'ddr_freq2_3' : 0,
+    'ddr_freq4_5' : 0,
+    'drv_when_odten' : 0,
+    'drv_when_odtoff' : 0,
+    'odt_info' : 0,
+    'dq_odten_freq' : 0,
+    'sr_when_odten' : 0,
+    'sr_when_odtoff' : 0,
+    'ca_odten_freq' : 0,
+    'cs_drv_ca_odt_info' : 0,
+    'vref_when_odten' : 0,
+    'vref_when_odtoff' : 0,
+    'lp45_si_10' : 0,
+    'lp45_si_11' : 0,
+    'phy_dfe' : 0,
+    'reserved_lp45_si_info_0' : 0,
+    'reserved_lp45_si_info_1' : 0,
+    'reserved_lp45_si_info_2' : 0,
+    'reserved_lp45_si_info_3' : 0,
+}
+
+# struct template_info_v7 (18 words = 0x48 bytes)
+template_info_v7 = {
+    'template_0' : 0,
+    'ca_swap_0' : 0,
+    'ca_swap_1' : 0,
+    'ca_swap_2' : 0,
+    'ca_swap_3' : 0,
+    'byte_swap' : 0,
+    'dq_swap_0' : 0,
+    'dq_swap_1' : 0,
+    'dq_swap_2' : 0,
+    'dq_swap_3' : 0,
+    'dq_swap_4' : 0,
+    'dq_swap_5' : 0,
+    'dq_swap_6' : 0,
+    'dq_swap_7' : 0,
+    'template_info_reserved_0' : 0,
+    'template_info_reserved_1' : 0,
+    'template_info_reserved_2' : 0,
+    'template_info_reserved_3' : 0,
 }
 
 # struct dq_map_info
@@ -384,6 +674,32 @@ sdram_head_info_v6 = {
     'uart_iomux_info' : uart_iomux_info.copy(),
 }
 
+# struct sdram_head_info_v7
+sdram_head_info_v7 = {
+    'global_info' : global_info.copy(),
+    'ddr2_info' : ddr2_3_4_lp2_3_info_v5.copy(),
+    'ddr3_info' : ddr2_3_4_lp2_3_info_v5.copy(),
+    'ddr4_info' : ddr2_3_4_lp2_3_info_v5.copy(),
+    'ddr5_info' : ddr2_3_4_lp2_3_info_v5.copy(),
+    'lp2_info' : ddr2_3_4_lp2_3_info_v5.copy(),
+    'lp3_info' : ddr2_3_4_lp2_3_info_v5.copy(),
+    'lp4_info' : lp45_si_info_v7.copy(),
+    'dq_map_info' : dq_map_info.copy(),
+    'lp4x_info' : lp45_si_info_v7.copy(),
+    'lp5_info' : lp45_si_info_v7.copy(),
+    'lp4_4x_hash_info' : hash_info.copy(),
+    'lp5_hash_info' : hash_info.copy(),
+    'ddr4_hash_info' : hash_info.copy(),
+    'lp3_hash_info' : hash_info.copy(),
+    'ddr3_hash_info' : hash_info.copy(),
+    'lp2_hash_info' : hash_info.copy(),
+    'ddr2_hash_info' : hash_info.copy(),
+    'ddr5_hash_info' : hash_info.copy(),
+    'uart_iomux_info' : uart_iomux_info.copy(),
+    'lp4_4x_template_info' : template_info_v7.copy(),
+    'lp5_5x_template_info' : template_info_v7.copy(),
+}
+
 sdram_head_info_v0 = [[0xc, 0], [0x10, 0], [0x14, 0], [0x18, 0], [0x1c, 0], [0x20, 0], [0x24, 0]]
 
 # struct base_info_full
@@ -422,7 +738,7 @@ base_info_full = {
     'ssmod_div': {'value': 0, 'num_base': 'dec', 'index': 'global_index', 'position': 'info_2t', 'shift': 9, 'mask': 0xff, 'version': 0, 'v0_info': [0x24, 9, 0xff]},
     'ssmod_spread': {'value': 0, 'num_base': 'dec', 'index': 'global_index', 'position': 'info_2t', 'shift': 1, 'mask': 0xff, 'version': 0, 'v0_info': [0x24, 1, 0xff]},
     'ddr_2t': {'value': 0, 'num_base': 'dec', 'index': 'global_index', 'position': 'info_2t', 'shift': 0, 'mask': 0x1, 'version': 0, 'v0_info': [0x24, 0, 0x1]},
-    'reserved_global_info_2t_bit31': {'value': 0, 'num_base': 'dec', 'index': 'global_index', 'position': 'info_2t', 'shift': 31, 'mask': 0x1, 'version': 2},
+    'dis_noc_probe_suspend': {'value': 0, 'num_base': 'dec', 'index': 'global_index', 'position': 'info_2t', 'shift': 31, 'mask': 0x1, 'version': 7},
     'pstore_base_addr': {'value': 0, 'num_base': 'hex', 'index': 'global_index', 'position': 'reserved_0', 'shift': 16, 'mask': 0xffff, 'version': 2},
     'pstore_buf_size': {'value': 0, 'num_base': 'hex', 'index': 'global_index', 'position': 'reserved_0', 'shift': 12, 'mask': 0xf, 'version': 2},
     'uboot_log_en': {'value': 0, 'num_base': 'dec', 'index': 'global_index', 'position': 'reserved_0', 'shift': 4, 'mask': 0x1, 'version': 2},
@@ -676,7 +992,8 @@ base_info_full = {
     'lp4_drv_pu_cal_odtoff': {'value': 0, 'num_base': 'dec', 'index': 'lp4_index', 'position': 'odt_info', 'shift': 27, 'mask': 0x1, 'version': 2},
     'phy_lp4_drv_pull_dn_en_odten': {'value': 0, 'num_base': 'dec', 'index': 'lp4_index', 'position': 'odt_info', 'shift': 28, 'mask': 0x1, 'version': 2},
     'phy_lp4_drv_pull_dn_en_odtoff': {'value': 0, 'num_base': 'dec', 'index': 'lp4_index', 'position': 'odt_info', 'shift': 29, 'mask': 0x1, 'version': 2},
-    'reserved_lp4_odt_info_bit31': {'value': 0, 'num_base': 'dec', 'index': 'lp4_index', 'position': 'odt_info', 'shift': 31, 'mask': 0x1, 'version': 2},
+    'lp4_dbi_rd': {'value': 0, 'num_base': 'dec', 'index': 'lp4_index', 'position': 'odt_info', 'shift': 30, 'mask': 0x1, 'version': 7},
+    'lp4_dbi_wr': {'value': 0, 'num_base': 'dec', 'index': 'lp4_index', 'position': 'odt_info', 'shift': 31, 'mask': 0x1, 'version': 7},
     'phy_lp4_odten_freq_mhz': {'value': 0, 'num_base': 'dec', 'index': 'lp4_index', 'position': 'dq_odten_freq', 'shift': 12, 'mask': 0xfff, 'version': 2},
     'lp4_dq_odten_freq_mhz': {'value': 0, 'num_base': 'dec', 'index': 'lp4_index', 'position': 'dq_odten_freq', 'shift': 0, 'mask': 0xfff, 'version': 2},
     'reserved_lp4_dq_odten_freq_bit24_31': {'value': 0, 'num_base': 'dec', 'index': 'lp4_index', 'position': 'dq_odten_freq', 'shift': 24, 'mask': 0xff, 'version': 2},
@@ -704,6 +1021,20 @@ base_info_full = {
     'lp4_dq_vref_when_odtoff': {'value': 0, 'num_base': 'dec', 'index': 'lp4_index', 'position': 'vref_when_odtoff', 'shift': 10, 'mask': 0x3ff, 'version': 2},
     'lp4_ca_vref_when_odtoff': {'value': 0, 'num_base': 'dec', 'index': 'lp4_index', 'position': 'vref_when_odtoff', 'shift': 20, 'mask': 0x3ff, 'version': 2},
     'reserved_lp4_vref_when_odtoff_bit30_31': {'value': 0, 'num_base': 'dec', 'index': 'lp4_index', 'position': 'vref_when_odtoff', 'shift': 30, 'mask': 0x3, 'version': 2},
+    'lp4_read_train_vref_offset_mv': {'value': 0, 'num_base': 'dec', 'index': 'lp4_index', 'position': 'lp45_si_10', 'shift': 0, 'mask': 0xff, 'version': 7},
+    'lp4_read_train_vref_offset_en_freq_mhz': {'value': 0, 'num_base': 'dec', 'index': 'lp4_index', 'position': 'lp45_si_10', 'shift': 8, 'mask': 0xfff, 'version': 7},
+    'reserved_lp4_si_10_bit20_31': {'value': 0, 'num_base': 'dec', 'index': 'lp4_index', 'position': 'lp45_si_10', 'shift': 20, 'mask': 0xfff, 'version': 7},
+    'lp4_write_train_vref_offset_mv': {'value': 0, 'num_base': 'dec', 'index': 'lp4_index', 'position': 'lp45_si_11', 'shift': 0, 'mask': 0xff, 'version': 7},
+    'lp4_write_train_vref_offset_en_freq_mhz': {'value': 0, 'num_base': 'dec', 'index': 'lp4_index', 'position': 'lp45_si_11', 'shift': 8, 'mask': 0xfff, 'version': 7},
+    'phy_lp4_dfe_en_freq_mhz': {'value': 0, 'num_base': 'dec', 'index': 'lp4_index', 'position': 'lp45_si_11', 'shift': 20, 'mask': 0xfff, 'version': 7},
+    'phy_lp4_vref0_l_mv': {'value': 0, 'num_base': 'dec', 'index': 'lp4_index', 'position': 'phy_dfe', 'shift': 0, 'mask': 0xff, 'version': 7},
+    'phy_lp4_vref0_h_mv': {'value': 0, 'num_base': 'dec', 'index': 'lp4_index', 'position': 'phy_dfe', 'shift': 8, 'mask': 0xff, 'version': 7},
+    'phy_lp4_vref1_l_mv': {'value': 0, 'num_base': 'dec', 'index': 'lp4_index', 'position': 'phy_dfe', 'shift': 16, 'mask': 0xff, 'version': 7},
+    'phy_lp4_vref1_h_mv': {'value': 0, 'num_base': 'dec', 'index': 'lp4_index', 'position': 'phy_dfe', 'shift': 24, 'mask': 0xff, 'version': 7},
+    'reserved_lp4_si_info_reserved0': {'value': 0, 'num_base': 'dec', 'index': 'lp4_index', 'position': 'reserved_lp45_si_info_0', 'shift': 0, 'mask': 0xffffffff, 'version': 7},
+    'reserved_lp4_si_info_reserved1': {'value': 0, 'num_base': 'dec', 'index': 'lp4_index', 'position': 'reserved_lp45_si_info_1', 'shift': 0, 'mask': 0xffffffff, 'version': 7},
+    'reserved_lp4_si_info_reserved2': {'value': 0, 'num_base': 'dec', 'index': 'lp4_index', 'position': 'reserved_lp45_si_info_2', 'shift': 0, 'mask': 0xffffffff, 'version': 7},
+    'reserved_lp4_si_info_reserved3': {'value': 0, 'num_base': 'dec', 'index': 'lp4_index', 'position': 'reserved_lp45_si_info_3', 'shift': 0, 'mask': 0xffffffff, 'version': 7},
 
     'ddr2_bytes_map': {'value': 0, 'num_base': 'hex', 'index': 'dq_map_index', 'position': 'byte_map_0', 'shift': 16, 'mask': 0xff, 'version': 2},
     'ddr3_bytes_map': {'value': 0, 'num_base': 'hex', 'index': 'dq_map_index', 'position': 'byte_map_0', 'shift': 24, 'mask': 0xff, 'version': 2},
@@ -743,7 +1074,8 @@ base_info_full = {
     'lp4x_drv_pu_cal_odtoff': {'value': 0, 'num_base': 'dec', 'index': 'lp4x_index', 'position': 'odt_info', 'shift': 27, 'mask': 0x1, 'version': 2},
     'phy_lp4x_drv_pull_dn_en_odten': {'value': 0, 'num_base': 'dec', 'index': 'lp4x_index', 'position': 'odt_info', 'shift': 28, 'mask': 0x1, 'version': 2},
     'phy_lp4x_drv_pull_dn_en_odtoff': {'value': 0, 'num_base': 'dec', 'index': 'lp4x_index', 'position': 'odt_info', 'shift': 29, 'mask': 0x1, 'version': 2},
-    'reserved_lp4x_odt_info_bit31': {'value': 0, 'num_base': 'dec', 'index': 'lp4x_index', 'position': 'odt_info', 'shift': 31, 'mask': 0x1, 'version': 2},
+    'lp4x_dbi_rd': {'value': 0, 'num_base': 'dec', 'index': 'lp4x_index', 'position': 'odt_info', 'shift': 30, 'mask': 0x1, 'version': 7},
+    'lp4x_dbi_wr': {'value': 0, 'num_base': 'dec', 'index': 'lp4x_index', 'position': 'odt_info', 'shift': 31, 'mask': 0x1, 'version': 7},
     'phy_lp4x_odten_freq_mhz': {'value': 0, 'num_base': 'dec', 'index': 'lp4x_index', 'position': 'dq_odten_freq', 'shift': 12, 'mask': 0xfff, 'version': 2},
     'lp4x_dq_odten_freq_mhz': {'value': 0, 'num_base': 'dec', 'index': 'lp4x_index', 'position': 'dq_odten_freq', 'shift': 0, 'mask': 0xfff, 'version': 2},
     'reserved_lp4x_dq_odten_freq_bit24_31': {'value': 0, 'num_base': 'dec', 'index': 'lp4x_index', 'position': 'dq_odten_freq', 'shift': 24, 'mask': 0xff, 'version': 2},
@@ -771,6 +1103,20 @@ base_info_full = {
     'lp4x_dq_vref_when_odtoff': {'value': 0, 'num_base': 'dec', 'index': 'lp4x_index', 'position': 'vref_when_odtoff', 'shift': 10, 'mask': 0x3ff, 'version': 2},
     'lp4x_ca_vref_when_odtoff': {'value': 0, 'num_base': 'dec', 'index': 'lp4x_index', 'position': 'vref_when_odtoff', 'shift': 20, 'mask': 0x3ff, 'version': 2},
     'reserved_lp4x_vref_when_odtoff_bit30_31': {'value': 0, 'num_base': 'dec', 'index': 'lp4x_index', 'position': 'vref_when_odtoff', 'shift': 30, 'mask': 0x3, 'version': 2},
+    'lp4x_read_train_vref_offset_mv': {'value': 0, 'num_base': 'dec', 'index': 'lp4x_index', 'position': 'lp45_si_10', 'shift': 0, 'mask': 0xff, 'version': 7},
+    'lp4x_read_train_vref_offset_en_freq_mhz': {'value': 0, 'num_base': 'dec', 'index': 'lp4x_index', 'position': 'lp45_si_10', 'shift': 8, 'mask': 0xfff, 'version': 7},
+    'reserved_lp4x_si_10_bit20_31': {'value': 0, 'num_base': 'dec', 'index': 'lp4x_index', 'position': 'lp45_si_10', 'shift': 20, 'mask': 0xfff, 'version': 7},
+    'lp4x_write_train_vref_offset_mv': {'value': 0, 'num_base': 'dec', 'index': 'lp4x_index', 'position': 'lp45_si_11', 'shift': 0, 'mask': 0xff, 'version': 7},
+    'lp4x_write_train_vref_offset_en_freq_mhz': {'value': 0, 'num_base': 'dec', 'index': 'lp4x_index', 'position': 'lp45_si_11', 'shift': 8, 'mask': 0xfff, 'version': 7},
+    'phy_lp4x_dfe_en_freq_mhz': {'value': 0, 'num_base': 'dec', 'index': 'lp4x_index', 'position': 'lp45_si_11', 'shift': 20, 'mask': 0xfff, 'version': 7},
+    'phy_lp4x_vref0_l_mv': {'value': 0, 'num_base': 'dec', 'index': 'lp4x_index', 'position': 'phy_dfe', 'shift': 0, 'mask': 0xff, 'version': 7},
+    'phy_lp4x_vref0_h_mv': {'value': 0, 'num_base': 'dec', 'index': 'lp4x_index', 'position': 'phy_dfe', 'shift': 8, 'mask': 0xff, 'version': 7},
+    'phy_lp4x_vref1_l_mv': {'value': 0, 'num_base': 'dec', 'index': 'lp4x_index', 'position': 'phy_dfe', 'shift': 16, 'mask': 0xff, 'version': 7},
+    'phy_lp4x_vref1_h_mv': {'value': 0, 'num_base': 'dec', 'index': 'lp4x_index', 'position': 'phy_dfe', 'shift': 24, 'mask': 0xff, 'version': 7},
+    'reserved_lp4x_si_info_reserved0': {'value': 0, 'num_base': 'dec', 'index': 'lp4x_index', 'position': 'reserved_lp45_si_info_0', 'shift': 0, 'mask': 0xffffffff, 'version': 7},
+    'reserved_lp4x_si_info_reserved1': {'value': 0, 'num_base': 'dec', 'index': 'lp4x_index', 'position': 'reserved_lp45_si_info_1', 'shift': 0, 'mask': 0xffffffff, 'version': 7},
+    'reserved_lp4x_si_info_reserved2': {'value': 0, 'num_base': 'dec', 'index': 'lp4x_index', 'position': 'reserved_lp45_si_info_2', 'shift': 0, 'mask': 0xffffffff, 'version': 7},
+    'reserved_lp4x_si_info_reserved3': {'value': 0, 'num_base': 'dec', 'index': 'lp4x_index', 'position': 'reserved_lp45_si_info_3', 'shift': 0, 'mask': 0xffffffff, 'version': 7},
 
     'lp5_f1_freq_mhz': {'value': 0, 'num_base': 'dec', 'index': 'lp5_index', 'position': 'ddr_freq0_1', 'shift': 12, 'mask': 0xfff, 'version': 2},
     'reserved_lp5_ddr_freq0_1_bit24_31': {'value': 0, 'num_base': 'dec', 'index': 'lp5_index', 'position': 'ddr_freq0_1', 'shift': 24, 'mask': 0xff, 'version': 2},
@@ -795,10 +1141,11 @@ base_info_full = {
     'lp5_drv_pu_cal_odtoff': {'value': 0, 'num_base': 'dec', 'index': 'lp5_index', 'position': 'odt_info', 'shift': 27, 'mask': 0x1, 'version': 2},
     'phy_lp5_drv_pull_dn_en_odten': {'value': 0, 'num_base': 'dec', 'index': 'lp5_index', 'position': 'odt_info', 'shift': 28, 'mask': 0x1, 'version': 2},
     'phy_lp5_drv_pull_dn_en_odtoff': {'value': 0, 'num_base': 'dec', 'index': 'lp5_index', 'position': 'odt_info', 'shift': 29, 'mask': 0x1, 'version': 2},
-    'reserved_lp5_odt_info_bit31': {'value': 0, 'num_base': 'dec', 'index': 'lp5_index', 'position': 'odt_info', 'shift': 31, 'mask': 0x1, 'version': 2},
+    'lp5_dbi_rd': {'value': 0, 'num_base': 'dec', 'index': 'lp5_index', 'position': 'odt_info', 'shift': 30, 'mask': 0x1, 'version': 7},
+    'lp5_dbi_wr': {'value': 0, 'num_base': 'dec', 'index': 'lp5_index', 'position': 'odt_info', 'shift': 31, 'mask': 0x1, 'version': 7},
     'phy_lp5_odten_freq_mhz': {'value': 0, 'num_base': 'dec', 'index': 'lp5_index', 'position': 'dq_odten_freq', 'shift': 12, 'mask': 0xfff, 'version': 2},
     'lp5_dq_odten_freq_mhz': {'value': 0, 'num_base': 'dec', 'index': 'lp5_index', 'position': 'dq_odten_freq', 'shift': 0, 'mask': 0xfff, 'version': 2},
-    'reserved_lp5_dq_odten_freq_bit24_31': {'value': 0, 'num_base': 'dec', 'index': 'lp5_index', 'position': 'dq_odten_freq', 'shift': 24, 'mask': 0xff, 'version': 2},
+    'lp5x_cs_odt_ohm': {'value': 0, 'num_base': 'dec', 'index': 'lp5_index', 'position': 'dq_odten_freq', 'shift': 24, 'mask': 0xff, 'version': 7},
     'phy_lp5_dq_sr_when_odten': {'value': 0, 'num_base': 'hex', 'index': 'lp5_index', 'position': 'sr_when_odten', 'shift': 0, 'mask': 0xff, 'version': 2},
     'phy_lp5_ca_sr_when_odten': {'value': 0, 'num_base': 'hex', 'index': 'lp5_index', 'position': 'sr_when_odten', 'shift': 8, 'mask': 0xff, 'version': 2},
     'phy_lp5_clk_sr_when_odten': {'value': 0, 'num_base': 'hex', 'index': 'lp5_index', 'position': 'sr_when_odten', 'shift': 16, 'mask': 0xff, 'version': 2},
@@ -825,6 +1172,20 @@ base_info_full = {
     'lp5_dq_vref_when_odtoff': {'value': 0, 'num_base': 'dec', 'index': 'lp5_index', 'position': 'vref_when_odtoff', 'shift': 10, 'mask': 0x3ff, 'version': 2},
     'lp5_ca_vref_when_odtoff': {'value': 0, 'num_base': 'dec', 'index': 'lp5_index', 'position': 'vref_when_odtoff', 'shift': 20, 'mask': 0x3ff, 'version': 2},
     'reserved_lp5_vref_when_odtoff_bit30_31': {'value': 0, 'num_base': 'dec', 'index': 'lp5_index', 'position': 'vref_when_odtoff', 'shift': 30, 'mask': 0x3, 'version': 2},
+    'lp5_read_train_vref_offset_mv': {'value': 0, 'num_base': 'dec', 'index': 'lp5_index', 'position': 'lp45_si_10', 'shift': 0, 'mask': 0xff, 'version': 7},
+    'lp5_read_train_vref_offset_en_freq_mhz': {'value': 0, 'num_base': 'dec', 'index': 'lp5_index', 'position': 'lp45_si_10', 'shift': 8, 'mask': 0xfff, 'version': 7},
+    'reserved_lp5_si_10_bit20_31': {'value': 0, 'num_base': 'dec', 'index': 'lp5_index', 'position': 'lp45_si_10', 'shift': 20, 'mask': 0xfff, 'version': 7},
+    'lp5_write_train_vref_offset_mv': {'value': 0, 'num_base': 'dec', 'index': 'lp5_index', 'position': 'lp45_si_11', 'shift': 0, 'mask': 0xff, 'version': 7},
+    'lp5_write_train_vref_offset_en_freq_mhz': {'value': 0, 'num_base': 'dec', 'index': 'lp5_index', 'position': 'lp45_si_11', 'shift': 8, 'mask': 0xfff, 'version': 7},
+    'phy_lp5_dfe_en_freq_mhz': {'value': 0, 'num_base': 'dec', 'index': 'lp5_index', 'position': 'lp45_si_11', 'shift': 20, 'mask': 0xfff, 'version': 7},
+    'phy_lp5_vref0_l_mv': {'value': 0, 'num_base': 'dec', 'index': 'lp5_index', 'position': 'phy_dfe', 'shift': 0, 'mask': 0xff, 'version': 7},
+    'phy_lp5_vref0_h_mv': {'value': 0, 'num_base': 'dec', 'index': 'lp5_index', 'position': 'phy_dfe', 'shift': 8, 'mask': 0xff, 'version': 7},
+    'phy_lp5_vref1_l_mv': {'value': 0, 'num_base': 'dec', 'index': 'lp5_index', 'position': 'phy_dfe', 'shift': 16, 'mask': 0xff, 'version': 7},
+    'phy_lp5_vref1_h_mv': {'value': 0, 'num_base': 'dec', 'index': 'lp5_index', 'position': 'phy_dfe', 'shift': 24, 'mask': 0xff, 'version': 7},
+    'reserved_lp5_si_info_reserved0': {'value': 0, 'num_base': 'dec', 'index': 'lp5_index', 'position': 'reserved_lp45_si_info_0', 'shift': 0, 'mask': 0xffffffff, 'version': 7},
+    'reserved_lp5_si_info_reserved1': {'value': 0, 'num_base': 'dec', 'index': 'lp5_index', 'position': 'reserved_lp45_si_info_1', 'shift': 0, 'mask': 0xffffffff, 'version': 7},
+    'reserved_lp5_si_info_reserved2': {'value': 0, 'num_base': 'dec', 'index': 'lp5_index', 'position': 'reserved_lp45_si_info_2', 'shift': 0, 'mask': 0xffffffff, 'version': 7},
+    'reserved_lp5_si_info_reserved3': {'value': 0, 'num_base': 'dec', 'index': 'lp5_index', 'position': 'reserved_lp45_si_info_3', 'shift': 0, 'mask': 0xffffffff, 'version': 7},
 
     'lp4_4x_ch_mask0': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_hash_index', 'position': 'ch_mask_0', 'shift': 0, 'mask': 0xffffffff, 'version': 3},
     'lp4_4x_ch_mask1': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_hash_index', 'position': 'ch_mask_1', 'shift': 0, 'mask': 0xffffffff, 'version': 3},
@@ -1050,6 +1411,198 @@ base_info_full = {
     'lp5_cs1_b_skew': {'value': 0, 'num_base': 'hex', 'index': 'skew_index', 'position': 'null', 'shift': 0, 'mask': 0, 'version': 4},
     'lp5_resetn_skew': {'value': 0, 'num_base': 'hex', 'index': 'skew_index', 'position': 'null', 'shift': 0, 'mask': 0, 'version': 4},
 
+    # v7: LP4_4X Template Info
+    'lp4_4x_template_available': {'value': 0, 'num_base': 'dec', 'index': 'lp4_4x_template_index', 'position': 'template_0', 'shift': 0, 'mask': 0x1, 'version': 7},
+    'lp4_4x_template_quad_channel': {'value': 0, 'num_base': 'dec', 'index': 'lp4_4x_template_index', 'position': 'template_0', 'shift': 1, 'mask': 0x1, 'version': 7},
+    'reserved_lp4_4x_template_bit2': {'value': 0, 'num_base': 'dec', 'index': 'lp4_4x_template_index', 'position': 'template_0', 'shift': 2, 'mask': 0x3, 'version': 7},
+    'lp4_4x_template_pcb_layer': {'value': 0, 'num_base': 'dec', 'index': 'lp4_4x_template_index', 'position': 'template_0', 'shift': 4, 'mask': 0xff, 'version': 7},
+    'lp4_4x_template_dram_ball': {'value': 0, 'num_base': 'dec', 'index': 'lp4_4x_template_index', 'position': 'template_0', 'shift': 12, 'mask': 0xfff, 'version': 7},
+    'lp4_4x_template_max_rank': {'value': 0, 'num_base': 'dec', 'index': 'lp4_4x_template_index', 'position': 'template_0', 'shift': 24, 'mask': 0xf, 'version': 7},
+    'reserved_lp4_4x_template_bit28': {'value': 0, 'num_base': 'dec', 'index': 'lp4_4x_template_index', 'position': 'template_0', 'shift': 28, 'mask': 0xf, 'version': 7},
+    'lp4_4x_ca_swap_cha_a0': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'ca_swap_0', 'shift': 0, 'mask': 0xff, 'version': 7},
+    'lp4_4x_ca_swap_cha_a1': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'ca_swap_0', 'shift': 8, 'mask': 0xff, 'version': 7},
+    'lp4_4x_ca_swap_cha_a2': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'ca_swap_0', 'shift': 16, 'mask': 0xff, 'version': 7},
+    'lp4_4x_ca_swap_cha_a3': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'ca_swap_0', 'shift': 24, 'mask': 0xff, 'version': 7},
+    'lp4_4x_ca_swap_cha_a4': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'ca_swap_1', 'shift': 0, 'mask': 0xff, 'version': 7},
+    'lp4_4x_ca_swap_cha_a5': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'ca_swap_1', 'shift': 8, 'mask': 0xff, 'version': 7},
+    'reserved_lp4_4x_ca_swap_1_bit16': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'ca_swap_1', 'shift': 16, 'mask': 0xffff, 'version': 7},
+    'lp4_4x_ca_swap_chb_a0': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'ca_swap_2', 'shift': 0, 'mask': 0xff, 'version': 7},
+    'lp4_4x_ca_swap_chb_a1': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'ca_swap_2', 'shift': 8, 'mask': 0xff, 'version': 7},
+    'lp4_4x_ca_swap_chb_a2': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'ca_swap_2', 'shift': 16, 'mask': 0xff, 'version': 7},
+    'lp4_4x_ca_swap_chb_a3': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'ca_swap_2', 'shift': 24, 'mask': 0xff, 'version': 7},
+    'lp4_4x_ca_swap_chb_a4': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'ca_swap_3', 'shift': 0, 'mask': 0xff, 'version': 7},
+    'lp4_4x_ca_swap_chb_a5': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'ca_swap_3', 'shift': 8, 'mask': 0xff, 'version': 7},
+    'reserved_lp4_4x_ca_swap_3_bit16': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'ca_swap_3', 'shift': 16, 'mask': 0xffff, 'version': 7},
+    'lp4_4x_byte0_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'byte_swap', 'shift': 0, 'mask': 0xf, 'version': 7},
+    'lp4_4x_byte1_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'byte_swap', 'shift': 4, 'mask': 0xf, 'version': 7},
+    'lp4_4x_byte2_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'byte_swap', 'shift': 8, 'mask': 0xf, 'version': 7},
+    'lp4_4x_byte3_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'byte_swap', 'shift': 12, 'mask': 0xf, 'version': 7},
+    'reserved_lp4_4x_byte_swap_bit16': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'byte_swap', 'shift': 16, 'mask': 0xffff, 'version': 7},
+    'lp4_4x_byte0_dq0_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'dq_swap_0', 'shift': 0, 'mask': 0xf, 'version': 7},
+    'lp4_4x_byte0_dq1_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'dq_swap_0', 'shift': 4, 'mask': 0xf, 'version': 7},
+    'lp4_4x_byte0_dq2_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'dq_swap_0', 'shift': 8, 'mask': 0xf, 'version': 7},
+    'lp4_4x_byte0_dq3_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'dq_swap_0', 'shift': 12, 'mask': 0xf, 'version': 7},
+    'lp4_4x_byte0_dq4_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'dq_swap_0', 'shift': 16, 'mask': 0xf, 'version': 7},
+    'lp4_4x_byte0_dq5_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'dq_swap_0', 'shift': 20, 'mask': 0xf, 'version': 7},
+    'lp4_4x_byte0_dq6_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'dq_swap_0', 'shift': 24, 'mask': 0xf, 'version': 7},
+    'lp4_4x_byte0_dq7_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'dq_swap_0', 'shift': 28, 'mask': 0xf, 'version': 7},
+    'lp4_4x_byte1_dq0_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'dq_swap_1', 'shift': 0, 'mask': 0xf, 'version': 7},
+    'lp4_4x_byte1_dq1_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'dq_swap_1', 'shift': 4, 'mask': 0xf, 'version': 7},
+    'lp4_4x_byte1_dq2_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'dq_swap_1', 'shift': 8, 'mask': 0xf, 'version': 7},
+    'lp4_4x_byte1_dq3_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'dq_swap_1', 'shift': 12, 'mask': 0xf, 'version': 7},
+    'lp4_4x_byte1_dq4_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'dq_swap_1', 'shift': 16, 'mask': 0xf, 'version': 7},
+    'lp4_4x_byte1_dq5_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'dq_swap_1', 'shift': 20, 'mask': 0xf, 'version': 7},
+    'lp4_4x_byte1_dq6_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'dq_swap_1', 'shift': 24, 'mask': 0xf, 'version': 7},
+    'lp4_4x_byte1_dq7_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'dq_swap_1', 'shift': 28, 'mask': 0xf, 'version': 7},
+    'lp4_4x_byte2_dq0_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'dq_swap_2', 'shift': 0, 'mask': 0xf, 'version': 7},
+    'lp4_4x_byte2_dq1_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'dq_swap_2', 'shift': 4, 'mask': 0xf, 'version': 7},
+    'lp4_4x_byte2_dq2_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'dq_swap_2', 'shift': 8, 'mask': 0xf, 'version': 7},
+    'lp4_4x_byte2_dq3_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'dq_swap_2', 'shift': 12, 'mask': 0xf, 'version': 7},
+    'lp4_4x_byte2_dq4_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'dq_swap_2', 'shift': 16, 'mask': 0xf, 'version': 7},
+    'lp4_4x_byte2_dq5_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'dq_swap_2', 'shift': 20, 'mask': 0xf, 'version': 7},
+    'lp4_4x_byte2_dq6_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'dq_swap_2', 'shift': 24, 'mask': 0xf, 'version': 7},
+    'lp4_4x_byte2_dq7_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'dq_swap_2', 'shift': 28, 'mask': 0xf, 'version': 7},
+    'lp4_4x_byte3_dq0_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'dq_swap_3', 'shift': 0, 'mask': 0xf, 'version': 7},
+    'lp4_4x_byte3_dq1_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'dq_swap_3', 'shift': 4, 'mask': 0xf, 'version': 7},
+    'lp4_4x_byte3_dq2_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'dq_swap_3', 'shift': 8, 'mask': 0xf, 'version': 7},
+    'lp4_4x_byte3_dq3_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'dq_swap_3', 'shift': 12, 'mask': 0xf, 'version': 7},
+    'lp4_4x_byte3_dq4_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'dq_swap_3', 'shift': 16, 'mask': 0xf, 'version': 7},
+    'lp4_4x_byte3_dq5_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'dq_swap_3', 'shift': 20, 'mask': 0xf, 'version': 7},
+    'lp4_4x_byte3_dq6_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'dq_swap_3', 'shift': 24, 'mask': 0xf, 'version': 7},
+    'lp4_4x_byte3_dq7_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'dq_swap_3', 'shift': 28, 'mask': 0xf, 'version': 7},
+    'lp4_4x_byte4_dq0_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'dq_swap_4', 'shift': 0, 'mask': 0xf, 'version': 7},
+    'lp4_4x_byte4_dq1_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'dq_swap_4', 'shift': 4, 'mask': 0xf, 'version': 7},
+    'lp4_4x_byte4_dq2_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'dq_swap_4', 'shift': 8, 'mask': 0xf, 'version': 7},
+    'lp4_4x_byte4_dq3_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'dq_swap_4', 'shift': 12, 'mask': 0xf, 'version': 7},
+    'lp4_4x_byte4_dq4_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'dq_swap_4', 'shift': 16, 'mask': 0xf, 'version': 7},
+    'lp4_4x_byte4_dq5_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'dq_swap_4', 'shift': 20, 'mask': 0xf, 'version': 7},
+    'lp4_4x_byte4_dq6_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'dq_swap_4', 'shift': 24, 'mask': 0xf, 'version': 7},
+    'lp4_4x_byte4_dq7_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'dq_swap_4', 'shift': 28, 'mask': 0xf, 'version': 7},
+    'lp4_4x_byte5_dq0_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'dq_swap_5', 'shift': 0, 'mask': 0xf, 'version': 7},
+    'lp4_4x_byte5_dq1_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'dq_swap_5', 'shift': 4, 'mask': 0xf, 'version': 7},
+    'lp4_4x_byte5_dq2_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'dq_swap_5', 'shift': 8, 'mask': 0xf, 'version': 7},
+    'lp4_4x_byte5_dq3_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'dq_swap_5', 'shift': 12, 'mask': 0xf, 'version': 7},
+    'lp4_4x_byte5_dq4_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'dq_swap_5', 'shift': 16, 'mask': 0xf, 'version': 7},
+    'lp4_4x_byte5_dq5_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'dq_swap_5', 'shift': 20, 'mask': 0xf, 'version': 7},
+    'lp4_4x_byte5_dq6_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'dq_swap_5', 'shift': 24, 'mask': 0xf, 'version': 7},
+    'lp4_4x_byte5_dq7_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'dq_swap_5', 'shift': 28, 'mask': 0xf, 'version': 7},
+    'lp4_4x_byte6_dq0_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'dq_swap_6', 'shift': 0, 'mask': 0xf, 'version': 7},
+    'lp4_4x_byte6_dq1_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'dq_swap_6', 'shift': 4, 'mask': 0xf, 'version': 7},
+    'lp4_4x_byte6_dq2_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'dq_swap_6', 'shift': 8, 'mask': 0xf, 'version': 7},
+    'lp4_4x_byte6_dq3_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'dq_swap_6', 'shift': 12, 'mask': 0xf, 'version': 7},
+    'lp4_4x_byte6_dq4_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'dq_swap_6', 'shift': 16, 'mask': 0xf, 'version': 7},
+    'lp4_4x_byte6_dq5_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'dq_swap_6', 'shift': 20, 'mask': 0xf, 'version': 7},
+    'lp4_4x_byte6_dq6_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'dq_swap_6', 'shift': 24, 'mask': 0xf, 'version': 7},
+    'lp4_4x_byte6_dq7_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'dq_swap_6', 'shift': 28, 'mask': 0xf, 'version': 7},
+    'lp4_4x_byte7_dq0_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'dq_swap_7', 'shift': 0, 'mask': 0xf, 'version': 7},
+    'lp4_4x_byte7_dq1_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'dq_swap_7', 'shift': 4, 'mask': 0xf, 'version': 7},
+    'lp4_4x_byte7_dq2_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'dq_swap_7', 'shift': 8, 'mask': 0xf, 'version': 7},
+    'lp4_4x_byte7_dq3_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'dq_swap_7', 'shift': 12, 'mask': 0xf, 'version': 7},
+    'lp4_4x_byte7_dq4_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'dq_swap_7', 'shift': 16, 'mask': 0xf, 'version': 7},
+    'lp4_4x_byte7_dq5_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'dq_swap_7', 'shift': 20, 'mask': 0xf, 'version': 7},
+    'lp4_4x_byte7_dq6_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'dq_swap_7', 'shift': 24, 'mask': 0xf, 'version': 7},
+    'lp4_4x_byte7_dq7_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'dq_swap_7', 'shift': 28, 'mask': 0xf, 'version': 7},
+    'reserved_0_lp4_4x_template_info_bit0': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'template_info_reserved_0', 'shift': 0, 'mask': 0xffffffff, 'version': 7},
+    'reserved_1_lp4_4x_template_info_bit0': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'template_info_reserved_1', 'shift': 0, 'mask': 0xffffffff, 'version': 7},
+    'reserved_2_lp4_4x_template_info_bit0': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'template_info_reserved_2', 'shift': 0, 'mask': 0xffffffff, 'version': 7},
+    'reserved_3_lp4_4x_template_info_bit0': {'value': 0, 'num_base': 'hex', 'index': 'lp4_4x_template_index', 'position': 'template_info_reserved_3', 'shift': 0, 'mask': 0xffffffff, 'version': 7},
+
+    # v7: LP5_5X Template Info
+    'lp5_5x_template_available': {'value': 0, 'num_base': 'dec', 'index': 'lp5_5x_template_index', 'position': 'template_0', 'shift': 0, 'mask': 0x1, 'version': 7},
+    'lp5_5x_template_quad_channel': {'value': 0, 'num_base': 'dec', 'index': 'lp5_5x_template_index', 'position': 'template_0', 'shift': 1, 'mask': 0x1, 'version': 7},
+    'reserved_lp5_5x_template_bit2': {'value': 0, 'num_base': 'dec', 'index': 'lp5_5x_template_index', 'position': 'template_0', 'shift': 2, 'mask': 0x3, 'version': 7},
+    'lp5_5x_template_pcb_layer': {'value': 0, 'num_base': 'dec', 'index': 'lp5_5x_template_index', 'position': 'template_0', 'shift': 4, 'mask': 0xff, 'version': 7},
+    'lp5_5x_template_dram_ball': {'value': 0, 'num_base': 'dec', 'index': 'lp5_5x_template_index', 'position': 'template_0', 'shift': 12, 'mask': 0xfff, 'version': 7},
+    'lp5_5x_template_max_rank': {'value': 0, 'num_base': 'dec', 'index': 'lp5_5x_template_index', 'position': 'template_0', 'shift': 24, 'mask': 0xf, 'version': 7},
+    'reserved_lp5_5x_template_bit28': {'value': 0, 'num_base': 'dec', 'index': 'lp5_5x_template_index', 'position': 'template_0', 'shift': 28, 'mask': 0xf, 'version': 7},
+    'lp5_5x_ca_swap_cha_a0': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'ca_swap_0', 'shift': 0, 'mask': 0xff, 'version': 7},
+    'lp5_5x_ca_swap_cha_a1': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'ca_swap_0', 'shift': 8, 'mask': 0xff, 'version': 7},
+    'lp5_5x_ca_swap_cha_a2': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'ca_swap_0', 'shift': 16, 'mask': 0xff, 'version': 7},
+    'lp5_5x_ca_swap_cha_a3': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'ca_swap_0', 'shift': 24, 'mask': 0xff, 'version': 7},
+    'lp5_5x_ca_swap_cha_a4': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'ca_swap_1', 'shift': 0, 'mask': 0xff, 'version': 7},
+    'lp5_5x_ca_swap_cha_a5': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'ca_swap_1', 'shift': 8, 'mask': 0xff, 'version': 7},
+    'reserved_lp5_5x_ca_swap_1_bit16': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'ca_swap_1', 'shift': 16, 'mask': 0xffff, 'version': 7},
+    'lp5_5x_ca_swap_chb_a0': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'ca_swap_2', 'shift': 0, 'mask': 0xff, 'version': 7},
+    'lp5_5x_ca_swap_chb_a1': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'ca_swap_2', 'shift': 8, 'mask': 0xff, 'version': 7},
+    'lp5_5x_ca_swap_chb_a2': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'ca_swap_2', 'shift': 16, 'mask': 0xff, 'version': 7},
+    'lp5_5x_ca_swap_chb_a3': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'ca_swap_2', 'shift': 24, 'mask': 0xff, 'version': 7},
+    'lp5_5x_ca_swap_chb_a4': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'ca_swap_3', 'shift': 0, 'mask': 0xff, 'version': 7},
+    'lp5_5x_ca_swap_chb_a5': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'ca_swap_3', 'shift': 8, 'mask': 0xff, 'version': 7},
+    'reserved_lp5_5x_ca_swap_3_bit16': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'ca_swap_3', 'shift': 16, 'mask': 0xffff, 'version': 7},
+    'lp5_5x_byte0_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'byte_swap', 'shift': 0, 'mask': 0xf, 'version': 7},
+    'lp5_5x_byte1_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'byte_swap', 'shift': 4, 'mask': 0xf, 'version': 7},
+    'lp5_5x_byte2_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'byte_swap', 'shift': 8, 'mask': 0xf, 'version': 7},
+    'lp5_5x_byte3_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'byte_swap', 'shift': 12, 'mask': 0xf, 'version': 7},
+    'reserved_lp5_5x_byte_swap_bit16': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'byte_swap', 'shift': 16, 'mask': 0xffff, 'version': 7},
+    'lp5_5x_byte0_dq0_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'dq_swap_0', 'shift': 0, 'mask': 0xf, 'version': 7},
+    'lp5_5x_byte0_dq1_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'dq_swap_0', 'shift': 4, 'mask': 0xf, 'version': 7},
+    'lp5_5x_byte0_dq2_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'dq_swap_0', 'shift': 8, 'mask': 0xf, 'version': 7},
+    'lp5_5x_byte0_dq3_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'dq_swap_0', 'shift': 12, 'mask': 0xf, 'version': 7},
+    'lp5_5x_byte0_dq4_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'dq_swap_0', 'shift': 16, 'mask': 0xf, 'version': 7},
+    'lp5_5x_byte0_dq5_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'dq_swap_0', 'shift': 20, 'mask': 0xf, 'version': 7},
+    'lp5_5x_byte0_dq6_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'dq_swap_0', 'shift': 24, 'mask': 0xf, 'version': 7},
+    'lp5_5x_byte0_dq7_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'dq_swap_0', 'shift': 28, 'mask': 0xf, 'version': 7},
+    'lp5_5x_byte1_dq0_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'dq_swap_1', 'shift': 0, 'mask': 0xf, 'version': 7},
+    'lp5_5x_byte1_dq1_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'dq_swap_1', 'shift': 4, 'mask': 0xf, 'version': 7},
+    'lp5_5x_byte1_dq2_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'dq_swap_1', 'shift': 8, 'mask': 0xf, 'version': 7},
+    'lp5_5x_byte1_dq3_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'dq_swap_1', 'shift': 12, 'mask': 0xf, 'version': 7},
+    'lp5_5x_byte1_dq4_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'dq_swap_1', 'shift': 16, 'mask': 0xf, 'version': 7},
+    'lp5_5x_byte1_dq5_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'dq_swap_1', 'shift': 20, 'mask': 0xf, 'version': 7},
+    'lp5_5x_byte1_dq6_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'dq_swap_1', 'shift': 24, 'mask': 0xf, 'version': 7},
+    'lp5_5x_byte1_dq7_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'dq_swap_1', 'shift': 28, 'mask': 0xf, 'version': 7},
+    'lp5_5x_byte2_dq0_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'dq_swap_2', 'shift': 0, 'mask': 0xf, 'version': 7},
+    'lp5_5x_byte2_dq1_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'dq_swap_2', 'shift': 4, 'mask': 0xf, 'version': 7},
+    'lp5_5x_byte2_dq2_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'dq_swap_2', 'shift': 8, 'mask': 0xf, 'version': 7},
+    'lp5_5x_byte2_dq3_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'dq_swap_2', 'shift': 12, 'mask': 0xf, 'version': 7},
+    'lp5_5x_byte2_dq4_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'dq_swap_2', 'shift': 16, 'mask': 0xf, 'version': 7},
+    'lp5_5x_byte2_dq5_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'dq_swap_2', 'shift': 20, 'mask': 0xf, 'version': 7},
+    'lp5_5x_byte2_dq6_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'dq_swap_2', 'shift': 24, 'mask': 0xf, 'version': 7},
+    'lp5_5x_byte2_dq7_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'dq_swap_2', 'shift': 28, 'mask': 0xf, 'version': 7},
+    'lp5_5x_byte3_dq0_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'dq_swap_3', 'shift': 0, 'mask': 0xf, 'version': 7},
+    'lp5_5x_byte3_dq1_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'dq_swap_3', 'shift': 4, 'mask': 0xf, 'version': 7},
+    'lp5_5x_byte3_dq2_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'dq_swap_3', 'shift': 8, 'mask': 0xf, 'version': 7},
+    'lp5_5x_byte3_dq3_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'dq_swap_3', 'shift': 12, 'mask': 0xf, 'version': 7},
+    'lp5_5x_byte3_dq4_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'dq_swap_3', 'shift': 16, 'mask': 0xf, 'version': 7},
+    'lp5_5x_byte3_dq5_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'dq_swap_3', 'shift': 20, 'mask': 0xf, 'version': 7},
+    'lp5_5x_byte3_dq6_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'dq_swap_3', 'shift': 24, 'mask': 0xf, 'version': 7},
+    'lp5_5x_byte3_dq7_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'dq_swap_3', 'shift': 28, 'mask': 0xf, 'version': 7},
+    'lp5_5x_byte4_dq0_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'dq_swap_4', 'shift': 0, 'mask': 0xf, 'version': 7},
+    'lp5_5x_byte4_dq1_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'dq_swap_4', 'shift': 4, 'mask': 0xf, 'version': 7},
+    'lp5_5x_byte4_dq2_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'dq_swap_4', 'shift': 8, 'mask': 0xf, 'version': 7},
+    'lp5_5x_byte4_dq3_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'dq_swap_4', 'shift': 12, 'mask': 0xf, 'version': 7},
+    'lp5_5x_byte4_dq4_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'dq_swap_4', 'shift': 16, 'mask': 0xf, 'version': 7},
+    'lp5_5x_byte4_dq5_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'dq_swap_4', 'shift': 20, 'mask': 0xf, 'version': 7},
+    'lp5_5x_byte4_dq6_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'dq_swap_4', 'shift': 24, 'mask': 0xf, 'version': 7},
+    'lp5_5x_byte4_dq7_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'dq_swap_4', 'shift': 28, 'mask': 0xf, 'version': 7},
+    'lp5_5x_byte5_dq0_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'dq_swap_5', 'shift': 0, 'mask': 0xf, 'version': 7},
+    'lp5_5x_byte5_dq1_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'dq_swap_5', 'shift': 4, 'mask': 0xf, 'version': 7},
+    'lp5_5x_byte5_dq2_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'dq_swap_5', 'shift': 8, 'mask': 0xf, 'version': 7},
+    'lp5_5x_byte5_dq3_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'dq_swap_5', 'shift': 12, 'mask': 0xf, 'version': 7},
+    'lp5_5x_byte5_dq4_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'dq_swap_5', 'shift': 16, 'mask': 0xf, 'version': 7},
+    'lp5_5x_byte5_dq5_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'dq_swap_5', 'shift': 20, 'mask': 0xf, 'version': 7},
+    'lp5_5x_byte5_dq6_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'dq_swap_5', 'shift': 24, 'mask': 0xf, 'version': 7},
+    'lp5_5x_byte5_dq7_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'dq_swap_5', 'shift': 28, 'mask': 0xf, 'version': 7},
+    'lp5_5x_byte6_dq0_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'dq_swap_6', 'shift': 0, 'mask': 0xf, 'version': 7},
+    'lp5_5x_byte6_dq1_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'dq_swap_6', 'shift': 4, 'mask': 0xf, 'version': 7},
+    'lp5_5x_byte6_dq2_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'dq_swap_6', 'shift': 8, 'mask': 0xf, 'version': 7},
+    'lp5_5x_byte6_dq3_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'dq_swap_6', 'shift': 12, 'mask': 0xf, 'version': 7},
+    'lp5_5x_byte6_dq4_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'dq_swap_6', 'shift': 16, 'mask': 0xf, 'version': 7},
+    'lp5_5x_byte6_dq5_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'dq_swap_6', 'shift': 20, 'mask': 0xf, 'version': 7},
+    'lp5_5x_byte6_dq6_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'dq_swap_6', 'shift': 24, 'mask': 0xf, 'version': 7},
+    'lp5_5x_byte6_dq7_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'dq_swap_6', 'shift': 28, 'mask': 0xf, 'version': 7},
+    'lp5_5x_byte7_dq0_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'dq_swap_7', 'shift': 0, 'mask': 0xf, 'version': 7},
+    'lp5_5x_byte7_dq1_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'dq_swap_7', 'shift': 4, 'mask': 0xf, 'version': 7},
+    'lp5_5x_byte7_dq2_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'dq_swap_7', 'shift': 8, 'mask': 0xf, 'version': 7},
+    'lp5_5x_byte7_dq3_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'dq_swap_7', 'shift': 12, 'mask': 0xf, 'version': 7},
+    'lp5_5x_byte7_dq4_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'dq_swap_7', 'shift': 16, 'mask': 0xf, 'version': 7},
+    'lp5_5x_byte7_dq5_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'dq_swap_7', 'shift': 20, 'mask': 0xf, 'version': 7},
+    'lp5_5x_byte7_dq6_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'dq_swap_7', 'shift': 24, 'mask': 0xf, 'version': 7},
+    'lp5_5x_byte7_dq7_swap': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'dq_swap_7', 'shift': 28, 'mask': 0xf, 'version': 7},
+    'reserved_0_lp5_5x_template_info_bit0': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'template_info_reserved_0', 'shift': 0, 'mask': 0xffffffff, 'version': 7},
+    'reserved_1_lp5_5x_template_info_bit0': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'template_info_reserved_1', 'shift': 0, 'mask': 0xffffffff, 'version': 7},
+    'reserved_2_lp5_5x_template_info_bit0': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'template_info_reserved_2', 'shift': 0, 'mask': 0xffffffff, 'version': 7},
+    'reserved_3_lp5_5x_template_info_bit0': {'value': 0, 'num_base': 'hex', 'index': 'lp5_5x_template_index', 'position': 'template_info_reserved_3', 'shift': 0, 'mask': 0xffffffff, 'version': 7},
+
     'uart_addr': {'value': 0, 'num_base': 'hex', 'index': 'uart_iomux_index_u16', 'position': 'uart_addr', 'shift': 0, 'mask': 0xffffffff, 'version': 6},
 }
 
@@ -1065,12 +1618,17 @@ def signed_char_to_int(byte_value):
         return byte_value - 256
     return byte_value
 
-def process_clk_compensate_phase(key, temp_value, info_from_bin):
+def process_signed_value(key, temp_value, info_from_bin):
     if "clk_compensate_phase" in key:
         # clk_compensate_phase* is signed char, unit 5ps per step
         signed_temp_value = signed_char_to_int(temp_value)
         result = signed_temp_value * 5
         info_from_bin[key]['value'] = result
+        return True
+    if "train_vref_offset_mv" in key:
+        # read/write_train_vref_offset_mv is signed s8, unit 1mv per step
+        signed_temp_value = signed_char_to_int(temp_value)
+        info_from_bin[key]['value'] = signed_temp_value
         return True
     return False
 
@@ -1091,36 +1649,63 @@ def bin_data_2_info(info_from_bin, read_out, ddrbin_index, version, info_from_tx
         for index_name in ddrbin_index:
             if "reserved" in index_name:
                 continue
+            if "_arr_" in index_name:
+                continue
             if "index_u16" in index_name:
                 head_info_name = index_name[:-10]+'_info'
             else:
                 head_info_name = index_name[:-6]+'_info'
             if ddrbin_index[index_name]['offset'] != 0 and 'skew' not in index_name:
+                if head_info_name not in read_out:
+                    continue
                 for key, value in info_from_bin.items():
                     if value['index'] == index_name and value['version'] <= version:
+                        if value['position'] not in read_out[head_info_name]:
+                            continue
                         temp_value = read_out[head_info_name][value['position']]
                         temp_value = (temp_value >> value['shift']) & value['mask']
-                        if not process_clk_compensate_phase(key, temp_value, info_from_bin):
+                        if not process_signed_value(key, temp_value, info_from_bin):
                             info_from_bin[key]['value'] = temp_value
                             #print(f"D: {key} = {value} {value['position']}={temp_value}")
             elif ddrbin_index[index_name]['offset'] != 0 and 'skew' in index_name:
-                if chip_info in ('rk3528', 'rk3538'):
+                if head_info_name not in read_out:
+                    continue
+                if chip_info in ('rk3528', 'rk3538', 'rv1126b'):
                     for key, value in info_from_bin.items():
                         if value['index'] == index_name and value['version'] <= version:
+                            # Use platform-specific CA skew mapping for CA skew signals
+                            if '_ca' in key or any(x in key for x in ['_ras_', '_cas_', '_ba', '_we_', '_cke', '_ck', '_cs', '_odt', '_reset', '_act']):
+                                # Extract DDR type and signal name from key
+                                parts = key.split('_')
+                                ddr_type_key = parts[0]  # 'ddr3', 'ddr4', 'lp3'
+                                signal_name = parts[1].upper()
+
+                                dynamic_pos = get_ca_skew_position(chip_info, ddr_type_key, signal_name)
+                                if dynamic_pos:
+                                    position, shift = dynamic_pos
+                                    # position is like 'ddr3_ca_skew_3', we need position_2 = 'ca_skew_3'
+                                    position_2 = position[position.find('_') + 1:]  # Skip 'ddr3_'
+                                    # read_out structure: read_out[head_info_name][ddr_type_key][position_2]
+                                    if ddr_type_key in read_out[head_info_name] and position_2 in read_out[head_info_name][ddr_type_key]:
+                                        temp_value = read_out[head_info_name][ddr_type_key][position_2]
+                                        temp_value = (temp_value >> shift) & value['mask']
+                                        if not process_signed_value(key, temp_value, info_from_bin):
+                                            info_from_bin[key]['value'] = temp_value
+                                    continue
+
+                            # Fall back to hardcoded position/shift for non-CA-skew signals
                             position_1 = value['position'][ : value['position'].find('_')]
                             position_2 = value['position'][value['position'].find('_') + 1 : ]
-                            # read_out is sdram_head_info_v2 or sdram_head_info_v5
                             if position_1 in list(read_out[head_info_name].keys()):
                                 temp_value = read_out[head_info_name][position_1][position_2]
                                 temp_value = (temp_value >> value['shift']) & value['mask']
-                                if not process_clk_compensate_phase(key, temp_value, info_from_bin):
+                                if not process_signed_value(key, temp_value, info_from_bin):
                                     info_from_bin[key]['value'] = temp_value
-                                    #print(f"D: {key} = {value} {value['position']}={temp_value}")
 
     return 0
 
 
-def modefy_2_bin_data(info_from_txt, write_in, ddrbin_index, version):
+def modefy_2_bin_data(info_from_txt, write_in, ddrbin_index, version, read_out=None):
     global rk3528_skew_info
 
     if version < 2:
@@ -1133,6 +1718,8 @@ def modefy_2_bin_data(info_from_txt, write_in, ddrbin_index, version):
         for index_name in ddrbin_index:
             if "reserved" in index_name:
                 continue
+            if "_arr_" in index_name:
+                continue
             if "index_u16" in index_name:
                 head_info_name = index_name[:-10]+'_info'
             else:
@@ -1141,6 +1728,8 @@ def modefy_2_bin_data(info_from_txt, write_in, ddrbin_index, version):
                 position_name = 'null'
                 for key, value in info_from_txt.items():
                     if value['index'] == index_name and value['version'] <= version:
+                        if value['position'] not in write_in[head_info_name]:
+                            continue
                         if "clk_compensate_phase" in key:
                             # clk_compensate_phase* is signed char, unit 5ps per step
                             divided_value = value['value'] // 5
@@ -1153,26 +1742,69 @@ def modefy_2_bin_data(info_from_txt, write_in, ddrbin_index, version):
                             else:
                                 unsigned_value = divided_value
                             value['value'] = unsigned_value
+                        elif "train_vref_offset_mv" in key:
+                            # train_vref_offset_mv is signed s8, unit 1mv per step
+                            raw_value = value['value']
+                            if raw_value > 127:
+                                raw_value = 127
+                            elif raw_value < -128:
+                                raw_value = -128
+                            if raw_value < 0:
+                                unsigned_value = raw_value & 0xFF
+                            else:
+                                unsigned_value = raw_value
+                            value['value'] = unsigned_value
                         if position_name != value['position']:
                             position_name = value['position']
-                            position_value = 0
+                            position_value = write_in[head_info_name][value['position']]
+                        position_value &= ~(value['mask'] << value['shift'])
                         position_value |= (value['value'] << value['shift'])
                         write_in[head_info_name][value['position']] = position_value
                         #print(f"D: {key} = {value}, {value['position']}={position_value}")
             elif ddrbin_index[index_name]['offset'] != 0 and 'skew' in index_name:
-                if chip_info in ('rk3528', 'rk3538'):
-                    write_in.update({'skew_info' : rk3528_skew_info})
-                    if rk3528_skew_info['skew_sub_version'] == 0x1:
+                if chip_info in ('rk3528', 'rk3538', 'rv1126b'):
+                    # Copy skew_info from read_out to preserve original data
+                    if read_out and 'skew_info' in read_out:
+                        import copy
+                        skew_info = copy.deepcopy(read_out['skew_info'])
+                    else:
+                        skew_info = create_skew_info_for_platform(chip_info)
+                    write_in.update({'skew_info': skew_info})
+                    if skew_info['skew_sub_version'] == 0x1:
                         for key, value in info_from_txt.items():
                             if value['index'] == index_name and value['version'] <= version:
-                                position_1 = value['position'][ : value['position'].find('_')]
-                                position_2 = value['position'][value['position'].find('_') + 1 : ]
-                                if position_1 in list(write_in[head_info_name].keys()):
-                                    temp_value =  write_in[head_info_name][position_1][position_2]
-                                    temp_value &= ~(value['mask'] << value['shift'])
-                                    temp_value |= value['value'] << value['shift']
-                                    write_in[head_info_name][position_1][position_2] = temp_value
-                                    #print(f"D: {key} = {value}, {temp_value}")
+                                # Check if this is a CA skew signal that should use dynamic mapping
+                                is_ca_skew_signal = '_ca' in key or any(x in key for x in ['_ras_', '_cas_', '_ba', '_we_', '_cke', '_ck', '_cs', '_odt', '_reset', '_act'])
+
+                                # Use platform-specific CA skew mapping for CA skew signals
+                                if is_ca_skew_signal:
+                                    parts = key.split('_')
+                                    ddr_type_key = parts[0]
+                                    signal_name = parts[1].upper()
+
+                                    dynamic_pos = get_ca_skew_position(chip_info, ddr_type_key, signal_name)
+                                    if dynamic_pos:
+                                        position, shift = dynamic_pos
+                                        # position is like 'ddr3_ca_skew_3', we need position_2 = 'ca_skew_3'
+                                        position_2 = position[position.find('_') + 1:]  # Skip 'ddr3_'
+                                        # write_in structure: write_in[head_info_name][ddr_type_key][position_2]
+                                        if ddr_type_key in write_in[head_info_name] and position_2 in write_in[head_info_name][ddr_type_key]:
+                                            temp_value = write_in[head_info_name][ddr_type_key][position_2]
+                                            temp_value &= ~(value['mask'] << shift)
+                                            temp_value |= value['value'] << shift
+                                            write_in[head_info_name][ddr_type_key][position_2] = temp_value
+                                        continue
+
+                                # Fall back to hardcoded position/shift for non-CA-skew signals
+                                # Skip CA skew signals as they were already handled by dynamic mapping
+                                if not is_ca_skew_signal:
+                                    position_1 = value['position'][:value['position'].find('_')]
+                                    position_2 = value['position'][value['position'].find('_') + 1:]
+                                    if position_1 in list(write_in[head_info_name].keys()):
+                                        temp_value = write_in[head_info_name][position_1][position_2]
+                                        temp_value &= ~(value['mask'] << value['shift'])
+                                        temp_value |= value['value'] << value['shift']
+                                        write_in[head_info_name][position_1][position_2] = temp_value
 
     #print(f"D: write_in = {write_in}")
     return 0
@@ -1182,6 +1814,8 @@ def write_in_bin_data_v2(filebin, bin_skew_offset, write_in, ddrbin_index, info_
     for index_name in ddrbin_index:
         if "reserved" in index_name:
                 continue
+        if "_arr_" in index_name:
+                continue
         if "index_u16" in index_name:
                 head_info_name = index_name[:-10]+'_info'
         else:
@@ -1189,7 +1823,11 @@ def write_in_bin_data_v2(filebin, bin_skew_offset, write_in, ddrbin_index, info_
         if head_info_name not in write_in:
             continue
         if ddrbin_index[index_name]['offset'] != 0 and 'skew' not in index_name:
-            filebin.seek(bin_skew_offset + (ddrbin_index[index_name]['offset'] - 1) * 4)
+            if version >= 7 and index_name in ('lp4_index', 'lp5_index', 'lp4x_index',
+                                                 'lp4_4x_template_index', 'lp5_5x_template_index'):
+                filebin.seek(ddrbin_index[index_name]['offset'] * 4)
+            else:
+                filebin.seek(bin_skew_offset + (ddrbin_index[index_name]['offset'] - 1) * 4)
             index_size = ddrbin_index[index_name]['size']
             for key in write_in[head_info_name]:
                 if index_size > 0:
@@ -1201,19 +1839,29 @@ def write_in_bin_data_v2(filebin, bin_skew_offset, write_in, ddrbin_index, info_
                         print("write bin {} to file fail".format(head_info_name))
                         return -1
         elif ddrbin_index[index_name]['offset'] != 0 and 'skew' in index_name:
-            if chip_info in ('rk3528', 'rk3538') and write_in[head_info_name]["skew_sub_version"] == 1:
+            if chip_info in ('rk3528', 'rk3538', 'rv1126b'):
                 filebin.seek(bin_skew_offset + (ddrbin_index[index_name]['offset'] - 1) * 4)
                 index_size = ddrbin_index[index_name]['size']
-                for key in write_in[head_info_name]:
-                    if key == 'skew_sub_version':
-                        temp_value = write_in[head_info_name]["skew_sub_version"]
-                        filebin.write(temp_value.to_bytes(4,byteorder='little'))
+
+                if write_in[head_info_name]["skew_sub_version"] == 1:
+                    # New format: write skew_sub_version first
+                    temp_value = write_in[head_info_name]["skew_sub_version"]
+                    filebin.write(temp_value.to_bytes(4,byteorder='little'))
+                else:
+                    # Legacy format: no skew_sub_version field
+                    pass
+
+                # Write DDR type-specific CA skew data in platform order
+                for ddr_type in get_platform_ddr_types(chip_info):
+                    key = DDR_TYPE_TO_KEY.get(ddr_type)
+
+                    if key not in write_in[head_info_name]:
                         continue
+
                     for key_1 in write_in[head_info_name][key]:
                         if index_size > 0:
                             try:
                                 temp_value = write_in[head_info_name][key][key_1]
-                                #print(f"D: {head_info_name} {key}.{key_1} = {temp_value}")
                                 filebin.write(temp_value.to_bytes(4,byteorder='little'))
                                 index_size -= 1
                             except:
@@ -1276,7 +1924,7 @@ def txt_data_check_availability(info_from_txt, chip_info):
     return 0
 
 #info from bin + info from txt generate to loader parameters
-def txt_data_2_bin_data(info_from_txt, info_from_bin, ddrbin_index, write_in, version):
+def txt_data_2_bin_data(info_from_txt, info_from_bin, ddrbin_index, write_in, version, read_out=None):
     print("\nnew bin config:")
 
     need_modify_uart_iomux = False
@@ -1286,6 +1934,8 @@ def txt_data_2_bin_data(info_from_txt, info_from_bin, ddrbin_index, write_in, ve
         if (info_from_txt[key]['value'] == 0) and (key not in update_key_list):
             info_from_txt[key]['value'] = info_from_bin[key]['value']
         else:
+            if key.startswith('reserved_'):
+                continue
             if info_from_txt[key]['index'] == 'uart_iomux_index_u16':
                 continue
             if info_from_txt[key]['num_base'] == 'hex':
@@ -1301,7 +1951,7 @@ def txt_data_2_bin_data(info_from_txt, info_from_bin, ddrbin_index, write_in, ve
             return -1
     #print(info_from_txt)
 
-    modefy_2_bin_data(info_from_txt, write_in, ddrbin_index, version)
+    modefy_2_bin_data(info_from_txt, write_in, ddrbin_index, version, read_out)
 
     return 0
 
@@ -1337,6 +1987,7 @@ def uart_iomux_count_calculation(ddrbin_index, info_from_txt, info_from_bin, rea
 
 def bin_data_readout(filebin, ddrbin_index, read_out, bin_skew_offset, version, info_from_txt):
     global rk3528_skew_info
+    global chip_info
 
     if version < 2:
         for i in range(len(read_out)):
@@ -1352,12 +2003,20 @@ def bin_data_readout(filebin, ddrbin_index, read_out, bin_skew_offset, version, 
                 continue
             if "_perf_" in index_name:
                 continue
+            if "_arr_" in index_name:
+                continue
             if "index_u16" in index_name:
                 head_info_name = index_name[:-10]+'_info'
             else:
                 head_info_name = index_name[:-6]+'_info'
+            if head_info_name not in read_out and 'skew' not in index_name:
+                continue
             if ddrbin_index[index_name]['offset'] != 0 and 'skew' not in index_name:
-                filebin.seek(bin_skew_offset + (ddrbin_index[index_name]['offset'] - 1) * 4)
+                if version >= 7 and index_name in ('lp4_index', 'lp5_index', 'lp4x_index',
+                                                      'lp4_4x_template_index', 'lp5_5x_template_index'):
+                    filebin.seek(ddrbin_index[index_name]['offset'] * 4)
+                else:
+                    filebin.seek(bin_skew_offset + (ddrbin_index[index_name]['offset'] - 1) * 4)
                 index_size = ddrbin_index[index_name]['size']
                 for key in read_out[head_info_name]:
                     if index_size > 0:
@@ -1376,31 +2035,54 @@ def bin_data_readout(filebin, ddrbin_index, read_out, bin_skew_offset, version, 
                 except:
                     print("read skew_sub_ver from bin file fail")
                     return -1
-                if chip_info in ('rk3528', 'rk3538') and skew_sub_ver == 0x1:
-                    for i in rk3528_skew_info:
-                        if i == 'skew_sub_version':
-                            rk3528_skew_info[i] = skew_sub_ver
-                            continue
-                        for j in rk3528_skew_info[i]:
-                            try:
-                                temp_value = int.from_bytes(filebin.read(4), byteorder='little')
-                                rk3528_skew_info[i][j] = temp_value
-                                #print(f"D: {i}.{j}={rk3528_skew_info[i][j]}")
-                            except:
-                                print("read {} from bin file fail".format(head_info_name))
+
+                if skew_sub_ver == 0x1:
+                    # Use platform-specific skew info
+                    if chip_info in ('rk3528', 'rk3538', 'rv1126b'):
+                        skew_info = create_skew_info_for_platform(chip_info)
+                        skew_info['skew_sub_version'] = skew_sub_ver
+
+                        # Read DDR type-specific CA skew data in platform order
+                        for ddr_type in get_platform_ddr_types(chip_info):
+                            key = DDR_TYPE_TO_KEY.get(ddr_type)
+
+                            if key not in skew_info:
+                                print("Error: DDR type {} not found in skew_info for {}".format(ddr_type, chip_info))
                                 return -1
 
-                read_out.update({'skew_info' : rk3528_skew_info})
+                            for j in skew_info[key]:
+                                try:
+                                    temp_value = int.from_bytes(filebin.read(4), byteorder='little')
+                                    skew_info[key][j] = temp_value
+                                except:
+                                    print("read {} from bin file fail".format(head_info_name))
+                                    return -1
+
+                        read_out.update({'skew_info': skew_info})
+                    else:
+                        print("Unsupported platform {} for skew".format(chip_info))
+                        return -1
+                else:
+                    read_out.update({'skew_info': rk3528_skew_info})
 
     return 0
 
-def gen_info_from_bin(filegen_path, info_from_bin, verinfo_full, version):
+def gen_info_from_bin(filegen_path, info_from_bin, verinfo_full, version, ddrbin_index=None, ddr_type=None, adc_value=None, is_multi_group=False):
     with open(filegen_path, 'w+', encoding='utf-8') as file:
         file.write('/* ' + verinfo_full + ' */\n')
+        # For multi-group platforms, add ddr_type and adc_value comment
+        if is_multi_group and ddr_type and adc_value is not None:
+            file.write('/* ddr_type={}, adc_value_to_ddr_config={} */\n'.format(ddr_type, adc_value))
 
     with open(filegen_path, 'a', encoding='utf-8') as file:
         for key, value in info_from_bin.items():
             if "reserved" in key:
+                continue
+            # Skip params whose index is not in ddrbin_index (e.g., lp5x_index when not LPDDR5X)
+            if ddrbin_index is not None and value['index'] not in ddrbin_index:
+                continue
+            # Skip params whose version is not supported by this binary
+            if value['version'] > version:
                 continue
 
             if value['num_base'] == 'hex':
@@ -1445,6 +2127,13 @@ def print_help():
         "Note:	The function 1 and function 2 are two separate functions\n"\
         "The gen_param.txt file which is generated by function 2 is no need used in function 1.\n"\
         "\n"\
+"* Multi-group configuration, some rk platforms supported(RK3572 etc.):\n"\
+"	Specify ddr_type and adc_value_to_ddr_config to select which group:\n"\
+"	ddr_type: LPDDR4, LPDDR4X, LPDDR5, LPDDR5X\n"\
+"	adc_value_to_ddr_config: group number (0-based, 0 means first group)\n"\
+"	like: ./ddrbin_tool.py rk3572 ddrbin_param.txt rk3572_ddr_v1.02.bin LPDDR4 adc_value_to_ddr_config=5\n"\
+"	like: ./ddrbin_tool.py rk3572 -g gen_param.txt rk3572_ddr_v1.02.bin LPDDR5 adc_value_to_ddr_config=10\n"\
+        "\n"\
         "For more details, please refer to the ddrbin_tool_user_guide.txt\n"\
     )
 
@@ -1467,7 +2156,7 @@ def ddrbin_tool(argc, argv):
     verinfo_editable_offset = 0
     verinfo_editable_length = 17
 
-    print("version v1.32 20260127")
+    print("version v1.35 20260530")
     print("python {}, {}, {}".format(sys.version.split(' ', 1)[0], platform.system(), platform.machine()))
     if sys.version_info < (3, 6):
         print("Warning: Please installed Python 3.6 or later.")
@@ -1512,6 +2201,19 @@ def ddrbin_tool(argc, argv):
             print("The file {} not exist".format(filebin_path))
             return -1
 
+        ddr_type = ''
+        adc_value = 1
+        adc_value_set = False
+        for i in range(5, argc):
+            if '=' in argv[i]:
+                k, v = argv[i].split('=', 1)
+                if k == 'adc_value_to_ddr_config':
+                    adc_value = int(v)
+                    adc_value_set = True
+            else:
+                if argv[i] in ('LPDDR4', 'LPDDR4X', 'LPDDR5', 'DDR2', 'DDR3', 'DDR4', 'LPDDR2', 'LPDDR3', 'LPDDR5X'):
+                    ddr_type = argv[i]
+
         #print(f"D: filegen_path={filegen_path}, {filebin_path}")
     else:
         # function: modify ddr.bin file from ddrbin_param.txt.
@@ -1530,10 +2232,25 @@ def ddrbin_tool(argc, argv):
             print("The file {} not exist".format(filebin_path))
             return -1
 
+        ddr_type = ''
+        adc_value = 1
+        adc_value_set = False
+        for i in range(4, argc):
+            if '=' in argv[i]:
+                k, v = argv[i].split('=', 1)
+                if k == 'adc_value_to_ddr_config':
+                    adc_value = int(v)
+                    adc_value_set = True
+            else:
+                if argv[i] in ('LPDDR4', 'LPDDR4X', 'LPDDR5', 'DDR2', 'DDR3', 'DDR4', 'LPDDR2', 'LPDDR3', 'LPDDR5X'):
+                    ddr_type = argv[i]
+
         for key in version_old_list:
             if key in argv[3]:
                 version_old_hit = 1
         #print(f"D: fileskew_path={fileskew_path},{filebin_path},version_old_hit={version_old_hit}")
+
+    info_from_txt['start tag']['value'] = 0x12345678
 
     if gen_txt_from_bin != 1:
         # Read the parameters that need to be modified from the txt file.
@@ -1573,15 +2290,13 @@ def ddrbin_tool(argc, argv):
         if hot == 0:
             print("Failed to read DRAM parameters from the file")
             return -1
-    else:
-        info_from_txt['start tag']['value'] = 0x12345678
-
     # get info from bin file
     with open(filebin_path, 'rb') as file:
         content = file.read()
     # convert the target byte sequence 'start tag' into bytes, byteorder little
     target_bytes = struct.pack('<I', info_from_txt['start tag']['value'])
     start_position = 0
+    start_tag_pos = 0  # Save start_tag position for v7 arr offset calculation
     while True:
         position = content.find(target_bytes, start_position)
         if position == -1:
@@ -1589,6 +2304,7 @@ def ddrbin_tool(argc, argv):
 
         version = int.from_bytes(content[position + 4: position + 8], byteorder='little')
         if version >= 0 and version <= version_max:
+            start_tag_pos = position  # Save start_tag position
             break
         else:
             start_position = position + len(target_bytes)
@@ -1604,7 +2320,7 @@ def ddrbin_tool(argc, argv):
 
     # get ddrbin parameters version
     try:
-        bin_skew_offset = position + 4
+        bin_skew_offset = start_tag_pos + 4
         filebin = open(filebin_path, 'rb+')
         filebin.seek(bin_skew_offset)
         version = int.from_bytes(filebin.read(4), byteorder='little')
@@ -1637,6 +2353,9 @@ def ddrbin_tool(argc, argv):
         else:
             start_position = position + len(target_bytes)
 
+    # Initialize is_multi_group for all versions (default False for non-multi-group platforms)
+    is_multi_group = False
+
     if version < 2:
         read_out = copy.deepcopy(sdram_head_info_v0)
         write_in = copy.deepcopy(sdram_head_info_v0)
@@ -1652,6 +2371,8 @@ def ddrbin_tool(argc, argv):
             ddrbin_index.update(sdram_head_info_index_v5)
         if version >= 6:
             ddrbin_index.update(sdram_head_info_index_v6)
+        if version >= 7:
+            ddrbin_index.update(sdram_head_info_index_v7)
 
         if version < 5:
             read_out = copy.deepcopy(sdram_head_info_v2)
@@ -1659,9 +2380,12 @@ def ddrbin_tool(argc, argv):
         elif version == 5:
             read_out = copy.deepcopy(sdram_head_info_v5)
             write_in = copy.deepcopy(sdram_head_info_v5)
-        else:
+        elif version == 6:
             read_out = copy.deepcopy(sdram_head_info_v6)
             write_in = copy.deepcopy(sdram_head_info_v6)
+        else:
+            read_out = copy.deepcopy(sdram_head_info_v7)
+            write_in = copy.deepcopy(sdram_head_info_v7)
 
         #index_info read out
         head_total_size = 2 * 4
@@ -1698,6 +2422,92 @@ def ddrbin_tool(argc, argv):
         print("version not support")
         return -1
 
+    # v7: read _arr_ entries from fixed offset and set up virtual index entries
+    if version >= 7:
+        v7_group_sizes = DDR_GROUP_SIZE_WORDS.get(version, DDR_GROUP_SIZE_WORDS[7])
+        si_info_size = v7_group_sizes['si_info']
+        template_info_size = v7_group_sizes['template_info']
+
+        v7_arr_offset = start_tag_pos + 0x40
+        filebin.seek(v7_arr_offset)
+        v7_arr_keys = [
+            ('lp4_si_info_arr', si_info_size),
+            ('lp5_si_info_arr', si_info_size),
+            ('lp4x_si_info_arr', si_info_size),
+            ('lp4_4x_template_info_arr', template_info_size),
+            ('lp5_5x_template_info_arr', template_info_size),
+        ]
+        v7_arr_data = {}
+        for arr_name, words_per_group in v7_arr_keys:
+            arr_offset_val = int.from_bytes(filebin.read(2), byteorder='little')
+            arr_size_val = int.from_bytes(filebin.read(2), byteorder='little')
+            v7_arr_data[arr_name] = {'offset': arr_offset_val, 'size': arr_size_val, 'words_per_group': words_per_group}
+
+        ddr_type_map = {
+            'LPDDR4':  ('lp4_si_info_arr', 'lp4_4x_template_info_arr', 'lp4_index'),
+            'LPDDR4X': ('lp4x_si_info_arr', 'lp4_4x_template_info_arr', 'lp4x_index'),
+            'LPDDR5':  ('lp5_si_info_arr', 'lp5_5x_template_info_arr', 'lp5_index'),
+        }
+
+        # Check if this is a multi-group platform (any si_info_arr has non-zero size)
+        is_multi_group = any(v7_arr_data[k]['size'] != 0 for k in v7_arr_data if k.endswith('_si_info_arr'))
+
+        # For multi-group platforms, require ddr_type and adc_value
+        if is_multi_group:
+            if not ddr_type:
+                print("Error: ddr_type (LPDDR4/LPDDR4X/LPDDR5) is required for multi-group platforms.")
+                print("Usage: ./ddrbin_tool.py <chip> -g <output> <bin> <ddr_type> adc_value_to_ddr_config=<N>")
+                print("Example: ./ddrbin_tool.py rk3572 -g gen_param.txt rk3572_ddr_v1.02.bin LPDDR5 adc_value_to_ddr_config=0")
+                filebin.close()
+                return -1
+            if not adc_value_set:
+                print("Error: adc_value_to_ddr_config is required for multi-group platforms.")
+                print("Usage: ./ddrbin_tool.py <chip> -g <output> <bin> <ddr_type> adc_value_to_ddr_config=<N>")
+                print("Example: ./ddrbin_tool.py rk3572 -g gen_param.txt rk3572_ddr_v1.02.bin LPDDR5 adc_value_to_ddr_config=0")
+                filebin.close()
+                return -1
+            if ddr_type not in ddr_type_map:
+                print("Error: invalid ddr_type '{}'. Supported: LPDDR4, LPDDR4X, LPDDR5".format(ddr_type))
+                filebin.close()
+                return -1
+
+        if ddr_type in ddr_type_map:
+            si_arr_name, tpl_arr_name, si_index_name = ddr_type_map[ddr_type]
+        else:
+            si_arr_name, tpl_arr_name, si_index_name = None, None, None
+
+        # Validate adc_value range
+        if is_multi_group and si_arr_name and si_arr_name in v7_arr_data:
+            si_arr = v7_arr_data[si_arr_name]
+            max_groups = si_arr['size'] // si_arr['words_per_group'] if si_arr['words_per_group'] > 0 else 0
+            if adc_value >= max_groups:
+                print("Error: adc_value_to_ddr_config={} is out of range. Valid range: 0-{} (si_info_arr_size={}, words_per_group={})".format(
+                    adc_value, max_groups - 1, si_arr['size'], si_arr['words_per_group']))
+                filebin.close()
+                return -1
+
+        if adc_value < 0:
+            adc_value = 0
+
+        if ddr_type == 'LPDDR5X' and 'lp5_si_info_arr' in v7_arr_data and v7_arr_data['lp5_si_info_arr']['offset'] != 0:
+            lp5_arr = v7_arr_data['lp5_si_info_arr']
+            lp5x_arr_offset = lp5_arr['offset'] + adc_value * lp5_arr['words_per_group']
+            lp5x_absolute_word_offset = start_tag_pos // 4 + lp5x_arr_offset
+            ddrbin_index['lp5x_index'] = {'offset': lp5x_absolute_word_offset, 'size': lp5_arr['words_per_group']}
+
+        if si_arr_name and si_arr_name in v7_arr_data and v7_arr_data[si_arr_name]['offset'] != 0:
+            si_arr = v7_arr_data[si_arr_name]
+            si_group_offset = si_arr['offset'] + adc_value * si_arr['words_per_group']
+            si_absolute_word_offset = start_tag_pos // 4 + si_group_offset
+            ddrbin_index[si_index_name] = {'offset': si_absolute_word_offset, 'size': si_arr['words_per_group']}
+
+        if tpl_arr_name and tpl_arr_name in v7_arr_data and v7_arr_data[tpl_arr_name]['offset'] != 0:
+            tpl_arr = v7_arr_data[tpl_arr_name]
+            tpl_group_offset = tpl_arr['offset'] + adc_value * tpl_arr['words_per_group']
+            tpl_absolute_word_offset = start_tag_pos // 4 + tpl_group_offset
+            tpl_index_name = tpl_arr_name.replace('_info_arr', '_index')
+            ddrbin_index[tpl_index_name] = {'offset': tpl_absolute_word_offset, 'size': tpl_arr['words_per_group']}
+
     uart_iomux_count_calculation(ddrbin_index, info_from_txt, info_from_bin, read_out, version)
 
     if bin_data_readout(filebin, ddrbin_index, read_out, bin_skew_offset, version, info_from_txt) != 0:
@@ -1707,7 +2517,7 @@ def ddrbin_tool(argc, argv):
 
     bin_data_2_info(info_from_bin, read_out, ddrbin_index, version, info_from_txt)
     if gen_txt_from_bin == 1:
-        if gen_info_from_bin(filegen_path, info_from_bin, verinfo_full, version) == 0:
+        if gen_info_from_bin(filegen_path, info_from_bin, verinfo_full, version, ddrbin_index, ddr_type, adc_value, is_multi_group) == 0:
             print("generate info from bin file ok.")
             filebin.close()
             return 0
@@ -1721,7 +2531,7 @@ def ddrbin_tool(argc, argv):
         print("Error: modify ddrbin failed")
         return -1
 
-    ret = txt_data_2_bin_data(info_from_txt, info_from_bin, ddrbin_index, write_in, version)
+    ret = txt_data_2_bin_data(info_from_txt, info_from_bin, ddrbin_index, write_in, version, read_out)
     if ret != 0:
         filebin.close()
         print("modify ddrbin failed")
@@ -1775,5 +2585,4 @@ def ddrbin_tool(argc, argv):
 
 if __name__ == '__main__':
     #print(f"D: argc = {len(sys.argv)}, argv = {sys.argv}")
-    ddrbin_tool(len(sys.argv), sys.argv)
-
+    sys.exit(ddrbin_tool(len(sys.argv), sys.argv))

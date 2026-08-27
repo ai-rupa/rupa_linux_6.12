@@ -13,4 +13,5 @@
 #include "tools/benchmark.config"
 #include "tools/common.config"
 #include "gui/weston.config"
+#include "ota/update_engine.config"
 # BR2_PREFER_ROCKCHIP_RGA is not set

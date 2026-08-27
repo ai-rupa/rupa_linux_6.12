@@ -84,10 +84,10 @@
 	rockchip,data-sync-bypass;
 	pinctrl-names = "default";
 	/*
-	 * rgb3x8_pins_m0/rgb3x8_pins_m1 for RGB3x8(8bit)
-	 * rgb565_pins for RGB565(16bit)
+	 * mcu_rgb3x8_pins_m0/mcu_rgb3x8_pins_m1 for RGB3x8(8bit)
+	 * mcu_rgb565_pins for RGB565(16bit)
 	 */
-	pinctrl-0 = <&rgb565_pins>;
+	pinctrl-0 = <&mcu_rgb565_pins>;
 
 	/*
 	 * 320x480 RGB/MCU screen K350C4516T
@@ -266,12 +266,12 @@
 };
 
 /*
- * The pin of hp-con-gpio on rk730_sound and backlight_mcu are
+ * The pin of hp-con-gpio on rk730_es7202_sound and backlight_mcu are
  * multiplexed. To ensure audio-video synchronization during video
- * playback, rk730_sound cannot be disabled, so only the hp-con-gpio
+ * playback, rk730_es7202_sound cannot be disabled, so only the hp-con-gpio
  * property is removed.
  */
-&rk730_sound {
+&rk730_es7202_sound {
 	/delete-property/ hp-con-gpio;
 };
 

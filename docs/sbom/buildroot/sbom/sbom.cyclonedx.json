@@ -1,0 +1,4399 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.5",
+  "version": 1,
+  "metadata": {
+    "timestamp": "2026-07-01T09:43:03Z",
+    "component": {
+      "type": "application",
+      "name": "Rockchip Linux SDK - Buildroot",
+      "version": "6.12"
+    },
+    "tools": [
+      {
+        "name": "sdk_sbom.py",
+        "version": "2.0.0"
+      }
+    ]
+  },
+  "components": [
+    {
+      "type": "application",
+      "name": "gcc-final",
+      "version": "14.3.0",
+      "purl": "pkg:generic/gcc-final@14.3.0",
+      "licenses": [
+        {
+          "license": {
+            "name": "GPL-3.0-with-GCC-exception"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Free Software Foundation"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "glibc",
+      "version": "2.42-67-g4ebd33dd77eabe8d4c45232bed4b42a31d2f9edc",
+      "purl": "pkg:generic/glibc@2.42-67-g4ebd33dd77eabe8d4c45232bed4b42a31d2f9edc",
+      "licenses": [
+        {
+          "license": {
+            "name": "GPL-2.0+ (programs), LGPL-2.1+, BSD-3-Clause, MIT (library)"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Free Software Foundation"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "operating-system",
+      "name": "linux-headers",
+      "version": "6.12.69",
+      "purl": "pkg:generic/rockchip/linux-headers@6.12.69",
+      "licenses": [
+        {
+          "license": {
+            "name": "GPL-2.0"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: The Linux Foundation"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "alsa-lib",
+      "version": "1.2.15.3",
+      "purl": "pkg:generic/alsa-lib@1.2.15.3",
+      "licenses": [
+        {
+          "license": {
+            "name": "LGPL-2.1+ (library), GPL-2.0+ (aserver)"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: The ALSA Project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "alsa-plugins",
+      "version": "1.2.12",
+      "purl": "pkg:generic/alsa-plugins@1.2.12",
+      "licenses": [
+        {
+          "license": {
+            "name": "LGPL-2.1+, GPL-2.0+ (samplerate plugin)"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: The ALSA Project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "alsa-utils",
+      "version": "1.2.15.2",
+      "purl": "pkg:generic/alsa-utils@1.2.15.2",
+      "licenses": [
+        {
+          "license": {
+            "name": "GPL-2.0"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: The ALSA Project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "libsamplerate",
+      "version": "0.2.2",
+      "purl": "pkg:github/libsndfile/libsamplerate@0.2.2",
+      "licenses": [
+        {
+          "license": {
+            "name": "BSD-2-Clause"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: libsamplerate upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "ncurses",
+      "version": "6.6-20251231",
+      "purl": "pkg:github/ThomasDickey/ncurses@6.6-20251231",
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT with advertising clause"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Thomas E. Dickey"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "alsa-ucm-conf",
+      "version": "v1.2.6.3",
+      "purl": "pkg:github/alsa-project/alsa-ucm-conf@v1.2.6.3",
+      "licenses": [
+        {
+          "license": {
+            "name": "BSD-3-Clause"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: The ALSA Project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "at-spi2-core",
+      "version": "2.58.2",
+      "purl": "pkg:generic/at-spi2-core@2.58.2",
+      "licenses": [
+        {
+          "license": {
+            "name": "LGPL-2.1+"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Freedesktop.org"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "dbus",
+      "version": "1.14.10",
+      "purl": "pkg:generic/dbus@1.14.10",
+      "licenses": [
+        {
+          "license": {
+            "name": "AFL-2.1 or GPL-2.0+ (library, tools), GPL-2.0+ (tools)"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Freedesktop.org"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "expat",
+      "version": "2.8.1",
+      "purl": "pkg:github/libexpat/expat@2.8.1",
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: The Expat maintainers"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "libglib2",
+      "version": "2.86.5",
+      "purl": "pkg:generic/libglib2@2.86.5",
+      "licenses": [
+        {
+          "license": {
+            "name": "LGPL-2.1+"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: libglib2 upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "libffi",
+      "version": "3.4.8",
+      "purl": "pkg:github/libffi/libffi@3.4.8",
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: GNOME Foundation"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "pcre2",
+      "version": "10.47",
+      "purl": "pkg:github/PCRE2Project/pcre2@10.47",
+      "licenses": [
+        {
+          "license": {
+            "name": "BSD-3-Clause"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: pcre2 upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "util-linux-libs",
+      "version": "2.41.4",
+      "purl": "pkg:generic/util-linux-libs@2.41.4",
+      "licenses": [
+        {
+          "license": {
+            "name": "LGPL-2.1+ (libblkid, libfdisk, libmount), BSD-3-Clause (libuuid)"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: kernel.org util-linux project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "libxcrypt",
+      "version": "4.5.2",
+      "purl": "pkg:github/besser82/libxcrypt@4.5.2",
+      "licenses": [
+        {
+          "license": {
+            "name": "LGPL-2.1+"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: libxcrypt upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "libzlib",
+      "version": "1.3.2",
+      "purl": "pkg:generic/libzlib@1.3.2",
+      "licenses": [
+        {
+          "license": {
+            "name": "Zlib"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: libzlib upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "libxml2",
+      "version": "2.15.3",
+      "purl": "pkg:generic/libxml2@2.15.3",
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: libxml2 upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "bash",
+      "version": "5.2.37",
+      "purl": "pkg:generic/bash@5.2.37",
+      "licenses": [
+        {
+          "license": {
+            "name": "GPL-3.0+"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Free Software Foundation"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "readline",
+      "version": "8.3",
+      "purl": "pkg:generic/readline@8.3",
+      "licenses": [
+        {
+          "license": {
+            "name": "GPL-3.0+"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: readline upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "bluez-alsa",
+      "version": "4.3.1",
+      "purl": "pkg:github/Arkq/bluez-alsa@4.3.1",
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: BlueZ Project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "bluez5_utils",
+      "version": "5.79",
+      "purl": "pkg:generic/bluez5-utils@5.79",
+      "licenses": [
+        {
+          "license": {
+            "name": "GPL-2.0+, LGPL-2.1+"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: BlueZ Project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "libical",
+      "version": "3.0.20",
+      "purl": "pkg:github/libical/libical@3.0.20",
+      "licenses": [
+        {
+          "license": {
+            "name": "MPL-2.0 or LGPL-2.1"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Free Software Foundation"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "eudev",
+      "version": "3.2.14",
+      "purl": "pkg:github/eudev-project/eudev@3.2.14",
+      "licenses": [
+        {
+          "license": {
+            "name": "GPL-2.0+ (programs), LGPL-2.1+ (libraries)"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: systemd Project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "kmod",
+      "version": "33",
+      "purl": "pkg:generic/kmod@33",
+      "licenses": [
+        {
+          "license": {
+            "name": "LGPL-2.1+ (library)"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Professional Open Source"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "libopenssl",
+      "version": "3.6.2",
+      "purl": "pkg:github/openssl/libopenssl@3.6.2",
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: OpenSSL Software Foundation"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "libbsd",
+      "version": "0.12.2",
+      "purl": "pkg:generic/libbsd@0.12.2",
+      "licenses": [
+        {
+          "license": {
+            "name": "BSD-2-Clause, BSD-3-Clause, BSD-5-Clause, MIT, ISC, Beerware"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: FreeBSD Foundation"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "libmd",
+      "version": "1.1.0",
+      "purl": "pkg:generic/libmd@1.1.0",
+      "licenses": [
+        {
+          "license": {
+            "name": "BSD-2-Clause, BSD-3-Clause, Beerware, ISC, Public Domain"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: libmd upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "mpg123",
+      "version": "1.33.4",
+      "purl": "pkg:generic/mpg123@1.33.4",
+      "licenses": [
+        {
+          "license": {
+            "name": "LGPL-2.1"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: mpg123 upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "opus",
+      "version": "1.6.1",
+      "purl": "pkg:generic/opus@1.6.1",
+      "licenses": [
+        {
+          "license": {
+            "name": "BSD-3-Clause"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: opus upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "sbc",
+      "version": "2.1",
+      "purl": "pkg:generic/sbc@2.1",
+      "licenses": [
+        {
+          "license": {
+            "name": "LGPL-2.1+ (library)"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: sbc upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "spandsp",
+      "version": "3.0.0-6ec23e5a7e",
+      "purl": "pkg:generic/spandsp@3.0.0-6ec23e5a7e",
+      "licenses": [
+        {
+          "license": {
+            "name": "LGPL-2.1 (library), GPL-2.0 (test suite)"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: spandsp upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "tiff",
+      "version": "4.7.1",
+      "purl": "pkg:generic/tiff@4.7.1",
+      "licenses": [
+        {
+          "license": {
+            "name": "tiff license"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: tiff upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "jpeg-turbo",
+      "version": "3.1.2",
+      "purl": "pkg:github/libjpeg-turbo/jpeg-turbo@3.1.2",
+      "licenses": [
+        {
+          "license": {
+            "name": "IJG (libjpeg), BSD-3-Clause (TurboJPEG), Zlib (SIMD)"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: libjpeg-turbo Project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "busybox",
+      "version": "1.38.0",
+      "purl": "pkg:generic/busybox@1.38.0",
+      "licenses": [
+        {
+          "license": {
+            "name": "GPL-2.0, bzip2-1.0.4"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: BusyBox.net"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "coreutils",
+      "version": "9.10",
+      "purl": "pkg:generic/coreutils@9.10",
+      "licenses": [
+        {
+          "license": {
+            "name": "GPL-3.0+"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Free Software Foundation"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "libcap",
+      "version": "2.78",
+      "purl": "pkg:generic/libcap@2.78",
+      "licenses": [
+        {
+          "license": {
+            "name": "GPL-2.0 or BSD-3-Clause"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Andrew G. Morgan"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "dosfstools",
+      "version": "4.2",
+      "purl": "pkg:github/dosfstools/dosfstools@4.2",
+      "licenses": [
+        {
+          "license": {
+            "name": "GPL-3.0+"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Werner Almesberger"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "e2fsprogs",
+      "version": "1.47.3",
+      "purl": "pkg:generic/e2fsprogs@1.47.3",
+      "licenses": [
+        {
+          "license": {
+            "name": "GPL-2.0, MIT-like with advertising clause (libss and libet)"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Theodore Ts'o"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "util-linux",
+      "version": "2.41.4",
+      "purl": "pkg:generic/util-linux@2.41.4",
+      "licenses": [
+        {
+          "license": {
+            "name": "GPL-2.0+, BSD-4-Clause, LGPL-2.1+ (libblkid, libfdisk, libmount), BSD-3-Clause (libuuid), BSD-2-Clause (xxhash), ISC (rfkill), MIT (hardlink, flock)"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: kernel.org util-linux project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "i2c-tools",
+      "version": "4.4",
+      "purl": "pkg:generic/i2c-tools@4.4",
+      "licenses": [
+        {
+          "license": {
+            "name": "GPL-2.0+, GPL-2.0 (py-smbus), LGPL-2.1+ (libi2c)"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Jean Delvare"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "iproute2",
+      "version": "6.17.0",
+      "purl": "pkg:generic/iproute2@6.17.0",
+      "licenses": [
+        {
+          "license": {
+            "name": "GPL-2.0+"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: iproute2 upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "iputils",
+      "version": "20250605",
+      "purl": "pkg:github/iputils/iputils@20250605",
+      "licenses": [
+        {
+          "license": {
+            "name": "GPL-2.0+, BSD-3-Clause"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: iputils developers"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "libidn2",
+      "version": "2.3.8",
+      "purl": "pkg:generic/libidn2@2.3.8",
+      "licenses": [
+        {
+          "license": {
+            "name": "GPL-2.0+ or LGPL-3.0+ (library)"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Free Software Foundation"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "libunistring",
+      "version": "1.4.2",
+      "purl": "pkg:generic/libunistring@1.4.2",
+      "licenses": [
+        {
+          "license": {
+            "name": "LGPL-3.0+ or GPL-2.0"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Free Software Foundation"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "libtirpc",
+      "version": "1.3.7",
+      "purl": "pkg:generic/libtirpc@1.3.7",
+      "licenses": [
+        {
+          "license": {
+            "name": "BSD-3-Clause"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: libtirpc upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "pciutils",
+      "version": "3.14.0",
+      "purl": "pkg:generic/pciutils@3.14.0",
+      "licenses": [
+        {
+          "license": {
+            "name": "GPL-2.0+"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: pciutils upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "procps-ng",
+      "version": "4.0.6",
+      "purl": "pkg:generic/procps-ng@4.0.6",
+      "licenses": [
+        {
+          "license": {
+            "name": "GPL-2.0+, LGPL-2.0+ (libproc and libps)"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: procps-ng upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "bzip2",
+      "version": "1.0.8",
+      "purl": "pkg:generic/bzip2@1.0.8",
+      "licenses": [
+        {
+          "license": {
+            "name": "bzip2 license"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Julian Seward"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "ca-certificates",
+      "version": "20260223",
+      "purl": "pkg:generic/ca-certificates@20260223",
+      "licenses": [
+        {
+          "license": {
+            "name": "GPL-2.0+ (script), MPL-2.0 (data)"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Mozilla Foundation"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "cairo",
+      "version": "1.18.4",
+      "purl": "pkg:generic/cairo@1.18.4",
+      "licenses": [
+        {
+          "license": {
+            "name": "LGPL-2.1 or MPL-1.1 (library)"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Cairo Project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "fontconfig",
+      "version": "2.17.1",
+      "purl": "pkg:generic/fontconfig@2.17.1",
+      "licenses": [
+        {
+          "license": {
+            "name": "fontconfig license"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Freedesktop.org"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "freetype",
+      "version": "2.14.3",
+      "purl": "pkg:gnu/freetype@2.14.3",
+      "licenses": [
+        {
+          "license": {
+            "name": "FTL or GPL-2.0+"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: The FreeType Project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "libpng",
+      "version": "1.6.58",
+      "purl": "pkg:generic/libpng@1.6.58",
+      "licenses": [
+        {
+          "license": {
+            "name": "Libpng-2.0"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: PNG Reference Library"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "pixman",
+      "version": "0.46.4",
+      "purl": "pkg:generic/pixman@0.46.4",
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: pixman upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "can-utils",
+      "version": "2025.01",
+      "purl": "pkg:github/linux-can/can-utils@2025.01",
+      "licenses": [
+        {
+          "license": {
+            "name": "BSD-3-Clause or GPL-2.0"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: can-utils upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "chromium-wayland",
+      "version": "132.0.6834.83",
+      "purl": "pkg:generic/rockchip/chromium-wayland",
+      "licenses": [
+        {
+          "license": {
+            "name": "BSD-3-Clause"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Google LLC"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "chrony",
+      "version": "4.8",
+      "purl": "pkg:generic/chrony@4.8",
+      "licenses": [
+        {
+          "license": {
+            "name": "GPL-2.0"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Richard Cochran"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "libnss",
+      "version": "3.120.1",
+      "purl": "pkg:generic/libnss@3.120.1",
+      "licenses": [
+        {
+          "license": {
+            "name": "MPL-2.0"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: libnss upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "libnspr",
+      "version": "4.38.2",
+      "purl": "pkg:generic/libnspr@4.38.2",
+      "licenses": [
+        {
+          "license": {
+            "name": "MPL-2.0"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: libnspr upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "sqlite",
+      "version": "3.51.3",
+      "purl": "pkg:generic/sqlite@3.51.3",
+      "licenses": [
+        {
+          "license": {
+            "name": "blessing"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: D. Richard Hipp"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "dejavu",
+      "version": "2.37",
+      "purl": "pkg:generic/dejavu@2.37",
+      "licenses": [
+        {
+          "license": {
+            "name": "LicenseRef-DejaVu-Fonts"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: DejaVu Fonts project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "dhcpcd",
+      "version": "10.2.4",
+      "purl": "pkg:github/NetworkConfiguration/dhcpcd@10.2.4",
+      "licenses": [
+        {
+          "license": {
+            "name": "BSD-2-Clause"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Roy Marples"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "dhrystone",
+      "version": "2",
+      "purl": "pkg:generic/dhrystone@2",
+      "licenses": [
+        {
+          "license": {
+            "name": "LicenseRef-Dhrystone"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Reinhold P. Weicker"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "dnsmasq",
+      "version": "2.92rel2",
+      "purl": "pkg:generic/dnsmasq@2.92rel2",
+      "licenses": [
+        {
+          "license": {
+            "name": "GPL-2.0 or GPL-3.0"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Simon Kelley"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "dropbear",
+      "version": "2026.91",
+      "purl": "pkg:generic/dropbear@2026.91",
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT, BSD-2-Clause, Public domain, Unlicense, WTFPL"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Matt Johnston"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "evtest",
+      "version": "1.36",
+      "purl": "pkg:generic/evtest@1.36",
+      "licenses": [
+        {
+          "license": {
+            "name": "GPL-2.0+"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Arnd Bergmann"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "exfat-utils",
+      "version": "1.4.0",
+      "purl": "pkg:github/relan/exfat-utils@1.4.0",
+      "licenses": [
+        {
+          "license": {
+            "name": "GPL-2.0+"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Andrew Nayenko"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "exfat",
+      "version": "1.4.0",
+      "purl": "pkg:github/relan/exfat@1.4.0",
+      "licenses": [
+        {
+          "license": {
+            "name": "GPL-2.0+"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Andrew Nayenko"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "libfuse3",
+      "version": "3.18.1",
+      "purl": "pkg:github/libfuse/libfuse3@3.18.1",
+      "licenses": [
+        {
+          "license": {
+            "name": "LGPL-2.1"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: libfuse developers"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "faad2",
+      "version": "2.11.2",
+      "purl": "pkg:github/knik0/faad2@2.11.2",
+      "licenses": [
+        {
+          "license": {
+            "name": "GPL-2.0"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: FAAD2 developers"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "fatresize",
+      "version": "321973ba156bbf2489e82c47c94b2bca74b16316",
+      "purl": "pkg:github/ya-mouse/fatresize@321973ba156bbf2489e82c47c94b2bca74b16316",
+      "licenses": [
+        {
+          "license": {
+            "name": "GPL-3.0"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: fatresize upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "parted",
+      "version": "3.6",
+      "purl": "pkg:generic/parted@3.6",
+      "licenses": [
+        {
+          "license": {
+            "name": "GPL-3.0+"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: parted upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "flac",
+      "version": "1.5.0",
+      "purl": "pkg:generic/flac@1.5.0",
+      "licenses": [
+        {
+          "license": {
+            "name": "Xiph BSD-like (libFLAC), GPL-2.0+ (tools), LGPL-2.1+ (other libraries)"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Xiph.Org Foundation"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "libogg",
+      "version": "1.3.6",
+      "purl": "pkg:generic/libogg@1.3.6",
+      "licenses": [
+        {
+          "license": {
+            "name": "BSD-3-Clause"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Xiph.Org Foundation"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "fluidsynth",
+      "version": "2.4.7",
+      "purl": "pkg:github/FluidSynth/fluidsynth@2.4.7",
+      "licenses": [
+        {
+          "license": {
+            "name": "LGPL-2.1+"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: FluidSynth developers"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "font-awesome",
+      "version": "4.7.0",
+      "purl": "pkg:github/FortAwesome/font-awesome@4.7.0",
+      "licenses": [
+        {
+          "license": {
+            "name": "OFL-1.1 (font), MIT (CSS, LESS and Sass files)"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Fonticons Inc"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "gdk-pixbuf",
+      "version": "2.42.12",
+      "purl": "pkg:generic/gdk-pixbuf@2.42.12",
+      "licenses": [
+        {
+          "license": {
+            "name": "LGPL-2.1+"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: GNOME Foundation"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "gesftpserver",
+      "version": "2",
+      "purl": "pkg:generic/gesftpserver@2",
+      "licenses": [
+        {
+          "license": {
+            "name": "GPL-2.0+"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: gesftpserver upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "glmark2",
+      "version": "2023.01",
+      "purl": "pkg:github/glmark2/glmark2@2023.01",
+      "licenses": [
+        {
+          "license": {
+            "name": "GPL-3.0+, SGIv1"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Canonical"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "libdrm",
+      "version": "2.4.131",
+      "purl": "pkg:generic/libdrm@2.4.131",
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: The Linux Foundation"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "libpthread-stubs",
+      "version": "0.5",
+      "purl": "pkg:generic/libpthread-stubs@0.5",
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: libpthread-stubs upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rockchip-mali",
+      "version": "master",
+      "purl": "pkg:generic/rockchip/rockchip-mali",
+      "licenses": [
+        {
+          "license": {
+            "name": "ARM"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Rockchip Electronics Co., Ltd."
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "wayland",
+      "version": "1.24.0",
+      "purl": "pkg:generic/wayland@1.24.0",
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Freedesktop.org"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "wayland-protocols",
+      "version": "1.48",
+      "purl": "pkg:generic/wayland-protocols@1.48",
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Freedesktop.org"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "gst1-plugins-bad",
+      "version": "1.28.2",
+      "purl": "pkg:generic/gst1-plugins-bad@1.28.2",
+      "licenses": [
+        {
+          "license": {
+            "name": "LGPL-2.0-or-later AND GPL-2.0-or-later"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: GStreamer Project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "gst1-plugins-base",
+      "version": "1.28.2",
+      "purl": "pkg:generic/gst1-plugins-base@1.28.2",
+      "licenses": [
+        {
+          "license": {
+            "name": "LGPL-2.1+"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: GStreamer Project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "gstreamer1",
+      "version": "1.28.2",
+      "purl": "pkg:generic/gstreamer1@1.28.2",
+      "licenses": [
+        {
+          "license": {
+            "name": "LGPL-2.1+"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: GStreamer Project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "libtheora",
+      "version": "1.2.0",
+      "purl": "pkg:generic/libtheora@1.2.0",
+      "licenses": [
+        {
+          "license": {
+            "name": "BSD-3-Clause"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: libtheora upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "libvorbis",
+      "version": "1.3.7",
+      "purl": "pkg:generic/libvorbis@1.3.7",
+      "licenses": [
+        {
+          "license": {
+            "name": "BSD-3-Clause"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: libvorbis upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rockchip-rga",
+      "version": "master",
+      "purl": "pkg:generic/rockchip/rockchip-rga",
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Rockchip Electronics Co., Ltd."
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "libmpeg2",
+      "version": "0.5.1",
+      "purl": "pkg:generic/libmpeg2@0.5.1",
+      "licenses": [
+        {
+          "license": {
+            "name": "GPL-2.0+"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: libmpeg2 upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "mjpegtools",
+      "version": "2.2.1",
+      "purl": "pkg:generic/mjpegtools@2.2.1",
+      "licenses": [
+        {
+          "license": {
+            "name": "GPL-2.0+"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: mjpegtools upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "rtmpdump",
+      "version": "6f6bb1353fc84f4cc37138baa99f586750028a01",
+      "purl": "pkg:generic/rtmpdump@6f6bb1353fc84f4cc37138baa99f586750028a01",
+      "licenses": [
+        {
+          "license": {
+            "name": "LGPL-2.1+"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: rtmpdump upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "gst1-plugins-good",
+      "version": "1.28.2",
+      "purl": "pkg:generic/gst1-plugins-good@1.28.2",
+      "licenses": [
+        {
+          "license": {
+            "name": "LGPL-2.1+"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: GStreamer Project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "libgudev",
+      "version": "238",
+      "purl": "pkg:generic/libgudev@238",
+      "licenses": [
+        {
+          "license": {
+            "name": "LGPL-2.1+"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: GNOME Foundation"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "libsoup3",
+      "version": "3.6.6",
+      "purl": "pkg:generic/libsoup3@3.6.6",
+      "licenses": [
+        {
+          "license": {
+            "name": "LGPL-2.0+"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: libsoup3 upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "libpsl",
+      "version": "0.21.5",
+      "purl": "pkg:github/rockdaboot/libpsl@0.21.5",
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT, BSD-3-Clause"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: libpsl upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "nghttp2",
+      "version": "1.64.0",
+      "purl": "pkg:github/nghttp2/nghttp2@1.64.0",
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: nghttp2 upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "libv4l",
+      "version": "1.28.1",
+      "purl": "pkg:generic/libv4l@1.28.1",
+      "licenses": [
+        {
+          "license": {
+            "name": "GPL-2.0+ (utilities), LGPL-2.1+ (libraries)"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: libv4l upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "gst1-plugins-ugly",
+      "version": "1.28.2",
+      "purl": "pkg:generic/gst1-plugins-ugly@1.28.2",
+      "licenses": [
+        {
+          "license": {
+            "name": "LGPL-2.1+, GPL-2.0"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: GStreamer Project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "harfbuzz",
+      "version": "12.3.2",
+      "purl": "pkg:github/harfbuzz/harfbuzz@12.3.2",
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT, ISC (ucdn library)"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: GNOME Foundation"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "hostapd",
+      "version": "2.11",
+      "purl": "pkg:generic/hostapd@2.11",
+      "licenses": [
+        {
+          "license": {
+            "name": "BSD-3-Clause"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Jouni Malinen"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "libnl",
+      "version": "3.11.0",
+      "purl": "pkg:github/thom311/libnl@3.11.0",
+      "licenses": [
+        {
+          "license": {
+            "name": "LGPL-2.1+"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: libnl upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "hwdata",
+      "version": "0.403",
+      "purl": "pkg:github/vcrhonek/hwdata@0.403",
+      "licenses": [
+        {
+          "license": {
+            "name": "GPL-2.0+, BSD-3-Clause, XFree86 1.0"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Vojtech Pavlik"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "iperf",
+      "version": "2.2.1",
+      "purl": "pkg:generic/iperf@2.2.1",
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT-like"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: ESnet"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "iw",
+      "version": "6.17",
+      "purl": "pkg:generic/iw@6.17",
+      "licenses": [
+        {
+          "license": {
+            "name": "ISC"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Linux Wireless"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "libabseil-cpp",
+      "version": "20260107.1",
+      "purl": "pkg:github/abseil/libabseil-cpp@20260107.1",
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: libabseil-cpp upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "libcurl",
+      "version": "8.20.0",
+      "purl": "pkg:generic/libcurl@8.20.0",
+      "licenses": [
+        {
+          "license": {
+            "name": "curl"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Daniel Stenberg"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "libdisplay-info",
+      "version": "0.3.0",
+      "purl": "pkg:generic/libdisplay-info@0.3.0",
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: libdisplay-info upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "liberation",
+      "version": "2.1.5",
+      "purl": "pkg:github/liberationfonts/liberation@2.1.5",
+      "licenses": [
+        {
+          "license": {
+            "name": "OFL-1.1"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Red Hat"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "libevdev",
+      "version": "1.13.5",
+      "purl": "pkg:generic/libevdev@1.13.5",
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Freedesktop.org"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "libfribidi",
+      "version": "1.0.16",
+      "purl": "pkg:github/fribidi/libfribidi@1.0.16",
+      "licenses": [
+        {
+          "license": {
+            "name": "LGPL-2.1+"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: GNOME Foundation"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "libinput",
+      "version": "1.31.1",
+      "purl": "pkg:generic/libinput@1.31.1",
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Freedesktop.org"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "mtdev",
+      "version": "1.1.7",
+      "purl": "pkg:generic/mtdev@1.1.7",
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Linux MTD Project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "libmad",
+      "version": "0.15.1b",
+      "purl": "pkg:generic/libmad@0.15.1b",
+      "licenses": [
+        {
+          "license": {
+            "name": "GPL-2.0+"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: libmad upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "libsndfile",
+      "version": "1.2.2",
+      "purl": "pkg:github/libsndfile/libsndfile@1.2.2",
+      "licenses": [
+        {
+          "license": {
+            "name": "LGPL-2.1+"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: libsndfile upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "libsocketcan",
+      "version": "0.0.12",
+      "purl": "pkg:generic/libsocketcan@0.0.12",
+      "licenses": [
+        {
+          "license": {
+            "name": "LGPL-2.1+"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: libsocketcan upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "libtool",
+      "version": "2.4.6",
+      "purl": "pkg:generic/libtool@2.4.6",
+      "licenses": [
+        {
+          "license": {
+            "name": "LGPL-2.1+"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: libtool upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "libvpx",
+      "version": "1.16.0",
+      "purl": "pkg:github/webmproject/libvpx@1.16.0",
+      "licenses": [
+        {
+          "license": {
+            "name": "BSD-3-Clause"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: libvpx upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "libxkbcommon",
+      "version": "1.9.2",
+      "purl": "pkg:github/xkbcommon/libxkbcommon@1.9.2",
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT/X11"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: libxkbcommon upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "libxslt",
+      "version": "1.1.45",
+      "purl": "pkg:generic/libxslt@1.1.45",
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: libxslt upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "lmbench",
+      "version": "8b3ddfa52ee4a886abe5af4550f404142966eb88",
+      "purl": "pkg:github/intel/lmbench@8b3ddfa52ee4a886abe5af4550f404142966eb88",
+      "licenses": [
+        {
+          "license": {
+            "name": "lmbench license (based on GPL-2.0)"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: lmbench upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "lrzsz",
+      "version": "0.12.21rc",
+      "purl": "pkg:generic/lrzsz@0.12.21rc",
+      "licenses": [
+        {
+          "license": {
+            "name": "GPL-2.0+"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: lrzsz upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "make",
+      "version": "4.3",
+      "purl": "pkg:generic/make@4.3",
+      "licenses": [
+        {
+          "license": {
+            "name": "GPL-3.0+"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Free Software Foundation"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "memtester",
+      "version": "4.7.1",
+      "purl": "pkg:generic/memtester@4.7.1",
+      "licenses": [
+        {
+          "license": {
+            "name": "GPL-2.0"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: memtester upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "ntfs-3g",
+      "version": "2022.10.3",
+      "purl": "pkg:generic/ntfs-3g@2022.10.3",
+      "licenses": [
+        {
+          "license": {
+            "name": "GPL-2.0+, LGPL-2.0+"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: ntfs-3g upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "numactl",
+      "version": "2.0.19",
+      "purl": "pkg:github/numactl/numactl@2.0.19",
+      "licenses": [
+        {
+          "license": {
+            "name": "LGPL-2.1 (libnuma), GPL-2.0 (programs)"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: numactl upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "opencv4",
+      "version": "4.13.0",
+      "purl": "pkg:github/opencv/opencv4@4.13.0",
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: opencv4 upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "protobuf",
+      "version": "33.5",
+      "purl": "pkg:github/protocolbuffers/protobuf@33.5",
+      "licenses": [
+        {
+          "license": {
+            "name": "BSD-3-Clause"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: protobuf upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "pango",
+      "version": "1.56.4",
+      "purl": "pkg:generic/pango@1.56.4",
+      "licenses": [
+        {
+          "license": {
+            "name": "LGPL-2.0+"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: GNOME Project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "perl",
+      "version": "5.42.2",
+      "purl": "pkg:generic/perl@5.42.2",
+      "licenses": [
+        {
+          "license": {
+            "name": "Artistic or GPL-1.0+"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: perl upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "pm-utils",
+      "version": "1.4.1",
+      "purl": "pkg:generic/pm-utils@1.4.1",
+      "licenses": [
+        {
+          "license": {
+            "name": "GPL-2.0+"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: pm-utils upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "procrank_linux",
+      "version": "21c30ab4514a5b15ac6e813e21bee0d3d714cb08",
+      "purl": "pkg:github/csimmonds/procrank-linux@21c30ab4514a5b15ac6e813e21bee0d3d714cb08",
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: procrank_linux upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "camera-engine-rkaiq",
+      "version": "1.0",
+      "purl": "pkg:generic/camera-engine-rkaiq@1.0",
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: camera-engine-rkaiq upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "gstreamer1-rockchip",
+      "version": "master",
+      "purl": "pkg:generic/gstreamer1-rockchip@master",
+      "licenses": [
+        {
+          "license": {
+            "name": "LGPL-2.1"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: GStreamer Project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rockchip-mpp",
+      "version": "develop",
+      "purl": "pkg:generic/rockchip/rockchip-mpp",
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0, MIT"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Rockchip Electronics Co., Ltd."
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "libv4l-rkmpp",
+      "version": "1.7.1",
+      "purl": "pkg:github/JeffyCN/libv4l-rkmpp@1.7.1",
+      "licenses": [
+        {
+          "license": {
+            "name": "LGPL-2.1"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: libv4l-rkmpp upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "recovery",
+      "version": "develop",
+      "purl": "pkg:generic/recovery@develop",
+      "licenses": [
+        {
+          "license": {
+            "name": "ROCKCHIP"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: recovery upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "rknn3-runtime",
+      "version": "1.0.0",
+      "purl": "pkg:generic/rknn3-runtime@1.0.0",
+      "licenses": [
+        {
+          "license": {
+            "name": "ROCKCHIP"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: rknn3-runtime upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "rknn3-test",
+      "version": "1.0.0",
+      "purl": "pkg:generic/rknn3-test@1.0.0",
+      "licenses": [
+        {
+          "license": {
+            "name": "ROCKCHIP"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: rknn3-test upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "firmware",
+      "name": "rknpu2",
+      "version": "1.0.0",
+      "purl": "pkg:generic/rockchip/rknpu2",
+      "licenses": [
+        {
+          "license": {
+            "name": "ROCKCHIP"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Rockchip Electronics Co., Ltd."
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "rktoolkit",
+      "version": "master",
+      "purl": "pkg:generic/rktoolkit@master",
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: rktoolkit upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "wpa_supplicant",
+      "version": "2.11",
+      "purl": "pkg:generic/wpa-supplicant@2.11",
+      "licenses": [
+        {
+          "license": {
+            "name": "BSD-3-Clause"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: wpa_supplicant upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "rkwifibt",
+      "version": "1.0.0",
+      "purl": "pkg:generic/rkwifibt@1.0.0",
+      "licenses": [
+        {
+          "license": {
+            "name": "ROCKCHIP"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: rkwifibt upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "rockchip-ai",
+      "version": "1.0",
+      "purl": "pkg:generic/rockchip-ai@1.0",
+      "licenses": [
+        {
+          "license": {
+            "name": "ROCKCHIP"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Rockchip Electronics Co., Ltd."
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "rockchip-alsa-config",
+      "version": "1.0",
+      "purl": "pkg:generic/rockchip-alsa-config@1.0",
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Rockchip Electronics Co., Ltd."
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "rockchip-test",
+      "version": "master",
+      "purl": "pkg:generic/rockchip-test@master",
+      "licenses": [
+        {
+          "license": {
+            "name": "ROCKCHIP"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Rockchip Electronics Co., Ltd."
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "rt-tests",
+      "version": "2.8",
+      "purl": "pkg:generic/rt-tests@2.8",
+      "licenses": [
+        {
+          "license": {
+            "name": "GPL-2.0+"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: rt-tests upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "source-han-sans-cn",
+      "version": "2.004R",
+      "purl": "pkg:github/adobe-fonts/source-han-sans-cn@2.004R",
+      "licenses": [
+        {
+          "license": {
+            "name": "OFL-1.1"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: source-han-sans-cn upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "sox",
+      "version": "7524160b29a476f7e87bc14fddf12d349f9a3c5e",
+      "purl": "pkg:generic/sox@7524160b29a476f7e87bc14fddf12d349f9a3c5e",
+      "licenses": [
+        {
+          "license": {
+            "name": "GPL-2.0+ (sox binary), LGPL-2.1+ (libraries)"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: sox upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "strace",
+      "version": "6.19",
+      "purl": "pkg:github/strace/strace@6.19",
+      "licenses": [
+        {
+          "license": {
+            "name": "LGPL-2.1+"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: strace upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "stress-ng",
+      "version": "0.21.00",
+      "purl": "pkg:github/ColinIanKing/stress-ng@0.21.00",
+      "licenses": [
+        {
+          "license": {
+            "name": "GPL-2.0+"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: stress-ng upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "stress",
+      "version": "1.0.7",
+      "purl": "pkg:github/resurrecting-open-source-projects/stress@1.0.7",
+      "licenses": [
+        {
+          "license": {
+            "name": "GPL-2.0+"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: stress upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "stressapptest",
+      "version": "6714c57d0d67f5a2a7a9987791af6729289bf64e",
+      "purl": "pkg:github/stressapptest/stressapptest@6714c57d0d67f5a2a7a9987791af6729289bf64e",
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: stressapptest upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "tzdata",
+      "version": "2026b",
+      "purl": "pkg:generic/tzdata@2026b",
+      "licenses": [
+        {
+          "license": {
+            "name": "Public domain"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: tzdata upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "unixbench",
+      "version": "e477bc034137f994f2bbaba52952ca6e1de53856",
+      "purl": "pkg:github/kdlucas/unixbench@e477bc034137f994f2bbaba52952ca6e1de53856",
+      "licenses": [
+        {
+          "license": {
+            "name": "GPL-2.0+"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: unixbench upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "usbmount",
+      "version": "0.0.22",
+      "purl": "pkg:generic/usbmount@0.0.22",
+      "licenses": [
+        {
+          "license": {
+            "name": "BSD-2-Clause"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: usbmount upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "wayland-utils",
+      "version": "1.2.0",
+      "purl": "pkg:generic/wayland-utils@1.2.0",
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Freedesktop.org"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "webp",
+      "version": "1.6.0",
+      "purl": "pkg:generic/webp@1.6.0",
+      "licenses": [
+        {
+          "license": {
+            "name": "BSD-3-Clause"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: webp upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "weston",
+      "version": "e0c5b8a26b1332300bdbdc098ae92ebfaf435c8c",
+      "purl": "pkg:generic/weston@e0c5b8a26b1332300bdbdc098ae92ebfaf435c8c",
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Freedesktop.org"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "whetstone",
+      "version": "1.2",
+      "purl": "pkg:generic/whetstone@1.2",
+      "licenses": [
+        {
+          "license": {
+            "name": "LicenseRef-Whetstone"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Painter Engineering, Inc."
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "wireless_tools",
+      "version": "30.pre9",
+      "purl": "pkg:generic/wireless-tools@30.pre9",
+      "licenses": [
+        {
+          "license": {
+            "name": "GPL-2.0"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: wireless_tools upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "xkeyboard-config",
+      "version": "2.38",
+      "purl": "pkg:generic/xkeyboard-config@2.38",
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: xkeyboard-config upstream project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "buildroot-target"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "linux-kernel",
+      "version": "6.12.69",
+      "purl": "pkg:generic/rockchip/linux-kernel@6.12.69",
+      "licenses": [
+        {
+          "license": {
+            "name": "GPL-2.0-only"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: The Linux Foundation"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "sdk-kernel"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "u-boot",
+      "version": "2025.04",
+      "purl": "pkg:generic/rockchip/u-boot@2025.04",
+      "licenses": [
+        {
+          "license": {
+            "name": "GPL-2.0-or-later"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: DENX Software Engineering"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "sdk-bootloader"
+        }
+      ]
+    },
+    {
+      "type": "firmware",
+      "name": "rkbin",
+      "version": "sdk-release",
+      "purl": "pkg:generic/rockchip/rkbin@sdk-release",
+      "licenses": [
+        {
+          "license": {
+            "name": "LicenseRef-ROCKCHIP"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Rockchip Electronics Co., Ltd."
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "sdk-firmware"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "buildroot",
+      "version": "sdk-release",
+      "purl": "pkg:generic/rockchip/buildroot@sdk-release",
+      "licenses": [
+        {
+          "license": {
+            "name": "GPL-2.0-or-later"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Buildroot project"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "sdk-build-system"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rk3572-device-tree",
+      "version": "6.12.69",
+      "purl": "pkg:generic/rockchip/rk3572-device-tree@6.12.69",
+      "licenses": [
+        {
+          "license": {
+            "name": "GPL-2.0-only"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Rockchip Electronics Co., Ltd."
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "sdk-device-tree"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "u-boot-spl",
+      "version": "2025.04",
+      "purl": "pkg:generic/rockchip/u-boot-spl@2025.04",
+      "licenses": [
+        {
+          "license": {
+            "name": "GPL-2.0-or-later"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: DENX Software Engineering"
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "sdk-bootloader-spl"
+        }
+      ]
+    },
+    {
+      "type": "firmware",
+      "name": "rk3572-ddr-init",
+      "version": "1.09",
+      "purl": "pkg:generic/rockchip/rk3572-ddr-init@1.09",
+      "licenses": [
+        {
+          "license": {
+            "name": "LicenseRef-ROCKCHIP"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Rockchip Electronics Co., Ltd."
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "sdk-ddr-firmware"
+        }
+      ]
+    },
+    {
+      "type": "firmware",
+      "name": "rk3572-trustzone-bl31",
+      "version": "1.23",
+      "purl": "pkg:generic/rockchip/rk3572-trustzone-bl31@1.23",
+      "licenses": [
+        {
+          "license": {
+            "name": "LicenseRef-ROCKCHIP"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Rockchip Electronics Co., Ltd."
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "sdk-trustzone"
+        }
+      ]
+    },
+    {
+      "type": "firmware",
+      "name": "rk3572-trustzone-bl32",
+      "version": "1.08",
+      "purl": "pkg:generic/rockchip/rk3572-trustzone-bl32@1.08",
+      "licenses": [
+        {
+          "license": {
+            "name": "LicenseRef-ROCKCHIP"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Rockchip Electronics Co., Ltd."
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "sdk-trustzone"
+        }
+      ]
+    },
+    {
+      "type": "firmware",
+      "name": "rk3572-secure-boot-trust-config",
+      "version": "sdk-release",
+      "purl": "pkg:generic/rockchip/rk3572-secure-boot-trust-config@sdk-release",
+      "licenses": [
+        {
+          "license": {
+            "name": "LicenseRef-ROCKCHIP"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Rockchip Electronics Co., Ltd."
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "sdk-secure-boot"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rk3572-update-image",
+      "version": "product-update-image",
+      "purl": "pkg:generic/rockchip/rk3572-update-image@product-update-image",
+      "licenses": [
+        {
+          "license": {
+            "name": "LicenseRef-Product-Image-Composite"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Rockchip Electronics Co., Ltd."
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "product-image"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rk3572-update-raw-image",
+      "version": "product-update-raw-image",
+      "purl": "pkg:generic/rockchip/rk3572-update-raw-image@product-update-raw-image",
+      "licenses": [
+        {
+          "license": {
+            "name": "LicenseRef-Product-Image-Composite"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Rockchip Electronics Co., Ltd."
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "product-image"
+        }
+      ]
+    },
+    {
+      "type": "operating-system",
+      "name": "buildroot-rootfs-image",
+      "version": "product-rootfs",
+      "purl": "pkg:generic/rockchip/buildroot-rootfs-image@product-rootfs",
+      "licenses": [
+        {
+          "license": {
+            "name": "LicenseRef-Product-Image-Composite"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Rockchip Electronics Co., Ltd."
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "product-rootfs"
+        }
+      ]
+    },
+    {
+      "type": "operating-system",
+      "name": "rk3572-boot-image",
+      "version": "product-boot",
+      "purl": "pkg:generic/rockchip/rk3572-boot-image@product-boot",
+      "licenses": [
+        {
+          "license": {
+            "name": "LicenseRef-Product-Image-Composite"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Rockchip Electronics Co., Ltd."
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "product-boot"
+        }
+      ]
+    },
+    {
+      "type": "operating-system",
+      "name": "rk3572-recovery-image",
+      "version": "product-recovery",
+      "purl": "pkg:generic/rockchip/rk3572-recovery-image@product-recovery",
+      "licenses": [
+        {
+          "license": {
+            "name": "LicenseRef-Product-Image-Composite"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Rockchip Electronics Co., Ltd."
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "product-recovery"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rk3572-uboot-image",
+      "version": "product-bootloader",
+      "purl": "pkg:generic/rockchip/rk3572-uboot-image@product-bootloader",
+      "licenses": [
+        {
+          "license": {
+            "name": "LicenseRef-Product-Image-Composite"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Rockchip Electronics Co., Ltd."
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "product-bootloader"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rk3572-misc-image",
+      "version": "product-partition",
+      "purl": "pkg:generic/rockchip/rk3572-misc-image@product-partition",
+      "licenses": [
+        {
+          "license": {
+            "name": "LicenseRef-Product-Image-Composite"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Rockchip Electronics Co., Ltd."
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "product-partition"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rk3572-oem-image",
+      "version": "product-partition",
+      "purl": "pkg:generic/rockchip/rk3572-oem-image@product-partition",
+      "licenses": [
+        {
+          "license": {
+            "name": "LicenseRef-Product-Image-Composite"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Rockchip Electronics Co., Ltd."
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "product-partition"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rk3572-userdata-image",
+      "version": "product-partition",
+      "purl": "pkg:generic/rockchip/rk3572-userdata-image@product-partition",
+      "licenses": [
+        {
+          "license": {
+            "name": "LicenseRef-Product-Image-Composite"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Rockchip Electronics Co., Ltd."
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "product-partition"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rk3572-parameter-file",
+      "version": "product-partition-table",
+      "purl": "pkg:generic/rockchip/rk3572-parameter-file@product-partition-table",
+      "licenses": [
+        {
+          "license": {
+            "name": "LicenseRef-Product-Image-Composite"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Rockchip Electronics Co., Ltd."
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "product-partition-table"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rk3572-package-file",
+      "version": "product-update-manifest",
+      "purl": "pkg:generic/rockchip/rk3572-package-file@product-update-manifest",
+      "licenses": [
+        {
+          "license": {
+            "name": "LicenseRef-Product-Image-Composite"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Rockchip Electronics Co., Ltd."
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "product-update-manifest"
+        }
+      ]
+    },
+    {
+      "type": "firmware",
+      "name": "rk3572_ddr_lp4_2112MHz_lp5_2736MHz_ultra_v1.07.bin",
+      "version": "1.07.",
+      "purl": "pkg:generic/rockchip/rkbin/rk3572_ddr_lp4_2112MHz_lp5_2736MHz_ultra_v1.07.bin@1.07.",
+      "licenses": [
+        {
+          "license": {
+            "name": "LicenseRef-ROCKCHIP"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Rockchip Electronics Co., Ltd."
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "rkbin"
+        }
+      ]
+    },
+    {
+      "type": "firmware",
+      "name": "rk3572_ddr_lp4_2112MHz_lp5_2736MHz_v1.07.bin",
+      "version": "1.07.",
+      "purl": "pkg:generic/rockchip/rkbin/rk3572_ddr_lp4_2112MHz_lp5_2736MHz_v1.07.bin@1.07.",
+      "licenses": [
+        {
+          "license": {
+            "name": "LicenseRef-ROCKCHIP"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Rockchip Electronics Co., Ltd."
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "rkbin"
+        }
+      ]
+    },
+    {
+      "type": "firmware",
+      "name": "rk3572_bl31_v1.10.elf",
+      "version": "1.10.",
+      "purl": "pkg:generic/rockchip/rkbin/rk3572_bl31_v1.10.elf@1.10.",
+      "licenses": [
+        {
+          "license": {
+            "name": "LicenseRef-ROCKCHIP"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Rockchip Electronics Co., Ltd."
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "rkbin"
+        }
+      ]
+    },
+    {
+      "type": "firmware",
+      "name": "rk3572_spl_v1.03.bin",
+      "version": "1.03.",
+      "purl": "pkg:generic/rockchip/rkbin/rk3572_spl_v1.03.bin@1.03.",
+      "licenses": [
+        {
+          "license": {
+            "name": "LicenseRef-ROCKCHIP"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Rockchip Electronics Co., Ltd."
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "rkbin"
+        }
+      ]
+    },
+    {
+      "type": "firmware",
+      "name": "rk3572_usbplug_fspi1_v1.00.bin",
+      "version": "1.00.",
+      "purl": "pkg:generic/rockchip/rkbin/rk3572_usbplug_fspi1_v1.00.bin@1.00.",
+      "licenses": [
+        {
+          "license": {
+            "name": "LicenseRef-ROCKCHIP"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Rockchip Electronics Co., Ltd."
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "rkbin"
+        }
+      ]
+    },
+    {
+      "type": "firmware",
+      "name": "rk3572_spl_fspi1_v1.03.bin",
+      "version": "1.03.",
+      "purl": "pkg:generic/rockchip/rkbin/rk3572_spl_fspi1_v1.03.bin@1.03.",
+      "licenses": [
+        {
+          "license": {
+            "name": "LicenseRef-ROCKCHIP"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Rockchip Electronics Co., Ltd."
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "rkbin"
+        }
+      ]
+    },
+    {
+      "type": "firmware",
+      "name": "rk3572_ddr_lp4_2112MHz_lp5_2736MHz_eyescan_v1.07.bin",
+      "version": "1.07.",
+      "purl": "pkg:generic/rockchip/rkbin/rk3572_ddr_lp4_2112MHz_lp5_2736MHz_eyescan_v1.07.bin@1.07.",
+      "licenses": [
+        {
+          "license": {
+            "name": "LicenseRef-ROCKCHIP"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Rockchip Electronics Co., Ltd."
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "rkbin"
+        }
+      ]
+    },
+    {
+      "type": "firmware",
+      "name": "rk3572_ddr_lp4_2112MHz_lp5_2736MHz_rt_v1.07.bin",
+      "version": "1.07.",
+      "purl": "pkg:generic/rockchip/rkbin/rk3572_ddr_lp4_2112MHz_lp5_2736MHz_rt_v1.07.bin@1.07.",
+      "licenses": [
+        {
+          "license": {
+            "name": "LicenseRef-ROCKCHIP"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Rockchip Electronics Co., Ltd."
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "rkbin"
+        }
+      ]
+    },
+    {
+      "type": "firmware",
+      "name": "rk3572_usbplug_v1.00.bin",
+      "version": "1.00.",
+      "purl": "pkg:generic/rockchip/rkbin/rk3572_usbplug_v1.00.bin@1.00.",
+      "licenses": [
+        {
+          "license": {
+            "name": "LicenseRef-ROCKCHIP"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Rockchip Electronics Co., Ltd."
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "rkbin"
+        }
+      ]
+    },
+    {
+      "type": "firmware",
+      "name": "rk3572_dboot_v1.00.bin",
+      "version": "1.00.",
+      "purl": "pkg:generic/rockchip/rkbin/rk3572_dboot_v1.00.bin@1.00.",
+      "licenses": [
+        {
+          "license": {
+            "name": "LicenseRef-ROCKCHIP"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Rockchip Electronics Co., Ltd."
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "rkbin"
+        }
+      ]
+    },
+    {
+      "type": "firmware",
+      "name": "rk3572_rboot_v1.00.bin",
+      "version": "1.00.",
+      "purl": "pkg:generic/rockchip/rkbin/rk3572_rboot_v1.00.bin@1.00.",
+      "licenses": [
+        {
+          "license": {
+            "name": "LicenseRef-ROCKCHIP"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Rockchip Electronics Co., Ltd."
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "rkbin"
+        }
+      ]
+    },
+    {
+      "type": "firmware",
+      "name": "rk3572_bl32_v1.06.bin",
+      "version": "1.06.",
+      "purl": "pkg:generic/rockchip/rkbin/rk3572_bl32_v1.06.bin@1.06.",
+      "licenses": [
+        {
+          "license": {
+            "name": "LicenseRef-ROCKCHIP"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Rockchip Electronics Co., Ltd."
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "rkbin"
+        }
+      ]
+    },
+    {
+      "type": "firmware",
+      "name": "MiniLoaderAll.bin",
+      "version": "unknown",
+      "purl": "pkg:generic/rockchip/rkbin/MiniLoaderAll.bin",
+      "licenses": [
+        {
+          "license": {
+            "name": "LicenseRef-ROCKCHIP"
+          }
+        }
+      ],
+      "supplier": {
+        "name": "Organization: Rockchip Electronics Co., Ltd."
+      },
+      "properties": [
+        {
+          "name": "scope",
+          "value": "rkbin"
+        }
+      ]
+    }
+  ]
+}

@@ -161,6 +161,8 @@ void MergeAwbHistBinStats(
 
         }
         break;
+    default:
+        break;
     }
 }
 
@@ -319,6 +321,8 @@ void MergeAwbExcWpStats(
             merge_stats[i].BgainValue = left_stats->sum_exc[i].bgain_exc + right_stats->sum_exc[i].bgain_exc;
             merge_stats[i].WpNo = left_stats->sum_exc[i].wp_num_exc + right_stats->sum_exc[i].wp_num_exc;
         }
+        break;
+    default:
         break;
     }
 }
@@ -715,6 +719,8 @@ void MergeAecHistBinStats(
                 }
             }
             break;
+        default:
+            break;
         }
 
     } else {
@@ -735,6 +741,8 @@ void MergeAecHistBinStats(
             for(int i = 0; i < ISP32_HIST_BIN_N_MAX; i++) {
                 merge_stats[i] += left_stats[i] + right_stats[i];
             }
+            break;
+        default:
             break;
         }
     }
@@ -3888,6 +3896,8 @@ void MergeAwbHistBinStatsVertical(
             merge_stats[i] = top_stats[i] + bottom_stats[i];
         }
         break;
+    default:
+        break;
     }
 }
 
@@ -3910,6 +3920,8 @@ void MergeAwbExcWpStatsVertical(
             merge_stats[i].BgainValue = top_stats[i].BgainValue + bottom_stats[i].BgainValue;
             merge_stats[i].WpNo = top_stats[i].WpNo + bottom_stats[i].WpNo;
         }
+        break;
+    default:
         break;
     }
 }

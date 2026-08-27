@@ -13,6 +13,7 @@
 #include "utility.h"
 #include "Rk_wifi.h"
 #include "Rk_softap.h"
+#include "RkBtBase.h"
 
 typedef struct {
 	pthread_mutex_t wifi_mutex;

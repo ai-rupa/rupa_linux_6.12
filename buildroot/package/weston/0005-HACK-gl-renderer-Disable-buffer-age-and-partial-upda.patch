@@ -1,0 +1,31 @@
+From 78fc51e06ea909061b5914dfff04b5bd064f19f1 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Thu, 26 Mar 2026 16:31:36 +0800
+Subject: [PATCH 05/98] HACK: gl-renderer: Disable buffer age and partial
+ update for old GPUs
+
+These features are broken for old Mali GPUs (e.g. Midgard).
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ libweston/renderer-gl/gl-renderer.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/libweston/renderer-gl/gl-renderer.c b/libweston/renderer-gl/gl-renderer.c
+index f576aa05..7070bee8 100644
+--- a/libweston/renderer-gl/gl-renderer.c
++++ b/libweston/renderer-gl/gl-renderer.c
+@@ -888,6 +888,10 @@ get_renderbuffer_window_age(struct weston_output *output)
+ 	EGLint buffer_age = 0;
+ 	EGLBoolean ret;
+ 
++	/* HACK: Disable buffer age and partial update for old GPUs */
++	if (!gl_features_has(gr, FEATURE_EXPLICIT_SYNC))
++		return buffer_age;
++
+ 	if ((egl_display_has(gr, EXTENSION_EXT_BUFFER_AGE) ||
+ 	     egl_display_has(gr, EXTENSION_KHR_PARTIAL_UPDATE)) &&
+ 	    go->egl_surface != EGL_NO_SURFACE) {
+-- 
+2.39.5
+

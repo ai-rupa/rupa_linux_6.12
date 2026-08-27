@@ -1,8 +1,18 @@
 config BR2_PACKAGE_ROCKCHIP_AI
     bool "rockchip ai"
+    select BR2_PACKAGE_ROCKCHIP
     select BR2_GCC_ENABLE_OPENMP
     select BR2_PACKAGE_OPENCV4
     select BR2_PACKAGE_OPENCV4_LIB_FEATURES2D
     select BR2_PACKAGE_OPENCV4_WITH_JPEG
-    select BR2_PACKAGE_RKNPU2
-    select BR2_PACKAGE_RKNN_LLM
+    # RV1126B uses rkllm backend
+    select BR2_PACKAGE_RKNN_LLM if BR2_PACKAGE_RV1126B
+    select BR2_PACKAGE_RKNPU2 if BR2_PACKAGE_RV1126B
+    # RK3572 uses rknn3 backend
+    select BR2_PACKAGE_RKNN3_RUNTIME if BR2_PACKAGE_RK3572
+    help
+      Rockchip AI demos (rkai) including LLM/VLM sample apps.
+
+      Backend selection by chip:
+      - RV1126B: uses rkllm (librkllmrt.so) + rknpu2
+      - RK3572: uses rknn3 (librknn3_api.so)

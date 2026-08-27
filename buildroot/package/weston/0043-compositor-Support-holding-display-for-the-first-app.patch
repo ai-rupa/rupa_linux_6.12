@@ -1,0 +1,134 @@
+From 9ac052d8ae25c08daf6c0eba92538aef3366c48b Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Fri, 3 Jul 2020 10:20:40 +0800
+Subject: [PATCH 43/98] compositor: Support holding display for the first app
+
+Add a warm-up option to hold display until the first desktop app appears.
+This avoids showing a blank screen during startup.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ frontend/main.c               |  8 ++++++++
+ include/libweston/libweston.h |  6 ++++++
+ libweston/compositor.c        | 17 +++++++++++++++++
+ 3 files changed, 31 insertions(+)
+
+diff --git a/frontend/main.c b/frontend/main.c
+index 43ca5b1b..e1ef89e7 100644
+--- a/frontend/main.c
++++ b/frontend/main.c
+@@ -757,6 +757,7 @@ usage(int error_code)
+ 		"  -f, --flight-rec-scopes=SCOPE\n\t\t\tSpecify log scopes to "
+ 			"subscribe to.\n\t\t\tCan specify multiple scopes, "
+ 			"each followed by comma\n"
++		"  -w, --warm-up\t\tHold display for the first app\n"
+ 		"  -h, --help\t\tThis help message\n\n");
+ 
+ #if defined(BUILD_DRM_COMPOSITOR)
+@@ -5336,6 +5337,8 @@ wet_main(int argc, char *argv[], const struct weston_testsuite_data *test_data)
+ 	bool wait_for_debugger = false;
+ 	struct wl_protocol_logger *protologger = NULL;
+ 
++	bool warm_up = false;
++
+ 	const struct weston_option core_options[] = {
+ 		{ WESTON_OPTION_STRING, "backend", 'B', &backends },
+ 		{ WESTON_OPTION_STRING, "backends", 0, &backends },
+@@ -5358,6 +5361,7 @@ wet_main(int argc, char *argv[], const struct weston_testsuite_data *test_data)
+ 		{ WESTON_OPTION_STRING, "debug-scopes", 'd', &debug_scopes },
+ 		{ WESTON_OPTION_STRING, "logger-scopes", 'l', &log_scopes },
+ 		{ WESTON_OPTION_STRING, "flight-rec-scopes", 'f', &flight_rec_scopes },
++		{ WESTON_OPTION_BOOLEAN, "warm-up", 'w', &warm_up },
+ 	};
+ 
+ 	wl_list_init(&wet.layoutput_list);
+@@ -5598,9 +5602,13 @@ wet_main(int argc, char *argv[], const struct weston_testsuite_data *test_data)
+ 	if (idle_time < 0)
+ 		idle_time = 300; /* default idle timeout, in seconds */
+ 
++	if (!warm_up)
++		weston_config_section_get_bool(section, "warm-up", &warm_up, false);
++
+ 	wet.compositor->idle_time = idle_time;
+ 	wet.compositor->default_pointer_grab = NULL;
+ 	wet.compositor->exit = handle_exit;
++	wet.compositor->lazy_output_ready = warm_up;
+ 
+ 	weston_compositor_log_capabilities(wet.compositor);
+ 
+diff --git a/include/libweston/libweston.h b/include/libweston/libweston.h
+index c4dd8ba4..57026b4a 100644
+--- a/include/libweston/libweston.h
++++ b/include/libweston/libweston.h
+@@ -603,6 +603,9 @@ struct weston_output {
+ 
+ 	/* Needs full buffer clear */
+ 	bool full_clear_needed;
++
++	/* Output is ready but waiting for first desktop surface */
++	bool lazy_ready;
+ };
+ 
+ enum weston_pointer_motion_mask {
+@@ -1602,6 +1605,9 @@ struct weston_compositor {
+ 	/* Primary output dimensions for mirrors */
+ 	int32_t mirror_width;
+ 	int32_t mirror_height;
++
++	/* Delay output display until first desktop surface (warm-up) */
++	bool lazy_output_ready;
+ };
+ 
+ struct weston_solid_buffer_values {
+diff --git a/libweston/compositor.c b/libweston/compositor.c
+index cf046516..8ec83deb 100644
+--- a/libweston/compositor.c
++++ b/libweston/compositor.c
+@@ -58,6 +58,7 @@
+ #include "timeline.h"
+ #include "weston-trace.h"
+ 
++#include <libweston/desktop.h>
+ #include <libweston/shell-utils.h>
+ #include <libweston/libweston.h>
+ #include <libweston/weston-log.h>
+@@ -4276,6 +4277,7 @@ weston_output_should_freeze(struct weston_output *output)
+ {
+ 	struct weston_paint_node *pnode;
+ 	struct timespec now;
++	bool has_desktop_surface = false;
+ 
+ 	weston_compositor_read_presentation_clock(output->compositor, &now);
+ 
+@@ -4287,6 +4289,19 @@ weston_output_should_freeze(struct weston_output *output)
+ 			timespec_add_msec(&output->freeze_until, &now, 50);
+ 			return true;
+ 		}
++
++		/* Check if any desktop surface is present */
++		if (weston_surface_is_desktop_surface(pnode->surface))
++			has_desktop_surface = true;
++	}
++
++	/* Freeze output until first desktop app appears */
++	if (output->lazy_ready) {
++		if (!has_desktop_surface)
++			return true;
++
++		/* Unlock output once desktop app is ready */
++		output->lazy_ready = false;
+ 	}
+ 
+ 	if (timespec_sub_to_msec(&output->freeze_until, &now) > 0)
+@@ -11410,6 +11425,8 @@ WL_EXPORT void
+ weston_output_set_ready(struct weston_output *output)
+ {
+ 	if (!output->ready) {
++		output->lazy_ready = output->compositor->lazy_output_ready;
++
+ 		output->ready = true;
+ 		weston_output_schedule_repaint(output);
+ 	}
+-- 
+2.39.5
+

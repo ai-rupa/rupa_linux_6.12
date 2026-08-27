@@ -83,7 +83,8 @@ static XCamReturn _handlerAwb_processing(AiqAlgoHandler_t* pAlgoHandler) {
     RkAiqAlgosComShared_t* sharedCom = &pAlgoHandler->mAiqCore->mAlogsComSharedParams;
     RkAiqAlgoProcAwb* awb_proc_int = (RkAiqAlgoProcAwb*)pAlgoHandler->mProcInParam;
     RkAiqAlgoProcResAwb* awb_proc_res_int = (RkAiqAlgoProcResAwb*)pAlgoHandler->mProcOutParam;
-
+    awb_proc_int->af_converged = sharedCom->af_converged;
+    awb_proc_int->af_focuspos = sharedCom->af_focuspos;
     if ((!shared->awbStatsBuf || !shared->awbStatsBuf->bValid) && !sharedCom->init) {
 		LOGE("fid:%d no awb stats, ignore!", shared->frameId);
         return XCAM_RETURN_BYPASS;

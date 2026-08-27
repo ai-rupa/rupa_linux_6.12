@@ -37,10 +37,14 @@ typedef struct AiqIspParamsSplitter_s AiqIspParamsSplitter_t;
 struct AiqIspParamsSplitter_s {
     Splitter_Rectangle_t pic_rect_;
     Splitter_Rectangle_t left_isp_rect_;
+    Splitter_Rectangle_t middle_isp_rect_;
     Splitter_Rectangle_t right_isp_rect_;
     Splitter_Rectangle_t bottom_left_isp_rect_;
     Splitter_Rectangle_t bottom_right_isp_rect_;
     int                  isp_unite_mode_;
+    Splitter_Rectangle_t isp_splite_rect_[3][3];
+    uint8_t              isp_splite_h_num_;
+    uint8_t              isp_splite_v_num_;
 
     XCamReturn (*SplitIspParams)(AiqIspParamsSplitter_t* pSplit, void* orig_isp_params,
                                  void* isp_params);
@@ -68,5 +72,9 @@ const Splitter_Rectangle_t* AiqIspParamsSplitter_GetRightIspRect(AiqIspParamsSpl
 
 int AiqIspParamsSplitter_GetIspUniteMode(AiqIspParamsSplitter_t* pSplit);
 XCamReturn AiqIspParamsSplitter_SetIspUniteMode(AiqIspParamsSplitter_t* pSplit, int mode);
+XCamReturn AiqIspParamsSplitter_SetIspUniteSliteNum(AiqIspParamsSplitter_t* pSplit, uint8_t h_num,
+                                                    uint8_t v_num);
+XCamReturn AiqIspParamsSplitter_GetIspUniteSliteNum(AiqIspParamsSplitter_t* pSplit, uint8_t *h_num,
+                                                    uint8_t* v_num);
 
 #endif  // __COMMON_HWI_ISP_PARAMS_SPLITTER_H__

@@ -5,6 +5,7 @@
 #include "multimedia/camera.config"
 #include "multimedia/mpp.config"
 #include "multimedia/rockit.config"
+#include "ota/update_engine.config"
 BR2_PACKAGE_LIBDRM=y
 BR2_PACKAGE_LIBDRM_INSTALL_TESTS=y
 BR2_PACKAGE_ROCKCHIP_RGA=y

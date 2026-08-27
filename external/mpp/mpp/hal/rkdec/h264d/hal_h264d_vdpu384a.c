@@ -237,6 +237,10 @@ MPP_RET vdpu384a_h264d_init(void *hal, MppHalCfg *cfg)
 
     vdpu38x_rcb_calc_init((Vdpu38xRcbCtx **)&reg_ctx->rcb_ctx);
     hal_dbg_init(&p_hal->dbg_ctx, "hal_h264d");
+    if (p_hal->fast_mode && p_hal->dbg_ctx) {
+        mpp_log("fast mode enabled, hal_dbg will be disabled");
+        hal_dbg_deinit(&p_hal->dbg_ctx);
+    }
 
 __RETURN:
     return MPP_OK;
@@ -558,8 +562,6 @@ MPP_RET vdpu384a_h264d_wait(void *hal, HalTaskInfo *task)
                              reg_ctx->reg_buf[task->dec.reg_index].regs :
                              reg_ctx->regs;
 
-    hal_dbg_finish(p_hal->dbg_ctx);
-
     if (task->dec.flags.parse_err ||
         (task->dec.flags.ref_err && !p_hal->cfg->cfg->base.disable_error)) {
         goto __SKIP_HARD;
@@ -605,8 +607,9 @@ __SKIP_HARD:
         reg_ctx->reg_buf[task->dec.reg_index].valid = 0;
     }
 
-    (void)task;
 __RETURN:
+    hal_dbg_finish(p_hal->dbg_ctx);
+
     return ret = MPP_OK;
 }
 

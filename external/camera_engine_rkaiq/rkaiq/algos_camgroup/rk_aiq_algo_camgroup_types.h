@@ -273,6 +273,7 @@ typedef struct _RkAiqAlgoCamGroupPrepare {
         float        PixelPeriodsPerLine;
         rk_aiq_sensor_nr_switch_t nr_switch;
         rk_aiq_sensor_dcg_ratio_t dcg_ratio;
+        rk_aiq_sensor_exp_offset_t exp_offset;
         int          compr_bit;
         bool         isBtnrLogdomain;
     } aec;

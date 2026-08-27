@@ -176,6 +176,16 @@ public:
     virtual RkAiqIspUniteMode getIspUniteMode() {
         return RK_AIQ_ISP_UNITE_MODE_NORMAL;
     };
+    virtual XCamReturn getIspUniteInfo(RkAiqIspUniteInfo_t& info) {
+        xcam_mem_clear(info);
+        info.mode  = RK_AIQ_ISP_UNITE_MODE_NORMAL;
+        info.h_num = 1;
+        info.v_num = 1;
+        return XCAM_RETURN_NO_ERROR;
+    };
+    virtual XCamReturn setCifSclStartFlag(int ratio, bool mode) {
+        return XCAM_RETURN_ERROR_FAILED;
+    };
     HwResListener* mHwResLintener;
 
 protected:

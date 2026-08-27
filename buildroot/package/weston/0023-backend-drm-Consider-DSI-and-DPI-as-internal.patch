@@ -1,0 +1,64 @@
+From 2a74d5a00a3e78672daa6f39e191d7689f871f25 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Wed, 25 Mar 2026 16:44:43 +0800
+Subject: [PATCH 23/98] backend-drm: Consider DSI and DPI as internal
+
+Treat DSI and DPI connectors as internal displays like LVDS and eDP.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ libweston/backend-drm/drm.c          | 11 +++++++++--
+ libweston/backend-drm/libbacklight.c | 10 ++++++++--
+ 2 files changed, 17 insertions(+), 4 deletions(-)
+
+diff --git a/libweston/backend-drm/drm.c b/libweston/backend-drm/drm.c
+index 745895c2..f5e41bcf 100644
+--- a/libweston/backend-drm/drm.c
++++ b/libweston/backend-drm/drm.c
+@@ -3407,9 +3407,16 @@ drm_head_create(struct drm_device *device, drmModeConnector *conn,
+ 		head->backlight = NULL;
+ 	}
+ 
+-	if (conn->connector_type == DRM_MODE_CONNECTOR_LVDS ||
+-	    conn->connector_type == DRM_MODE_CONNECTOR_eDP)
++	switch(conn->connector_type) {
++	case DRM_MODE_CONNECTOR_LVDS:
++	case DRM_MODE_CONNECTOR_eDP:
++	case DRM_MODE_CONNECTOR_DSI:
++	case DRM_MODE_CONNECTOR_DPI:
+ 		weston_head_set_internal(&head->base);
++		break;
++	default:
++		break;
++	}
+ 
+ 	if (drm_head_read_current_setup(head, device) < 0) {
+ 		weston_log("Failed to retrieve current mode from connector %d.\n",
+diff --git a/libweston/backend-drm/libbacklight.c b/libweston/backend-drm/libbacklight.c
+index c747a11c..c044473b 100644
+--- a/libweston/backend-drm/libbacklight.c
++++ b/libweston/backend-drm/libbacklight.c
+@@ -251,12 +251,18 @@ struct backlight *backlight_init(struct udev_device *drm_device,
+ 		else
+ 			goto out;
+ 
+-		if (connector_type != DRM_MODE_CONNECTOR_LVDS &&
+-		    connector_type != DRM_MODE_CONNECTOR_eDP) {
++		switch(connector_type) {
++		case DRM_MODE_CONNECTOR_LVDS:
++		case DRM_MODE_CONNECTOR_eDP:
++		case DRM_MODE_CONNECTOR_DSI:
++		case DRM_MODE_CONNECTOR_DPI:
++			break;
++		default:
+ 			/* External displays are assumed to require
+ 			   gpu control at the moment */
+ 			if (entry_type != BACKLIGHT_RAW)
+ 				goto out;
++			break;
+ 		}
+ 
+ 		free (path);
+-- 
+2.39.5
+

@@ -1,4 +1,4 @@
-From 77c67792ac1fc3e2dabbbd6e80eabba164cc4fbe Mon Sep 17 00:00:00 2001
+From 57c6ac985eb9a4e82ff12e424d07710e3966dec4 Mon Sep 17 00:00:00 2001
 From: Jeffy Chen <jeffy.chen@rock-chips.com>
 Date: Tue, 24 May 2022 16:16:33 +0800
 Subject: [PATCH 12/21] glupload: Support NV12_10LE40 and NV12|NV12_10LE40|NV16
@@ -20,10 +20,10 @@ Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
  7 files changed, 95 insertions(+), 5 deletions(-)
 
 diff --git a/gst-libs/gst/gl/egl/gsteglimage.c b/gst-libs/gst/gl/egl/gsteglimage.c
-index cb8d43f..d9a8c8f 100644
+index de71fa6..4cf5fcb 100644
 --- a/gst-libs/gst/gl/egl/gsteglimage.c
 +++ b/gst-libs/gst/gl/egl/gsteglimage.c
-@@ -856,8 +856,9 @@ gst_egl_image_from_dmabuf_direct_target_with_dma_drm (GstGLContext * context,
+@@ -869,8 +869,9 @@ gst_egl_image_from_dmabuf_direct_target_with_dma_drm (GstGLContext * context,
  {
    EGLImageKHR img;
    const GstVideoInfo *in_info = &in_info_dma->vinfo;
@@ -34,7 +34,7 @@ index cb8d43f..d9a8c8f 100644
    gint i;
    gboolean with_modifiers;
  
-@@ -869,6 +870,7 @@ gst_egl_image_from_dmabuf_direct_target_with_dma_drm (GstGLContext * context,
+@@ -882,6 +883,7 @@ gst_egl_image_from_dmabuf_direct_target_with_dma_drm (GstGLContext * context,
     */
    guintptr attribs[41];         /* 6 + 10 * 3 + 4 + 1 */
    gint atti = 0;
@@ -42,7 +42,7 @@ index cb8d43f..d9a8c8f 100644
  
    if (!gst_egl_image_check_dmabuf_direct_with_dma_drm (context, in_info_dma,
            target))
-@@ -882,6 +884,22 @@ gst_egl_image_from_dmabuf_direct_target_with_dma_drm (GstGLContext * context,
+@@ -895,6 +897,22 @@ gst_egl_image_from_dmabuf_direct_target_with_dma_drm (GstGLContext * context,
    if (!with_modifiers && modifier != DRM_FORMAT_MOD_LINEAR)
      return NULL;
  
@@ -65,7 +65,7 @@ index cb8d43f..d9a8c8f 100644
    /* EGL DMABuf importation supports a maximum of 3 planes */
    if (G_UNLIKELY (n_planes > 3))
      return NULL;
-@@ -900,7 +918,7 @@ gst_egl_image_from_dmabuf_direct_target_with_dma_drm (GstGLContext * context,
+@@ -913,7 +931,7 @@ gst_egl_image_from_dmabuf_direct_target_with_dma_drm (GstGLContext * context,
      attribs[atti++] = EGL_DMA_BUF_PLANE0_OFFSET_EXT;
      attribs[atti++] = offset[0];
      attribs[atti++] = EGL_DMA_BUF_PLANE0_PITCH_EXT;
@@ -75,7 +75,7 @@ index cb8d43f..d9a8c8f 100644
        attribs[atti++] = EGL_DMA_BUF_PLANE0_MODIFIER_LO_EXT;
        attribs[atti++] = modifier & 0xffffffff;
 diff --git a/gst-libs/gst/gl/egl/gsteglimage.h b/gst-libs/gst/gl/egl/gsteglimage.h
-index c69d65a..dfd5a6d 100644
+index 29f0cb8..2d38a8a 100644
 --- a/gst-libs/gst/gl/egl/gsteglimage.h
 +++ b/gst-libs/gst/gl/egl/gsteglimage.h
 @@ -26,6 +26,8 @@
@@ -88,23 +88,23 @@ index c69d65a..dfd5a6d 100644
  
  GST_GL_API GType gst_egl_image_get_type (void);
 diff --git a/gst-libs/gst/gl/gstglmemory.h b/gst-libs/gst/gl/gstglmemory.h
-index 99c727b..511222d 100644
+index 4ef02ce..5306a5a 100644
 --- a/gst-libs/gst/gl/gstglmemory.h
 +++ b/gst-libs/gst/gl/gstglmemory.h
 @@ -68,7 +68,7 @@ GType gst_gl_memory_allocator_get_type(void);
  #define GST_GL_MEMORY_VIDEO_FORMATS_STR \
      "{ RGBA, BGRA, RGBx, BGRx, ARGB, ABGR, xRGB, xBGR, GBRA, GBR, RGBP, BGRP, RGB, BGR, RGB16, BGR16, " \
-     "AYUV, VUYA, A444, A422, Y410, I420, YV12, NV12, NV21, NV16, NV61, YUY2, UYVY, Y210, Y41B, " \
+     "AYUV, VUYA, A444, A422, Y410, I420, YV12, NV12, NV21, NV16, NV61, NV24, YUY2, UYVY, Y210, Y41B, " \
 -    "Y42B, Y444, GRAY8, GRAY16_LE, GRAY16_BE, ARGB64, A420, AV12, NV12_16L32S, NV12_4L4, RBGA, v210" \
 +    "Y42B, Y444, GRAY8, GRAY16_LE, GRAY16_BE, ARGB64, A420, AV12, NV12_10LE40, NV12_16L32S, NV12_4L4, RBGA, v210" \
      GST_GL_MEMORY_VIDEO_EXT_FORMATS "}"
  
  /**
 diff --git a/gst-libs/gst/gl/gstglupload.c b/gst-libs/gst/gl/gstglupload.c
-index f13c0fa..63ec3c9 100644
+index 810fabe..5f8bcaf 100644
 --- a/gst-libs/gst/gl/gstglupload.c
 +++ b/gst-libs/gst/gl/gstglupload.c
-@@ -704,7 +704,8 @@ _gl_memory_upload_free (gpointer impl)
+@@ -1166,7 +1166,8 @@ _gl_memory_upload_free (gpointer impl)
  
  static GstStaticCaps _gl_memory_upload_caps =
  GST_STATIC_CAPS (GST_VIDEO_CAPS_MAKE_WITH_FEATURES
@@ -114,7 +114,7 @@ index f13c0fa..63ec3c9 100644
  
  static const UploadMethod _gl_memory_upload = {
    "GLMemory",
-@@ -3149,6 +3150,9 @@ static gboolean
+@@ -3642,6 +3643,9 @@ static gboolean
  _gst_gl_upload_set_caps_unlocked (GstGLUpload * upload, GstCaps * in_caps,
      GstCaps * out_caps)
  {
@@ -124,7 +124,7 @@ index f13c0fa..63ec3c9 100644
    g_return_val_if_fail (upload != NULL, FALSE);
    g_return_val_if_fail (gst_caps_is_fixed (in_caps), FALSE);
  
-@@ -3170,6 +3174,15 @@ _gst_gl_upload_set_caps_unlocked (GstGLUpload * upload, GstCaps * in_caps,
+@@ -3663,6 +3667,15 @@ _gst_gl_upload_set_caps_unlocked (GstGLUpload * upload, GstCaps * in_caps,
    }
    gst_video_info_from_caps (&upload->priv->out_info, out_caps);
  
@@ -141,10 +141,10 @@ index f13c0fa..63ec3c9 100644
    upload->priv->method_impl = NULL;
    upload->priv->method_i = 0;
 diff --git a/gst-libs/gst/gl/meson.build b/gst-libs/gst/gl/meson.build
-index db437df..df52170 100644
+index 22649a2..46bc270 100644
 --- a/gst-libs/gst/gl/meson.build
 +++ b/gst-libs/gst/gl/meson.build
-@@ -1116,6 +1116,8 @@ if build_gstgl
+@@ -1112,6 +1112,8 @@ if build_gstgl
    # case-insensitive FS would include gst-libs/gl/egl/egl.h as EGL/egl.h.
    common_args += '-I@0@'.format(meson.current_build_dir())
  
@@ -153,7 +153,7 @@ index db437df..df52170 100644
    gstgl = library('gstgl-' + api_version,
      gl_sources, gl_egl_sources, gl_x11_sources, gl_wayland_sources, gl_viv_fb_sources, gl_priv_sources, gl_enumtypes_c, gl_enumtypes_h,
      c_args : common_args,
-@@ -1127,7 +1129,7 @@ if build_gstgl
+@@ -1123,7 +1125,7 @@ if build_gstgl
      darwin_versions : osxversion,
      install : true,
      dependencies : [gst_base_dep, video_dep, gmodule_dep, gl_lib_deps,
@@ -163,10 +163,10 @@ index db437df..df52170 100644
      implicit_include_directories : false)
  
 diff --git a/gst-libs/gst/video/video-info-dma.c b/gst-libs/gst/video/video-info-dma.c
-index 7e8b9b8..804962e 100644
+index 16c1cff..4b3e286 100644
 --- a/gst-libs/gst/video/video-info-dma.c
 +++ b/gst-libs/gst/video/video-info-dma.c
-@@ -347,6 +347,19 @@ gst_video_info_dma_drm_from_video_info (GstVideoInfoDmaDrm * drm_info,
+@@ -348,6 +348,19 @@ gst_video_info_dma_drm_from_video_info (GstVideoInfoDmaDrm * drm_info,
    if (fourcc == DRM_FORMAT_INVALID)
      return FALSE;
  
@@ -187,7 +187,7 @@ index 7e8b9b8..804962e 100644
    drm_info->drm_fourcc = fourcc;
    drm_info->drm_modifier = modifier;
 diff --git a/gst-libs/gst/video/video-info-dma.h b/gst-libs/gst/video/video-info-dma.h
-index e83e363..bb0ab3a 100644
+index 2ad63ab..43ea129 100644
 --- a/gst-libs/gst/video/video-info-dma.h
 +++ b/gst-libs/gst/video/video-info-dma.h
 @@ -25,6 +25,48 @@

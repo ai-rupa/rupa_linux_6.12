@@ -33,7 +33,8 @@
 
 /* Driver version info */
 #define SHM_VUART_MAGIC_NUMBER      0x524B5655
-#define SHM_VUART_DRV_VERSION       0x10000000
+#define SHM_VUART_VERSION_V1        0x10000000
+#define SHM_VUART_VERSION_V2        0x20000000
 
 /* Small buffer size for simplified design */
 #define VUART_BUFFER_SIZE                256
@@ -49,6 +50,7 @@ struct vuart_shm {
     volatile uint32_t  master_to_slave_buf[VUART_BUFFER_SIZE / sizeof(uint32_t)]; /* Master to Slave data buffer */
     volatile uint32_t  slave_to_master_buf[VUART_BUFFER_SIZE / sizeof(uint32_t)]; /* Slave to Master data buffer */
     volatile uint32_t  master_rx_enabled;                                  /* Master is ready to recieve data */
+    volatile uint32_t  priv;                                               /* Used for idle status in v2.0 */
 };
 
 /* Device context structure */
@@ -68,6 +70,7 @@ struct vuart_context {
     int is_oneshot;
     int debug_enabled;
     int command_sent;
+    double timeout;
     struct timespec last_rx_time;
     char oneshot_cmd[VUART_BUFFER_SIZE];
 };
@@ -114,8 +117,10 @@ static int setup_vuart_device(uint32_t addr)
     g_ctx.bar_size = sizeof(struct vuart_shm);
     g_ctx.shm = (struct vuart_shm *)(g_ctx.bar_addr);
 
-    /* 校验magic和版本号 */
-    if (g_ctx.shm->magic != SHM_VUART_MAGIC_NUMBER || g_ctx.shm->version != SHM_VUART_DRV_VERSION) {
+    /* Check version, compatible with v1.0 and v2.0 */
+    if (g_ctx.shm->magic != SHM_VUART_MAGIC_NUMBER ||
+        (g_ctx.shm->version != SHM_VUART_VERSION_V1 &&
+         g_ctx.shm->version != SHM_VUART_VERSION_V2)) {
         printf("magic=%x or version=%x error, addr=0x%x\n", g_ctx.shm->magic, g_ctx.shm->version, addr);
         return -1;
     }
@@ -127,6 +132,9 @@ static int setup_vuart_device(uint32_t addr)
 static int setup_terminal_raw_mode(void)
 {
     struct termios new_termios;
+
+    if (g_ctx.raw_mode)
+        return 0;
 
     /* Save original terminal settings */
     if (tcgetattr(STDIN_FILENO, &g_ctx.orig_termios) < 0) {
@@ -168,7 +176,7 @@ static int setup_terminal_raw_mode(void)
 static void restore_terminal_settings(void)
 {
     if (g_ctx.raw_mode) {
-        tcsetattr(STDIN_FILENO, TCSAFLUSH, &g_ctx.orig_termios);
+        tcsetattr(STDIN_FILENO, TCSANOW, &g_ctx.orig_termios);
         g_ctx.raw_mode = 0;
     }
 }
@@ -234,32 +242,37 @@ static void *rx_polling_thread(void *arg)
             src = (uint32_t *)g_ctx.shm->slave_to_master_buf;
             dst = (uint32_t *)szBuf;
             safe_memcpy(dst, src, len);
+
             /* Print received byte */
-            len = g_ctx.shm->slave_to_master_len;
+            int cmd_sent_snap = g_ctx.command_sent;
             for (int i = 0; i < len; i++) {
+                if (g_ctx.is_oneshot && !cmd_sent_snap)
+                    continue;
+
                 putchar(szBuf[i]);
 
                 if (g_ctx.is_oneshot && g_ctx.command_sent) {
                     /* Update timestamp for timeout detection */
                     clock_gettime(CLOCK_MONOTONIC, &g_ctx.last_rx_time);
 
-                    /* Simple state machine to match "msh >" prompt */
-                    static int match_idx = 0;
-                    const char *prompt = "msh >";
-                    if (szBuf[i] == prompt[match_idx]) {
-                        match_idx++;
-                        if (prompt[match_idx] == '\0') {
-                            VUART_DEBUG("\n[DEBUG] Found prompt '%s', signaling exit...\n", prompt);
-                            g_ctx.running = 0; /* Found prompt, signal exit */
+                    /* Simple state machine to match prompts: "msh >" or "MCU Console: " */
+                    static int match_msh = 0, match_mcu = 0;
+                    const char *p_msh = "msh >";
+                    const char *p_mcu = "MCU Console:";
+
+                    if (szBuf[i] == p_msh[match_msh]) {
+                        if (p_msh[++match_msh] == '\0') {
+                            VUART_DEBUG("\n[DEBUG] Found prompt '%s', signaling exit...\n", p_msh);
+                            g_ctx.running = 0;
                         }
-                    } else {
-                        /* Reset if no match, check if current char is the start of prompt */
-                        if (szBuf[i] == prompt[0]) {
-                            match_idx = 1;
-                        } else {
-                            match_idx = 0;
+                    } else { match_msh = (szBuf[i] == p_msh[0]) ? 1 : 0; }
+
+                    if (szBuf[i] == p_mcu[match_mcu]) {
+                        if (p_mcu[++match_mcu] == '\0') {
+                            VUART_DEBUG("\n[DEBUG] Found prompt '%s', signaling exit...\n", p_mcu);
+                            g_ctx.running = 0;
                         }
-                    }
+                    } else { match_mcu = (szBuf[i] == p_mcu[0]) ? 1 : 0; }
                 }
             }
             /* Clear flag to acknowledge receipt */
@@ -321,11 +334,7 @@ static void send_string_to_slave(const char *str, size_t len)
 /* Process an input character - buffer until newline */
 static void process_input_char(unsigned char c)
 {
-    /* Echo the character locally */
-    putchar(c);
-    fflush(stdout);
-
-    /* Check for special characters */
+    /* Check for special characters - always allow exit */
     if (c == 24) { /* Ctrl+X - exit */
         printf("\r\nCtrl+X pressed, exiting...\r\n");
         g_ctx.running = 0;
@@ -333,10 +342,22 @@ static void process_input_char(unsigned char c)
         return;
     }
 
+    /* Check busy status for v2.0 protocol */
+    if (g_ctx.shm->version >= 0x20000000 && g_ctx.shm->priv == 1) {
+        if (c == '\r' || c == '\n') {
+            printf("\r\n[MCU Busy] A command is running. Please wait or press Ctrl+X to exit tool.\r\n");
+            fflush(stdout);
+        }
+        return;
+    }
+
+    /* Echo the character locally */
+    putchar(c);
+    fflush(stdout);
+
     /* Handle backspace */
     if (c == 127 || c == 8) {
         if (g_ctx.buffer_pos > 0) {
-            g_ctx.buffer_pos--;
             /* Optional: echo backspace properly with " \b" */
             putchar('\b');
             putchar(' ');
@@ -356,7 +377,7 @@ static void process_input_char(unsigned char c)
         /* Ensure newline at end */
         if (g_ctx.buffer_pos > 0 && g_ctx.input_buffer[g_ctx.buffer_pos - 1] != '\n' &&
             g_ctx.input_buffer[g_ctx.buffer_pos - 1] != '\r') {
-            g_ctx.input_buffer[g_ctx.buffer_pos++] = '\n';
+            g_ctx.input_buffer[g_ctx.buffer_pos++] = '\r';
         }
 
         /* Send buffer to Slave */
@@ -424,10 +445,49 @@ static int vuart_main(uint32_t addr)
         cleanup_and_exit(1);
     }
 
-    if (!g_ctx.is_oneshot) {
-        printf("VUART Master (Version 0x%x) started\r\n", SHM_VUART_DRV_VERSION);
-        printf("Line buffered mode: Input will be sent to Slave on newline\r\n");
-        printf("Press Ctrl+X to exit\r\n");
+    if (g_ctx.is_oneshot) {
+        /* Oneshot mode: send command and wait for prompt or inactivity timeout */
+        int cmd_len = strlen(g_ctx.oneshot_cmd);
+        if (cmd_len > 0 && g_ctx.oneshot_cmd[cmd_len - 1] != '\n' && g_ctx.oneshot_cmd[cmd_len - 1] != '\r') {
+            strcat(g_ctx.oneshot_cmd, "\r");
+            cmd_len++;
+        }
+
+        /* Flush any currently pending old data in SHM */
+        while (g_ctx.shm->slave_to_master_flag) {
+            g_ctx.shm->slave_to_master_len = 0;
+            g_ctx.shm->slave_to_master_flag = 0;
+            usleep(1000); /* Short wait to let slave push more if backlog exists */
+        }
+
+        /* Initial timestamp */
+        clock_gettime(CLOCK_MONOTONIC, &g_ctx.last_rx_time);
+        g_ctx.command_sent = 1;
+        send_string_to_slave(g_ctx.oneshot_cmd, cmd_len);
+
+        /* Wait loop for prompt or timeout */
+        while (g_ctx.running) {
+            if (g_ctx.timeout > 0) {
+                struct timespec now;
+                clock_gettime(CLOCK_MONOTONIC, &now);
+                double elapsed = (now.tv_sec - g_ctx.last_rx_time.tv_sec) +
+                                 (now.tv_nsec - g_ctx.last_rx_time.tv_nsec) / 1e9;
+                if (elapsed > g_ctx.timeout) {
+                    printf("\r\n[WARNING] Oneshot inactivity timeout (%.1fs). Exiting.\r\n", g_ctx.timeout);
+                    g_ctx.running = 0; /* Signal exit */
+                    break;
+                }
+            }
+            usleep(10000); /* 10ms */
+        }
+    }
+
+    if (!g_ctx.is_oneshot && g_ctx.running) {
+        if (g_ctx.command_sent == 0) { /* If not coming from a timed-out oneshot */
+            printf("VUART Master (Detected Version 0x%x) started\r\n", g_ctx.shm->version);
+            printf("Line buffered mode: Input will be sent to Slave on newline\r\n");
+            printf("Press Ctrl+X to exit\r\n");
+        }
 
         /* Main loop for user input */
         unsigned char byte;
@@ -442,32 +502,6 @@ static int vuart_main(uint32_t addr)
                 break;
             }
         }
-    } else {
-        /* Oneshot mode: send command and wait */
-        int cmd_len = strlen(g_ctx.oneshot_cmd);
-        if (cmd_len > 0 && g_ctx.oneshot_cmd[cmd_len - 1] != '\n' && g_ctx.oneshot_cmd[cmd_len - 1] != '\r') {
-            strcat(g_ctx.oneshot_cmd, "\n");
-            cmd_len++;
-        }
-
-        /* Initial timestamp */
-        clock_gettime(CLOCK_MONOTONIC, &g_ctx.last_rx_time);
-        send_string_to_slave(g_ctx.oneshot_cmd, cmd_len);
-        g_ctx.command_sent = 1;
-
-        /* Wait loop for prompt or timeout */
-        while (g_ctx.running) {
-            struct timespec now;
-            clock_gettime(CLOCK_MONOTONIC, &now);
-            double elapsed = (now.tv_sec - g_ctx.last_rx_time.tv_sec) +
-                             (now.tv_nsec - g_ctx.last_rx_time.tv_nsec) / 1e9;
-            if (elapsed > 0.8) { /* Extend to 800ms timeout for stability */
-                VUART_DEBUG("\n[DEBUG] Oneshot timeout reached.\n");
-                break;
-            }
-            usleep(10000); /* 10ms */
-        }
-        fflush(stdout);
     }
 
     /* Clean up and exit */
@@ -478,12 +512,13 @@ static int vuart_main(uint32_t addr)
 static void usage(void)
 {
     printf("VUART Shared Memory Communication Tool\n");
-    printf("Usage: vuart_console <physical_address> [command] [--debug]\n");
+    printf("Usage: vuart_console <physical_address> [command] [-t <timeout>] [--debug]\n");
     printf("\n");
     printf("Arguments:\n");
     printf("  <physical_address>  Physical address of the VUART shared memory region (hexadecimal)\n");
     printf("  [command]           Optional: Command to run on the Slave. If provided, tool will run\n");
     printf("                      the command, print output, and exit (oneshot mode).\n");
+    printf("  -t <timeout>        Inactivity timeout in seconds for oneshot mode (default: 2.0, 0 for infinite)\n");
     printf("  --debug             Optional: Enable debug prints.\n");
     printf("\n");
     printf("Description:\n");
@@ -502,6 +537,8 @@ static int parse_variable(int argc, char *argv[], uint32_t *addr)
     int pos_argc = 0;
     char *pos_argv[3];
 
+    g_ctx.timeout = 2.0; /* Default inactivity timeout */
+
     /* Check for help and debug flags */
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
@@ -510,10 +547,16 @@ static int parse_variable(int argc, char *argv[], uint32_t *addr)
         }
         if (strcmp(argv[i], "--debug") == 0) {
             g_ctx.debug_enabled = 1;
-        } else {
-            if (pos_argc < 3) {
-                pos_argv[pos_argc++] = (char *)argv[i];
+            continue;
+        }
+        if (strcmp(argv[i], "-t") == 0) {
+            if (i + 1 < argc) {
+                g_ctx.timeout = atof(argv[++i]);
+                continue;
             }
+        }
+        if (pos_argc < 3) {
+            pos_argv[pos_argc++] = (char *)argv[i];
         }
     }
 

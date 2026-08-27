@@ -1,0 +1,156 @@
+From f826f48e49651f48781d7f54d34ba8f2c6c63a60 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Tue, 12 Dec 2023 10:21:42 +0800
+Subject: [PATCH 34/98] clients: Speed up background image drawing
+
+Ignore the alpha channel in background images.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ clients/desktop-shell.c            |  4 ++--
+ clients/image.c                    |  2 +-
+ clients/ivi-shell-user-interface.c | 14 +++++++-------
+ shared/cairo-util.c                |  7 +++++--
+ shared/cairo-util.h                |  3 ++-
+ 5 files changed, 17 insertions(+), 13 deletions(-)
+
+diff --git a/clients/desktop-shell.c b/clients/desktop-shell.c
+index 564e60dd..74727103 100644
+--- a/clients/desktop-shell.c
++++ b/clients/desktop-shell.c
+@@ -860,11 +860,11 @@ background_draw(struct widget *widget, void *data)
+ 		widget_get_allocation(widget, &allocation);
+ 		image = NULL;
+ 		if (background->image)
+-			image = load_cairo_surface(background->image);
++			image = load_cairo_surface(background->image, false);
+ 		else if (background->color == 0) {
+ 			char *name = file_name_with_datadir("pattern.png");
+ 
+-			image = load_cairo_surface(name);
++			image = load_cairo_surface(name, false);
+ 			free(name);
+ 		}
+ 
+diff --git a/clients/image.c b/clients/image.c
+index b48d7f4b..f6e6ecd0 100644
+--- a/clients/image.c
++++ b/clients/image.c
+@@ -456,7 +456,7 @@ image_create(struct display *display, const char *filename,
+ 	free(copy);
+ 
+ 	image->filename = strdup(filename);
+-	image->image = load_cairo_surface(filename);
++	image->image = load_cairo_surface(filename, true);
+ 
+ 	if (!image->image) {
+ 		free(image->filename);
+diff --git a/clients/ivi-shell-user-interface.c b/clients/ivi-shell-user-interface.c
+index 2bf164ea..dc4bba19 100644
+--- a/clients/ivi-shell-user-interface.c
++++ b/clients/ivi-shell-user-interface.c
+@@ -933,9 +933,9 @@ create_ivisurface(struct wlContextStruct *p_wlCtx,
+ static void
+ create_ivisurfaceFromFile(struct wlContextStruct *p_wlCtx,
+ 			  uint32_t id_surface,
+-			  const char *imageFile)
++			  const char *imageFile, bool alpha)
+ {
+-	cairo_surface_t *surface = load_cairo_surface(imageFile);
++	cairo_surface_t *surface = load_cairo_surface(imageFile, alpha);
+ 
+ 	if (NULL == surface) {
+ 		fprintf(stderr, "Failed to load_cairo_surface %s\n", imageFile);
+@@ -990,28 +990,28 @@ static void
+ create_background(struct wlContextStruct *p_wlCtx, const uint32_t id_surface,
+ 		  const char *imageFile)
+ {
+-	create_ivisurfaceFromFile(p_wlCtx, id_surface, imageFile);
++	create_ivisurfaceFromFile(p_wlCtx, id_surface, imageFile, false);
+ }
+ 
+ static void
+ create_panel(struct wlContextStruct *p_wlCtx, const uint32_t id_surface,
+ 	     const char *imageFile)
+ {
+-	create_ivisurfaceFromFile(p_wlCtx, id_surface, imageFile);
++	create_ivisurfaceFromFile(p_wlCtx, id_surface, imageFile, true);
+ }
+ 
+ static void
+ create_button(struct wlContextStruct *p_wlCtx, const uint32_t id_surface,
+ 	      const char *imageFile, uint32_t number)
+ {
+-	create_ivisurfaceFromFile(p_wlCtx, id_surface, imageFile);
++	create_ivisurfaceFromFile(p_wlCtx, id_surface, imageFile, true);
+ }
+ 
+ static void
+ create_home_button(struct wlContextStruct *p_wlCtx, const uint32_t id_surface,
+ 		   const char *imageFile)
+ {
+-	create_ivisurfaceFromFile(p_wlCtx, id_surface, imageFile);
++	create_ivisurfaceFromFile(p_wlCtx, id_surface, imageFile, true);
+ }
+ 
+ static void
+@@ -1056,7 +1056,7 @@ create_launchers(struct wlContextCommon *cmm, struct wl_list *launcher_list)
+ 			p_wlCtx->cmm = cmm;
+ 			create_ivisurfaceFromFile(p_wlCtx,
+ 						  launchers[jj]->icon_surface_id,
+-						  launchers[jj]->icon);
++						  launchers[jj]->icon, true);
+ 		}
+ 
+ 		start = ii + 1;
+diff --git a/shared/cairo-util.c b/shared/cairo-util.c
+index 4bd5c28b..006199ad 100644
+--- a/shared/cairo-util.c
++++ b/shared/cairo-util.c
+@@ -349,9 +349,10 @@ loaded_cairo_surface_destructor(void *data)
+ static const cairo_user_data_key_t weston_cairo_util_load_cairo_surface_key;
+ 
+ cairo_surface_t *
+-load_cairo_surface(const char *filename)
++load_cairo_surface(const char *filename, bool alpha)
+ {
+ 	cairo_surface_t *surface;
++	cairo_format_t format;
+ 	cairo_status_t ret;
+ 	struct weston_image *image;
+ 	int width, height, stride;
+@@ -368,7 +369,9 @@ load_cairo_surface(const char *filename)
+ 	height = pixman_image_get_height(image->pixman_image);
+ 	stride = pixman_image_get_stride(image->pixman_image);
+ 
+-	surface = cairo_image_surface_create_for_data(data, CAIRO_FORMAT_ARGB32,
++	format = alpha ? CAIRO_FORMAT_ARGB32 : CAIRO_FORMAT_RGB24;
++
++	surface = cairo_image_surface_create_for_data(data, format,
+ 						      width, height, stride);
+ 	ret = cairo_surface_status(surface);
+ 	if (ret != CAIRO_STATUS_SUCCESS)
+diff --git a/shared/cairo-util.h b/shared/cairo-util.h
+index d56618ba..9f3d8e16 100644
+--- a/shared/cairo-util.h
++++ b/shared/cairo-util.h
+@@ -26,6 +26,7 @@
+ #ifndef _CAIRO_UTIL_H
+ #define _CAIRO_UTIL_H
+ 
++#include <stdbool.h>
+ #include <stdint.h>
+ #include <cairo.h>
+ #ifdef HAVE_PANGO
+@@ -47,7 +48,7 @@ void
+ rounded_rect(cairo_t *cr, int x0, int y0, int x1, int y1, int radius);
+ 
+ cairo_surface_t *
+-load_cairo_surface(const char *filename);
++load_cairo_surface(const char *filename, bool alpha);
+ 
+ struct weston_image *
+ load_cairo_surface_get_user_data(cairo_surface_t *surface);
+-- 
+2.39.5
+

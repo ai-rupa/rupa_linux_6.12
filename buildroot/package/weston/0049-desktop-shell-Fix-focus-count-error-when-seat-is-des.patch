@@ -1,0 +1,35 @@
+From e223450f3049ce18b80291ac29b45fa536a7e082 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Mon, 19 Aug 2024 12:13:00 +0800
+Subject: [PATCH 49/98] desktop-shell: Fix focus count error when seat is
+ destroyed
+
+Deactivate the currently focused surface before destroying a seat to
+maintain correct focus count.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ desktop-shell/shell.c | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/desktop-shell/shell.c b/desktop-shell/shell.c
+index 97b80993..5ee5b082 100644
+--- a/desktop-shell/shell.c
++++ b/desktop-shell/shell.c
+@@ -1743,6 +1743,13 @@ shell_set_view_fullscreen(struct shell_surface *shsurf)
+ static void
+ desktop_shell_destroy_seat(struct shell_seat *shseat)
+ {
++	/* Deactivate focused surface to maintain correct focus count */
++	if (shseat->focused_surface) {
++		struct shell_surface *current_focus =
++			get_shell_surface(shseat->focused_surface);
++		if (current_focus)
++			shell_surface_deactivate(current_focus);
++	}
+ 
+ 	wl_list_remove(&shseat->keyboard_focus_listener.link);
+ 	wl_list_remove(&shseat->caps_changed_listener.link);
+-- 
+2.39.5
+

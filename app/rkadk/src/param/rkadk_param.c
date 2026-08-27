@@ -1014,6 +1014,7 @@ static void RKADK_PARAM_DefDispCfg(RKADK_U32 u32CamId, char *path) {
     pstDispCfg->height = DISP_HEIGHT;
     pstDispCfg->frame_rate = 30;
     pstDispCfg->rotation = 1; //0: 0, 1: 90, 2: 180, 3: 270
+    pstDispCfg->enable_vpss = true;
     pstDispCfg->vpss_grp = 3;
     pstDispCfg->vpss_chn = 0;
     memcpy(pstDispCfg->img_type, "RGB888", strlen("RGB888"));
@@ -1284,6 +1285,8 @@ static void RKADK_PARAM_Dump() {
            pstCfg->stMediaCfg[i].stDispCfg.height);
     printf("\t\tsensor[%d] stDispCfg rotation: %d\n", i,
            pstCfg->stMediaCfg[i].stDispCfg.rotation);
+    printf("\t\tsensor[%d] stDispCfg enable_vpss: %d\n", i,
+           pstCfg->stMediaCfg[i].stDispCfg.enable_vpss);
     printf("\t\tsensor[%d] stDispCfg vpss_grp: %d\n", i,
            pstCfg->stMediaCfg[i].stDispCfg.vpss_grp);
     printf("\t\tsensor[%d] stDispCfg vpss_chn: %d\n", i,
@@ -1640,6 +1643,10 @@ static RKADK_S32 RKADK_PARAM_LoadParam(char *path,
       RKADK_LOGW("sensor[%d] display config param not exist, use default", i);
       return ret;
     }
+
+    // load live enable_audio
+    snprintf(entry, RKADK_BUFFER_LEN, "display:enable_vpss");
+    pstCfg->stMediaCfg[i].stDispCfg.enable_vpss = RKADK_IniGetBool(i, entry, 1);
     RKADK_PARAM_CheckDispCfg(sensorPath[i], i);
 
     // load thumb config

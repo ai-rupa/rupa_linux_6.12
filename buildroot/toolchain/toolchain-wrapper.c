@@ -46,6 +46,9 @@ static char *predef_args[] = {
 #endif
 	path,
 	"--sysroot", sysroot,
+#ifdef BR_CLANG_CONFIG_FILE
+	BR_CLANG_CONFIG_FILE,
+#endif
 #ifdef BR_ABI
 	"-mabi=" BR_ABI,
 #endif
@@ -58,6 +61,9 @@ static char *predef_args[] = {
 #ifdef BR_SOFTFLOAT
 	"-msoft-float",
 #endif /* BR_SOFTFLOAT */
+#ifdef BR_SIMD
+	"-msimd=" BR_SIMD,
+#endif
 #ifdef BR_MODE
 	"-m" BR_MODE,
 #endif

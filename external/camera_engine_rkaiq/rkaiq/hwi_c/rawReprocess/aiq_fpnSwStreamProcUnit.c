@@ -1,4 +1,7 @@
 
+#include <sys/ioctl.h>
+#include <linux/dma-buf.h>
+#include <fcntl.h>
 #include "hwi_c/rawReprocess/aiq_fpnSwStreamProcUnit.h"
 #include "c_base/aiq_list.h"
 #include "c_base/aiq_mutex.h"
@@ -590,7 +593,7 @@ XCamReturn AiqFpnSwStreamProcUnit_queryStatus(AiqFpnSwStreamProcUnit_t* pFpnProc
     return XCAM_RETURN_NO_ERROR;
 }
 
-XCamReturn AiqFpnSwStreamProcUnit_init(AiqFpnSwStreamProcUnit_t* pFpnProc, void *sns_dev)
+XCamReturn AiqFpnSwStreamProcUnit_init(AiqFpnSwStreamProcUnit_t* pFpnProc)
 {
     if (!pFpnProc)
         return XCAM_RETURN_ERROR_PARAM;
@@ -619,8 +622,6 @@ XCamReturn AiqFpnSwStreamProcUnit_init(AiqFpnSwStreamProcUnit_t* pFpnProc, void 
         LOGE_ANALYZER("init %s error", __func__);
         return ret;
     }
-
-    pFpnProc->_sensor_dev = sns_dev;
 
     return XCAM_RETURN_NO_ERROR;
 }
@@ -653,12 +654,22 @@ XCamReturn AiqFpnSwStreamProcUnit_deinit(AiqFpnSwStreamProcUnit_t* pFpnProc)
     return XCAM_RETURN_NO_ERROR;
 }
 
+XCamReturn AiqFpnSwStreamProcUnit_prepare(AiqFpnSwStreamProcUnit_t* pFpnProc, void *sns_dev)
+{
+    if (!pFpnProc)
+        return XCAM_RETURN_ERROR_PARAM;
+
+    pFpnProc->_sensor_dev = sns_dev;
+
+    return XCAM_RETURN_NO_ERROR;
+}
+
 XCamReturn AiqFpnSwStreamProcUnit_setFormat(AiqFpnSwStreamProcUnit_t* pFpnProc, uint32_t width, uint32_t height, uint32_t bpp)
 {
     if (!pFpnProc)
         return XCAM_RETURN_ERROR_PARAM;
 
-    if (!pFpnProc->_is_high_bw_mode && bpp != 16) {
+    if (!pFpnProc->_is_high_bw_mode && bpp != 10) {
         LOGE_CAMHW("%s compact raw fmt mode must be 10bit raw input!", __func__);
     }
 
@@ -681,10 +692,10 @@ XCamReturn AiqFpnSwStreamProcUnit_start(AiqFpnSwStreamProcUnit_t* pFpnProc)
     if (!pFpnProc->_fpn_attr)
         return XCAM_RETURN_ERROR_PARAM;
 
-    if (pFpnProc->_fpn_attr->en)
+    if (!pFpnProc->_fpn_attr->en)
         return XCAM_RETURN_BYPASS;
 
-    if (strlen(pFpnProc->_fpn_attr->stAuto.sta.sw_fpnSw_raw_path) > 0 && !pFpnProc->_fpn_init) {
+    if (strlen(pFpnProc->_fpn_attr->stAuto.sta.sw_fpnSw_raw_path) > 0 && !pFpnProc->_fpn_init && pFpnProc->_fpn_en) {
         rk_fpn_correction_param_t *fpn_proc = &pFpnProc->_fpn_param;
         fpn_proc->raw_wid = pFpnProc->_width;
         fpn_proc->raw_hgt = pFpnProc->_height;

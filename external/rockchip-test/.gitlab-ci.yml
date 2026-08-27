@@ -1,0 +1,111 @@
+stages:
+  - build
+  - deploy
+  - test
+  - report
+
+variables:
+  TARGET_IP: ""          # Set per-runner or via CI/CD variables
+  TARGET_USER: "root"
+  TEST_DURATION: "3600"  # Default 1 hour for CI
+  REPORT_FORMAT: "json"
+
+# Build stage: cross-compile any native test binaries
+build:test-tools:
+  stage: build
+  script:
+    - make -C npu2/rknn_demo/ all 2>/dev/null || echo "No rknn_demo to build"
+  artifacts:
+    paths:
+      - npu2/rknn_demo/*/rknn_common_test
+    expire_in: 1 week
+  allow_failure: true
+
+# Deploy stage: push test suite to target device
+deploy:to-target:
+  stage: deploy
+  script:
+    - ssh ${TARGET_USER}@${TARGET_IP} "mkdir -p /rockchip-test"
+    - rsync -avz --exclude='.git' --exclude='.gitlab-ci.yml' ./ ${TARGET_USER}@${TARGET_IP}:/rockchip-test/
+  needs:
+    - build:test-tools
+  only:
+    - branches
+
+# Test template for module-level parallel jobs
+.test_template: &test_template
+  stage: test
+  script:
+    - ssh ${TARGET_USER}@${TARGET_IP} "/rockchip-test/rockchip_test.sh --module ${CI_JOB_NAME} --test stress --duration ${TEST_DURATION} --report json --quiet 2>&1 || true"
+    - scp ${TARGET_USER}@${TARGET_IP}:/userdata/rockchip-test/results.jsonl results_${CI_JOB_NAME}.jsonl 2>/dev/null || echo "No results file"
+  artifacts:
+    paths:
+      - results_*.jsonl
+    expire_in: 1 week
+    when: always
+  only:
+    - branches
+
+# Individual module test jobs (parallelizable)
+cpu:test:
+  <<: *test_template
+  variables:
+    CI_JOB_NAME: "cpu"
+
+ddr:test:
+  <<: *test_template
+  variables:
+    CI_JOB_NAME: "ddr"
+
+gpu:test:
+  <<: *test_template
+  variables:
+    CI_JOB_NAME: "gpu"
+
+video:test:
+  <<: *test_template
+  variables:
+    CI_JOB_NAME: "video"
+
+npu:test:
+  <<: *test_template
+  variables:
+    CI_JOB_NAME: "npu"
+
+camera:test:
+  <<: *test_template
+  variables:
+    CI_JOB_NAME: "camera"
+
+benchmark:test:
+  <<: *test_template
+  variables:
+    CI_JOB_NAME: "benchmark"
+
+pcie:test:
+  <<: *test_template
+  variables:
+    CI_JOB_NAME: "pcie"
+
+# Report stage: aggregate results from all modules
+report:aggregate:
+  stage: report
+  script:
+    - python3 scripts/aggregate_results.py results_*.jsonl > final_report.json
+    - cat final_report.json
+  needs:
+    - cpu:test
+    - ddr:test
+    - gpu:test
+    - video:test
+    - npu:test
+    - camera:test
+    - benchmark:test
+    - pcie:test
+  artifacts:
+    paths:
+      - final_report.json
+    expire_in: 30 days
+  when: always
+  only:
+    - branches

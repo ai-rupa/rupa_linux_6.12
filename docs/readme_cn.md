@@ -2,39 +2,217 @@
 
 # 文档说明
 
-Rockchip Linux SDK中在 docs ⽬录划分为中⽂⽂档（ cn ）、英⽂⽂档（ en ）和软件物料清单 (sbom) 等⽬录。其中 sbom 包含如下：
+Rockchip Linux SDK中在 docs ⽬录划分为中⽂⽂档（ cn ）、英⽂⽂档（ en ）、软件物料清单 (sbom) 和补丁 (Patches) 等⽬录。
+
+```
+docs/
+├── cn/                  # 中文文档
+├── en/                  # 英文文档
+├── sbom/                # 软件物料清单和安全漏洞报告
+├── Patches/             # 补丁文件
+├── LICENSE              # 文档授权声明
+├── readme_cn.md         # 中文文档说明
+└── readme_en.md         # 英文文档说明
+```
+
+## 中文文档目录 (cn)
+
+中文文档目录包含通用开发指导文档、Linux系统开发文档、发布说明、芯片平台相关文档和其他参考文档。
+
+```
+docs/cn/
+├── Common/                                    # 通用开发指导文档
+│   ├── ALGORITHM/                             # 算法模块（EIS/IDC）
+│   ├── AMP/                                   # 多核异构系统开发
+│   ├── AUDIO/                                 # 音频模块
+│   ├── AVL/                                   # 外设支持列表
+│   ├── CAMERA/                                # 摄像头模块
+│   ├── CAN/                                   # CAN总线模块
+│   ├── CLK/                                   # 时钟模块
+│   ├── CRYPTO/                                # 加密模块
+│   ├── DDR/                                   # DDR模块
+│   ├── DEBUG/                                 # 调试模块
+│   ├── DISPLAY/                               # 显示模块（DP/HDMI/LVDS/MIPI等）
+│   ├── DSMC/                                  # 双倍速率串行存储器控制器
+│   ├── DVFS/                                  # 动态调频调压模块
+│   ├── FLEXBUS/                               # FLEXBUS模块
+│   ├── GMAC/                                  # 以太网模块
+│   ├── GPIO/                                  # GPIO模块
+│   ├── HDMI-IN/                               # HDMI-IN模块
+│   ├── I2C/                                   # I2C模块
+│   ├── IMU/                                   # 惯性测量单元模块
+│   ├── IO-DOMAIN/                             # IO电源域模块
+│   ├── IOMMU/                                 # IOMMU模块
+│   ├── ISP/                                   # 图像处理模块
+│   ├── MCU/                                   # MCU模块
+│   ├── MEMORY/                                # 内存模块（CMA/DMABUF等）
+│   ├── MMC/                                   # MMC/SD/eMMC模块
+│   ├── MPP/                                   # 多媒体处理平台
+│   ├── NPU/                                   # 神经网络处理单元
+│   ├── NVM/                                   # 存储模块
+│   ├── PCIe/                                  # PCIe模块
+│   ├── PERF/                                  # 性能分析模块
+│   ├── PINCTRL/                               # 引脚控制模块
+│   ├── PMIC/                                  # 电源管理芯片
+│   ├── POWER/                                 # 功耗模块
+│   ├── PWM/                                   # 脉宽调制模块
+│   ├── RGA/                                   # 2D图形加速模块
+│   ├── RTT/                                   # RT-Thread实时操作系统
+│   ├── SARADC/                                # SARADC模块
+│   ├── SECURITY/                              # 安全模块
+│   ├── SPI/                                   # SPI模块
+│   ├── THERMAL/                               # 温控模块
+│   ├── TOOL/                                  # 工具类模块
+│   ├── TRUST/                                 # 信任安全模块
+│   ├── UART/                                  # 串口模块
+│   ├── UBOOT/                                 # U-Boot模块
+│   ├── USB/                                   # USB模块
+│   └── WATCHDOG/                              # 看门狗模块
+├── Linux/                                     # Linux系统开发文档
+│   ├── ApplicationNote/                       # 应用指南
+│   ├── Audio/                                 # 音频开发
+│   ├── Camera/                                # 摄像头开发
+│   ├── DPDK/                                  # DPDK开发
+│   ├── Docker/                                # Docker容器开发
+│   ├── Graphics/                              # 图形显示开发
+│   ├── Multimedia/                            # 多媒体开发
+│   ├── Profile/                               # 软件测试/Benchmark
+│   ├── RKAI/                                  # AI框架开发
+│   ├── Recovery/                              # OTA升级/Recovery
+│   ├── Security/                              # 安全启动方案
+│   ├── System/                                # 系统移植开发
+│   ├── Uefi/                                  # UEFI启动方案
+│   └── Wifibt/                                # WIFI/BT开发
+├── Others/                                    # 其他参考文档
+├── Release/                                   # 发布说明和快速入门
+├── Rockchip_Developer_Guide_Linux_Software_CN.pdf  # Linux软件开发指南
+└── docs_list_cn.txt                           # 文档目录列表
+```
+
+## 英文文档目录 (en)
+
+英文文档目录结构与中文文档目录一致，包含相同的模块和子目录，提供英文版本的开发文档。
+
+```
+docs/en/
+├── Common/                                    # 通用开发指导文档
+├── Linux/                                     # Linux系统开发文档
+├── Others/                                    # 其他参考文档
+├── Release/                                   # 发布说明和快速入门
+├── Rockchip_Developer_Guide_Linux_Software_EN.pdf  # Linux软件开发指南
+└── docs_list_en.txt                           # 文档目录列表
+```
+
+## 软件物料清单 (SBOM)
+
+sbom是软件物料清单，详细列出了软件中包含的**开源组件、第三方库、版本信息、许可证、依赖关系、漏洞关联信息**等内容。Rockchip Linux SDK 的 sbom 目录针对不同操作系统（Buildroot、Debian、Yocto）及 SDK 和 U-Boot 提供了完整的 SBOM 和安全漏洞扫描报告。
+
+**每个操作系统和 SDK 均提供 4 种格式的 SBOM 和安全分析报告**：SPDX JSON、CycloneDX JSON、CSV 和 HTML，以满足不同工具和场景的需求。
 
 ```
 sbom/
-├── buildroot
-│   ├── copyright
-│   │   ├── BUILDROOT_README
-│   │   ├── host-software_copyright_list.csv
-│   │   └── software_copyright_list.csv
-│   └── cve
-│       └── software_vulnerability_check_list.html
-└── kernel
-    ├── Latest-Release-Rockchip-Kernel-CVEs-Link.txt
-    └── cve
-        ├── 2025-01.md
-        ├── 2025-02.md
-        ├── 2025-03.md
-        ├── 2025-04.md
-        ├── 2025-05.md
-        ├── 2025-06.md
-        ├── 2025-07.md
-        ├── 2025-08.md
-        ├── 2025-09.md
-        ├── 2025-10.md
-        └── 2025-11.md
+├── buildroot/
+│   ├── sbom/                               # Buildroot 系统 SBOM 文件
+│   │   ├── sbom.spdx.json                 # SPDX 格式
+│   │   ├── sbom.cyclonedx.json            # CycloneDX 格式
+│   │   ├── sbom.csv                       # CSV 格式
+│   │   └── sbom.html                      # HTML 格式
+│   └── security/                           # Buildroot 安全扫描报告
+│       ├── cve-report.spdx.json           # SPDX 格式
+│       ├── cve-report.cyclonedx.json      # CycloneDX 格式
+│       ├── cve-report.csv                 # CSV 格式
+│       └── cve-report.html                # HTML 格式
+├── debian/
+│   ├── sbom/                               # Debian 系统 SBOM 文件
+│   │   ├── sbom.spdx.json                 # SPDX 格式
+│   │   ├── sbom.cyclonedx.json            # CycloneDX 格式
+│   │   ├── sbom.csv                       # CSV 格式
+│   │   └── sbom.html                      # HTML 格式
+│   └── security/                           # Debian 安全扫描报告
+│       ├── cve-report.spdx.json           # SPDX 格式
+│       ├── cve-report.cyclonedx.json      # CycloneDX 格式
+│       ├── cve-report.csv                 # CSV 格式
+│       └── cve-report.html                # HTML 格式
+├── yocto/
+│   ├── sbom/                               # Yocto 系统 SBOM 文件
+│   │   ├── sbom.spdx.json                 # SPDX 格式
+│   │   ├── sbom.cyclonedx.json            # CycloneDX 格式
+│   │   ├── sbom.csv                       # CSV 格式
+│   │   └── sbom.html                      # HTML 格式
+│   └── security/                           # Yocto 安全扫描报告
+│       ├── cve-report.spdx.json           # SPDX 格式
+│       ├── cve-report.cyclonedx.json      # CycloneDX 格式
+│       ├── cve-report.csv                 # CSV 格式
+│       └── cve-report.html                # HTML 格式
+├── sdk/
+│   ├── sbom/                               # SDK SBOM 文件
+│   │   ├── sdk-sbom.spdx.json             # SPDX 格式
+│   │   ├── sdk-sbom.cyclonedx.json        # CycloneDX 格式
+│   │   ├── sdk-sbom.csv                   # CSV 格式
+│   │   └── sdk-sbom.html                  # HTML 格式
+│   └── security/                           # SDK 安全扫描报告
+│       ├── sdk-security-report.spdx.json   # SPDX 格式
+│       ├── sdk-security-report.cyclonedx.json  # CycloneDX 格式
+│       ├── sdk-security-report.csv         # CSV 格式
+│       └── sdk-security-report.html        # HTML 格式
+├── kernel/
+│   ├── Latest-Release-Rockchip-Kernel-CVEs-Link.txt  # 内核 CVE 最新链接
+│   └── cve/                                # 内核月度 CVE 报告
+│       ├── 2025-06.md
+│       ├── ...
+│       └── 2026-05.md
+├── u-boot/
+│   ├── Latest-Release-Rockchip-U-Boot-CVEs-Link.txt  # U-Boot CVE 最新链接
+│   └── cve/                                # U-Boot CVE 报告
+│       ├── U-Boot-CVE-2026-06_CN.md
+│       └── U-Boot-CVE-2026-06_EN.md
+├── SBOM_Security_Scan_Reference_CN.md      # SBOM 和安全扫描参考文档（中文）
+└── SBOM_Security_Scan_Reference_EN.md      # SBOM 和安全扫描参考文档（英文）
 ```
 
-LICENSE 是 Rockchip 发布的⽂档授权申明。sbom是软件物料清单，详细列出了软件中包含的**开源组件、第三方库、版本信息、许可证、依赖关系、漏洞关联信息**等内容
+### 各系统 SBOM 说明
 
-host-software_copyright_list.csv、software_copyright_list.csv 和 BUILDROOT_README是 Buildroot 系统默认编译的第三⽅包 license 详细说明，software_vulnerability_check_list.html是Buildroot用于生成当前配置下所有软件包的详细信息报告，并检测已知 CVE 漏洞及上游版本更新状态。
+- **Buildroot 系统**：`sbom/buildroot/sbom/` 目录包含 Buildroot 系统的完整 SBOM 文件，`sbom/buildroot/security/` 目录包含安全漏洞扫描报告。使用浏览器打开 `sbom/buildroot/security/cve-report.html` 即可查看完整报告。
+- **Debian 系统**：`sbom/debian/sbom/` 目录包含 Debian 系统的 SBOM（SPDX 格式），`sbom/debian/security/` 目录包含安全漏洞扫描报告。使用浏览器打开 `sbom/debian/security/cve-report.html` 即可查看完整报告。
+- **Yocto 系统**：`sbom/yocto/sbom/` 目录包含 Yocto 系统的完整 SBOM，`sbom/yocto/security/` 目录包含 CVE 漏洞汇总信息。使用浏览器打开 `sbom/yocto/security/cve-report.html` 即可查看完整报告。
+- **SDK**：`sbom/sdk/sbom/` 目录包含 SDK 的完整 SBOM 文件，`sbom/sdk/security/` 目录包含 SDK 的安全漏洞扫描报告。使用浏览器打开 `sbom/sdk/security/sdk-security-report.html` 即可查看完整报告。
+- **Kernel**：内核 CVE 报告按月度组织，存放在 `sbom/kernel/cve/` 目录下。每份报告包含当月内核相关的 CVE 漏洞列表、漏洞影响的内核版本、漏洞严重程度和修复状态。最新 CVE 链接请参见 `sbom/kernel/Latest-Release-Rockchip-Kernel-CVEs-Link.txt`。
+- **U-Boot**：U-Boot CVE 报告存放在 `sbom/u-boot/cve/` 目录下，提供中英文版本。最新 CVE 链接请参见 `sbom/u-boot/Latest-Release-Rockchip-U-Boot-CVEs-Link.txt`。
+
+> **说明**: 关于 SBOM 文件格式、安全漏洞扫描工具的详细使用说明，请参考 `<SDK>/docs/sbom/SBOM_Security_Scan_Reference_CN.md`。
+
+## 补丁文件 (Patches)
+
+Patches 目录包含 Rockchip Linux SDK 的各类补丁文件，用于系统功能增强和问题修复。
+
+```
+Patches/
+├── Kernel-6.1/                  # Linux Kernel 6.1 补丁
+│   ├── rkr1-rkr4/              # RKR1-RKR4 版本补丁
+│   └── rkr5+/                  # RKR5+ 版本补丁
+├── ROS2/                        # ROS2 相关补丁
+│   ├── cross-compile/          # 交叉编译相关
+│   └── patches/                # ROS2 补丁文件
+└── Real-Time-Performance/       # 实时性能优化补丁
+│   ├── PREEMPT_RT/             # PREEMPT_RT 实时补丁
+│   └── XENOMAI/                # Xenomai 实时补丁
+```
+
+> **说明**: 关于补丁的详细使用说明，请参考各子目录下的 readme.txt 或相关文档。
 
 随 Rockchip Linux SDK 发布的文档旨在帮助开发者快速上手开发及调试，文档中涉及的内容并不能涵盖所有的开发知识和问题。文档列表也会不断更新，如有文档上的疑问及需求，请联系我们的FAE窗口<fae@rock-chips.com>。
-Rockchip Linux SDK 中在 docs 目录分为中文（cn）和英文（en）。其中中文目录附带了 Common（通用开发指导文档）、Socs（芯片平台相关文档）、Linux （Linux 系统开发相关文档）、Others（其他参考文档）、docs_list_cn.txt (docs文件目录结构），其具体介绍如下：
+Rockchip Linux SDK 中在 docs 目录分为中文（cn）和英文（en）。其中中文目录附带了 Common（通用开发指导文档）、Release（发布说明）、Linux （Linux 系统开发相关文档）、Others（其他参考文档），其具体介绍如下：
+
+## 发布说明 (Release)
+
+Release 目录包含 Rockchip Linux SDK 的发布说明和快速入门指南。
+
+```
+cn/Release/
+├── Rockchip_Linux6.12_SDK_Release_V1.0.0_20260620_CN.pdf  # SDK 发布说明
+├── Rockchip_Quick_Start_Linux6.12_CN.pdf                  # 快速入门指南
+└── Linux6.12_SDK_Note.md                                  # SDK 版本说明
+```
 
 ## 通用开发指导文档 (Common)
 
@@ -171,7 +349,7 @@ docs/cn/Common/CRYPTO/
 
 ```
 docs/cn/Common/DDR/
-├── Rockchip-Developer-Guide-DDR-CN.pdf
+├── Rockchip_Developer_Guide_DDR_CN.pdf
 ```
 
 ### 调试模块文档 (DEBUG)
@@ -242,6 +420,7 @@ docs/cn/Common/FLEXBUS/
 
 ```
 docs/cn/Common/GMAC/
+├── Rockchip_Developer_Guide_GMAC_PTP1588_CN.pdf
 ├── Rockchip_Developer_Guide_Linux_GMAC_CN.pdf
 ├── Rockchip_Developer_Guide_Linux_GMAC_DPDK_CN.pdf
 ├── Rockchip_Developer_Guide_Linux_GMAC_Mode_Configuration_CN.pdf
@@ -255,7 +434,6 @@ docs/cn/Common/GMAC/
 
 ```
 docs/cn/Common/HDMI-IN/
-├── Rockchip_Developer_Guide_HDMI_IN_Based_On_CameraHal3_CN.pdf
 └── Rockchip_Developer_Guide_HDMI_RX_CN.pdf
 ```
 
@@ -293,6 +471,7 @@ ISP21主要适用于RK3566_RK3568等
 ISP30主要适用于RK3588等
 ISP32-lite主要适用于RK3562等
 ISP35主要适用于RV1126B等
+ISP351主要适用于RK3572等
 ISP39主要适用于RK3576等
 
 包含ISP开发文档、VI驱动开发文档、IQ Tool开发文档、调试文档和颜色调试文档。具体文档如下：
@@ -437,7 +616,8 @@ docs/cn/Common/PCIe/
 ├── Rockchip_Developer_Guide_PCIe_EP_CN.pdf
 ├── Rockchip_Developer_Guide_PCIe_Performance_CN.pdf
 ├── Rockchip_PCIe_Virtualization_Developer_Guide_CN.pdf
-└── Rockchip_RK3399_Developer_Guide_PCIe_CN.pdf
+├── Rockchip_RK3399_Developer_Guide_PCIe_CN.pdf
+└── Rockchip_Trouble_Shooting_Linux_PCIe_CN.pdf
 ```
 
 ### 性能模块文档 (PERF)
@@ -446,8 +626,7 @@ docs/cn/Common/PCIe/
 
 ```
 docs/cn/Common/PERF/
-├── Rockchip_Developer_Guide_Linux_RealTime_Performance_Test_Report_CN.pdf
-└── Rockchip_Quick_Start_Linux_Performance_Analyse_CN.pdf
+└── Rockchip_Developer_Guide_Linux_RealTime_Performance_Test_Report_CN.pdf
 ```
 
 ### GPIO模块文档 (PINCTRL)
@@ -584,6 +763,7 @@ docs/cn/Common/UART/
 
 ```
 docs/cn/Common/UBOOT/
+├── Rockchip_Developer_Guide_U-Boot_V5_CN.pdf
 └── Rockchip_Developer_Guide_UBoot_Nextdev_CN.pdf
 ```
 
@@ -593,19 +773,17 @@ docs/cn/Common/UBOOT/
 
 ```
 docs/cn/Common/USB/
-├── Rockchip_Developer_Guide_Linux_USB_Initialization_Log_Analysis_CN.pdf
 ├── Rockchip_Developer_Guide_Linux_USB_Performance_Analysis_CN.pdf
 ├── Rockchip_Developer_Guide_USB2_Compliance_Test_CN.pdf
 ├── Rockchip_Developer_Guide_USB_CN.pdf
-├── Rockchip_Developer_Guide_USB_FFS_Test_Demo_CN.pdf
 ├── Rockchip_Developer_Guide_USB_Gadget_UAC_CN.pdf
 ├── Rockchip_Developer_Guide_USB_SQ_Test_CN.pdf
 ├── Rockchip_Introduction_USB_SQ_Tool_CN.pdf
 ├── Rockchip_RK3399_Developer_Guide_USB_CN.pdf
 ├── Rockchip_RK356x_Developer_Guide_USB_CN.pdf
+├── Rockchip_RK3572_Developer_Guide_USB_CN.pdf
 ├── Rockchip_RK3576_Developer_Guide_USB_CN.pdf
 ├── Rockchip_RK3588_Developer_Guide_USB_CN.pdf
-├── Rockchip_Trouble_Shooting_Linux4.19_USB_Gadget_UVC_CN.pdf
 └── Rockchip_Trouble_Shooting_Linux_USB_Host_UVC_CN.pdf
 ```
 
@@ -616,6 +794,55 @@ docs/cn/Common/USB/
 ```
 docs/cn/Common/WATCHDOG/
 └── Rockchip_Developer_Guide_Linux_WDT_CN.pdf
+```
+
+### 算法模块文档 (ALGORITHM)
+
+该模块文档主要包含 Rockchip 平台EIS（电子防抖）和IDC（畸变校正）等算法开发文档。
+
+```
+docs/cn/Common/ALGORITHM/
+├── EIS/
+│   └── Rockchip_Developer_Guide_EIS_CN.pdf
+└── IDC/
+    ├── Rockchip_IDC_Developer_Guide_CN.pdf
+    └── Rockchip_IDC_Developer_Tutorial_CN.pdf
+```
+
+### GPIO模块文档 (GPIO)
+
+该模块文档主要包含 Rockchip 平台GPIO相关开发文档。
+
+```
+docs/cn/Common/GPIO/
+└── Rockchip_Developer_Guide_GPIO_CN.pdf
+```
+
+### IMU模块文档 (IMU)
+
+该模块文档主要包含 Rockchip 平台IMU（惯性测量单元）相关开发文档。
+
+```
+docs/cn/Common/IMU/
+└── Rockchip_Developer_Guide_Linux_IMU_CN.pdf
+```
+
+### RT-Thread模块文档 (RTT)
+
+该模块文档主要包含 Rockchip 平台RT-Thread实时操作系统的相关开发文档，包括Display、I2C、PWM、SPI、UART、USB等外设驱动开发指南。
+
+```
+docs/cn/Common/RTT/
+├── Rockchip_Developer_Guide_RT-Thread_Display_CN.pdf
+├── Rockchip_Developer_Guide_RT-Thread_I2C_CN.pdf
+├── Rockchip_Developer_Guide_RT-Thread_PWM_CN.pdf
+├── Rockchip_Developer_Guide_RT-Thread_SPI2APB_CN.pdf
+├── Rockchip_Developer_Guide_RT-Thread_SPIFLASH_CN.pdf
+├── Rockchip_Developer_Guide_RT-Thread_SPI_CN.pdf
+├── Rockchip_Developer_Guide_RT-Thread_SPI_Screen_CN.pdf
+├── Rockchip_Developer_Guide_RT-Thread_UART.pdf
+├── Rockchip_Developer_Guide_RT-Thread_USB_CN.pdf
+└── Rockchip_Developer_Guide_RT-Thread_rkdemo_CN.pdf
 ```
 
 ## Linux系统开发文档 (Linux)
@@ -631,6 +858,7 @@ docs/cn/Common/WATCHDOG/
 ├── Graphics
 ├── Multimedia
 ├── Profile
+├── RKAI
 ├── Recovery
 ├── Security
 ├── System
@@ -646,7 +874,6 @@ docs/cn/Common/WATCHDOG/
 docs/cn/Linux/ApplicationNote/
 ├── Rockchip_Developer_Guide_Linux_RKIPC_CN.pdf
 ├── Rockchip_Instruction_Linux_ROS2_CN.pdf
-├── Rockchip_Instruction_Linux_ROS_CN.pdf
 ├── Rockchip_Quick_Start_Linux_USB_Gadget_CN.pdf
 └── Rockchip_Use_Guide_Linux_EtherCAT_IgH_CN.pdf
 ```
@@ -657,7 +884,10 @@ docs/cn/Linux/ApplicationNote/
 
 ```
 docs/cn/Linux/Audio/
-├── Algorithms
+├── Algorithms/
+│   ├── Rockchip_Developer_Guide_Audio_Algorithm_VQE_Introduction_CN.pdf
+│   ├── Rockchip_Developer_Guide_RockAA_Utils_CN.pdf
+│   └── Rockchip_Developer_Guide_Sound_Event_Detection_CN.pdf
 └── Rockchip_Developer_Guide_PulseAudio_CN.pdf
 ```
 
@@ -668,9 +898,7 @@ docs/cn/Linux/Audio/
 ```
 docs/cn/Linux/Camera/
 ├── Rockchip_Developer_Guide_Camera_Driver_CN.pdf
-├── Rockchip_Developer_Guide_Linux4.4_Camera_CN.pdf
 ├── Rockchip_Developer_Guide_Linux_RMSL_CN.pdf
-├── Rockchip_Trouble_Shooting_Linux4.4_Camera_CN.pdf
 └── Rockchip_Trouble_Shooting_Linux5.10_Camera_CN.pdf
 ```
 
@@ -690,8 +918,7 @@ docs/cn/Linux/DPDK/
 ```
 docs/cn/Linux/Docker/
 ├── Rockchip_Developer_Guide_Debian_Docker_CN.pdf
-├── Rockchip_Developer_Guide_Linux_Docker_Deploy_CN.pdf
-└── Rockchip_User_Guide_SDK_Docker_CN.pdf
+└── Rockchip_Developer_Guide_Linux_Docker_Deploy_CN.pdf
 ```
 
 ### 显示相关开发（Graphics）
@@ -793,7 +1020,6 @@ docs/cn/Linux/Profile/
 
 ```
 docs/cn/Linux/Recovery/
-├── Rockchip_Developer_Guide_Linux_Recovery_CN.pdf
 └── Rockchip_Developer_Guide_Linux_Upgrade_CN.pdf
 ```
 
@@ -834,6 +1060,27 @@ docs/cn/Linux/Uefi/
 docs/cn/Linux/Wifibt/
 ├── Latest-Release-Wifibt-Link.txt
 └── Rockchip_Developer_Guide_Linux_WIFI_BT_CN.pdf
+```
+
+### AI框架（RKAI）
+
+主要介绍Rockchip Linux平台上RKAI相关开发。
+
+```
+docs/cn/Linux/RKAI/
+└── Rockchip_Developer_Guide_Linux_RKAI_CN.pdf
+```
+
+### 多媒体开发（Multimedia）
+
+主要介绍Rockchip Linux平台上多媒体相关开发，包括RKADK、Rockit Runtime、Gstreamer等。
+
+```
+docs/cn/Linux/Multimedia/
+├── Rockchip_Developer_Guide_Linux_Rkadk_CN.pdf
+├── Rockchip_Developer_Guide_Linux_Rockit_Runtime_CN.pdf
+├── Rockchip_User_Guide_Linux_Gstreamer_CN.pdf
+└── Rockchip_User_Guide_Linux_Rockit_CN.pdf
 ```
 
 ## 芯片平台相关文档 (Socs)

@@ -20,8 +20,10 @@
 #include "tools/common.config"
 #include "tools/test.config"
 #include "network/chromium.config"
-#include "ai/npu2.config"
+#include "ai/rkai.config"
+#include "ai/rknn3-test.config"
 #include "gui/weston.config"
+#include "ota/update_engine.config"
 # BR2_PACKAGE_GST1_PLUGINS_GOOD_PLUGIN_PULSE is reset to default
 BR2_PACKAGE_LIBSNDFILE=y
 BR2_PACKAGE_LIBTOOL=y

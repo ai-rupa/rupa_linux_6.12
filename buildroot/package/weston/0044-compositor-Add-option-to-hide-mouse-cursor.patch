@@ -1,0 +1,61 @@
+From 74cc3e71f76ac456738008b602678eacba4c6475 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Tue, 19 Sep 2023 11:05:33 +0800
+Subject: [PATCH 44/98] compositor: Add option to hide mouse cursor
+
+Add 'hide-cursor' option in [shell] section to suppress cursor layer
+rendering.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ frontend/main.c               | 4 ++++
+ include/libweston/libweston.h | 2 ++
+ libweston/compositor.c        | 4 ++++
+ 3 files changed, 10 insertions(+)
+
+diff --git a/frontend/main.c b/frontend/main.c
+index e1ef89e7..7f8f97d0 100644
+--- a/frontend/main.c
++++ b/frontend/main.c
+@@ -5684,6 +5684,10 @@ wet_main(int argc, char *argv[], const struct weston_testsuite_data *test_data)
+ 		}
+ 	}
+ 
++	section = weston_config_get_section(config, "shell", NULL, NULL);
++	weston_config_section_get_bool(section, "hide-cursor",
++				       &wet.compositor->hide_cursor, false);
++
+ 	if (argc > 1 && strcmp(argv[1], "--") == 0) {
+ 		/* remove the '--' entry and move up the rest */
+ 		for (i = 1; i < argc; i++)
+diff --git a/include/libweston/libweston.h b/include/libweston/libweston.h
+index 57026b4a..fde7212a 100644
+--- a/include/libweston/libweston.h
++++ b/include/libweston/libweston.h
+@@ -1608,6 +1608,8 @@ struct weston_compositor {
+ 
+ 	/* Delay output display until first desktop surface (warm-up) */
+ 	bool lazy_output_ready;
++
++	bool hide_cursor;
+ };
+ 
+ struct weston_solid_buffer_values {
+diff --git a/libweston/compositor.c b/libweston/compositor.c
+index 8ec83deb..9476e38c 100644
+--- a/libweston/compositor.c
++++ b/libweston/compositor.c
+@@ -3622,6 +3622,10 @@ weston_compositor_build_view_list(struct weston_compositor *compositor)
+ 	wl_list_init(&compositor->view_list);
+ 
+ 	wl_list_for_each(layer, &compositor->layer_list, link) {
++		/* Skip cursor layer to disable all cursor rendering */
++		if (compositor->hide_cursor && layer == &compositor->cursor_layer)
++			continue;
++
+ 		wl_list_for_each(view, &layer->view_list.link, layer_link.link) {
+ 			view_list_add(compositor, view);
+ 		}
+-- 
+2.39.5
+

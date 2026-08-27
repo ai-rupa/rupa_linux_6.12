@@ -690,6 +690,7 @@ static calibdb_ctx_member_offset_info_t info_CamCalibDbSenceCis_t[] = {
     {"CisHdr", CALIB_MODULE_RELATIVE_OFFSET_CIS(cis_hdr)},
     {"CisQbcRmsc", CALIB_MODULE_RELATIVE_OFFSET_CIS(cis_qbcRmsc)},
     {"CisCmpsOut", CALIB_MODULE_RELATIVE_OFFSET_CIS(cis_cmpsOut)},
+    {"CisWb", CALIB_MODULE_RELATIVE_OFFSET_CIS(cis_wb)},
     {NULL, 0},
 };
 

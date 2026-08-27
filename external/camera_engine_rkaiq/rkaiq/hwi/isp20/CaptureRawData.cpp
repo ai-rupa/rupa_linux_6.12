@@ -205,7 +205,7 @@ const struct capture_fmt* CaptureRawData::find_fmt(const uint32_t pixelformat)
     const struct capture_fmt *fmt;
     unsigned int i;
 
-    for (i = 0; i < sizeof(csirx_fmts); i++) {
+    for (i = 0; i < sizeof(csirx_fmts) / sizeof(csirx_fmts[0]); i++) {
         fmt = &csirx_fmts[i];
         if (fmt->fourcc == pixelformat)
             return fmt;

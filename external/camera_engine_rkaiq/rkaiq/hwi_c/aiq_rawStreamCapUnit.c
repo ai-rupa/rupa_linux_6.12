@@ -165,6 +165,18 @@ XCamReturn RawStreamCapUnit_poll_buffer_ready(void* ctx, AiqHwEvt_t* evt, int de
             // normal
 #if RKAIQ_HAVE_AIRMS
             if (pRawStrCapUnit->_pAirmsStream) {
+                if (pRawStrCapUnit->_camHw) {
+                    AiqCamHwBase_t* _ch = pRawStrCapUnit->_camHw;
+                    aiqMutex_lock(&_ch->_capture_trigger_mutex);
+                    if (_ch->mCaptureTs.t1 != _ch->mCaptureTs.wr) {
+                        struct timespec _mid_ts;
+                        clock_gettime(CLOCK_MONOTONIC, &_mid_ts);
+                        _ch->mCaptureTs.queue[_ch->mCaptureTs.t1 % CAPTURE_TS_QSIZE].t1 =
+                            XCAM_TIMESPEC_2_USEC(_mid_ts);
+                        _ch->mCaptureTs.t1++;
+                    }
+                    aiqMutex_unlock(&_ch->_capture_trigger_mutex);
+                }
                 AiqAiRmsStreamProcUnit_setVicapBuf(pRawStrCapUnit->_pAirmsStream, buf_s);
             }
             else
@@ -239,13 +251,53 @@ XCamReturn AiqRawStreamCapUnit_init(AiqRawStreamCapUnit_t* pRawStrCapUnit,
     }
 
     const char* dev_str = NULL;
-    int lvds_fd = -1;
     pRawStrCapUnit->_is_split = s_info->split;
-    if (s_info->linked_to_serdes || s_info->split) {
+    bool is_preview_capture   = s_info->isPreviewCaptureMode;
+    if (is_preview_capture) {
+        LOGK_CAMHW_SUBM(ISP20HW_SUBM, "preview-capture mode enabled");
+        if (strlen(s_info->isp_info->linked_vicap_sd_path)) {
+            switch (s_info->vicap_output_path) {
+                case VICAP_OUT_PATH_FULL_ID0:
+                    dev_str = s_info->cif_info->mipi_id0;
+                    break;
+                case VICAP_OUT_PATH_FULL_ID1:
+                    dev_str = s_info->cif_info->mipi_id1;
+                    break;
+                case VICAP_OUT_PATH_FULL_ID2:
+                    dev_str = s_info->cif_info->mipi_id2;
+                    break;
+                case VICAP_OUT_PATH_FULL_ID3:
+                    dev_str = s_info->cif_info->mipi_id3;
+                    break;
+                case VICAP_OUT_PATH_SCL0:
+                    dev_str = s_info->cif_info->mipi_scl0;
+                    break;
+                case VICAP_OUT_PATH_SCL1:
+                    dev_str = s_info->cif_info->mipi_scl1;
+                    break;
+                case VICAP_OUT_PATH_SCL2:
+                    dev_str = s_info->cif_info->mipi_scl2;
+                    break;
+                default:
+                    LOGE_CAMHW_SUBM(SENSOR_SUBM, "no matched vicap output path %d\n",
+                                    s_info->vicap_output_path);
+            }
+        }
+        if (dev_str) {
+            LOGD_CAMHW_SUBM(ISP20HW_SUBM, "preview-capture mode, open dev %s\n", dev_str);
+            pRawStrCapUnit->_dev[0] = (AiqV4l2Device_t*)aiq_mallocz(sizeof(AiqV4l2Device_t));
+            if (!pRawStrCapUnit->_dev[0]) {
+                LOGE_CAMHW_SUBM(ISP20HW_SUBM, "%d: alloc fail !", __LINE__);
+                goto fail;
+            }
+            AiqV4l2Device_init(pRawStrCapUnit->_dev[0], dev_str);
+            pRawStrCapUnit->_dev[0]->open(pRawStrCapUnit->_dev[0], false);
+        }
+    } else if (s_info->linked_to_serdes || s_info->split) {
         if (strlen(s_info->isp_info->linked_vicap_sd_path) || strlen(s_info->cif_info->mipi_id0) ||
             strlen(s_info->cif_info->mipi_id1) || strlen(s_info->cif_info->mipi_id2) ||
             strlen(s_info->cif_info->mipi_id3)) {
-            switch (s_info->connect_id) {
+            switch (s_info->vicap_output_path) {
                 case 0:
                     dev_str = s_info->cif_info->mipi_id0;
                     break;
@@ -378,6 +430,11 @@ XCamReturn AiqRawStreamCapUnit_init(AiqRawStreamCapUnit_t* pRawStrCapUnit,
     int i = 0;
     for (i = 0; i < 3; i++) {
         if (pRawStrCapUnit->_dev[i]) {
+            if (is_preview_capture && s_info->vicap_output_path >= VICAP_OUT_PATH_FULL_ID0 &&
+                s_info->vicap_output_path <= VICAP_OUT_PATH_FULL_ID3) {
+                AiqV4l2Device_setAutoQbuf(pRawStrCapUnit->_dev[i], false);
+            }
+
             AiqV4l2Device_setBufCnt(pRawStrCapUnit->_dev[i], buf_cnt);
             AiqV4l2Device_setBufSync(pRawStrCapUnit->_dev[i], true);
             pRawStrCapUnit->_dev_bakup[i] = pRawStrCapUnit->_dev[i];
@@ -773,10 +830,12 @@ XCamReturn AiqRawStreamCapUnit_set_csi_mem_word_align_mode(AiqRawStreamCapUnit_t
         int ret1     = pRawStrCapUnit->_dev[i]->io_control(
             pRawStrCapUnit->_dev[i], RKCIF_CMD_SET_CSI_MEMORY_MODE, &mem_mode);
         if (ret1) {
-            LOGE_CAMHW_SUBM(ISP20HW_SUBM, "set CSI_MEM_WORD_BIG_ALIGN failed!\n");
+            LOGE_CAMHW_SUBM(ISP20HW_SUBM, "device(%s) set CSI_MEM_WORD_BIG_ALIGN failed!\n",
+                            AiqV4l2Device_getDevName(pRawStrCapUnit->_dev[i]));
             ret = XCAM_RETURN_ERROR_IOCTL;
         } else {
-            LOGD_CAMHW_SUBM(ISP20HW_SUBM, "set the memory mode of vicap to big align");
+            LOGD_CAMHW_SUBM(ISP20HW_SUBM, "%s, set the memory mode of vicap to %d",
+                            AiqV4l2Device_getDevName(pRawStrCapUnit->_dev[i]), mode);
 #if RKAIQ_HAVE_DUMPSYS
             pRawStrCapUnit->data_mode = mem_mode;
 #endif
@@ -861,6 +920,87 @@ XCamReturn AiqRawStreamCapUnit_setSingleBufAsyncMode(AiqRawStreamCapUnit_t* pRaw
     return XCAM_RETURN_NO_ERROR;
 }
 
+XCamReturn AiqRawStreamCapUnit_setSclMode(AiqRawStreamCapUnit_t* pRawStrCapUnit,
+                                          uint32_t scl_mode) {
+    XCamReturn ret = XCAM_RETURN_NO_ERROR;
+
+    if (!pRawStrCapUnit->_dev[0]) {
+        LOGE_CAMHW_SUBM(ISP20HW_SUBM, "dev[0] is null, cannot set scl mode");
+        return XCAM_RETURN_ERROR_PARAM;
+    }
+
+    // Get current scl mode
+    int cur_mode = -1;
+    errno        = 0;
+    int ret1 = pRawStrCapUnit->_dev[0]->io_control(pRawStrCapUnit->_dev[0], RKCIF_CMD_GET_SCL_MODE,
+                                                   &cur_mode);
+    if (ret1 < 0) {
+        LOGW_CAMHW_SUBM(ISP20HW_SUBM, "dev(%s) get scl mode failed: %d (%s)",
+                        AiqV4l2Device_getDevName(pRawStrCapUnit->_dev[0]), ret1, strerror(errno));
+    } else {
+        LOGD_CAMHW_SUBM(ISP20HW_SUBM, "dev(%s) current scl mode: %d",
+                        AiqV4l2Device_getDevName(pRawStrCapUnit->_dev[0]), cur_mode);
+    }
+
+    // Set new scl mode
+    errno = 0;
+    ret1  = pRawStrCapUnit->_dev[0]->io_control(pRawStrCapUnit->_dev[0], RKCIF_CMD_SET_SCL_MODE,
+                                                &scl_mode);
+    if (ret1 < 0) {
+        LOGE_CAMHW_SUBM(ISP20HW_SUBM, "dev(%s) set scl mode to %d failed: %d (%s)",
+                        AiqV4l2Device_getDevName(pRawStrCapUnit->_dev[0]), scl_mode, ret1,
+                        strerror(errno));
+        ret = XCAM_RETURN_ERROR_IOCTL;
+    } else {
+        LOGD_CAMHW_SUBM(ISP20HW_SUBM, "dev(%s) scl mode: %d -> %d",
+                        AiqV4l2Device_getDevName(pRawStrCapUnit->_dev[0]), cur_mode, scl_mode);
+    }
+
+    return ret;
+}
+
+XCamReturn AiqRawStreamCapUnit_setQuadBayerDualPipeMode(AiqRawStreamCapUnit_t* pRawStrCapUnit) {
+    XCamReturn ret = XCAM_RETURN_NO_ERROR;
+
+    if (!pRawStrCapUnit->_dev[0]) {
+        LOGE_CAMHW_SUBM(ISP20HW_SUBM, "dev[0] is null, cannot set capture mode");
+        return XCAM_RETURN_ERROR_PARAM;
+    }
+
+    // Get current capture mode
+    struct rkmodule_capture_info cap_info;
+    memset(&cap_info, 0, sizeof(cap_info));
+    errno    = 0;
+    int ret1 = pRawStrCapUnit->_dev[0]->io_control(pRawStrCapUnit->_dev[0],
+                                                   RKMODULE_GET_CAPTURE_MODE, &cap_info);
+    if (ret1 < 0) {
+        LOGW_CAMHW_SUBM(ISP20HW_SUBM, "dev(%s) get capture mode failed: %d (%s)",
+                        AiqV4l2Device_getDevName(pRawStrCapUnit->_dev[0]), ret1, strerror(errno));
+    } else {
+        LOGD_CAMHW_SUBM(ISP20HW_SUBM, "dev(%s) current capture mode: %u",
+                        AiqV4l2Device_getDevName(pRawStrCapUnit->_dev[0]), cap_info.mode);
+    }
+
+    // Set capture mode to RKMODULE_QUADBAYER_TO_DUAL_PIPE
+    uint32_t old_mode = cap_info.mode;
+    cap_info.mode     = RKMODULE_QUADBAYER_TO_DUAL_PIPE;
+    errno             = 0;
+    ret1 = pRawStrCapUnit->_dev[0]->io_control(pRawStrCapUnit->_dev[0], RKMODULE_SET_CAPTURE_MODE,
+                                               &cap_info);
+    if (ret1 < 0) {
+        LOGE_CAMHW_SUBM(ISP20HW_SUBM, "dev(%s) set capture mode to %u failed: %d (%s)",
+                        AiqV4l2Device_getDevName(pRawStrCapUnit->_dev[0]),
+                        RKMODULE_QUADBAYER_TO_DUAL_PIPE, ret1, strerror(errno));
+        ret = XCAM_RETURN_ERROR_IOCTL;
+    } else {
+        LOGD_CAMHW_SUBM(ISP20HW_SUBM, "dev(%s) capture mode: %u -> %u",
+                        AiqV4l2Device_getDevName(pRawStrCapUnit->_dev[0]), old_mode,
+                        RKMODULE_QUADBAYER_TO_DUAL_PIPE);
+    }
+
+    return ret;
+}
+
 bool AiqRawStreamCapUnit_getStreamOnStatus(AiqRawStreamCapUnit_t* pRawStrCapUnit) {
     bool stream_on = true;
     for (int i = 0; i < pRawStrCapUnit->_mipi_dev_max; i++) {
@@ -869,6 +1009,41 @@ bool AiqRawStreamCapUnit_getStreamOnStatus(AiqRawStreamCapUnit_t* pRawStrCapUnit
         }
     }
     return stream_on;
+}
+
+XCamReturn AiqRawStreamCapUnit_queueFreeBuffer(AiqRawStreamCapUnit_t* pRawStrCapUnit,
+                                               int dev_index) {
+    AiqV4l2Buffer_t* buf = NULL;
+    XCamReturn ret       = XCAM_RETURN_NO_ERROR;
+
+    // Check input parameters
+    if (!pRawStrCapUnit) {
+        LOGE_CAMHW_SUBM(ISP20HW_SUBM, "RawStreamCapUnit is NULL");
+        return XCAM_RETURN_ERROR_PARAM;
+    }
+
+    if (dev_index < 0 || dev_index >= pRawStrCapUnit->_mipi_dev_max ||
+        !pRawStrCapUnit->_dev[dev_index]) {
+        LOGE_CAMHW_SUBM(ISP20HW_SUBM, "Invalid device index %d or device is NULL", dev_index);
+        return XCAM_RETURN_ERROR_PARAM;
+    }
+
+    // Get a free buffer from the device buffer pool
+    buf = AiqV4l2Device_getBuf(pRawStrCapUnit->_dev[dev_index], -1);
+    if (!buf) {
+        LOGW_CAMHW_SUBM(ISP20HW_SUBM, "No free buffer available for device index %d", dev_index);
+        return XCAM_RETURN_ERROR_MEM;
+    }
+
+    // Queue the buffer to driver
+    ret = AiqV4l2Device_qbuf(pRawStrCapUnit->_dev[dev_index], buf, false);
+    if (ret != XCAM_RETURN_NO_ERROR) {
+        LOGE_CAMHW_SUBM(ISP20HW_SUBM, "Failed to qbuf for device index %d, ret=%d", dev_index, ret);
+        return ret;
+    }
+
+    LOGD_CAMHW_SUBM(ISP20HW_SUBM, "Successfully queued free buffer for device index %d", dev_index);
+    return XCAM_RETURN_NO_ERROR;
 }
 
 #if RKAIQ_HAVE_DUMPSYS

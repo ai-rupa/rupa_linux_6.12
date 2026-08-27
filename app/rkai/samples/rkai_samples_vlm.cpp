@@ -19,6 +19,7 @@
 #include <assert.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <dirent.h>
 
 #include "rkai_ini.h"
 #include "easy_timer.h"
@@ -34,97 +35,15 @@
 #include "rk_mpi_sys.h"
 #include "rk_mpi_vdec.h"
 #include "jpeglib.h"
+#elif !defined(RKAI_DISABLE_RKNN3)
+/* RKNN3 path: use libjpeg directly (no rockit dependency) */
+#include <jpeglib.h>
 #endif
 
 #ifdef RKAI_DEPENDMENT_OPENCV4
 #include "opencv2/opencv.hpp"
 #endif
 
-#if 0
-static int load_config(const char *filename, rkaiVLMCfg *cfg) {
-    FILE *file = fopen(filename, "rb");
-    if (!file) {
-        perror("Cannot open config file");
-        return -1;
-    }
-
-    fseek(file, 0, SEEK_END);
-    size_t length = ftell(file);
-    rewind(file);
-
-    // printf("json len: %d\n",length);
-    char *data = (char *)malloc(length + 1);
-    fread(data, 1, length, file);
-    data[length] = '\0';
-    fclose(file);
-
-    cJSON *json = cJSON_Parse(data);
-    if (!json) {
-        printf("Error parsing JSON: %s\n", cJSON_GetErrorPtr());
-        free(data);
-        return -1;
-    }
-
-    cJSON *visionModelPath = cJSON_GetObjectItem(json, "vision_model_path");
-    if (cJSON_IsString(visionModelPath)) {
-        strncpy(cfg->visionModelPath, visionModelPath->valuestring, sizeof(cfg->visionModelPath) - 1);
-        // printf("modelPath:%s\n",cfg->modelPath);
-    }
-
-    cJSON *llmModelPath = cJSON_GetObjectItem(json, "llm_model_path");
-    if (cJSON_IsString(llmModelPath)) {
-        strncpy(cfg->llmModelPath, llmModelPath->valuestring, sizeof(cfg->llmModelPath) - 1);
-        // printf("modelPath:%s\n",cfg->modelPath);
-    }
-
-    cJSON *inputPath = cJSON_GetObjectItem(json, "input_path");
-    if (cJSON_IsString(inputPath)) {
-        strncpy(cfg->inputPath, inputPath->valuestring, sizeof(cfg->inputPath) - 1);
-    }
-
-    cJSON *imgStart = cJSON_GetObjectItem(json, "img_start");
-    if (cJSON_IsString(imgStart)) {
-        strncpy(cfg->imgStart, imgStart->valuestring, sizeof(cfg->imgStart) - 1);
-        // printf("imgStart:%s\n",cfg->imgStart);
-    }
-    cJSON *imgEnd = cJSON_GetObjectItem(json, "img_end");
-    if (cJSON_IsString(imgEnd)) {
-        strncpy(cfg->imgEnd, imgEnd->valuestring, sizeof(cfg->imgEnd) - 1);
-    }
-    cJSON *imgContent = cJSON_GetObjectItem(json, "img_content");
-    if (cJSON_IsString(imgContent)) {
-        strncpy(cfg->imgContent, imgContent->valuestring, sizeof(cfg->imgContent) - 1);
-    }
-
-    cJSON *maxContextLen = cJSON_GetObjectItem(json, "max_context_len");
-    if (cJSON_IsNumber(maxContextLen)) {
-        cfg->maxContextLen = maxContextLen->valueint;
-    }
-    cJSON *maxNewTokens = cJSON_GetObjectItem(json, "max_new_tokens");
-    if (cJSON_IsNumber(maxNewTokens)) {
-        cfg->maxNewTokens = maxNewTokens->valueint;
-    }
-    cJSON *topK = cJSON_GetObjectItem(json, "top_k");
-    if (cJSON_IsNumber(topK)) {
-        cfg->topK = topK->valueint;
-    }
-
-    cJSON *skipSpecialToken = cJSON_GetObjectItem(json, "skip_special_token");
-    if (cJSON_IsNumber(skipSpecialToken)) {
-        cfg->skipSpecialToken = skipSpecialToken->valueint;
-    }
-
-    cJSON *baseDomainID = cJSON_GetObjectItem(json, "base_domain_id");
-    if (cJSON_IsNumber(baseDomainID)) {
-        cfg->baseDomainID = baseDomainID->valueint;
-    }
-
-    cJSON_Delete(json);
-    free(data);
-    return 0;
-}
-
-#endif
 
 #ifdef RKAI_DEPENDMENT_OPENCV4
 // Expand the image into a square and fill it with the specified background color
@@ -166,7 +85,8 @@ int rkai_mjpeg_get_resolutin(const char *path, int *width, int *height)
         return ret;
 
     while (!feof(fp)) {
-        fread(mark, 1, sizeof(mark), fp);
+        if (fread(mark, 1, sizeof(mark), fp) != sizeof(mark))
+            break;
         if (mark[0] == 0xFF && mark[1] == 0xD8)
             continue;
         if (mark[0] != 0xFF)
@@ -179,14 +99,16 @@ int rkai_mjpeg_get_resolutin(const char *path, int *width, int *height)
                 break;
             }
             fseek(fp, 3, SEEK_CUR);
-            fread(data, 1, sizeof(data), fp);
+            if (fread(data, 1, sizeof(data), fp) != sizeof(data))
+                break;
             *height = data[0] * 256 + data[1];
             *width = data[2] * 256 + data[3];
             printf("%s: %dx%d\n", __func__, *width, *height);
             ret = 0;
             break;
         } else {
-            fread(size, 1, sizeof(size), fp);
+            if (fread(size, 1, sizeof(size), fp) != sizeof(size))
+                break;
             fseek(fp, size[0] * 256 + size[1] - 2, SEEK_CUR);
             continue;
         }
@@ -196,7 +118,48 @@ int rkai_mjpeg_get_resolutin(const char *path, int *width, int *height)
     return ret;
 }
 
-#ifdef DEPENDMENT_ROCKIT
+#if defined(DEPENDMENT_ROCKIT) || !defined(RKAI_DISABLE_RKNN3)
+static unsigned char *decode_jpeg_lib(const char *image_name, int *width, int *height, int *channels)
+{
+    FILE *fp = fopen(image_name, "rb");
+    if (!fp) { perror("fopen"); return NULL; }
+
+    struct jpeg_decompress_struct cinfo;
+    struct jpeg_error_mgr jerr;
+    cinfo.err = jpeg_std_error(&jerr);
+    jpeg_create_decompress(&cinfo);
+    jpeg_stdio_src(&cinfo, fp);
+    jpeg_read_header(&cinfo, TRUE);
+
+    cinfo.out_color_space = JCS_RGB;
+    jpeg_start_decompress(&cinfo);
+
+    *width = cinfo.output_width;
+    *height = cinfo.output_height;
+    *channels = cinfo.output_components;
+
+    size_t row_stride = *width * *channels;
+    JSAMPARRAY buffer = (*cinfo.mem->alloc_sarray)
+                        ((j_common_ptr)&cinfo, JPOOL_IMAGE, row_stride, 1);
+
+    unsigned char *pixels = (unsigned char*)malloc(*height * row_stride);
+    if (!pixels) { fclose(fp); jpeg_destroy_decompress(&cinfo); return NULL; }
+
+    int y = 0;
+    while (cinfo.output_scanline < cinfo.output_height) {
+        jpeg_read_scanlines(&cinfo, buffer, 1);
+        memcpy(pixels + y * row_stride, buffer[0], row_stride);
+        ++y;
+    }
+
+    jpeg_finish_decompress(&cinfo);
+    jpeg_destroy_decompress(&cinfo);
+    fclose(fp);
+    return pixels;
+}
+#endif
+
+#ifdef DEPENDENT_ROCKIT
 unsigned char *decode_jpeg(const char *image_name, int *width, int *height, int *channels)
 {
     FILE *fp = fopen(image_name, "rb");
@@ -289,16 +252,12 @@ static void print_usage(const char *prog)
 {
     printf("Usage: %s [options]\n", prog);
     printf("Options:\n");
-    printf("  --vision_model <path>   Vision RKNN model file\n");
-    printf("  --llm_model    <path>   LLM RKLLM model file  \n");
+    printf("  --vision_model <path>   Vision model directory or .rknn file\n");
+    printf("  --llm_model    <path>   LLM model directory or .rkllm/.rknn file\n");
     printf("  --image_path   <path>   Input image file      \n");
     printf("  --config       <path>   Configuration ini file\n");
     printf("Example:\n");
-    printf("  %s rkai_VLM_Demo --config <path>/rkai_cfg.ini\n", prog);
-    printf("  %s rkai_VLM_Demo --vision_model <path>/fastvlm-0.5b-fp16.rv1126b.rknn \\\n", prog);
-    printf("     --llm_model <path>/fastvlm-0.5B-w8a8_level0.rv1126b.rkllm \\\n");
-    printf("     --image_path <path>/demo.jpg \\\n");
-    printf("     --config <path>/rkai_cfg.ini\n");
+    printf("  %s --config <path>/rkai_cfg.ini --vision_model <vision_dir> --llm_model <llm_dir>\n", prog);
 }
 
 #ifdef DEPENDMENT_ROCKIT
@@ -441,7 +400,10 @@ static char *get_model_dir_from_cfg(const char *cfg_path)
 
 static char *path_join(const char *left, const char *right)
 {
-    if (!left || !right) return NULL;
+    if (!right) return NULL;
+    if (right[0] == '/') return strdup(right);
+    if (!left) return NULL;
+
     size_t len = strlen(left) + strlen(right) + 2;
     char  *out = (char *)malloc(len);
     if (!out) return NULL;
@@ -454,12 +416,88 @@ static char *path_join(const char *left, const char *right)
     return out;
 }
 
+/* Find the first file in dir matching the given suffix. */
+static char *find_file_in_dir(const char *dir, const char *suffix)
+{
+    DIR *d = opendir(dir);
+    if (!d) return NULL;
+
+    struct dirent *ent;
+    char *result = NULL;
+    size_t suffix_len = strlen(suffix);
+
+    while ((ent = readdir(d)) != NULL) {
+        size_t namelen = strlen(ent->d_name);
+        if (namelen >= suffix_len &&
+            strcmp(ent->d_name + namelen - suffix_len, suffix) == 0) {
+            size_t path_len = strlen(dir) + 1 + namelen + 1;
+            result = (char *)malloc(path_len);
+            if (result) {
+                snprintf(result, path_len, "%s/%s", dir, ent->d_name);
+            }
+            break;
+        }
+    }
+    closedir(d);
+    return result;
+}
+
+/* Find the first file in dir whose name contains keyword and ends with suffix. */
+static char *find_file_in_dir_contains(const char *dir, const char *keyword, const char *suffix)
+{
+    DIR *d = opendir(dir);
+    if (!d) return NULL;
+
+    struct dirent *ent;
+    char *result = NULL;
+    size_t suffix_len = strlen(suffix);
+
+    while ((ent = readdir(d)) != NULL) {
+        size_t namelen = strlen(ent->d_name);
+        if (namelen >= suffix_len &&
+            strstr(ent->d_name, keyword) != NULL &&
+            strcmp(ent->d_name + namelen - suffix_len, suffix) == 0) {
+            size_t path_len = strlen(dir) + 1 + namelen + 1;
+            result = (char *)malloc(path_len);
+            if (result) {
+                snprintf(result, path_len, "%s/%s", dir, ent->d_name);
+            }
+            break;
+        }
+    }
+    closedir(d);
+    return result;
+}
+
+/* If path points to a directory, auto-detect a model file matching suffix inside it.
+ * Returns the resolved path (may be the original if it's already a file). */
+static char *resolve_model_path(const char *path, const char *suffix)
+{
+    if (!path) return NULL;
+
+    DIR *dir = opendir(path);
+    if (dir) {
+        closedir(dir);
+        char *found = find_file_in_dir(path, suffix);
+        if (found) {
+            printf(" auto-detected: %s\n", found);
+        } else {
+            printf("No %s file found in %s\n", suffix, path);
+        }
+        return found;
+    }
+    return strdup(path);
+}
+
 int main(int argc, char **argv) {
 
     char *vision_model = NULL;
     char *llm_model    = NULL;
     char *image_path   = NULL;
     char *config_path  = NULL;
+    bool vision_model_owned = false;
+    bool llm_model_owned    = false;
+    bool image_path_owned   = false;
 
     /* get all paramters */
     for (int i = 1; i < argc; ++i) {
@@ -498,41 +536,79 @@ int main(int argc, char **argv) {
     // printf("-----------prefix:%s----------\n",prefix);
     if(!vision_model) {
         const char *model_name = ini_get("vlm_cfg", "vision_model","none");
-        if(model_name == "none") {
+        if(strcmp(model_name, "none") == 0) {
             printf("cannot get vision_model from .ini. please set --vision_model");
             return -1;
         }
         vision_model = path_join(prefix,model_name);
+        vision_model_owned = true;
         printf(" vision_model:%s\n", vision_model);
     }
 
     if(!llm_model) {
         const char *model_name = ini_get("vlm_cfg", "llm_model","none");
-        if(model_name == "none") {
+        if(strcmp(model_name, "none") == 0) {
             printf("cannot get llm_model from .ini. please set --llm_model");
             return -1;
         }
         llm_model = path_join(prefix,model_name);
+        llm_model_owned = true;
         printf(" llm_model:%s\n", llm_model);
     }
 
     if(!image_path) {
         const char *image_name = ini_get("vlm_cfg", "image_path","none");
-        if(image_name == "none") {
+        if(strcmp(image_name, "none") == 0) {
             printf("cannot get image_path from .ini. please set --image_path");
             return -1;
         }
         image_path = path_join(prefix,image_name);
+        image_path_owned = true;
         printf(" image_path:%s\n", image_path);
     }
 
+    /* If --vision_model or --llm_model points to a directory, auto-detect files.
+     * Use "vision"/"llm" keyword in filename to distinguish the two models. */
+    DIR *vdir = opendir(vision_model);
+    if (vdir) {
+        closedir(vdir);
+        char *found = find_file_in_dir_contains(vision_model, "vision", ".rknn");
+        if (!found) found = find_file_in_dir(vision_model, ".rknn");
+        if (!found) {
+            printf("--vision_model: no vision .rknn file found in %s\n", vision_model);
+            return -1;
+        }
+        printf(" vision auto-detected: %s\n", found);
+        if (vision_model_owned) free(vision_model);
+        vision_model = found;
+        vision_model_owned = true;
+    }
+
+    DIR *ldir = opendir(llm_model);
+    if (ldir) {
+        closedir(ldir);
+        char *found = find_file_in_dir_contains(llm_model, "llm", ".rknn");
+        if (!found) found = resolve_model_path(llm_model, ".rknn");
+        if (!found) found = resolve_model_path(llm_model, ".rkllm");
+        if (!found) {
+            printf("--llm_model: no llm .rknn/.rkllm file found in %s\n", llm_model);
+            return -1;
+        }
+        printf(" llm auto-detected: %s\n", found);
+        if (llm_model_owned) free(llm_model);
+        llm_model = found;
+        llm_model_owned = true;
+    }
+
     if (!strstr(vision_model, ".rknn")) {
-        printf("--vision_model must be an .rknn file\n");
+        printf("--vision_model must be an .rknn file or directory\n");
         return -1;
     }
 
-    if (!strstr(llm_model, ".rkllm")) {
-        printf("--llm_model must be an .rkllm file\n");
+    bool is_rkllm = strstr(llm_model, ".rkllm") != NULL;
+    bool is_rknn  = strstr(llm_model, ".rknn")  != NULL;
+    if (!is_rkllm && !is_rknn) {
+        printf("--llm_model must be an .rkllm or .rknn file or directory\n");
         return -1;
     }
     int ret = -1;
@@ -542,9 +618,24 @@ int main(int argc, char **argv) {
     #endif
 
     rkaiVLMCfg cfg;
+    memset(&cfg, 0, sizeof(cfg));
     cfg.visionModelPath = vision_model;
     cfg.llmModelPath    = llm_model;
-    cfg.inputPath       = image_path;   // 原来是 .npy，现在指向 .jpg
+    cfg.inputPath       = image_path;
+
+    /* Auto-detect RKNN3 companion files from model directory */
+    if (is_rknn) {
+        /* Get directory of llm model file */
+        char *llm_dir = strdup(llm_model);
+        char *slash = strrchr(llm_dir, '/');
+        if (slash) *slash = '\0'; else { free(llm_dir); llm_dir = strdup("."); }
+        cfg.llmWeightPath = find_file_in_dir_contains(llm_dir, "llm", ".weight");
+        if (!cfg.llmWeightPath) cfg.llmWeightPath = find_file_in_dir(llm_dir, ".weight");
+        cfg.tokenizerPath = find_file_in_dir(llm_dir, ".tokenizer.gguf");
+        cfg.embeddingPath = find_file_in_dir_contains(llm_dir, "llm", ".embed.bin");
+        if (!cfg.embeddingPath) cfg.embeddingPath = find_file_in_dir(llm_dir, ".embed.bin");
+        free(llm_dir);
+    }
 
     rkai_vlm_get_version();
     
@@ -562,180 +653,306 @@ int main(int argc, char **argv) {
     cfg.imgEnd = ini_get("tensor","img_end","");
     cfg.imgContent = ini_get("tensor","img_content","");
 
-    rkaiCtxVision *rkai_ctx = (rkaiCtxVision *)malloc(sizeof(rkaiCtxVision));
-    memset(rkai_ctx, 0, sizeof(rkaiCtxVision));
 
-    rkaiCtxVLM *llm_ctx = (rkaiCtxVLM *)malloc(sizeof(rkaiCtxVLM));
-    memset(llm_ctx,0,sizeof(rkaiCtxVLM));
-    
-    rkaiTimer t_ms;
-    tik(&t_ms);
-    ret = rkai_vlm_vision_init(cfg.visionModelPath, rkai_ctx);
-    if (ret != 0) {
-        printf("rkai_vlm_vision_init fail! ret=%d model_path=%s\n", ret, cfg.visionModelPath);
-        return -1;
-    }
-    tok(&t_ms);
-    printf("%s: Model Vision loaded in %8.2f ms\n", __func__, get_time(&t_ms));
-    tik(&t_ms);
-    // load llm model
-    ret = rkai_vlm_llm_init(llm_ctx,cfg);
-    if(ret != 0) {
-        printf("rkai_vlm_llm_init fail! ret=%d model_path=%s\n", ret, cfg.llmModelPath);
-        return -1;
-    }
-    tok(&t_ms);
-    printf("%s: Model LLM loaded in %8.2f ms\n", __func__, get_time(&t_ms));
-    // unsigned char *resized_img = NULL;
-    int32_t input_len = rkai_ctx->model_channel*rkai_ctx->model_height*rkai_ctx->model_width; 
-    unsigned char *data = (unsigned char*)malloc(sizeof(unsigned char)*input_len); 
-    memset(data,0,sizeof(unsigned char)*input_len);
-    if (strstr(cfg.inputPath, ".npy")) {
-        int32_t image_len = load_npy(rkai_ctx,cfg.inputPath,data);
-        if(image_len != input_len) {
-            printf("input size is not match model inputs.\n");
+    /* ============================================================
+     * Vision init + image load + vision run (dual backend)
+     * ============================================================ */
+#if !defined(RKAI_DISABLE_RKNN3)
+    /* RKNN3 path */
+    {
+        /* Auto-detect vision weight from same directory as vision model */
+        char *vision_dir = strdup(vision_model);
+        char *p = strrchr(vision_dir, '/');
+        if (p) *p = '\0';
+        char *vision_weight_path = find_file_in_dir_contains(vision_dir, "vision", ".weight");
+        if (!vision_weight_path) vision_weight_path = find_file_in_dir(vision_dir, ".weight");
+        free(vision_dir);
+        if (!vision_weight_path) {
+            printf("No .weight file found for vision model\n");
             return -1;
         }
-    } else {
-        // #ifdef RKAI_DEPENDMENT_OPENCV4
-        // // TODO...
-        // cv::Mat img = cv::imread(cfg.inputPath);
-        // cv::cvtColor(img, img, cv::COLOR_BGR2RGB);
+        printf(" vision weight: %s\n", vision_weight_path);
 
-        // // Expand the image into a square and fill it with the specified background color (According the modeling_minicpmv.py)
-        // cv::Scalar background_color(127.5, 127.5, 127.5);
-        // cv::Mat square_img = expand2square(img, background_color);
+        rkaiCtxVisionRknn3 *rknn3_vision_ctx = (rkaiCtxVisionRknn3 *)malloc(sizeof(rkaiCtxVisionRknn3));
+        memset(rknn3_vision_ctx, 0, sizeof(rkaiCtxVisionRknn3));
 
-        // cv::Mat resized_img;
-        // cv::Size new_size(rkai_ctx->model_width, rkai_ctx->model_height);
-        // cv::resize(square_img, resized_img, new_size, 0, 0, cv::INTER_LINEAR);
+        rkaiCtxVLM *llm_ctx = (rkaiCtxVLM *)malloc(sizeof(rkaiCtxVLM));
+        memset(llm_ctx, 0, sizeof(rkaiCtxVLM));
 
-        // memcpy(data,resized_img.data,sizeof(unsigned char)*input_len);
-        #ifdef DEPENDMENT_ROCKIT
-        int width =0,height = 0,channel=0;
-        unsigned char * img_buffer = decode_jpeg(image_path,&width,&height,&channel);
-        if(img_buffer ==NULL) {
-            printf("decode jpeg fail.\n");
+        /* Load LLM first (needs larger contiguous memory) before vision model */
+        rkaiTimer t_ms;
+        tik(&t_ms);
+        ret = rkai_vlm_llm_init(llm_ctx, cfg);
+        if (ret != 0) {
+            printf("rkai_vlm_llm_init fail! ret=%d model_path=%s\n", ret, cfg.llmModelPath);
+            free(rknn3_vision_ctx); free(llm_ctx); free(vision_weight_path);
             return -1;
         }
-        
-        data = resize_use_tde(width,height,rkai_ctx->model_width,rkai_ctx->model_height,img_buffer);
-        if(img_buffer) {
+        tok(&t_ms);
+        printf("%s: Model LLM loaded in %8.2f ms\n", __func__, get_time(&t_ms));
+
+        tik(&t_ms);
+        ret = rkai_vlm_vision_init_rknn3(cfg.visionModelPath, vision_weight_path,
+                                          rknn3_vision_ctx, 0xff);
+        if (ret != 0) {
+            printf("rkai_vlm_vision_init fail! ret=%d model_path=%s\n", ret, cfg.visionModelPath);
+            rkai_vlm_llm_release(llm_ctx);
+            free(rknn3_vision_ctx); free(llm_ctx); free(vision_weight_path);
+            return -1;
+        }
+        tok(&t_ms);
+        printf("%s: Model Vision loaded in %8.2f ms\n", __func__, get_time(&t_ms));
+
+        /* Image loading: decode JPEG, vision_run_rknn3 does resize+normalize internally */
+        unsigned char *data = NULL;
+        int img_width = 0, img_height = 0;
+        if (strstr(cfg.inputPath, ".npy")) {
+            printf("RKNN3 backend does not support .npy input, use .jpg\n");
+            rkai_vlm_llm_release(llm_ctx);
+            rkai_vlm_vision_release_rknn3(rknn3_vision_ctx);
+            free(rknn3_vision_ctx); free(llm_ctx); free(vision_weight_path);
+            return -1;
+        }
+        int channel = 0;
+        unsigned char *img_buffer = decode_jpeg_lib(cfg.inputPath, &img_width, &img_height, &channel);
+        if (!img_buffer) {
+            printf("decode jpeg fail: %s\n", cfg.inputPath);
+            rkai_vlm_llm_release(llm_ctx);
+            rkai_vlm_vision_release_rknn3(rknn3_vision_ctx);
+            free(rknn3_vision_ctx); free(llm_ctx); free(vision_weight_path);
+            return -1;
+        }
+        data = img_buffer;
+        printf("image decoded: %dx%d %d channels\n", img_width, img_height, channel);
+
+        rkaiVisionToLLM *vtol = (rkaiVisionToLLM *)malloc(sizeof(rkaiVisionToLLM));
+        memset(vtol, 0, sizeof(rkaiVisionToLLM));
+        vtol->img_vec_fp16 = (float16 *)malloc(sizeof(float16) * rknn3_vision_ctx->img_elems);
+        memset(vtol->img_vec_fp16, 0, sizeof(float16) * rknn3_vision_ctx->img_elems);
+        printf("rknn3_vision_ctx->img_elems: %d\n", rknn3_vision_ctx->img_elems);
+
+        rkaiTimer vision_run_ms;
+        tik(&vision_run_ms);
+        ret = rkai_vlm_vision_run_rknn3(rknn3_vision_ctx, data, img_width, img_height, vtol);
+        if (ret != 0) {
+            printf("rkai_vlm_vision_run fail! ret=%d\n", ret);
+            rkai_vlm_llm_release(llm_ctx);
+            rkai_vlm_vision_release_rknn3(rknn3_vision_ctx);
+            free(vtol->img_vec_fp16); free(vtol); free(data);
+            free(rknn3_vision_ctx); free(llm_ctx); free(vision_weight_path);
+            return -1;
+        }
+        tok(&vision_run_ms);
+        printf("%s: Vision run in %8.2f ms\n", __func__, get_time(&vision_run_ms));
+
+        /* Interactive loop */
+        const char *pre_input[] = {
+            "<image>What is in the image?",
+            "<image>\xe8\xbf\x99\xe5\xbc\xa0\xe5\x9b\xbe\xe7\x89\x87\xe4\xb8\xad\xe6\x9c\x89\xe4\xbb\x80\xe4\xb9\x88\xe5\x85\x83\xe7\xb4\xa0\xef\xbc\x9f",
+        };
+        int pre_input_count = sizeof(pre_input) / sizeof(pre_input[0]);
+
+        printf("\n**********************\xe5\x8f\xaf\xe8\xbe\x93\xe5\x85\xa5\xe4\xbb\xa5\xe4\xb8\x8b\xe9\x97\xae\xe9\xa2\x98\xe5\xaf\xb9\xe5\xba\x94\xe5\xba\x8f\xe5\x8f\xb7\xe8\x8e\xb7\xe5\x8f\x96\xe5\x9b\x9e\xe7\xad\x94/\xe6\x88\x96\xe8\x87\xaa\xe5\xae\x9a\xe4\xb9\x89\xe8\xbe\x93\xe5\x85\xa5********************\n");
+        for (int i = 0; i < pre_input_count; i++) {
+            printf("[%d] %s\n", i, pre_input[i]);
+        }
+        printf("\n*************************************************************************\n");
+        llm_ctx->vlmStatsTime->visionCost = get_time(&vision_run_ms);
+
+        char input_buf[1024];
+        do {
+            printf("\nuser: ");
+            if (fgets(input_buf, sizeof(input_buf), stdin) == NULL) {
+                continue;
+            }
+            input_buf[strcspn(input_buf, "\n")] = 0;
+
+            if (strcmp(input_buf, "exit") == 0) {
+                break;
+            }
+
+            int idx = atoi(input_buf);
+            if ((idx >= 0 && idx < pre_input_count) &&
+                (strcmp(input_buf, "0") == 0 || idx > 0)) {
+                snprintf(input_buf, sizeof(input_buf), "%s", pre_input[idx]);
+                printf("%s\n", input_buf);
+            }
+            cfg.prompt = input_buf;
+            rkaiTimer total_timer;
+            tik(&total_timer);
+            rkai_vlm_llm_run(llm_ctx, cfg, vtol);
+            tok(&total_timer);
+
+            /* Print summary after each answer */
+            {
+                float ttft_ms = get_time(&g_vlm_llm_ttft);
+                float total_ms = get_time(&total_timer);
+                float tps = (total_ms > 0.f) ? (float)g_vlm_gen_tokens / total_ms * 1000.f : 0.f;
+                int64_t vision_mem = rkai_vlm_vision_query_memory_rknn3(rknn3_vision_ctx);
+                int64_t llm_mem = rkai_vlm_llm_query_memory(llm_ctx);
+
+                printf("\n===== RKNN3_VLM Results Summary =====\n\n");
+                printf("VisionCost:     %.3f ms\n", g_vlm_vision_cost_ms);
+                printf("TTFT:           %.3f ms\n", ttft_ms);
+                printf("GenLen:         %d tokens\n", g_vlm_gen_tokens);
+                printf("TPS:            %.3f tokens/s\n", tps);
+                printf("Total:          %.3f ms\n", total_ms);
+                printf("VisionMemory:   %.3f MB\n", (float)vision_mem / (1024.0 * 1024.0));
+                printf("LLMMemory:      %.3f MB\n", (float)llm_mem / (1024.0 * 1024.0));
+                printf("TotalMemory:    %.3f MB\n", (float)(vision_mem + llm_mem) / (1024.0 * 1024.0));
+                printf("\n=====================================\n\n");
+                fflush(stdout);
+                g_vlm_first_token = 1;
+                g_vlm_gen_tokens = 0;
+            }
+        } while (1);
+
+        /* Cleanup */
+        rkai_vlm_vision_release_rknn3(rknn3_vision_ctx);
+        free(rknn3_vision_ctx);
+        rkai_vlm_llm_release(llm_ctx);
+        if (data) free(data);
+        if (vtol->img_vec_fp16) free(vtol->img_vec_fp16);
+        if (llm_ctx) free(llm_ctx);
+        if (vtol) free(vtol);
+        if (vision_weight_path) free(vision_weight_path);
+        if (cfg.llmWeightPath) free((void*)cfg.llmWeightPath);
+        if (cfg.tokenizerPath) free((void*)cfg.tokenizerPath);
+        if (cfg.embeddingPath) free((void*)cfg.embeddingPath);
+    }
+#else
+    /* rknpu2 / RKLLM path (original, for RV1126B) */
+    {
+        rkaiCtxVision *rkai_ctx = (rkaiCtxVision *)malloc(sizeof(rkaiCtxVision));
+        memset(rkai_ctx, 0, sizeof(rkaiCtxVision));
+
+        rkaiCtxVLM *llm_ctx = (rkaiCtxVLM *)malloc(sizeof(rkaiCtxVLM));
+        memset(llm_ctx, 0, sizeof(rkaiCtxVLM));
+
+        rkaiTimer t_ms;
+        tik(&t_ms);
+        ret = rkai_vlm_vision_init(cfg.visionModelPath, rkai_ctx);
+        if (ret != 0) {
+            printf("rkai_vlm_vision_init fail! ret=%d model_path=%s\n", ret, cfg.visionModelPath);
+            return -1;
+        }
+        tok(&t_ms);
+        printf("%s: Model Vision loaded in %8.2f ms\n", __func__, get_time(&t_ms));
+
+        tik(&t_ms);
+        ret = rkai_vlm_llm_init(llm_ctx, cfg);
+        if (ret != 0) {
+            printf("rkai_vlm_llm_init fail! ret=%d model_path=%s\n", ret, cfg.llmModelPath);
+            return -1;
+        }
+        tok(&t_ms);
+        printf("%s: Model LLM loaded in %8.2f ms\n", __func__, get_time(&t_ms));
+
+        int32_t input_len = rkai_ctx->model_channel * rkai_ctx->model_height * rkai_ctx->model_width;
+        unsigned char *data = (unsigned char *)malloc(sizeof(unsigned char) * input_len);
+        memset(data, 0, sizeof(unsigned char) * input_len);
+        int img_width = 0, img_height = 0;
+
+        if (strstr(cfg.inputPath, ".npy")) {
+            int32_t image_len = load_npy(rkai_ctx, cfg.inputPath, data);
+            if (image_len != input_len) {
+                printf("input size is not match model inputs.\n");
+                return -1;
+            }
+        } else {
+#ifdef DEPENDENT_ROCKIT
+            int channel = 0;
+            unsigned char *img_buffer = decode_jpeg(image_path, &img_width, &img_height, &channel);
+            if (img_buffer == NULL) {
+                printf("decode jpeg fail.\n");
+                return -1;
+            }
+            unsigned char *resized = resize_use_tde(img_width, img_height,
+                                                     rkai_ctx->model_width, rkai_ctx->model_height, img_buffer);
             free(img_buffer);
-            img_buffer =NULL;
-        }
-        #else
-        printf("Unsupport *.jpg now,please open rockit and libjpeg. and you can test this demo by .npy\n");
-        return -1;
-        #endif
-    }
-    rkaiVisionToLLM *vtol;
-    vtol = (rkaiVisionToLLM *)malloc(sizeof(rkaiVisionToLLM));
-    memset(vtol,0,sizeof(rkaiVisionToLLM));
-
-    // float* img_vec;
-    vtol->img_vec = (float*)malloc(sizeof(float)*rkai_ctx->img_elems);
-    memset(vtol->img_vec,0,sizeof(float)*rkai_ctx->img_elems);
-    printf("rkai_ctx->img_elems: %d\n",rkai_ctx->img_elems);
-
-    rkaiTimer vision_run_ms;
-    tik(&vision_run_ms);
-    ret = rkai_vlm_vision_run(rkai_ctx, data, vtol);
-    if (ret != 0) {
-        printf("rkai_vlm_vision_run fail! ret=%d\n", ret);
-        return -1;
-    }
-    tok(&vision_run_ms);
-    printf("%s: Model run in %8.2f ms\n", __func__, get_time(&vision_run_ms));
-
-    
-    // pre prompt
-    const char *pre_input[] = {
-        "<image>What is in the image?",
-        "<image>这张图片中有什么元素？",
-    };
-    int pre_input_count = sizeof(pre_input) / sizeof(pre_input[0]);
-
-    // 打印预置问题
-    printf("\n**********************可输入以下问题对应序号获取回答/或自定义输入********************\n");
-    for (int i = 0; i < pre_input_count; i++) {
-        printf("[%d] %s\n", i, pre_input[i]);
-    }
-    printf("\n*************************************************************************\n");
-    llm_ctx->vlmStatsTime->visionCost = get_time(&vision_run_ms);
-    // printf("llm_ctx->vlmStatsTime->visionCost:%f\n",llm_ctx->vlmStatsTime->visionCost);
-    char input_buf[1024];
-    do {
-        printf("\nuser: ");
-        if (fgets(input_buf, sizeof(input_buf), stdin) == NULL) {
-            continue;
-        }
-        // 去掉换行符
-        input_buf[strcspn(input_buf, "\n")] = 0;
-
-        if (strcmp(input_buf, "exit") == 0) {
-            break;
+            if (resized) {
+                memcpy(data, resized, input_len);
+            } else {
+                printf("resize failed\n");
+                return -1;
+            }
+#else
+            printf("Unsupport *.jpg without rockit. Use .npy or enable rockit.\n");
+            return -1;
+#endif
         }
 
-        // 判断是否输入了数字索引
-        int idx = atoi(input_buf);
-        if ((idx >= 0 && idx < pre_input_count) &&
-            (strcmp(input_buf, "0") == 0 || idx > 0)) {
-            strcpy(input_buf, pre_input[idx]);
-            printf("%s\n", input_buf);
+        rkaiVisionToLLM *vtol = (rkaiVisionToLLM *)malloc(sizeof(rkaiVisionToLLM));
+        memset(vtol, 0, sizeof(rkaiVisionToLLM));
+        vtol->img_vec = (float *)malloc(sizeof(float) * rkai_ctx->img_elems);
+        memset(vtol->img_vec, 0, sizeof(float) * rkai_ctx->img_elems);
+        printf("rkai_ctx->img_elems: %d\n", rkai_ctx->img_elems);
+
+        rkaiTimer vision_run_ms;
+        tik(&vision_run_ms);
+        ret = rkai_vlm_vision_run(rkai_ctx, data, vtol);
+        if (ret != 0) {
+            printf("rkai_vlm_vision_run fail! ret=%d\n", ret);
+            return -1;
         }
-        cfg.prompt = input_buf;
-        rkai_vlm_llm_run(llm_ctx, cfg,vtol);
-    }while (1);
+        tok(&vision_run_ms);
+        printf("%s: Vision run in %8.2f ms\n", __func__, get_time(&vision_run_ms));
 
-    ret = rkai_vlm_vision_release(rkai_ctx);
-    if (ret != 0) {
-        printf("rkai_vlm_vision_release fail! ret=%d\n", ret);
-    }
+        /* Interactive loop */
+        const char *pre_input[] = {
+            "<image>What is in the image?",
+            "<image>\xe8\xbf\x99\xe5\xbc\xa0\xe5\x9b\xbe\xe7\x89\x87\xe4\xb8\xad\xe6\x9c\x89\xe4\xbb\x80\xe4\xb9\x88\xe5\x85\x83\xe7\xb4\xa0\xef\xbc\x9f",
+        };
+        int pre_input_count = sizeof(pre_input) / sizeof(pre_input[0]);
 
-    ret = rkai_vlm_llm_release(llm_ctx);
-    if (ret != 0) {
-        printf("rkai_vlm_llm_release fail! ret=%d\n", ret);
-    }
+        printf("\n**********************\xe5\x8f\xaf\xe8\xbe\x93\xe5\x85\xa5\xe4\xbb\xa5\xe4\xb8\x8b\xe9\x97\xae\xe9\xa2\x98\xe5\xaf\xb9\xe5\xba\x94\xe5\xba\x8f\xe5\x8f\xb7\xe8\x8e\xb7\xe5\x8f\x96\xe5\x9b\x9e\xe7\xad\x94/\xe6\x88\x96\xe8\x87\xaa\xe5\xae\x9a\xe4\xb9\x89\xe8\xbe\x93\xe5\x85\xa5********************\n");
+        for (int i = 0; i < pre_input_count; i++) {
+            printf("[%d] %s\n", i, pre_input[i]);
+        }
+        printf("\n*************************************************************************\n");
+        llm_ctx->vlmStatsTime->visionCost = get_time(&vision_run_ms);
 
-    if (rkai_ctx) {
+        char input_buf[1024];
+        do {
+            printf("\nuser: ");
+            if (fgets(input_buf, sizeof(input_buf), stdin) == NULL) {
+                continue;
+            }
+            input_buf[strcspn(input_buf, "\n")] = 0;
+
+            if (strcmp(input_buf, "exit") == 0) {
+                break;
+            }
+
+            int idx = atoi(input_buf);
+            if ((idx >= 0 && idx < pre_input_count) &&
+                (strcmp(input_buf, "0") == 0 || idx > 0)) {
+                snprintf(input_buf, sizeof(input_buf), "%s", pre_input[idx]);
+                printf("%s\n", input_buf);
+            }
+            cfg.prompt = input_buf;
+            rkai_vlm_llm_run(llm_ctx, cfg, vtol);
+        } while (1);
+
+        /* Cleanup */
+        rkai_vlm_vision_release(rkai_ctx);
         free(rkai_ctx);
-        rkai_ctx = NULL;
+        rkai_vlm_llm_release(llm_ctx);
+        if (data) free(data);
+        if (vtol->img_vec) free(vtol->img_vec);
+        if (llm_ctx) free(llm_ctx);
+        if (vtol) free(vtol);
     }
-    if(data) {
-        free(data);
-        data = NULL;
-    }
-    if(vtol->img_vec){
-        free(vtol->img_vec);
-        vtol->img_vec = NULL;
-    }
-    if(llm_ctx) {
-        free(llm_ctx);
-        llm_ctx = NULL;
-    }
-    if(vtol){
-        free(vtol);
-        vtol = NULL;
-    }
-    #ifdef DEPENDMENT_ROCKIT
-    ret = RK_MPI_SYS_Exit();
-    #endif
+#endif /* RKAI_DISABLE_RKNN3 */
 
-    if(vision_model) {
-        free(vision_model);
-        vision_model = NULL;
-    }
+#ifdef DEPENDENT_ROCKIT
+    RK_MPI_SYS_Exit();
+#endif
 
-    if(llm_model) {
-        free(llm_model);
-        llm_model = NULL;
-    }
-
-    if(image_path) {
-        free(image_path);
-        image_path = NULL;
-    }
+    if (vision_model_owned) { free(vision_model); vision_model = NULL; }
+    if (llm_model_owned) { free(llm_model); llm_model = NULL; }
+    if (image_path_owned) { free(image_path); image_path = NULL; }
+    if (prefix) { free(prefix); prefix = NULL; }
 
     return 0;
 }

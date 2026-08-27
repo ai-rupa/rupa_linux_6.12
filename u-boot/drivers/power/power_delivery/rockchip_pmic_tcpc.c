@@ -77,10 +77,9 @@
 
 #define RK_TCPC_STS				0x07
 #define RK_TCPC_STS_CC_OV			BIT(6)
-#define RK_TCPC_STS_TOGSS_RUNNING		(0x2)
 #define RK_TCPC_STS_TOGSS_RP			(0x0)
 #define RK_TCPC_STS_TOGSS_RD			(0x1)
-#define RK_TCPC_STS_TOGSS			GENMASK(5, 4)
+#define RK_TCPC_STS_TOGSS			BIT(4)
 #define RK_TCPC_STS_CC2				GENMASK(3, 2)
 #define RK_TCPC_STS_CC1				GENMASK(1, 0)
 
@@ -594,6 +593,12 @@ static int tcpm_get_cc(struct tcpc_dev *dev, enum typec_cc_status *cc1,
 		rk_tcpc_log(chip, "presenting Rd");
 		*cc1 = rk_tcpc_sts_to_cc(FIELD_GET(RK_TCPC_STS_CC1, sts), true);
 		*cc2 = rk_tcpc_sts_to_cc(FIELD_GET(RK_TCPC_STS_CC2, sts), true);
+
+		/* Handle special cable that both CC1 and CC2 pins are simultaneously pulled up. */
+		if (*cc1 == TYPEC_CC_RP_DEF && *cc2 == TYPEC_CC_RP_DEF) {
+			rk_tcpc_log(chip, "special cable detected, set cc2 to Open");
+			*cc2 = TYPEC_CC_OPEN;
+		}
 		break;
 
 	case RK_TCPC_STS_TOGSS_RP:
@@ -602,7 +607,6 @@ static int tcpm_get_cc(struct tcpc_dev *dev, enum typec_cc_status *cc1,
 		*cc2 = rk_tcpc_sts_to_cc(FIELD_GET(RK_TCPC_STS_CC2, sts), false);
 		break;
 
-	case RK_TCPC_STS_TOGSS_RUNNING:
 	default:
 		rk_tcpc_log(chip, "TOGDONE with an invalid state");
 		*cc1 = TYPEC_CC_OPEN;

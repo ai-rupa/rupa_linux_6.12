@@ -1,0 +1,60 @@
+#!/bin/sh
+OTA_IMG=/userdata/update_ota.img
+LOG=/userdata/rockchip-test/ab_stress.log
+CNT_FILE=/userdata/rockchip-test/ab_stress_cnt
+
+case "$1" in
+    start)
+        [ -f "$CNT_FILE" ] || exit 0
+        sh /etc/init.d/S99-ab-stress run &
+        ;;
+    run)
+        mkdir -p /userdata/rockchip-test
+
+        if [ ! -f "$OTA_IMG" ]; then
+            echo "ERROR: $OTA_IMG not found, stress test aborted" >> $LOG
+            rm -f $CNT_FILE
+            exit 1
+        fi
+
+        cnt=$(cat $CNT_FILE 2>/dev/null)
+
+        # support "echo off" or "echo 0" to stop the stress test
+        case "$cnt" in
+            off|OFF|''|*[!0-9]*) cnt=0 ;;
+        esac
+
+        if [ "$cnt" -le 0 ]; then
+            echo "=== DONE: $(date) ===" >> $LOG
+            rm -f $CNT_FILE
+            exit 0
+        fi
+
+        orig_cnt=$cnt
+        cnt=$((cnt - 1))
+        echo "$cnt" > $CNT_FILE
+        sync
+
+        echo "--- Remaining: $cnt  $(date) ---" >> $LOG
+        grep -o 'slotsufix=_[ab]' /proc/cmdline >> $LOG
+        sync
+
+        updateEngine --image_url="$OTA_IMG" --update > /tmp/ue.log 2>&1
+        RET=$?
+        cat /tmp/ue.log >> $LOG
+        rm -f /tmp/ue.log
+
+        if [ $RET -ne 0 ]; then
+            echo "FAIL at round=$orig_cnt $(date)" >> $LOG
+            rm -f $CNT_FILE
+            exit 1
+        fi
+
+        echo "OK remaining=$cnt $(date)" >> $LOG
+        sync
+        sleep 1
+        reboot
+        ;;
+    stop) ;;
+esac
+exit 0

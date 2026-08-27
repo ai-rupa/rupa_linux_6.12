@@ -17,6 +17,7 @@ im2d_source = [
     'im2d_api/src/im2d_debugger.cpp',
     'im2d_api/src/im2d_context.cpp',
     'im2d_api/src/im2d_job.cpp',
+    'im2d_api/src/im2d_csc.cpp',
     'im2d_api/src/im2d_impl.cpp',
     'im2d_api/src/im2d.cpp'
 ]

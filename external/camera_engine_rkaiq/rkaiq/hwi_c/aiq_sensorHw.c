@@ -505,6 +505,12 @@ static XCamReturn _SensorHw_split_locked(AiqSensorHw_t* pSnsHw, AiqSensorExpInfo
         if (max_dst_id < sof_id) max_dst_id = sof_id + 1;
 
         exp_param->_base.frame_id = max_dst_id + 1;
+        pItem = aiqMap_get(pSnsHw->_effecting_exp_map, (void*)(intptr_t)(max_dst_id + 1));
+        if (pItem) {
+            AIQ_REF_BASE_UNREF(&(*((AiqSensorExpInfo_t**)(pItem->_pData)))->_base._ref_base);
+            aiqMap_erase(pSnsHw->_effecting_exp_map, pItem->_key);
+            pItem = NULL;
+        }
         pItem = aiqMap_insert(pSnsHw->_effecting_exp_map, (void*)(intptr_t)(max_dst_id + 1),
                               &exp_param);
         if (pItem == NULL) {
@@ -713,7 +719,9 @@ static XCamReturn _SensorHw_handleSofInternal(AiqSensorHw_t* pSns, int64_t time,
 
     if (!pSns->_is_i2c_exp && new_exp) _SensorHw_setSensorDpcc(pSns, &new_exp->SensorDpccInfo);
 
-    AIQ_REF_BASE_UNREF(&new_exp->_base._ref_base);
+    if (new_exp) {
+        AIQ_REF_BASE_UNREF(&new_exp->_base._ref_base);
+    }
 
     EXIT_CAMHW_FUNCTION();
 
@@ -738,7 +746,7 @@ static XCamReturn _SensorHw_setI2cDAta(AiqSensorHw_t* pSnsHw, aiq_pending_split_
                         exps->i2c_exp_res.ValueByteNum[i]);
     }
 
-    if (AiqV4l2SubDevice_ioctl(pSnsHw, RKMODULE_SET_REGISTER, &regs) < 0) {
+    if (AiqV4l2SubDevice_ioctl(pSnsHw->mSd, RKMODULE_SET_REGISTER, &regs) < 0) {
         LOGE_CAMHW_SUBM(SENSOR_SUBM, "failed to set i2c regs !");
         return XCAM_RETURN_ERROR_IOCTL;
     }
@@ -772,11 +780,70 @@ static void _SensorHw_setUserVts(AiqSensorHw_t* pBaseSns) {
         }
     }
 }
+void _SensorHw_configWbGainType(AiqSensorHw_t* pSnsHw, struct rkmodule_wb_gain_group* wbgain) {
+    AiqCamHwBase_t* pCamHw = pSnsHw->_mCamHw;
+
+    if (pSnsHw->_working_mode == RK_AIQ_WORKING_MODE_NORMAL) {
+        wbgain->group_num = 1;
+    } else if (pSnsHw->_working_mode >= RK_AIQ_WORKING_MODE_ISP_HDR2 &&
+               pSnsHw->_working_mode < RK_AIQ_WORKING_MODE_ISP_HDR3) {
+        wbgain->group_num = 2;
+    } else if (pSnsHw->_working_mode >= RK_AIQ_WORKING_MODE_ISP_HDR3) {
+        wbgain->group_num = 3;
+    } else {
+        wbgain->group_num = 4;
+    }
+
+    if (pSnsHw->_working_mode == RK_AIQ_WORKING_MODE_NORMAL) {
+        wbgain->wb_gain_type[0] = RKMODULE_HCG_WB_GAIN;
+    } else {
+        calibdb_cis_hdr_t* cis_hdr =
+            (calibdb_cis_hdr_t*)(CALIBDBV2_GET_MODULE_PTR((void*)pCamHw->mCalibDbV2, CisHdr));
+        if (cis_hdr) {
+            if (cis_hdr->sta.hw_cisCfg_cisHdr_mode == RKAIQ_SENSOR_HDR_MODE_DCG) {
+                wbgain->wb_gain_type[0] = RKMODULE_LCG_WB_GAIN;
+                wbgain->wb_gain_type[1] = RKMODULE_HCG_WB_GAIN;
+            } else if (cis_hdr->sta.hw_cisCfg_cisHdr_mode == RKAIQ_SENSOR_HDR3_DCG_VS) {
+                wbgain->wb_gain_type[0] = RKMODULE_VS_WB_GAIN;
+                wbgain->wb_gain_type[1] = RKMODULE_LCG_WB_GAIN;
+                wbgain->wb_gain_type[2] = RKMODULE_HCG_WB_GAIN;
+            } else if (cis_hdr->sta.hw_cisCfg_cisHdr_mode == RKAIQ_SENSOR_HDR3_DCG_SPD) {
+                wbgain->wb_gain_type[0] = RKMODULE_SPD_WB_GAIN;
+                wbgain->wb_gain_type[1] = RKMODULE_LCG_WB_GAIN;
+                wbgain->wb_gain_type[2] = RKMODULE_HCG_WB_GAIN;
+            } else if (cis_hdr->sta.hw_cisCfg_cisHdr_mode == RKAIQ_SENSOR_HDR3_DCG_LOFIC) {
+                wbgain->wb_gain_type[0] = RKMODULE_LFC_WB_GAIN;
+                wbgain->wb_gain_type[1] = RKMODULE_LCG_WB_GAIN;
+                wbgain->wb_gain_type[2] = RKMODULE_HCG_WB_GAIN;
+            } else if (cis_hdr->sta.hw_cisCfg_cisHdr_mode == RKAIQ_SENSOR_HDR3_LCG_LOFIC_VS) {
+                wbgain->wb_gain_type[0] = RKMODULE_VS_WB_GAIN;
+                wbgain->wb_gain_type[1] = RKMODULE_LFC_WB_GAIN;
+                wbgain->wb_gain_type[2] = RKMODULE_LCG_WB_GAIN;
+            } else {
+                LOGE_AWB(
+                    "set-wb-gain-to-sensor is not supported in this hdr line mode, please "
+                    "check again!!!\n ");
+            }
+        } else {
+            LOGE_AWB("cis_hdr is not found in json, please check again!!!\n ");
+        }
+    }
+}
+
+static bool _SensorHw_needUpdateBlcWbgain(const AiqCamHwBase_t* pCamHw) {
+    if (!pCamHw) return false;
+
+    bool need_by_airms = pCamHw->_airms_en && pCamHw->airms_wbgain_mode == AIRMS_WBGAIN_APPLY_CIS;
+    bool need_by_compr = pCamHw->mSnsDes.compr_bit;
+    bool need_by_preview_capture = pCamHw->isPreviewCaptureMode;
+
+    return need_by_airms || need_by_compr || need_by_preview_capture;
+}
 
 static XCamReturn _SensorHw_updateBlcWbgain(AiqSensorHw_t* pSnsHw, uint32_t frmId) {
     AiqCamHwBase_t* pCamHw = pSnsHw->_mCamHw;
 
-    if (pCamHw && (pCamHw->_airms_en || pCamHw->mSnsDes.compr_bit)) {
+    if (_SensorHw_needUpdateBlcWbgain(pCamHw)) {
         aiq_isp_effect_params_t* ispParams = NULL;
         AiqCamHw_getEffectiveIspParams(pCamHw, &ispParams, frmId);
 
@@ -821,67 +888,95 @@ static XCamReturn _SensorHw_updateBlcWbgain(AiqSensorHw_t* pSnsHw, uint32_t frmI
             //    LOGE_CAMHW_SUBM(SENSOR_SUBM, "failed to set blc:%d", blc.group_num);
             //}
             // pDstEff->awb_gain_cfg
-            struct rkmodule_wb_gain_group wbgain;
-            xcam_mem_clear(wbgain);
-            wbgain.group_num = 4;
-            int wbgain_shift = 8 - wbg_cfg_info.fine_bit;//8bit to 10bit
-            if (pSnsHw->_working_mode == RK_AIQ_WORKING_MODE_NORMAL) {
-                if(wbgain_shift < 0) {
-                    for(uint32_t i = 0; i < wbgain.group_num; i++) {
-                        wbgain.wb_gain_type[i] = (enum rkmodule_wb_type)i;
-                        wbgain.wb_gain[i].r_gain = ispParams->awb_gain_cfg.awb1_gain_r << (-wbgain_shift);
-                        wbgain.wb_gain[i].gr_gain = ispParams->awb_gain_cfg.awb1_gain_gr <<(-wbgain_shift);
-                        wbgain.wb_gain[i].gb_gain = ispParams->awb_gain_cfg.awb1_gain_gb << (-wbgain_shift);
-                        wbgain.wb_gain[i].b_gain = ispParams->awb_gain_cfg.awb1_gain_b << (-wbgain_shift);
+            calibdb_cis_wb_t* cis_wb =
+                (calibdb_cis_wb_t*)(CALIBDBV2_GET_MODULE_PTR((void*)pCamHw->mCalibDbV2, CisWb));
+            if (!cis_wb || cis_wb->setWbGnInSensor_en) {
+                struct rkmodule_wb_gain_group wbgain;
+                xcam_mem_clear(wbgain);
+                _SensorHw_configWbGainType(pSnsHw, &wbgain);
+
+                int wbgain_shift = 8 - wbg_cfg_info.fine_bit;  // 8bit to 10bit
+                if (pSnsHw->_working_mode == RK_AIQ_WORKING_MODE_NORMAL) {
+                    if (wbgain_shift < 0) {
+                        for (uint32_t i = 0; i < wbgain.group_num; i++) {
+                            wbgain.wb_gain[i].r_gain = ispParams->awb_gain_cfg.awb1_gain_r
+                                                       << (-wbgain_shift);
+                            wbgain.wb_gain[i].gr_gain = ispParams->awb_gain_cfg.awb1_gain_gr
+                                                        << (-wbgain_shift);
+                            wbgain.wb_gain[i].gb_gain = ispParams->awb_gain_cfg.awb1_gain_gb
+                                                        << (-wbgain_shift);
+                            wbgain.wb_gain[i].b_gain = ispParams->awb_gain_cfg.awb1_gain_b
+                                                       << (-wbgain_shift);
+                        }
+                    } else {
+                        for (uint32_t i = 0; i < wbgain.group_num; i++) {
+                            wbgain.wb_gain[i].r_gain =
+                                ispParams->awb_gain_cfg.awb1_gain_r >> wbgain_shift;
+                            wbgain.wb_gain[i].gr_gain =
+                                ispParams->awb_gain_cfg.awb1_gain_gr >> wbgain_shift;
+                            wbgain.wb_gain[i].gb_gain =
+                                ispParams->awb_gain_cfg.awb1_gain_gb >> wbgain_shift;
+                            wbgain.wb_gain[i].b_gain =
+                                ispParams->awb_gain_cfg.awb1_gain_b >> wbgain_shift;
+                        }
                     }
                 } else {
-                    for(uint32_t i = 0; i < wbgain.group_num; i++) {
-                        wbgain.wb_gain_type[i] = (enum rkmodule_wb_type)i;
-                        wbgain.wb_gain[i].r_gain = ispParams->awb_gain_cfg.awb1_gain_r >> wbgain_shift;
-                        wbgain.wb_gain[i].gr_gain = ispParams->awb_gain_cfg.awb1_gain_gr >> wbgain_shift;
-                        wbgain.wb_gain[i].gb_gain = ispParams->awb_gain_cfg.awb1_gain_gb >> wbgain_shift;
-                        wbgain.wb_gain[i].b_gain = ispParams->awb_gain_cfg.awb1_gain_b >> wbgain_shift;
+                    if (wbgain_shift < 0) {
+                        for (uint32_t i = 0; i < wbgain.group_num; i++) {
+#if ISP_HW_V351s
+                            wbgain.wb_gain[i].r_gain = ispParams->awb_gain_cfg.gain0_r
+                                                       << (-wbgain_shift);
+                            wbgain.wb_gain[i].gr_gain = ispParams->awb_gain_cfg.gain0_gr
+                                                        << (-wbgain_shift);
+                            wbgain.wb_gain[i].gb_gain = ispParams->awb_gain_cfg.gain0_gb
+                                                        << (-wbgain_shift);
+                            wbgain.wb_gain[i].b_gain = ispParams->awb_gain_cfg.gain0_b
+                                                       << (-wbgain_shift);
+#else
+                            wbgain.wb_gain[i].r_gain = ispParams->awb_gain_cfg.gain0_red
+                                                       << (-wbgain_shift);
+                            wbgain.wb_gain[i].gr_gain = ispParams->awb_gain_cfg.gain0_green_r
+                                                        << (-wbgain_shift);
+                            wbgain.wb_gain[i].gb_gain = ispParams->awb_gain_cfg.gain0_green_b
+                                                        << (-wbgain_shift);
+                            wbgain.wb_gain[i].b_gain = ispParams->awb_gain_cfg.gain0_blue
+                                                       << (-wbgain_shift);
+#endif
+                        }
+                    } else {
+                        for (uint32_t i = 0; i < wbgain.group_num; i++) {
+#if ISP_HW_V351s
+                            wbgain.wb_gain[i].r_gain =
+                                ispParams->awb_gain_cfg.gain0_r >> wbgain_shift;
+                            wbgain.wb_gain[i].gr_gain =
+                                ispParams->awb_gain_cfg.gain0_gr >> wbgain_shift;
+                            wbgain.wb_gain[i].gb_gain =
+                                ispParams->awb_gain_cfg.gain0_gb >> wbgain_shift;
+                            wbgain.wb_gain[i].b_gain =
+                                ispParams->awb_gain_cfg.gain0_b >> wbgain_shift;
+#else
+                            wbgain.wb_gain[i].r_gain =
+                                ispParams->awb_gain_cfg.gain0_red >> wbgain_shift;
+                            wbgain.wb_gain[i].gr_gain =
+                                ispParams->awb_gain_cfg.gain0_green_r >> wbgain_shift;
+                            wbgain.wb_gain[i].gb_gain =
+                                ispParams->awb_gain_cfg.gain0_green_b >> wbgain_shift;
+                            wbgain.wb_gain[i].b_gain =
+                                ispParams->awb_gain_cfg.gain0_blue >> wbgain_shift;
+#endif
+                        }
                     }
                 }
-            } else {
-                if(wbgain_shift < 0) {
-                    for(uint32_t i = 0; i < wbgain.group_num; i++) {
-#if ISP_HW_V351s
-                        wbgain.wb_gain_type[i] = (enum rkmodule_wb_type)i;
-                        wbgain.wb_gain[i].r_gain = ispParams->awb_gain_cfg.gain0_r << (-wbgain_shift);
-                        wbgain.wb_gain[i].gr_gain = ispParams->awb_gain_cfg.gain0_gr <<(-wbgain_shift);
-                        wbgain.wb_gain[i].gb_gain = ispParams->awb_gain_cfg.gain0_gb << (-wbgain_shift);
-                        wbgain.wb_gain[i].b_gain = ispParams->awb_gain_cfg.gain0_b << (-wbgain_shift);
-#else
-                        wbgain.wb_gain_type[i] = (enum rkmodule_wb_type)i;
-                        wbgain.wb_gain[i].r_gain = ispParams->awb_gain_cfg.gain0_red << (-wbgain_shift);
-                        wbgain.wb_gain[i].gr_gain = ispParams->awb_gain_cfg.gain0_green_r <<(-wbgain_shift);
-                        wbgain.wb_gain[i].gb_gain = ispParams->awb_gain_cfg.gain0_green_b << (-wbgain_shift);
-                        wbgain.wb_gain[i].b_gain = ispParams->awb_gain_cfg.gain0_blue << (-wbgain_shift);
-#endif
-                    }
-                }else {
-                    for(uint32_t i = 0; i < wbgain.group_num; i++) {
-#if ISP_HW_V351s
-                        wbgain.wb_gain_type[i] = (enum rkmodule_wb_type)i;
-                        wbgain.wb_gain[i].r_gain = ispParams->awb_gain_cfg.gain0_r >> wbgain_shift;
-                        wbgain.wb_gain[i].gr_gain = ispParams->awb_gain_cfg.gain0_gr >> wbgain_shift;
-                        wbgain.wb_gain[i].gb_gain = ispParams->awb_gain_cfg.gain0_gb >> wbgain_shift;
-                        wbgain.wb_gain[i].b_gain = ispParams->awb_gain_cfg.gain0_b >> wbgain_shift;
-#else
-                        wbgain.wb_gain_type[i] = (enum rkmodule_wb_type)i;
-                        wbgain.wb_gain[i].r_gain = ispParams->awb_gain_cfg.gain0_red >> wbgain_shift;
-                        wbgain.wb_gain[i].gr_gain = ispParams->awb_gain_cfg.gain0_green_r >> wbgain_shift;
-                        wbgain.wb_gain[i].gb_gain = ispParams->awb_gain_cfg.gain0_green_b >> wbgain_shift;
-                        wbgain.wb_gain[i].b_gain = ispParams->awb_gain_cfg.gain0_blue >> wbgain_shift;
-#endif
-                    }
-                }
-            }
 
-            //LOGE_AWB("wbgain:%0x, %0x, %0x, %0x", wbgain.wb_gain[0].r_gain, wbgain.wb_gain[0].gr_gain, wbgain.wb_gain[0].gb_gain, wbgain.wb_gain[0].b_gain);
-            if (AiqV4l2SubDevice_ioctl(pSnsHw->mSd, RKMODULE_SET_WB_GAIN, &wbgain) < 0) {
-                LOGE_CAMHW_SUBM(SENSOR_SUBM, "failed to set wbgain:%d", wbgain.group_num);
+                /*for (uint32_t i = 0; i < wbgain.group_num; i++) {
+                    LOGE_AWB("wb_gain_type[%d]:%d wbgain:0x%0x, 0x%0x, 0x%0x, 0x%0x\n", i,
+                             wbgain.wb_gain_type[i], wbgain.wb_gain[i].r_gain,
+                             wbgain.wb_gain[i].gr_gain, wbgain.wb_gain[i].gb_gain,
+                             wbgain.wb_gain[i].b_gain);
+                }*/
+                if (AiqV4l2SubDevice_ioctl(pSnsHw->mSd, RKMODULE_SET_WB_GAIN, &wbgain) < 0) {
+                    LOGE_CAMHW_SUBM(SENSOR_SUBM, "failed to set wbgain:%d", wbgain.group_num);
+                }
             }
             AIQ_REF_BASE_UNREF(&ispParams->_ref_base);
             LOGD_CAMHW_SUBM(SENSOR_SUBM, "fid:%d, set wbgain & blc", frmId);
@@ -976,6 +1071,15 @@ XCamReturn SensorHw_handle_sof(AiqSensorHw_t* pBaseSns, int64_t time, uint32_t f
                 LOGE_CAMHW_SUBM(SENSOR_SUBM, "failed to set rkcif_exp!");
                 return XCAM_RETURN_ERROR_IOCTL;
             }
+            
+            // 将设置的曝光参数记录到pending_exp_array数组中
+            if (pSns->_pending_exp_count < 4) {
+                pSns->_pending_exp_array[pSns->_pending_exp_count] = exp_time;
+                AIQ_REF_BASE_REF(&exp_time->_base._ref_base);
+                pSns->_pending_exp_count++;
+            } else {
+                LOGE_CAMHW_SUBM(SENSOR_SUBM, "pending_exp_array full!");
+            }
         } else {
             RKAiqAecExpInfo_t *ptr_new_exp = NULL, new_exp;
             if (pSns->_dcg_gain_mode_delayed) {
@@ -1013,17 +1117,52 @@ XCamReturn SensorHw_handle_sof(AiqSensorHw_t* pBaseSns, int64_t time, uint32_t f
 
     _SensorHw_setUserVts(pSns);
 
-    if (set_time) {
+    if (pSns->mVicapExpFd >= 0 || set_time) {
         aiqMutex_lock(&pSns->_mutex);
 
         if (pSns->mVicapExpFd >= 0) {
-            if (xcam_device_ioctl(pSns->mVicapExpFd, RKCIF_CMD_GET_EFFECT_EXPOSURE, &_rkcif_effect_map) < 0) {
-                aiqMutex_unlock(&pSns->_mutex);
-                LOGE_CAMHW_SUBM(SENSOR_SUBM, "failed to get rkcif_exp effecting map!");
-                return XCAM_RETURN_ERROR_FAILED;
+            // 使用while循环获取生效曝光，直到返回出错
+            while (1) {
+                if (xcam_device_ioctl(pSns->mVicapExpFd, RKCIF_CMD_GET_EFFECT_EXPOSURE, &_rkcif_effect_map) < 0) {
+                    // 获取失败，退出循环
+                    break;
+                }
+                
+                // 在pending_exp_array中查找匹配的曝光参数
+                bool found_match = false;
+                for (int i = 0; i < pSns->_pending_exp_count; i++) {
+                    AiqSensorExpInfo_t* pending_exp = pSns->_pending_exp_array[i];
+                    
+                    if (pending_exp && 
+                        pending_exp->aecExpInfo.LinearExp.exp_sensor_params.coarse_integration_time == _rkcif_effect_map.time &&
+                        pending_exp->aecExpInfo.LinearExp.exp_sensor_params.analog_gain_code_global == _rkcif_effect_map.gain) {
+                        
+                        // 找到匹配项，将其移到_effecting_exp_map中
+                        aiqMap_insert(pSns->_effecting_exp_map, (void*)(intptr_t)_rkcif_effect_map.sequence, &pending_exp);
+                        AIQ_REF_BASE_REF(&pending_exp->_base._ref_base);
+                        
+                        // 从数组中移除该元素
+                        AIQ_REF_BASE_UNREF(&pending_exp->_base._ref_base);
+                        for (int j = i; j < pSns->_pending_exp_count - 1; j++) {
+                            pSns->_pending_exp_array[j] = pSns->_pending_exp_array[j + 1];
+                        }
+                        pSns->_pending_exp_count--;
+                        
+                        LOGV_CAMHW_SUBM(SENSOR_SUBM,
+                            "%s:cam%d effecting frame %d: time=%d, gain=%d\n",
+                            __FUNCTION__, pSns->mCamPhyId, _rkcif_effect_map.sequence,
+                            _rkcif_effect_map.time, _rkcif_effect_map.gain);
+                        
+                        found_match = true;
+                        break;
+                    }
+                }
+                
+                if (!found_match) {
+                    // 没有找到匹配项，继续下一次循环
+                    continue;
+                }
             }
-            aiqMap_insert(pSns->_effecting_exp_map, (void*)(intptr_t)_rkcif_effect_map.sequence, &exp_time);
-            AIQ_REF_BASE_REF(&exp_time->_base._ref_base);
         } else {
             if (pSns->_gain_delayed) {
                 aiqList_push(pSns->_delayed_gain_list, &exp_time);
@@ -1187,6 +1326,15 @@ static int SensorHw_getSensorDesc(AiqSensorHw_t* pBaseSns,
 
     if (AiqV4l2SubDevice_ioctl(pBaseSns->mSd, VIDIOC_SUBDEV_G_FMT, &fmt) < 0) return -errno;
 
+    if (pBaseSns->mIsPreviewPath) {
+        LOGD_CAMHW_SUBM(SENSOR_SUBM, "cam%d preview path, sensor resolution %dx%d -> %dx%d",
+                        pBaseSns->mCamPhyId, fmt.format.width, fmt.format.height,
+                        fmt.format.width / 2, fmt.format.height / 2);
+
+        fmt.format.width /= 2;
+        fmt.format.height /= 2;
+    }
+
     sns_des->sensor_output_width  = fmt.format.width;
     sns_des->sensor_output_height = fmt.format.height;
     sns_des->sensor_pixelformat   = sensorHw_get_v4l2_pixelformat(fmt.format.code);
@@ -1221,6 +1369,55 @@ static int SensorHw_getSpdRatio(AiqSensorHw_t* pBaseSns, rk_aiq_sensor_dcg_ratio
     spd_ratio->integer   = spd_ratio_drv.integer;
     spd_ratio->decimal   = spd_ratio_drv.decimal;
     spd_ratio->div_coeff = spd_ratio_drv.div_coeff;
+    return 0;
+}
+
+static int SensorHw_getLcg2LfcRatio(AiqSensorHw_t* pBaseSns, rk_aiq_sensor_dcg_ratio_t* lcg_lfc_ratio) {
+    struct rkmodule_dcg_ratio lcg_lfc_ratio_drv;
+    if (AiqV4l2SubDevice_ioctl(pBaseSns->mSd, RKMODULE_GET_LCG_LOFIC_RATIO, &lcg_lfc_ratio_drv) < 0) {
+        LOGD_CAMHW_SUBM(SENSOR_SUBM, "failed to get sensor lcg_lfc_ratio");
+        lcg_lfc_ratio->valid = false;
+        return XCAM_RETURN_ERROR_IOCTL;
+    }
+    lcg_lfc_ratio->valid     = true;
+    lcg_lfc_ratio->integer   = lcg_lfc_ratio_drv.integer;
+    lcg_lfc_ratio->decimal   = lcg_lfc_ratio_drv.decimal;
+    lcg_lfc_ratio->div_coeff = lcg_lfc_ratio_drv.div_coeff;
+    return 0;
+}
+
+static int SensorHw_getLfc2VsRatio(AiqSensorHw_t* pBaseSns, rk_aiq_sensor_dcg_ratio_t* lfc_vs_ratio) {
+    struct rkmodule_dcg_ratio lfc_vs_ratio_drv;
+    if (AiqV4l2SubDevice_ioctl(pBaseSns->mSd, RKMODULE_GET_LOFIC_VS_RATIO, &lfc_vs_ratio_drv) < 0) {
+        LOGD_CAMHW_SUBM(SENSOR_SUBM, "failed to get sensor lfc_vs_ratio");
+        lfc_vs_ratio->valid = false;
+        return XCAM_RETURN_ERROR_IOCTL;
+    }
+    lfc_vs_ratio->valid     = true;
+    lfc_vs_ratio->integer   = lfc_vs_ratio_drv.integer;
+    lfc_vs_ratio->decimal   = lfc_vs_ratio_drv.decimal;
+    lfc_vs_ratio->div_coeff = lfc_vs_ratio_drv.div_coeff;
+    return 0;
+}
+
+static int SensorHw_getExpOffset(AiqSensorHw_t* pBaseSns, rk_aiq_sensor_exp_offset_t* exp_offset) {
+    struct rkmodule_exp_offset exp_offset_drv;
+    if (AiqV4l2SubDevice_ioctl(pBaseSns->mSd, RKMODULE_GET_EXP_OFFSET, &exp_offset_drv) < 0) {
+        LOGD_CAMHW_SUBM(SENSOR_SUBM, "failed to get sensor exp offset");
+        exp_offset->valid = false;
+        return XCAM_RETURN_ERROR_IOCTL;
+    }
+    exp_offset->valid        = true;
+    exp_offset->integer[0]   = exp_offset_drv.integer[0];
+    exp_offset->integer[1]   = exp_offset_drv.integer[1];
+    exp_offset->integer[2]   = exp_offset_drv.integer[2];
+    exp_offset->decimal[0]   = exp_offset_drv.decimal[0];
+    exp_offset->decimal[1]   = exp_offset_drv.decimal[1];
+    exp_offset->decimal[2]   = exp_offset_drv.decimal[2];
+    exp_offset->div_coeff[0] = exp_offset_drv.div_coeff[0];
+    exp_offset->div_coeff[1] = exp_offset_drv.div_coeff[1];
+    exp_offset->div_coeff[2] = exp_offset_drv.div_coeff[2];
+
     return 0;
 }
 
@@ -1337,6 +1534,9 @@ XCamReturn SensorHw_getSensorModeData(AiqSensorHw_t* pBaseSns, const char* sns_e
     sns_des->nr_switch = sensor_desc.nr_switch;
     sns_des->dcg_ratio = sensor_desc.dcg_ratio;
     sns_des->spd_ratio = sensor_desc.spd_ratio;
+    sns_des->lcg2lofic_ratio = sensor_desc.lcg2lofic_ratio;
+    sns_des->lofic2vs_ratio = sensor_desc.lofic2vs_ratio;
+    sns_des->exp_offset = sensor_desc.exp_offset;
 
     sns_des->sensor_output_width  = sensor_desc.sensor_output_width;
     sns_des->sensor_output_height = sensor_desc.sensor_output_height;
@@ -1380,6 +1580,15 @@ static XCamReturn SensorHw_getSensorDescriptor(AiqSensorHw_t* pBaseSns,
         // do nothing;
     }
     if (SensorHw_getSpdRatio(pBaseSns, &sns_des->spd_ratio)) {
+        // do nothing;
+    }
+    if (SensorHw_getLcg2LfcRatio(pBaseSns, &sns_des->lcg2lofic_ratio)) {
+        // do nothing;
+    }
+    if (SensorHw_getLfc2VsRatio(pBaseSns, &sns_des->lofic2vs_ratio)) {
+        // do nothing;
+    }
+    if (SensorHw_getExpOffset(pBaseSns, &sns_des->exp_offset)) {
         // do nothing;
     }
     SensorHw_getBayerMode(pBaseSns, &sns_des->bayer_mode);
@@ -1952,6 +2161,9 @@ static XCamReturn _SensorHw_setEffExpMap(AiqSensorHw_t* pSns, uint32_t sequence,
         pSnsExp->aecExpInfo.LinearExp.exp_sensor_params.isp_digital_gain    = 1;
         pSnsExp->aecExpInfo.LinearExp.exp_real_params.digital_gain          = 1.0f;
         pSnsExp->aecExpInfo.LinearExp.exp_real_params.isp_dgain             = 1.0f;
+        pSnsExp->aecExpInfo.LinearExp.exp_real_params.cis_total_gain =
+            (off_finfo.lin_cis_total_gain <= 1.0f) ? (float)off_finfo.normal_gain
+                                                   : (float)off_finfo.lin_cis_total_gain;
 
         pSnsExp->aecExpInfo.HdrExp[2].exp_sensor_params.analog_gain_code_global =
             (uint32_t)off_finfo.hdr_gain_l;
@@ -1964,6 +2176,9 @@ static XCamReturn _SensorHw_setEffExpMap(AiqSensorHw_t* pSns, uint32_t sequence,
         pSnsExp->aecExpInfo.HdrExp[2].exp_sensor_params.isp_digital_gain    = 1;
         pSnsExp->aecExpInfo.HdrExp[2].exp_real_params.digital_gain          = 1.0f;
         pSnsExp->aecExpInfo.HdrExp[2].exp_real_params.isp_dgain             = 1.0f;
+        pSnsExp->aecExpInfo.HdrExp[2].exp_real_params.cis_total_gain =
+            (off_finfo.hdr_cis_total_gain[2] <= 1.0f) ? (float)off_finfo.hdr_gain_l
+                                                       : (float)off_finfo.hdr_cis_total_gain[2];
 
         pSnsExp->aecExpInfo.HdrExp[1].exp_sensor_params.analog_gain_code_global =
             (uint32_t)off_finfo.hdr_gain_m;
@@ -1976,6 +2191,9 @@ static XCamReturn _SensorHw_setEffExpMap(AiqSensorHw_t* pSns, uint32_t sequence,
         pSnsExp->aecExpInfo.HdrExp[1].exp_sensor_params.isp_digital_gain    = 1;
         pSnsExp->aecExpInfo.HdrExp[1].exp_real_params.digital_gain          = 1.0f;
         pSnsExp->aecExpInfo.HdrExp[1].exp_real_params.isp_dgain             = 1.0f;
+        pSnsExp->aecExpInfo.HdrExp[1].exp_real_params.cis_total_gain =
+            (off_finfo.hdr_cis_total_gain[1] <= 1.0f) ? (float)off_finfo.hdr_gain_m
+                                                       : (float)off_finfo.hdr_cis_total_gain[1];
 
         pSnsExp->aecExpInfo.HdrExp[0].exp_sensor_params.analog_gain_code_global =
             (uint32_t)off_finfo.hdr_gain_s;
@@ -1988,6 +2206,9 @@ static XCamReturn _SensorHw_setEffExpMap(AiqSensorHw_t* pSns, uint32_t sequence,
         pSnsExp->aecExpInfo.HdrExp[0].exp_sensor_params.isp_digital_gain    = 1;
         pSnsExp->aecExpInfo.HdrExp[0].exp_real_params.digital_gain          = 1.0f;
         pSnsExp->aecExpInfo.HdrExp[0].exp_real_params.isp_dgain             = 1.0f;
+        pSnsExp->aecExpInfo.HdrExp[0].exp_real_params.cis_total_gain =
+            (off_finfo.hdr_cis_total_gain[0] <= 1.0f) ? (float)off_finfo.hdr_gain_s
+                                                       : (float)off_finfo.hdr_cis_total_gain[0];
 
         pSnsExp->_base.frame_id = sequence;
         pItem = aiqMap_insert(pSns->_effecting_exp_map, (void*)(intptr_t)sequence, &pSnsExp);
@@ -2414,6 +2635,7 @@ void AiqSensorHw_init(AiqSensorHw_t* pSnsHw, const char* name, int cid) {
     pSnsHw->_flip           = 0;
     pSnsHw->dcg_mode        = -1;
     pSnsHw->mCisHdrMode     = 0;
+    pSnsHw->mIsPreviewPath  = false;
 
     pSnsHw->mVicapExpFd     = -1;
     {

@@ -79,27 +79,32 @@ static void ConfigWbgainBaseOnBlc(rk_aiq_wb_gain_v32_t* awb_gain, const blc_res_
             LOGE_AWB("mainPieplineBLC[%d] = %d is too large!!!!", i, mainPieplineBLC[i]);
         }
     }
-    float maxg1 = 0;
     if (mainPieplineBLC[AWB_CHANNEL_R] > 0) {
         awb_gain->rgain *= 4095.0 / (4095 - mainPieplineBLC[AWB_CHANNEL_R]);  // max_value=4095
-    }
-    if (maxg1 < awb_gain->rgain) {
-        maxg1 = awb_gain->rgain;
     }
     if (mainPieplineBLC[AWB_CHANNEL_B] > 0) {
         awb_gain->bgain *= 4095.0 / (4095 - mainPieplineBLC[AWB_CHANNEL_B]);  // max_value=4095
     }
-    if (maxg1 < awb_gain->bgain) {
-        maxg1 = awb_gain->bgain;
-    }
     if (mainPieplineBLC[AWB_CHANNEL_GR] > 0) {
         awb_gain->grgain *= 4095.0 / (4095 - mainPieplineBLC[AWB_CHANNEL_GR]);  // max_value=4095
     }
-    if (maxg1 < awb_gain->grgain) {
-        maxg1 = awb_gain->grgain;
-    }
     if (mainPieplineBLC[AWB_CHANNEL_GB] > 0) {
         awb_gain->gbgain *= 4095.0 / (4095 - mainPieplineBLC[AWB_CHANNEL_GB]);  // max_value=4095
+    }
+    LOGD_AWB("%s awb gain  = [%f, %f, %f, %f] \n", __FUNCTION__, awb_gain->rgain, awb_gain->grgain,
+             awb_gain->gbgain, awb_gain->bgain);
+}
+static void clipWbgain(rk_aiq_wb_gain_v32_t* awb_gain)
+{
+    float maxg1 = 0;
+    if (maxg1 < awb_gain->rgain) {
+        maxg1 = awb_gain->rgain;
+    }
+    if (maxg1 < awb_gain->bgain) {
+        maxg1 = awb_gain->bgain;
+    }
+    if (maxg1 < awb_gain->grgain) {
+        maxg1 = awb_gain->grgain;
     }
     if (maxg1 < awb_gain->gbgain) {
         maxg1 = awb_gain->gbgain;
@@ -113,10 +118,8 @@ static void ConfigWbgainBaseOnBlc(rk_aiq_wb_gain_v32_t* awb_gain, const blc_res_
         awb_gain->rgain *= scale;
         LOGW_AWB("max wbgain is %f, maybe error case", maxg1);
     }
-    LOGD_AWB("%s awb gain  = [%f, %f, %f, %f] \n", __FUNCTION__, awb_gain->rgain, awb_gain->grgain,
-             awb_gain->gbgain, awb_gain->bgain);
-}
 
+}
 
 static void convertAiqAwbGainToIsp33Params(AiqIspParamsCvt_t* pCvt, aiq_params_base_t* pBase) {
     LOG1_AWB("%s enter", __FUNCTION__);
@@ -138,7 +141,9 @@ static void convertAiqAwbGainToIsp33Params(AiqIspParamsCvt_t* pCvt, aiq_params_b
         ((rk_aiq_working_mode_t)(pCvt->_working_mode) == RK_AIQ_WORKING_MODE_NORMAL) ? IN_AWBGAIN1
         : IN_AWBGAIN0;
     // 2) //otp
-    AwbGainOtpAdjust(&pCvt->awb_gain_final, &pCvt->mCommonCvtInfo.otp_awb);
+    rk_aiq_wb_gain_v32_t awb_gain_otp = {1, 1, 1, 1, 1};
+    AwbGainOtpAdjust(&awb_gain_otp, &pCvt->mCommonCvtInfo.otp_awb);
+
     // 3)//ConfigWbgainBaseOnBlc
     float dgain = pCvt->mCommonCvtInfo.frameDGain[0] > 1 ? pCvt->mCommonCvtInfo.frameDGain[0] : 1;
     ConfigWbgainBaseOnBlc(&pCvt->awb_gain_final, blc, dgain);
@@ -146,11 +151,19 @@ static void convertAiqAwbGainToIsp33Params(AiqIspParamsCvt_t* pCvt, aiq_params_b
     // 4)//set to reg
     struct isp32_awb_gain_cfg* cfg = &pCvt->isp_params.isp_cfg->others.awb_gain_cfg;
     uint16_t max_wb_gain           = (1 << (ISP2X_WBGAIN_FIXSCALE_BIT + 3)) - 1;
-    uint16_t R  = (uint16_t)(0.5 + pCvt->awb_gain_final.rgain * (1 << ISP2X_WBGAIN_FIXSCALE_BIT));
-    uint16_t B  = (uint16_t)(0.5 + pCvt->awb_gain_final.bgain * (1 << ISP2X_WBGAIN_FIXSCALE_BIT));
-    uint16_t Gr = (uint16_t)(0.5 + pCvt->awb_gain_final.grgain * (1 << ISP2X_WBGAIN_FIXSCALE_BIT));
-    uint16_t Gb = (uint16_t)(0.5 + pCvt->awb_gain_final.gbgain * (1 << ISP2X_WBGAIN_FIXSCALE_BIT));
     if (pCvt->awb_gain_final.applyPosition == IN_AWBGAIN0) {
+        //apply awb_gain_otp in wb0, apply awb_gain_final in wb0
+        // or IS_SENSOR_BUILTIN apply awb_gain_otp in sensor, apply awb_gain_final in sensor
+        rk_aiq_wb_gain_v32_t awb_gain2 = {1, 1, 1, 1, 1};
+        awb_gain2.rgain  = pCvt->awb_gain_final.rgain * awb_gain_otp.rgain;
+        awb_gain2.bgain  = pCvt->awb_gain_final.bgain * awb_gain_otp.bgain;
+        awb_gain2.grgain = pCvt->awb_gain_final.grgain * awb_gain_otp.grgain;
+        awb_gain2.gbgain = pCvt->awb_gain_final.gbgain * awb_gain_otp.gbgain;
+        clipWbgain(&awb_gain2);
+        uint16_t R  = (uint16_t)(0.5 + awb_gain2.rgain * (1 << ISP2X_WBGAIN_FIXSCALE_BIT));
+        uint16_t B  = (uint16_t)(0.5 + awb_gain2.bgain * (1 << ISP2X_WBGAIN_FIXSCALE_BIT));
+        uint16_t Gr = (uint16_t)(0.5 + awb_gain2.grgain * (1 << ISP2X_WBGAIN_FIXSCALE_BIT));
+        uint16_t Gb = (uint16_t)(0.5 + awb_gain2.gbgain * (1 << ISP2X_WBGAIN_FIXSCALE_BIT));
         cfg->gain0_red     = R > max_wb_gain ? max_wb_gain : R;
         cfg->gain0_blue    = B > max_wb_gain ? max_wb_gain : B;
         cfg->gain0_green_r = Gr > max_wb_gain ? max_wb_gain : Gr;
@@ -167,25 +180,40 @@ static void convertAiqAwbGainToIsp33Params(AiqIspParamsCvt_t* pCvt, aiq_params_b
         cfg->awb1_gain_b   = (1 << ISP2X_WBGAIN_FIXSCALE_BIT);
         cfg->awb1_gain_gr  = (1 << ISP2X_WBGAIN_FIXSCALE_BIT);
         cfg->awb1_gain_gb  = (1 << ISP2X_WBGAIN_FIXSCALE_BIT);
+        LOGD_AWB("%s wb0 gain  = [%f, %f, %f, %f] ,wb1 gain=[1,1,1,1]\n", __FUNCTION__, awb_gain2.rgain, awb_gain2.grgain,
+                 awb_gain2.gbgain, awb_gain2.bgain);
     } else {
-        cfg->gain0_red     = (1 << ISP2X_WBGAIN_FIXSCALE_BIT);
-        cfg->gain0_blue    = (1 << ISP2X_WBGAIN_FIXSCALE_BIT);
-        cfg->gain0_green_r = (1 << ISP2X_WBGAIN_FIXSCALE_BIT);
-        cfg->gain0_green_b = (1 << ISP2X_WBGAIN_FIXSCALE_BIT);
-        cfg->gain1_red     = (1 << ISP2X_WBGAIN_FIXSCALE_BIT);
-        cfg->gain1_blue    = (1 << ISP2X_WBGAIN_FIXSCALE_BIT);
-        cfg->gain1_green_r = (1 << ISP2X_WBGAIN_FIXSCALE_BIT);
-        cfg->gain1_green_b = (1 << ISP2X_WBGAIN_FIXSCALE_BIT);
-        cfg->gain2_red     = (1 << ISP2X_WBGAIN_FIXSCALE_BIT);
-        cfg->gain2_blue    = (1 << ISP2X_WBGAIN_FIXSCALE_BIT);
-        cfg->gain2_green_r = (1 << ISP2X_WBGAIN_FIXSCALE_BIT);
-        cfg->gain2_green_b = (1 << ISP2X_WBGAIN_FIXSCALE_BIT);
+        //apply awb_gain_otp in wb0, apply awb_gain_final in wb1
+        uint16_t R  = (uint16_t)(0.5 + awb_gain_otp.rgain * (1 << ISP2X_WBGAIN_FIXSCALE_BIT));
+        uint16_t B  = (uint16_t)(0.5 + awb_gain_otp.bgain * (1 << ISP2X_WBGAIN_FIXSCALE_BIT));
+        uint16_t Gr = (uint16_t)(0.5 + awb_gain_otp.grgain * (1 << ISP2X_WBGAIN_FIXSCALE_BIT));
+        uint16_t Gb = (uint16_t)(0.5 + awb_gain_otp.gbgain * (1 << ISP2X_WBGAIN_FIXSCALE_BIT));
+        cfg->gain0_red     = R > max_wb_gain ? max_wb_gain : R;
+        cfg->gain0_blue    = B > max_wb_gain ? max_wb_gain : B;
+        cfg->gain0_green_r = Gr > max_wb_gain ? max_wb_gain : Gr;
+        cfg->gain0_green_b = Gb > max_wb_gain ? max_wb_gain : Gb;
+        cfg->gain1_red     = R > max_wb_gain ? max_wb_gain : R;
+        cfg->gain1_blue    = B > max_wb_gain ? max_wb_gain : B;
+        cfg->gain1_green_r = Gr > max_wb_gain ? max_wb_gain : Gr;
+        cfg->gain1_green_b = Gb > max_wb_gain ? max_wb_gain : Gb;
+        cfg->gain2_red     = R > max_wb_gain ? max_wb_gain : R;
+        cfg->gain2_blue    = B > max_wb_gain ? max_wb_gain : B;
+        cfg->gain2_green_r = Gr > max_wb_gain ? max_wb_gain : Gr;
+        cfg->gain2_green_b = Gb > max_wb_gain ? max_wb_gain : Gb;
+        clipWbgain(&pCvt->awb_gain_final);
+        R  = (uint16_t)(0.5 + pCvt->awb_gain_final.rgain * (1 << ISP2X_WBGAIN_FIXSCALE_BIT));
+        B  = (uint16_t)(0.5 + pCvt->awb_gain_final.bgain * (1 << ISP2X_WBGAIN_FIXSCALE_BIT));
+        Gr = (uint16_t)(0.5 + pCvt->awb_gain_final.grgain * (1 << ISP2X_WBGAIN_FIXSCALE_BIT));
+        Gb = (uint16_t)(0.5 + pCvt->awb_gain_final.gbgain * (1 << ISP2X_WBGAIN_FIXSCALE_BIT));
         cfg->awb1_gain_r   = R > max_wb_gain ? max_wb_gain : R;
         cfg->awb1_gain_b   = B > max_wb_gain ? max_wb_gain : B;
         cfg->awb1_gain_gr  = Gr > max_wb_gain ? max_wb_gain : Gr;
         cfg->awb1_gain_gb  = Gb > max_wb_gain ? max_wb_gain : Gb;
-    }
+        LOGD_AWB("%s wb0 gain  = [%f, %f, %f, %f] ,wb1 gain=[%f,%f,%f,%f]\n", __FUNCTION__, awb_gain_otp.rgain, awb_gain_otp.grgain,
+                    awb_gain_otp.gbgain, awb_gain_otp.bgain, pCvt->awb_gain_final.rgain,
+                    pCvt->awb_gain_final.grgain, pCvt->awb_gain_final.gbgain, pCvt->awb_gain_final.bgain);
 
+    }
     pCvt->mLatestWbGainCfg = *cfg;
 }
 
@@ -850,13 +878,13 @@ static void ConfigBlc2(const blc_res_cvt_t* ablc, const awbStats_cfg_t* awb_meas
     awb_cfg_v32->bls2_val.gr = 0;
     awb_cfg_v32->bls2_val.gb = 0;
     awb_cfg_v32->bls2_val.b  = 0;
-    if (awb_meas->hw_awbCfg_statsSrc_mode == awbStats_drcOut_mode ||
-            (awb_meas->hw_awbCfg_statsSrc_mode == awbStats_btnrOut_mode &&
-             working_mode != RK_AIQ_WORKING_MODE_NORMAL)) {
-        //LOGD_AWB("The BLC bias of the awbStats pathway is not effective in the current mode and is consistent with the main pathway");
-        // don't support to use blc2
+    if (awb_meas->hw_awbCfg_statsSrc_mode == awbStats_drcOut_mode) {
+        if(awb_meas->blc.hw_awbCfg_blc_en){
+            LOGW_AWB("The BLC bias of the awbStats pathway is not effective in the current mode and is consistent with the main pathway");
+            // don't support to use blc2
+        }
         //correct the bug that bls2_en wiil be forced to ture when sw_blcT_autoOB_offset is not zero
-        if (ablc && ablc->en&& awb_meas->hw_awbCfg_statsSrc_mode == awbStats_drcOut_mode ) {
+        if (ablc && ablc->en && ablc->obcPostTnr.sw_blcT_obcPostTnr_en ) {
             awb_cfg_v32->bls2_en   = true;
             awb_cfg_v32->bls2_val.r  = 0-ablc->obcPostTnr.sw_blcT_autoOB_offset;
             awb_cfg_v32->bls2_val.b  = 0-ablc->obcPostTnr.sw_blcT_autoOB_offset;
@@ -923,44 +951,44 @@ static XCamReturn ConfigOverexposureValue(const blc_res_cvt_t* ablc, float hdrmg
     int max_blc                           = 0;
     short ob                              = 0;
     int overexposure_value                = 254;
-    /*if (ablc)
-        ob = ablc->isp_ob_offset;*/
+    if (ablc && ablc->en && ablc->obcPostTnr.sw_blcT_obcPostTnr_en)
+        ob = ablc->obcPostTnr.sw_blcT_autoOB_offset;
     if (awb_meas->hw_awbCfg_statsSrc_mode == awbStats_drcOut_mode) {
         awb_cfg_v32->in_overexposure_threshold = overexposure_value;
     } else if (awb_meas->hw_awbCfg_statsSrc_mode == awbStats_btnrOut_mode) {
         if (ablc && ablc->en && isp_ob_predgain > 1) {
             dgain = isp_ob_predgain;
         }
+
+        // need check
+        short int blc[AWB_CHANNEL_MAX] = {0, 0, 0, 0};
+        if (ablc && ablc->en) {
+            blc[AWB_CHANNEL_R]  = ablc->obcPreTnr.hw_blcC_obR_val * dgain - ob;
+            blc[AWB_CHANNEL_GR] = ablc->obcPreTnr.hw_blcC_obGr_val * dgain - ob;
+            blc[AWB_CHANNEL_GB] = ablc->obcPreTnr.hw_blcC_obGb_val * dgain - ob;
+            blc[AWB_CHANNEL_B]  = ablc->obcPreTnr.hw_blcC_obB_val * dgain - ob;
+        }
+        for (int i = 0; i < AWB_CHANNEL_MAX; i++) {
+            if (blc[i] < 0) {
+                blc[i] = 0;
+            }
+        }
+        blc[AWB_CHANNEL_B] += awb_cfg_v32->bls2_val.b + ob;
+        blc[AWB_CHANNEL_R] += awb_cfg_v32->bls2_val.r + ob;
+        blc[AWB_CHANNEL_GB] += awb_cfg_v32->bls2_val.gb + ob;
+        blc[AWB_CHANNEL_GR] += awb_cfg_v32->bls2_val.gr + ob;
+        for (int i = 0; i < AWB_CHANNEL_MAX; i++) {
+            if (blc[i] > max_blc) {
+                max_blc = blc[i];
+            }
+        }
+        if (max_blc < 0) {
+            max_blc = 0;
+        }
         if (working_mode != RK_AIQ_WORKING_MODE_NORMAL) {
-            // hdr mode,awbgain0 will reset the out data to full range
-            LOGV_AWB("hdrmge_gain0_1 %f", hdrmge_gain0_1);
-            awb_cfg_v32->in_overexposure_threshold = overexposure_value * hdrmge_gain0_1 * dgain;
+            awb_cfg_v32->in_overexposure_threshold = overexposure_value * hdrmge_gain0_1 * dgain - max_blc / 16;
+            LOGD_AWB("hdrmge_gain0_1 %f, dgain %f, max_blc %d, overexposure_th %d", hdrmge_gain0_1, dgain, max_blc, awb_cfg_v32->in_overexposure_threshold);
         } else {
-            // need check
-            short int blc[AWB_CHANNEL_MAX] = {0, 0, 0, 0};
-            if (ablc && ablc->en) {
-                blc[AWB_CHANNEL_R]  = ablc->obcPreTnr.hw_blcC_obR_val * dgain - ob;
-                blc[AWB_CHANNEL_GR] = ablc->obcPreTnr.hw_blcC_obGr_val * dgain - ob;
-                blc[AWB_CHANNEL_GB] = ablc->obcPreTnr.hw_blcC_obGb_val * dgain - ob;
-                blc[AWB_CHANNEL_B]  = ablc->obcPreTnr.hw_blcC_obB_val * dgain - ob;
-            }
-            for (int i = 0; i < AWB_CHANNEL_MAX; i++) {
-                if (blc[i] < 0) {
-                    blc[i] = 0;
-                }
-            }
-            blc[AWB_CHANNEL_B] += awb_cfg_v32->bls2_val.b + ob;
-            blc[AWB_CHANNEL_R] += awb_cfg_v32->bls2_val.r + ob;
-            blc[AWB_CHANNEL_GB] += awb_cfg_v32->bls2_val.gb + ob;
-            blc[AWB_CHANNEL_GR] += awb_cfg_v32->bls2_val.gr + ob;
-            for (int i = 0; i < AWB_CHANNEL_MAX; i++) {
-                if (blc[i] > max_blc) {
-                    max_blc = blc[i];
-                }
-            }
-            if (max_blc < 0) {
-                max_blc = 0;
-            }
             awb_cfg_v32->in_overexposure_threshold = overexposure_value * dgain - max_blc / 16;
         }
 
@@ -1025,10 +1053,9 @@ static void UvParaFixed32(const awbStats_uvRegion_t* wpRegion, unsigned short pu
     }
 }
 
-static void ConfigPreWbgain3(struct isp33_rawawb_meas_cfg* awb_cfg_v32,
+static void ConfigPreWbgain3(AiqIspParamsCvt_t* pCvt, struct isp33_rawawb_meas_cfg* awb_cfg_v32,
                              const awbStats_cfg_priv_t* awb_meas,
-                             const rk_aiq_wb_gain_v32_t* awb_gain,
-                             const struct rkmodule_awb_inf* otp_awb) {
+                             const rk_aiq_wb_gain_v32_t* awb_gain) {
     // higher priority than ConfigPreWbgain2
     // call after wbgain  and frameChoose calculation,
     // 1) awb statistics before the awbgain application:
@@ -1063,7 +1090,7 @@ static void ConfigPreWbgain3(struct isp33_rawawb_meas_cfg* awb_cfg_v32,
         awb_cfg_v32->pre_wbgain_inv_r =
             (1 << RK_AIQ_AWB_PRE_WBGAIN_FRAC_BIT) / awb_gain->rgain * preWbgainSw[0] + 0.5;
         awb_cfg_v32->pre_wbgain_inv_g =
-            (1 << RK_AIQ_AWB_PRE_WBGAIN_FRAC_BIT) / awb_gain->grgain * preWbgainSw[1] + 0.5;
+            (1 << RK_AIQ_AWB_PRE_WBGAIN_FRAC_BIT) / (awb_gain->grgain + awb_gain->gbgain) * 2 * preWbgainSw[1] + 0.5;
         awb_cfg_v32->pre_wbgain_inv_b =
             (1 << RK_AIQ_AWB_PRE_WBGAIN_FRAC_BIT) / awb_gain->bgain * preWbgainSw[3] + 0.5;
 
@@ -1082,25 +1109,6 @@ static void ConfigPreWbgain3(struct isp33_rawawb_meas_cfg* awb_cfg_v32,
             (1 << RK_AIQ_AWB_PRE_WBGAIN_FRAC_BIT) * preWbgainSw[3] + 0.5;
     }
 
-    if (otp_awb != NULL && otp_awb->flag) {
-        LOGD_AWB("%s before otp pre_wbgain_inv = [%d, %d, %d];", __FUNCTION__,
-                 awb_cfg_v32->pre_wbgain_inv_r, awb_cfg_v32->pre_wbgain_inv_g,
-                 awb_cfg_v32->pre_wbgain_inv_b);
-        awb_cfg_v32->pre_wbgain_inv_r = (float)awb_cfg_v32->pre_wbgain_inv_r *
-                                        (float)otp_awb->golden_r_value /
-                                        (float)otp_awb->r_value +
-                                        0.5;
-        awb_cfg_v32->pre_wbgain_inv_g = (float)awb_cfg_v32->pre_wbgain_inv_g *
-                                        (float)(otp_awb->golden_gr_value + 1024) /
-                                        (float)(otp_awb->gr_value + 1024) +
-                                        0.5;
-        awb_cfg_v32->pre_wbgain_inv_b = (float)awb_cfg_v32->pre_wbgain_inv_b *
-                                        (float)otp_awb->golden_b_value /
-                                        (float)otp_awb->b_value +
-                                        0.5;
-        LOGD_AWB("otp pre_wbgain_inv = [%d, %d, %d] \n", awb_cfg_v32->pre_wbgain_inv_r,
-                 awb_cfg_v32->pre_wbgain_inv_g, awb_cfg_v32->pre_wbgain_inv_b);
-    }
 }
 
 static bool isAwbCfgVaild(const rk_aiq_isp_awb_meas_cfg_v33_t* awb_meas_priv,
@@ -1179,14 +1187,12 @@ static void convertAiqAwbToIsp33Params(AiqIspParamsCvt_t* pCvt, aiq_params_base_
             isp_dgain = MAX(1.0f, ae_exp->LinearExp.exp_real_params.isp_dgain);
         } else {
             isp_dgain   = MAX(1.0f, ae_exp->HdrExp[0].exp_real_params.isp_dgain);
-            float sExpo = ae_exp->HdrExp[0].exp_real_params.analog_gain *
-                          ae_exp->HdrExp[0].exp_real_params.digital_gain *
+            float sExpo = ae_exp->HdrExp[0].exp_real_params.cis_total_gain *
                           ae_exp->HdrExp[0].exp_real_params.integration_time;
 
-            float lExpo = ae_exp->HdrExp[1].exp_real_params.analog_gain *
-                          ae_exp->HdrExp[1].exp_real_params.digital_gain *
+            float lExpo = ae_exp->HdrExp[1].exp_real_params.cis_total_gain *
                           ae_exp->HdrExp[1].exp_real_params.integration_time;
-            if (sExpo > 0.001) {
+            if (sExpo > 0.00000001) {
                 hdrmge_gain0_1 = lExpo / sExpo;
             }
         }
@@ -1385,8 +1391,7 @@ static void convertAiqAwbToIsp33Params(AiqIspParamsCvt_t* pCvt, aiq_params_base_
     awb_cfg_v32->big_x1_3 = UtlFloatToFix_S0310(bigWpRegion->rbVtx.hw_awbT_vtxX_val);
     awb_cfg_v32->big_y0_3 = UtlFloatToFix_S0310(bigWpRegion->ltVtx.hw_awbT_vtxY_val);
     awb_cfg_v32->big_y1_3 = UtlFloatToFix_S0310(bigWpRegion->rbVtx.hw_awbT_vtxY_val);
-    ConfigPreWbgain3(awb_cfg_v32, awb_meas_priv, &pCvt->awb_gain_final,
-                     &pCvt->mCommonCvtInfo.otp_awb);
+    ConfigPreWbgain3(pCvt, awb_cfg_v32, awb_meas_priv, &pCvt->awb_gain_final);
     awb_cfg_v32->multiwindow_en      = awb_meas->mainWin.hw_awbCfg_nonROI_en;
     awb_cfg_v32->multiwindow0_h_offs = awb_meas->mainWin.nonROI[0].hw_awbCfg_nonROI_x;
     awb_cfg_v32->multiwindow0_v_offs = awb_meas->mainWin.nonROI[0].hw_awbCfg_nonROI_y;

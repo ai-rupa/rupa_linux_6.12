@@ -26,6 +26,7 @@
 #include <drm/drm_crtc_helper.h>
 #include <drm/drm_edid.h>
 #include <drm/drm_encoder_slave.h>
+#include <drm/drm_file.h>
 #include <drm/drm_of.h>
 #include <drm/drm_panel.h>
 #include <drm/drm_print.h>
@@ -358,7 +359,6 @@ struct dw_hdmi_qp {
 	void (*enable_audio)(struct dw_hdmi_qp *hdmi);
 	void (*disable_audio)(struct dw_hdmi_qp *hdmi);
 
-	struct dentry *debugfs_dir;
 	bool scramble_low_rates;
 
 	struct extcon_dev *extcon;
@@ -1412,8 +1412,7 @@ int dw_hdmi_qp_set_earc(struct dw_hdmi_qp *hdmi)
 	hdmi->phy.ops->set_mode(hdmi, hdmi->phy.data, HDMI_PHY_EARC_MASK,
 				true);
 
-	ret = hdmi->phy.ops->init(hdmi, hdmi->phy.data,
-				  &hdmi->previous_mode);
+	ret = hdmi->phy.ops->enable(hdmi, hdmi->phy.data, &hdmi->previous_mode);
 	if (ret)
 		return ret;
 
@@ -1551,6 +1550,7 @@ static void hdmi_config_AVI(struct dw_hdmi_qp *hdmi,
 	struct hdmi_avi_infoframe frame;
 	const struct drm_display_mode *mode = dw_hdmi_qp_connector_get_mode(connector);
 	u32 val, i, j;
+	int ret;
 	u8 buff[AVI_BUF_SIZE];
 	enum hdmi_quantization_range rgb_quant_range = hdmi->hdmi_data.quant_range;
 	enum hdmi_additional_colorimetry_extension additional_colorimetry = 0;
@@ -1625,7 +1625,11 @@ static void hdmi_config_AVI(struct dw_hdmi_qp *hdmi,
 
 	frame.scan_mode = HDMI_SCAN_MODE_NONE;
 
-	hdmi_avi_infoframe_pack_only(&frame, buff, AVI_BUF_SIZE);
+	ret = hdmi_avi_infoframe_pack_only(&frame, buff, AVI_BUF_SIZE);
+	if (ret < 0) {
+		DRM_ERROR("Failed to pack AVI infoframe: %d\n", ret);
+		return;
+	}
 
 	/* only avi version 4 support DCI-P3 */
 	if (frame.extended_colorimetry == HDMI_EXTENDED_COLORIMETRY_RESERVED) {
@@ -1652,6 +1656,18 @@ static void hdmi_config_AVI(struct dw_hdmi_qp *hdmi,
 	}
 
 	/*
+	 * Ensure payload won't overflow buff[]. buff[] layout:
+	 * [0..HDMI_AVI_HEADER_LEN-1] = header, [HDMI_AVI_HEADER_LEN..] = payload.
+	 * The loop accesses buff[i * 4 + j + 3] where i * 4 + j <= frame.length,
+	 * so the max index is frame.length + 3 (== HDMI_AVI_HEADER_LEN + frame.length - 1),
+	 * which must be < AVI_BUF_SIZE.
+	 */
+	if (frame.length > AVI_BUF_SIZE - HDMI_AVI_HEADER_LEN) {
+		DRM_ERROR("frame.length:%d is out of range\n", frame.length);
+		return;
+	}
+
+	/*
 	 * The Designware IP uses a different byte format from standard
 	 * AVI info frames, though generally the bits are in the correct
 	 * bytes.
@@ -1661,11 +1677,12 @@ static void hdmi_config_AVI(struct dw_hdmi_qp *hdmi,
 	hdmi_writel(hdmi, val, PKT_AVI_CONTENTS0);
 
 	for (i = 0; i < 4; i++) {
+		val = 0;
+
 		for (j = 0; j < 4; j++) {
-			if (i * 4 + j >= 14)
+			if (i * 4 + j > frame.length)
 				break;
-			if (!j)
-				val = buff[i * 4 + j + 3];
+
 			val |= buff[i * 4 + j + 3] << (8 * j);
 		}
 
@@ -2380,7 +2397,7 @@ static int dw_hdmi_qp_flt_lts4(struct dw_hdmi_qp *hdmi, u8 *rate)
 		hdmi->plat_data->link_clk_set(data, 0, true);
 
 	/* enable phy */
-	hdmi->phy.ops->init(hdmi, hdmi->phy.data, &hdmi->previous_mode);
+	hdmi->phy.ops->enable(hdmi, hdmi->phy.data, &hdmi->previous_mode);
 
 	*rate = actual_rate;
 	/* set new rate */
@@ -2519,7 +2536,7 @@ static int hdmi_set_op_mode(struct dw_hdmi_qp *hdmi,
 		hdmi_modb(hdmi, 0, OPMODE_FRL, LINK_CONFIG0);
 		hdmi_modb(hdmi, 0, OPMODE_FRL_4LANES, LINK_CONFIG0);
 		if (!hdmi->update) {
-			ret = hdmi->phy.ops->init(hdmi, hdmi->phy.data, &hdmi->previous_mode);
+			ret = hdmi->phy.ops->enable(hdmi, hdmi->phy.data, &hdmi->previous_mode);
 			if (!ret)
 				hdmi->disabled = false;
 		}
@@ -2538,7 +2555,7 @@ static int hdmi_set_op_mode(struct dw_hdmi_qp *hdmi,
 
 	hdmi_modb(hdmi, 1, OPMODE_FRL, LINK_CONFIG0);
 
-	ret = hdmi->phy.ops->init(hdmi, hdmi->phy.data, &hdmi->previous_mode);
+	ret = hdmi->phy.ops->enable(hdmi, hdmi->phy.data, &hdmi->previous_mode);
 	if (!ret) {
 		hdmi->disabled = false;
 		/* wait phy output stable then start flt */
@@ -2607,8 +2624,10 @@ static bool is_sink_hdcp2_supported(struct dw_hdmi_qp *hdmi)
 	int ret;
 
 	ret = hdcp_ddc_read(hdmi->ddc, HDMI_HDCP_ADDR, HDMI_HDCP2_VERSION, &bcaps);
-	if (ret < 0)
+	if (ret < 0) {
 		dev_err(hdmi->dev, "get hdcp2.x capable failed:%d\n", ret);
+		return false;
+	}
 
 	if (bcaps & HDMI_HDCP2_SUPPORT)
 		return true;
@@ -2649,6 +2668,13 @@ static void dw_hdmi_set_hdcp_bypass(struct dw_hdmi_qp *hdmi, u8 enable)
 	hdmi_writel(hdmi, enable, HDCP2LOGIC_CONFIG0);
 }
 
+static void dw_hdmi_set_hdcp14(struct dw_hdmi_qp *hdmi)
+{
+	hdmi_writel(hdmi, 0, HDCP2LOGIC_ESM_GPIO_IN);
+	if (hdmi->hdcp && hdmi->hdcp->hdcp_start)
+		hdmi->hdcp->hdcp_start(hdmi->hdcp);
+}
+
 static
 int dw_hdmi_hdcp2_notifier_callback(struct notifier_block *nb, unsigned long event, void *data)
 {
@@ -2678,6 +2704,9 @@ int dw_hdmi_hdcp2_notifier_callback(struct notifier_block *nb, unsigned long eve
 		break;
 	case DW_HDCP_GET_HDMI_BYPASS_EVENT:
 		hdcp_event->bypass = hdmi_readl(hdmi, HDCP2LOGIC_CONFIG0);
+		break;
+	case DW_HDCP_SET_HDMI_HDCP14_EVENT:
+		dw_hdmi_set_hdcp14(hdmi);
 		break;
 	default:
 		dev_err(hdmi->dev, "hdcp2 notifier: unknown event %lu\n", event);
@@ -2887,7 +2916,7 @@ static int dw_hdmi_qp_setup(struct dw_hdmi_qp *hdmi,
 		hdmi_modb(hdmi, OPMODE_DVI, OPMODE_DVI, LINK_CONFIG0);
 		hdmi_writel(hdmi, 2, PKTSCHED_PKT_CONTROL0);
 		hdmi_modb(hdmi, PKTSCHED_GCP_TX_EN, PKTSCHED_GCP_TX_EN, PKTSCHED_PKT_EN);
-		hdmi->phy.ops->init(hdmi, hdmi->phy.data, &hdmi->previous_mode);
+		hdmi->phy.ops->enable(hdmi, hdmi->phy.data, &hdmi->previous_mode);
 		dev_info(hdmi->dev, "%s DVI mode\n", __func__);
 	}
 
@@ -3255,7 +3284,7 @@ void dw_hdmi_qp_handle_hpd(struct dw_hdmi_qp *hdmi, bool enable)
 			hdmi_writel(hdmi, 0, SCRAMB_CONFIG0);
 		}
 
-		hdmi->phy.ops->init(hdmi, hdmi->phy.data, &hdmi->previous_mode);
+		hdmi->phy.ops->enable(hdmi, hdmi->phy.data, &hdmi->previous_mode);
 		hdmi->disabled = false;
 		msleep(50);
 		hdmi_writel(hdmi, 2, PKTSCHED_PKT_CONTROL0);
@@ -4338,7 +4367,6 @@ static irqreturn_t dw_hdmi_qp_avp_irq(int irq, void *dev_id)
 			if (conn_state->content_protection !=
 			    DRM_MODE_CONTENT_PROTECTION_UNDESIRED)
 				val = DRM_MODE_CONTENT_PROTECTION_DESIRED;
-			hdmi_modb(hdmi, HDCP2_BYPASS, HDCP2_BYPASS, HDCP2LOGIC_CONFIG0);
 			dev_err(hdmi->dev, "HDCP2 authentication failed\n");
 		}
 		conn_state->content_protection = val;
@@ -4772,22 +4800,31 @@ static const struct file_operations dw_hdmi_status_fops = {
 	.release = single_release,
 };
 
-static void dw_hdmi_register_debugfs(struct device *dev, struct dw_hdmi_qp *hdmi)
+struct dentry *dw_hdmi_qp_register_debugfs(struct dw_hdmi_qp *hdmi)
 {
 	u8 buf[11];
+	struct dentry *debugfs_dir;
 
-	snprintf(buf, sizeof(buf), "dw-hdmi%d", hdmi->plat_data->id);
-	hdmi->debugfs_dir = debugfs_create_dir(buf, NULL);
-	if (IS_ERR(hdmi->debugfs_dir)) {
-		dev_err(dev, "failed to create debugfs dir!\n");
-		return;
+	snprintf(buf, sizeof(buf), "hdmi%d", hdmi->plat_data->id);
+	debugfs_dir = debugfs_create_dir(buf, hdmi->bridge.dev->primary->debugfs_root);
+	if (IS_ERR(debugfs_dir)) {
+		dev_err(hdmi->dev, "failed to create debugfs dir!\n");
+		return NULL;
 	}
 
-	debugfs_create_file("status", 0400, hdmi->debugfs_dir,
-			    hdmi, &dw_hdmi_status_fops);
-	debugfs_create_file("ctrl", 0600, hdmi->debugfs_dir,
-			    hdmi, &dw_hdmi_ctrl_fops);
+	debugfs_create_file("status", 0400, debugfs_dir, hdmi, &dw_hdmi_status_fops);
+	debugfs_create_file("ctrl", 0600, debugfs_dir, hdmi, &dw_hdmi_ctrl_fops);
+
+	return debugfs_dir;
 }
+EXPORT_SYMBOL_GPL(dw_hdmi_qp_register_debugfs);
+
+void dw_hdmi_qp_phy_init(struct dw_hdmi_qp *hdmi)
+{
+	if (hdmi->phy.ops->init)
+		hdmi->phy.ops->init(hdmi->phy.data);
+}
+EXPORT_SYMBOL_GPL(dw_hdmi_qp_phy_init);
 
 static void dw_hdmi_qp_hdcp14_get_mem(struct dw_hdmi_qp *hdmi, u8 *data, u32 len)
 {
@@ -5215,8 +5252,6 @@ static struct dw_hdmi_qp *dw_hdmi_qp_probe(struct platform_device *pdev,
 	if (ret)
 		goto err_ddc;
 
-	dw_hdmi_register_debugfs(dev, hdmi);
-
 	if ((hdmi_readl(hdmi, CONFIG_REG) & CONFIG_HDCP14) &&
 	    (hdmi->plat_data->dw_hdmi_qp_version == DW_HDMI_QP_V1)) {
 		iores = platform_get_resource(pdev, IORESOURCE_MEM, 1);
@@ -5229,7 +5264,11 @@ static struct dw_hdmi_qp *dw_hdmi_qp_probe(struct platform_device *pdev,
 		}
 	}
 
-	hdmi->workqueue = create_workqueue("dw_hdmi_flt_queue");
+	hdmi->workqueue = alloc_workqueue("dw_hdmi_flt_queue", WQ_UNBOUND, 1);
+	if (!hdmi->workqueue) {
+		ret = -ENOMEM;
+		goto err_ddc;
+	}
 	INIT_WORK(&hdmi->flt_work, dw_hdmi_qp_flt_work);
 
 	return hdmi;
@@ -5265,8 +5304,6 @@ static void dw_hdmi_qp_remove(struct dw_hdmi_qp *hdmi)
 
 	if (hdmi->earc_irq)
 		disable_irq(hdmi->earc_irq);
-
-	debugfs_remove_recursive(hdmi->debugfs_dir);
 
 	if (!hdmi->plat_data->first_screen) {
 		dw_hdmi_destroy_properties(hdmi);

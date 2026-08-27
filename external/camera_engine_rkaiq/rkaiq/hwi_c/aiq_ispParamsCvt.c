@@ -447,6 +447,13 @@ void AiqIspParamsCvt_setCalib(AiqIspParamsCvt_t* pCvt, const CamCalibDbV2Context
     pCvt->btnr_attrib = btnr_attrib;
     CalibDb_Module_ParaV2_t* module_calib = (CalibDb_Module_ParaV2_t*)(CALIBDBV2_GET_MODULE_PTR((void *)calibv2, module_calib));
     pCvt->btnr_cis_info = &module_calib->module_cis.cisTnr;
+    calibdb_cis_wb_t* cis_wb = (calibdb_cis_wb_t*)(CALIBDBV2_GET_MODULE_PTR((void*)calibv2, CisWb));
+    if (cis_wb) {
+        pCvt->awb_cis_info = cis_wb;
+    } else {
+        pCvt->awb_cis_info = NULL;
+    }
+
 #endif
 }
 

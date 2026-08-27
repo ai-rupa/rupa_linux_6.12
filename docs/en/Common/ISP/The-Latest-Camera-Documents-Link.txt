@@ -1,6 +1,1 @@
-ISP21 for RK3566_RK3568
-ISP30 for RK3588
-ISP32-lite for RK3562
-
-The latest camera documents and avl of camera:
-https://redmine.rock-chips.com/documents/53
+../../../cn/Common/ISP/The-Latest-Camera-Documents-Link.txt

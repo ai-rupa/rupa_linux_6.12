@@ -117,8 +117,8 @@ typedef struct {
     float frameDGain[3];
     struct rkmodule_awb_inf otp_awb;
     struct rkmodule_lsc_inf otp_lsc;
-    struct rkmodule_af_inf *otp_af;
-    struct rkmodule_pdaf_inf *otp_pdaf;
+    struct rkmodule_af_inf otp_af;
+    struct rkmodule_pdaf_inf otp_pdaf;
 #if RKAIQ_HAVE_AIBNR
     RkAiqAibnrModelInfo_t aibnrModelInfo;
 #endif
@@ -153,7 +153,6 @@ typedef struct {
     int sw_btnrT_outFrmBase_mode;
 #endif
     int drc_warning_count;
-    int blc_warning_count;
     int btnr_warning_count;
     void* pBlcInfo;
     float offset2Blc1;

@@ -14,10 +14,10 @@
 		precharge-current-microamp = <180000>;
 		precharge-upper-limit-microvolt = <3600000>;
 		charge-term-current-microamp = <300000>;
-		constant-charge-current-max-microamp = <10000000>;
-		constant-charge-voltage-max-microvolt = <4400000>;
+		constant-charge-current-max-microamp = <3000000>;
+		constant-charge-voltage-max-microvolt = <4200000>;
 		factory-internal-resistance-micro-ohms = <80>;
-		voltage-max-design-microvolt = <4400000>;
+		voltage-max-design-microvolt = <4200000>;
 		voltage-min-design-microvolt = <3000000>;
 	};
 
@@ -111,7 +111,7 @@
 		/* 1: rst regs (default in codes), 0: rst the pmic */
 		pmic-reset-func = <0>;
 		rockchip,pmic-reg-only-cmds = "shell", "userrequested",
-				"userrequested,recovery", "null-rst", "";
+				"userrequested,recovery", "cts-test", "null-rst", "";
 		/* select internal feedback resistor */
 		fb-inner-reg-idxs = <2>;
 
@@ -369,7 +369,7 @@
 		/* 1: rst regs (default in codes), 0: rst the pmic */
 		pmic-reset-func = <0>;
 		rockchip,pmic-reg-only-cmds = "shell", "userrequested",
-				"userrequested,recovery", "null-rst", "";
+				"userrequested,recovery", "cts-test", "null-rst", "";
 		/* 0: active low, 1:active high */
 		sleep-pin-polarity = <1>;
 		status = "okay";
@@ -442,7 +442,7 @@
 
 			vccio_sd_s0: LDO_REG1 {
 				regulator-name = "vccio_sd_s0";
-				regulator-min-microvolt = <3300000>;
+				regulator-min-microvolt = <1800000>;
 				regulator-max-microvolt = <3300000>;
 				regulator-always-on;
 				regulator-boot-on;

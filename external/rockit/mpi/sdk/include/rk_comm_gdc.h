@@ -376,12 +376,18 @@ typedef struct rkGDC_ROT_UPDATE_ATTR_S {
     RK_FLOAT                fRotationAngle;
 } GDC_ROT_UPDATE_ATTR_S;
 
+typedef struct rkGDC_DIS_UPDATE_ATTR_S {
+    RK_BOOL        bDisEnable;
+    RK_FLOAT       fZoomRatio;
+} GDC_DIS_UPDATE_ATTR_S;
+
 typedef struct rkGDC_UPDATE_ATTR_S {
     GDC_CHN_MODE_E  enMode;
     union {
         GDC_FEC_UPDATE_ATTR_S  stFecAttr;
         GDC_IDC_UPDATE_ATTR_S  stIdcAttr;
         GDC_ROT_UPDATE_ATTR_S  stRotAttr;
+        GDC_DIS_UPDATE_ATTR_S  stDisAttr;
     };
 } GDC_UPDATE_ATTR_S;
 

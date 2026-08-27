@@ -1,6 +1,8 @@
 #ifndef __LIBRKDISAPI_H__
 #define __LIBRKDISAPI_H__
 
+#include <stdbool.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -9,6 +11,7 @@ typedef enum {
 	RK_DIS_PIXEL_FMT_RASTER_YUV420SP,   /**< RASTER: YUV420SP */
 	RK_DIS_PIXEL_FMT_TILE4X4_YUV420,    /**< TILE4X4: YUV420 */
 	RK_DIS_PIXEL_FMT_FBCE_YUV420,       /**< FBCE: YUV420 */
+	RK_DIS_PIXEL_FMT_RGB888,            /**< RGB888 */
 	RK_DIS_PIXEL_FMT_NUM,
 } RK_DIS_format_type_t;
 
@@ -98,6 +101,12 @@ typedef struct _RK_DIS_initConfig_tag {
 	char reserved[256];
 } RK_DIS_initConfig;
 
+typedef struct  {
+	bool  dis_enable;
+	float zoom_ratio;
+	void  *args;
+} RK_DIS_attr;
+
 const char* RK_DIS_getVersion(void);
 
 int RK_DIS_prepare(RK_DIS* const engine);
@@ -105,6 +114,8 @@ int RK_DIS_prepare(RK_DIS* const engine);
 int RK_DIS_init(RK_DIS* const engine, RK_DIS_initConfig *pInitCfg);
 
 int RK_DIS_start(RK_DIS* const engine);
+
+int RK_DIS_update_attr(RK_DIS* const engine, RK_DIS_attr attr);
 
 int RK_DIS_process_async(RK_DIS* const engine, RK_DIS_buffer *input);
 

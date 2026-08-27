@@ -1,0 +1,42 @@
+From 65a8ef6042757f2ac049c5caf2cd3d348da011e6 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Fri, 3 Apr 2026 17:37:36 +0800
+Subject: [PATCH 35/98] desktop-shell: Fix fullscreen_output handling on output
+ changes
+
+Fix use-after-free crash when removing output with fullscreen surface by
+updating fullscreen_output pointer properly.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ desktop-shell/shell.c | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/desktop-shell/shell.c b/desktop-shell/shell.c
+index 717d80d1..c561e4b0 100644
+--- a/desktop-shell/shell.c
++++ b/desktop-shell/shell.c
+@@ -1564,6 +1564,12 @@ shell_surface_set_output(struct shell_surface *shsurf,
+ 		shsurf->output_destroy_listener.notify = NULL;
+ 	}
+ 
++	/* Update fullscreen_output based on current surface state */
++	if (weston_desktop_surface_get_fullscreen(shsurf->desktop_surface))
++		shsurf->fullscreen_output = shsurf->output;
++	else
++		shsurf->fullscreen_output = NULL;
++
+ 	if (!shsurf->output)
+ 		return;
+ 
+@@ -2292,7 +2298,6 @@ set_fullscreen(struct shell_surface *shsurf, bool fullscreen,
+ 		}
+ 
+ 		shell_surface_set_output(shsurf, output);
+-		shsurf->fullscreen_output = shsurf->output;
+ 
+ 		weston_desktop_surface_set_orientation(shsurf->desktop_surface,
+ 							WESTON_TOP_LEVEL_TILED_ORIENTATION_NONE);
+-- 
+2.39.5
+

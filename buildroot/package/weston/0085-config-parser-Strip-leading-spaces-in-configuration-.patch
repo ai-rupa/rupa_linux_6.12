@@ -1,0 +1,49 @@
+From 060d9a18b03ae0d8e1850a6bf877d3e2a9ef07fa Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Wed, 15 Jun 2022 12:08:39 +0800
+Subject: [PATCH 85/98] config-parser: Strip leading spaces in configuration
+ lines
+
+Allow indented configuration entries by safely stripping leading
+whitespace before parsing each line. This improves config file
+readability while maintaining compatibility.
+
+Tested with:
+[core]
+    gbm-format=argb8888
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ shared/config-parser.c | 11 +++++++++--
+ 1 file changed, 9 insertions(+), 2 deletions(-)
+
+diff --git a/shared/config-parser.c b/shared/config-parser.c
+index 606e9ea8..cf87317e 100644
+--- a/shared/config-parser.c
++++ b/shared/config-parser.c
+@@ -459,13 +459,20 @@ weston_config_parse_internal(struct weston_config *config, FILE *fp,
+ 			     const char *file_name)
+ {
+ 	struct weston_config_section *section = NULL;
+-	char line[512], *p;
++	char buf[512], *line, *p;
+ 	int i;
+ 
+-	while (fgets(line, sizeof line, fp)) {
++	while (fgets(buf, sizeof buf, fp)) {
++		line = buf;
++
++		/* Skip leading whitespace to allow indented config entries */
++		while (isspace((unsigned char)*line))
++			line++;
++
+ 		switch (line[0]) {
+ 		case '#':
+ 		case '\n':
++		case '\0':
+ 			continue;
+ 		case '[':
+ 			p = strchr(&line[1], ']');
+-- 
+2.39.5
+

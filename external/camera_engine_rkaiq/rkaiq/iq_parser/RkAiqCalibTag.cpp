@@ -9438,7 +9438,7 @@ int calib_check_nonleaf_tag_start(CALIB_IQ_TAG_ID_T tag_id, CALIB_IQ_TAG_ID_T pa
     // if not the leaf node, generate check tag list
     calib_tag_info_t *tag_info = &(g_calib_tag_infos[tag_id]);
     calib_tag_check_info_t* check_info =
-        (calib_tag_check_info_t *)calloc(sizeof(calib_tag_check_info_t), 1);
+        (calib_tag_check_info_t *)calloc(1, sizeof(calib_tag_check_info_t));
 
     if(check_info == NULL) {
         LOGE("%s(%d): tag_id:%d tag_name:%s  --- check_info malloc fail \n",

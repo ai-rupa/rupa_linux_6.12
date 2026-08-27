@@ -74,7 +74,8 @@ XCamReturn
 rk_aiq_user_api2_af_SetPdafLibInput(const rk_aiq_sys_ctx_t* sys_ctx, rk_aiq_pdlib_input* pdlib_in);
 XCamReturn
 rk_aiq_user_api2_af_GetPdafLibOutput(const rk_aiq_sys_ctx_t* sys_ctx, rk_aiq_pdlib_output* pdlib_output, int timeout_ms);
-
+XCamReturn
+rk_aiq_user_api2_af_SetOtpAf(const rk_aiq_sys_ctx_t* sys_ctx, struct rkmodule_af_inf *otp_af, struct rkmodule_pdaf_inf *otp_pdaf);
 #endif
 RKAIQ_END_DECLARE
 

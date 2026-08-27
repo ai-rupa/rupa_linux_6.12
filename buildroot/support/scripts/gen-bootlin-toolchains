@@ -363,7 +363,7 @@ class Toolchain:
                 selects.append("BR2_ENABLE_LOCALE")
 
             # thread support
-            if frag.startswith("BR2_TOOLCHAIN_EXTERNAL_HAS_THREADS"):
+            if frag.startswith("BR2_TOOLCHAIN_EXTERNAL_HAS_THREADS="):
                 selects.append("BR2_TOOLCHAIN_HAS_THREADS")
 
             if frag.startswith("BR2_TOOLCHAIN_EXTERNAL_HAS_THREADS_DEBUG"):
@@ -479,11 +479,6 @@ def get_toolchains():
             elif parts[2].startswith("bleeding-edge-"):
                 variant = "bleeding-edge"
                 version = parts[2][len("bleeding-edge-"):]
-
-            # GCC 14.x on Microblaze is very broken, see
-            # https://gcc.gnu.org/bugzilla/show_bug.cgi?id=118280
-            if arch in ["microblazeel", "microblazebe"] and variant == "bleeding-edge":
-                continue
 
             tmp[(arch, libc, variant)] = version
 

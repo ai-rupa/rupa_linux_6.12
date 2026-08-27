@@ -357,11 +357,11 @@ usb_do_start_daemon()
 
 	usb_msg "Starting daemon: $DAEMON $ARGS"
 
-	/sbin/start-stop-daemon -Sqx $DAEMON -- $ARGS >> \
+	start-stop-daemon -Sqx $DAEMON -- $ARGS >> \
 		$LOG_DIR/$(basename $(usb_daemon_file)).log 2>&1 || true
 
 	# The daemon might fork itself
-	while /sbin/start-stop-daemon -Kqtx $DAEMON; do
+	while start-stop-daemon -Kqtx $DAEMON; do
 		sleep .5
 	done
 
@@ -395,7 +395,7 @@ usb_kill_daemon()
 	DAEMON="${1:-$(usb_daemon)}"
 	if [ "$DAEMON" ]; then
 		usb_msg "Killing daemon: $DAEMON"
-		/sbin/start-stop-daemon -Kqox $DAEMON || true
+		start-stop-daemon -Kqox $DAEMON || true
 	fi
 }
 
@@ -988,17 +988,7 @@ usb_restart()
 usb_do_handle_request()
 {
 	case "$1" in
-		start|update)
-			usb_enable
-			usb_run_stage usb start
-			;;
-		stop)
-			usb_run_stage usb stop
-			usb_disable
-			;;
-		restart)
-			usb_run_stage usb restart
-			;;
+		start|update|stop|restart) usb_run_stage usb $1 ;;
 		*) usb_msg "Unknown request $1!" ;;
 	esac
 }
@@ -1007,10 +997,18 @@ usb_handle_request()
 {
 	usb_msg "Handling $ACTION request..."
 
-	# Nothing to update when disabled
-	if [ "$ACTION" = update ] && ! usb_is_enabled; then
-		return 0
-	fi
+	case "$ACTION" in
+		start) usb_enable ;;
+		update)
+			if usb_is_enabled; then
+				# Retry start
+				ACTION=start
+			else
+				# Nothing to update when disabled
+				return 0
+			fi
+			;;
+	esac
 
 	# Nothing to do when USB gadget not available
 	if ! usb_run_stage usb prepare; then
@@ -1019,6 +1017,10 @@ usb_handle_request()
 	fi
 
 	usb_do_handle_request $ACTION
+
+	if [ "$ACTION" = stop ]; then
+		usb_disable
+	fi
 
 	usb_msg "Done $ACTION request"
 	echo

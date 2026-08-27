@@ -56,6 +56,8 @@ struct AiqV4l2Device_s {
     AiqMutex_t _buf_mutex;
     int32_t _mplanes_count;
     int _use_type;
+    // Control whether to execute qbuf during prepare/start, default is true
+    bool _auto_qbuf;
     XCamReturn (*open)(AiqV4l2Device_t* v4l2_dev, bool nonblock);
     XCamReturn (*close)(AiqV4l2Device_t* v4l2_dev);
     XCamReturn (*prepare)(AiqV4l2Device_t* v4l2_dev);
@@ -133,6 +135,7 @@ XCamReturn AiqV4l2Device_setFmt(AiqV4l2Device_t* v4l2_dev, uint32_t width, uint3
                                 uint32_t pixelformat, enum v4l2_field field,
                                 uint32_t bytes_perline);
 int AiqV4l2Device_enumFmts(AiqV4l2Device_t* v4l2_dev, struct v4l2_fmtdesc* fmts, uint32_t max);
+bool AiqV4l2Device_setAutoQbuf(AiqV4l2Device_t* v4l2_dev, bool enable);
 XCamReturn AiqV4l2Device_start(AiqV4l2Device_t* v4l2_dev, bool prepared);
 XCamReturn AiqV4l2Device_stop(AiqV4l2Device_t* v4l2_dev);
 XCamReturn AiqV4l2Device_stopStreamOff(AiqV4l2Device_t* v4l2_dev);

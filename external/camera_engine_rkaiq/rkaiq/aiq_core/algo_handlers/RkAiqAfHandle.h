@@ -68,6 +68,7 @@ class RkAiqAfHandleInt : virtual public RkAiqHandle {
     XCamReturn setAeStable(bool ae_stable);
     XCamReturn setPdafLibInput(rk_aiq_pdlib_input* pdlib_input);
     XCamReturn getPdafLibOutput(rk_aiq_pdlib_output* pdlib_output, int timeout_ms);
+    XCamReturn setOtpAf(struct rkmodule_af_inf *otp_af, struct rkmodule_pdaf_inf *otp_pdaf);
 
  protected:
     virtual void init();
@@ -95,6 +96,8 @@ class RkAiqAfHandleInt : virtual public RkAiqHandle {
 
     XCam::Mutex mPdLibOutputMutex;
     XCam::Cond  mPdLibOutputCond;
+    struct rkmodule_af_inf mApiOtpAf = {};
+    struct rkmodule_pdaf_inf mApiOtpPdaf = {};
  private:
     DECLARE_HANDLE_REGISTER_TYPE(RkAiqAfHandleInt);
 };

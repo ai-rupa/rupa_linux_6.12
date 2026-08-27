@@ -1,4 +1,4 @@
-From c11655f8c91d6c49180626ef2f6bd2b1d3b83b00 Mon Sep 17 00:00:00 2001
+From 1406d2093efb9efed143164f2571effe1b36a025 Mon Sep 17 00:00:00 2001
 From: Jeffy Chen <jeffy.chen@rock-chips.com>
 Date: Thu, 31 Oct 2019 18:45:19 +0800
 Subject: [PATCH 08/21] video-converter: Support rockchip RGA 2D accel
@@ -8,25 +8,25 @@ Disabled by default, set env GST_VIDEO_CONVERT_USE_RGA=1 to enable.
 Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
 ---
  gst-libs/gst/video/meson.build       |   2 +-
- gst-libs/gst/video/video-converter.c | 180 +++++++++++++++++++++++++++
+ gst-libs/gst/video/video-converter.c | 182 +++++++++++++++++++++++++++
  meson.build                          |   3 +
- 3 files changed, 184 insertions(+), 1 deletion(-)
+ 3 files changed, 186 insertions(+), 1 deletion(-)
 
 diff --git a/gst-libs/gst/video/meson.build b/gst-libs/gst/video/meson.build
-index 4c36541..0173bf2 100644
+index 6eff585..32c846b 100644
 --- a/gst-libs/gst/video/meson.build
 +++ b/gst-libs/gst/video/meson.build
-@@ -124,7 +124,7 @@ gstvideo_h = video_enums[1]
+@@ -126,7 +126,7 @@ gstvideo_h = video_enums[1]
  video_gen_sources = [gstvideo_h]
  
  orcsrc = 'video-orc'
--gstvideo_deps = [gst_base_dep, libm]
-+gstvideo_deps = [gst_base_dep, libm, rga_dep]
+-gstvideo_deps = [allocators_dep, gst_base_dep, orc_dep, libm]
++gstvideo_deps = [allocators_dep, gst_base_dep, orc_dep, libm, rga_dep]
  if have_orcc
-   gstvideo_deps += [orc_dep]
    orc_h = custom_target(orcsrc + '.h',
+     input : orcsrc + '.orc',
 diff --git a/gst-libs/gst/video/video-converter.c b/gst-libs/gst/video/video-converter.c
-index 1e82c8c..a81cfb3 100644
+index a32a6c5..2f52b42 100644
 --- a/gst-libs/gst/video/video-converter.c
 +++ b/gst-libs/gst/video/video-converter.c
 @@ -38,6 +38,11 @@
@@ -41,7 +41,7 @@ index 1e82c8c..a81cfb3 100644
  /**
   * SECTION:videoconverter
   * @title: GstVideoConverter
-@@ -2749,6 +2754,169 @@ gst_video_converter_get_config (GstVideoConverter * convert)
+@@ -2763,6 +2768,171 @@ gst_video_converter_get_config (GstVideoConverter * convert)
    return convert->config;
  }
  
@@ -79,6 +79,8 @@ index 1e82c8c..a81cfb3 100644
 +      return RK_FORMAT_YCbCr_422_P;
 +    case GST_VIDEO_FORMAT_NV12_10LE40:
 +      return RK_FORMAT_YCbCr_420_SP_10B;
++    case GST_VIDEO_FORMAT_NV16_10LE40:
++      return RK_FORMAT_YCbCr_422_SP_10B;
 +    default:
 +      return RK_FORMAT_UNKNOWN;
 +  }
@@ -211,7 +213,7 @@ index 1e82c8c..a81cfb3 100644
  /**
   * gst_video_converter_frame:
   * @convert: a #GstVideoConverter
-@@ -2796,6 +2964,12 @@ gst_video_converter_frame (GstVideoConverter * convert,
+@@ -2810,6 +2980,12 @@ gst_video_converter_frame (GstVideoConverter * convert,
            convert->out_width == 0 || convert->out_height == 0))
      return;
  
@@ -224,7 +226,7 @@ index 1e82c8c..a81cfb3 100644
    convert->convert (convert, src, dest);
  }
  
-@@ -7781,6 +7955,12 @@ convert_scale_planes (GstVideoConverter * convert,
+@@ -7758,6 +7934,12 @@ convert_scale_planes (GstVideoConverter * convert,
  {
    int i, n_planes;
  
@@ -238,10 +240,10 @@ index 1e82c8c..a81cfb3 100644
    for (i = 0; i < n_planes; i++) {
      if (convert->fconvert[i])
 diff --git a/meson.build b/meson.build
-index 1162348..1499182 100644
+index e49c6cf..fa1d5ed 100644
 --- a/meson.build
 +++ b/meson.build
-@@ -321,6 +321,9 @@ libdrm_dep = dependency('libdrm', version : '>= 2.4.98',
+@@ -331,6 +331,9 @@ libdrm_dep = dependency('libdrm', version : '>= 2.4.98',
  
  core_conf.set('HAVE_LIBDRM', libdrm_dep.found())
  

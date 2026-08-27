@@ -4,8 +4,8 @@
 #
 ################################################################################
 
-NETWORK_MANAGER_VERSION_MAJOR = 1.50
-NETWORK_MANAGER_VERSION = $(NETWORK_MANAGER_VERSION_MAJOR).2
+NETWORK_MANAGER_VERSION_MAJOR = 1.52
+NETWORK_MANAGER_VERSION = $(NETWORK_MANAGER_VERSION_MAJOR).1
 NETWORK_MANAGER_SOURCE = NetworkManager-$(NETWORK_MANAGER_VERSION).tar.xz
 NETWORK_MANAGER_SITE = https://gitlab.freedesktop.org/NetworkManager/NetworkManager/-/releases/$(NETWORK_MANAGER_VERSION)/downloads
 NETWORK_MANAGER_INSTALL_STAGING = YES
@@ -16,7 +16,6 @@ NETWORK_MANAGER_CPE_ID_PRODUCT = networkmanager
 NETWORK_MANAGER_SELINUX_MODULES = networkmanager
 
 NETWORK_MANAGER_DEPENDENCIES = \
-	host-intltool \
 	host-libxslt \
 	host-pkgconf \
 	dbus \
@@ -30,6 +29,7 @@ NETWORK_MANAGER_CONF_OPTS = \
 	-Dtests=no \
 	-Dqt=false \
 	-Diptables=/usr/sbin/iptables \
+	-Dip6tables=/usr/sbin/ip6tables \
 	-Difupdown=false \
 	-Dnm_cloud_setup=false \
 	-Dsession_tracking_consolekit=false
@@ -76,12 +76,14 @@ else
 NETWORK_MANAGER_CONF_OPTS += -Dconcheck=false
 endif
 
-ifeq ($(BR2_PACKAGE_LIBNSS),y)
+ifeq ($(BR2_PACKAGE_GNUTLS),y)
+NETWORK_MANAGER_DEPENDENCIES += gnutls
+NETWORK_MANAGER_CONF_OPTS += -Dcrypto=gnutls
+else ifeq ($(BR2_PACKAGE_LIBNSS),y)
 NETWORK_MANAGER_DEPENDENCIES += libnss
 NETWORK_MANAGER_CONF_OPTS += -Dcrypto=nss
 else
-NETWORK_MANAGER_DEPENDENCIES += gnutls
-NETWORK_MANAGER_CONF_OPTS += -Dcrypto=gnutls
+NETWORK_MANAGER_CONF_OPTS += -Dcrypto=null
 endif
 
 ifeq ($(BR2_PACKAGE_LIBPSL),y)

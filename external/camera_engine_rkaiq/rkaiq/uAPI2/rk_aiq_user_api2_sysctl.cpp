@@ -802,7 +802,12 @@ XCamReturn rk_aiq_uapi2_sysctl_setUserOtpInfo(rk_aiq_sys_ctx_t* sys_ctx, rk_aiq_
     }
 
     ret = sys_ctx->_camHw->setUserOtpInfo(otp_info);
-
+    if (ret != XCAM_RETURN_NO_ERROR) {
+        return ret;
+    }
+#ifndef ISP_HW_V33
+    ret = rk_aiq_user_api2_af_SetOtpAf(sys_ctx, &otp_info.otp_af, &otp_info.otp_pdaf);
+#endif
     return ret;
 }
 

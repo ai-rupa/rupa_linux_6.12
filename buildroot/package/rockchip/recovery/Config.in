@@ -7,7 +7,6 @@ config BR2_PACKAGE_RECOVERY
 	select BR2_PACKAGE_LIBZ
 	select BR2_PACKAGE_E2FSPROGS if !BR2_PACKAGE_MTD
 	select BR2_PACKAGE_E2FSPROGS_RESIZE2FS if !BR2_PACKAGE_MTD
-	select BR2_PACKAGE_LIBCURL
 	select BR2_PACKAGE_BZIP2
 	help
 	  Rockchip recovery for linux.
@@ -21,6 +20,15 @@ config BR2_PACKAGE_RECOVERY_NO_UI
 
 config BR2_PACKAGE_RECOVERY_BOOTCONTROL
 	bool "Linux AB bool control"
+
+config BR2_PACKAGE_RECOVERY_SOURCE_URL
+	bool "URL download support"
+	select BR2_PACKAGE_LIBCURL
+	select BR2_PACKAGE_OPENSSL
+	select BR2_PACKAGE_LIBCURL_OPENSSL
+	help
+	  Enable HTTP/HTTPS update package download in updateEngine.
+	  Disable this when the product only upgrades from local, SD or USB media.
 
 choice
 	default BR2_PACKAGE_RECOVERY_SUCCESSFUL_BOOT
@@ -54,7 +62,7 @@ config BR2_PACKAGE_RECOVERY_UPDATEENGINEBIN
 config BR2_PACKAGE_RECOVERY_STATIC
 	bool "Enable static"
 	default y if BR2_STATIC_LIBS
-	select BR2_PACKAGE_LIBCURL_STATIC
+	select BR2_PACKAGE_LIBCURL_STATIC if BR2_PACKAGE_RECOVERY_SOURCE_URL
 	select BR2_PACKAGE_LIBDRM_STATIC
 	select BR2_PACKAGE_LIBPNG_STATIC
 

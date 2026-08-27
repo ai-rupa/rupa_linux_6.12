@@ -1,95 +1,171 @@
-PROJECT_DIR := $(shell pwd)
-CC = gcc
-PROM = recovery
-UPDATE_ENGINE = updateEngine
+# Rockchip Recovery — Linux SDK build
+# Usage:
+#   make RecoveryNoUi=true
+#   make RECOVERY_FEATURES="RK_STORAGE_EMMC RK_STORAGE_MTD RK_SOURCE_SD ..."
+#
+# Feature switches are definition-based: a name present in RECOVERY_FEATURES is
+# compiled as -D<name>, and absent means disabled. Old command-line overrides
+# such as RK_STORAGE_MTD=0/1 are accepted only as a compatibility shim.
+# RecoveryNoUi accepts 1/y/yes/true/on for old Buildroot packages.
 
-all: $(PROM) $(UPDATE_ENGINE)
-.PHONY : all recovery_version clean
+CC      ?= $(CROSS_COMPILE)gcc
 
-OBJ = recovery.o \
-	default_recovery_ui.o \
-	rktools.o \
-	roots.o \
-	bootloader.o \
-	safe_iop.o \
-	strlcpy.o \
-	strlcat.o \
-	rkupdate.o \
-	sdboot.o \
-	usbboot.o \
-	mtdutils/mounts.o \
-	mtdutils/mtdutils.o \
-	mtdutils/rk29.o \
-	minzip/DirUtil.o \
-	update_engine/log.o
+# Buildroot's pkg-generic.mk overrides CFLAGS via `make CFLAGS="..."`, which
+# wipes anything we put into CFLAGS here. Use a separate variable for our
+# project-local include paths and feature defines, and prepend it in the
+# compile rule so it can't be clobbered by external CFLAGS overrides.
+LOCAL_CFLAGS := -Wall -Wextra -Iinclude -D_FILE_OFFSET_BITS=64
 
-ifdef RecoveryNoUi
-OBJ += noui.o
-else
-OBJ += ui.o\
-	minzip/Hash.o \
-	minzip/SysUtil.o \
-	minzip/Zip.o \
-	minui/events.o \
-	minui/graphics.o \
-	minui/resources.o \
-	minui/graphics_drm.o
+# Same rationale for link flags: buildroot also overrides LDFLAGS via
+# `make LDFLAGS=""`. Keep project-required link libs in LOCAL_LDLIBS and
+# append them at link time so external LDFLAGS overrides can't drop them.
+LOCAL_LDLIBS := -lpthread
+
+# ---- Feature switches ----
+RECOVERY_DEFAULT_FEATURES := \
+  RK_STORAGE_EMMC RK_STORAGE_MTD RK_STORAGE_UFS \
+  RK_SOURCE_SD RK_SOURCE_USB RK_SOURCE_URL \
+  RK_DIFF_UPDATE RK_GPT_UPDATE RK_IDBLOCK_UPDATE \
+  RK_AB_SUPPORT
+
+RECOVERY_FEATURES ?= $(RECOVERY_DEFAULT_FEATURES)
+RECOVERY_DISABLE_FEATURES ?=
+
+false_values := 0 n no false off
+
+define apply_legacy_feature
+ifneq ($$(origin $(1)),undefined)
+  ifneq ($$(filter $$(false_values),$$(strip $$($(1)))),)
+    RECOVERY_DISABLE_FEATURES += $(1)
+  else
+    RECOVERY_FEATURES += $(1)
+  endif
+endif
+endef
+
+$(eval $(call apply_legacy_feature,RK_STORAGE_EMMC))
+$(eval $(call apply_legacy_feature,RK_STORAGE_MTD))
+$(eval $(call apply_legacy_feature,RK_STORAGE_UFS))
+$(eval $(call apply_legacy_feature,RK_SOURCE_SD))
+$(eval $(call apply_legacy_feature,RK_SOURCE_USB))
+$(eval $(call apply_legacy_feature,RK_SOURCE_URL))
+$(eval $(call apply_legacy_feature,RK_DIFF_UPDATE))
+$(eval $(call apply_legacy_feature,RK_GPT_UPDATE))
+$(eval $(call apply_legacy_feature,RK_IDBLOCK_UPDATE))
+$(eval $(call apply_legacy_feature,RK_AB_SUPPORT))
+
+ifneq ($(origin RK_AB_RETRY_BOOT),undefined)
+  ifeq ($(filter $(false_values),$(strip $(RK_AB_RETRY_BOOT))),)
+    RECOVERY_FEATURES += RETRY_BOOT
+  endif
+endif
+ifneq ($(origin RETRY_BOOT),undefined)
+  ifeq ($(filter $(false_values),$(strip $(RETRY_BOOT))),)
+    RECOVERY_FEATURES += RETRY_BOOT
+  endif
+endif
+ifneq ($(origin SUCCESSFUL_BOOT),undefined)
+  ifeq ($(filter $(false_values),$(strip $(SUCCESSFUL_BOOT))),)
+    RECOVERY_FEATURES += SUCCESSFUL_BOOT
+  endif
 endif
 
-CFLAGS += -I$(PROJECT_DIR) -I/usr/include -I/usr/include/libdrm/ -lc -DUSE_UPDATEENGINE=ON
+RECOVERY_FEATURES := $(sort $(filter-out $(RECOVERY_DISABLE_FEATURES),$(RECOVERY_FEATURES)))
 
-ifdef RecoveryNoUi
-CFLAGS += -lpthread -lbz2
-else
-CFLAGS += -lz -lpng -ldrm -lpthread -lcurl -lbz2
+LOCAL_CFLAGS += $(addprefix -D,$(filter RK_%,$(RECOVERY_FEATURES)))
+
+ifneq ($(filter RK_DIFF_UPDATE,$(RECOVERY_FEATURES)),)
+  LOCAL_LDLIBS += -lbz2
+endif
+ifneq ($(filter RK_AB_SUPPORT,$(RECOVERY_FEATURES)),)
+  ifneq ($(filter RETRY_BOOT,$(RECOVERY_FEATURES)),)
+    LOCAL_CFLAGS += -DRETRY_BOOT
+  else ifneq ($(filter SUCCESSFUL_BOOT,$(RECOVERY_FEATURES)),)
+    LOCAL_CFLAGS += -DSUCCESSFUL_BOOT
+  else ifneq ($(findstring -DRETRY_BOOT,$(CFLAGS)),)
+  else ifneq ($(findstring -DSUCCESSFUL_BOOT,$(CFLAGS)),)
+  else
+    LOCAL_CFLAGS += -DSUCCESSFUL_BOOT
+  endif
+endif
+ifneq ($(filter RK_SOURCE_URL,$(RECOVERY_FEATURES)),)
+  # download.o (core/, always compiled) is linked into BOTH binaries —
+  # recovery's source_ota.c calls download_file too — so curl is a common
+  # link dep, not engine-only.
+  LOCAL_LDLIBS += -lcurl
 endif
 
-UPDATE_ENGINE_OBJ = mtdutils/mounts.o \
-	mtdutils/mtdutils.o \
-	mtdutils/rk29.o \
-	update_engine/rkbootloader.o \
-	update_engine/download.o \
-	update_engine/flash_image.o \
-	update_engine/log.o \
-	update_engine/main.o \
-	update_engine/md5.o \
-	update_engine/md5sum.o \
-	update_engine/rkimage.o \
-	update_engine/rktools.o \
-	update_engine/rkboot.o \
-	update_engine/crc.o \
-	update_engine/update.o \
-	update_engine/do_patch.o
+# ---- Common objects ----
+UTILS_OBJ = utils/log.o utils/strlcpy.o utils/strlcat.o utils/process.o \
+            utils/cmdline.o
 
-recovery_version:
-	@unset GIT_DIR; \
-	if command -v git > /dev/null; then \
-		COMMIT_HASH=$$(git rev-parse --verify --short HEAD 2> /dev/null); \
-		if [ -n "$$COMMIT_HASH" ]; then \
-			GIT_COMMIT_TIME=$$(git log -1 --format=%cd --date=format:%y%m%d 2> /dev/null); \
-			commit_info="-g$${COMMIT_HASH}-$${GIT_COMMIT_TIME:-000000}"; \
-			echo "#define GIT_COMMIT_INFO $${commit_info}" > recovery_autogenerate.h; \
-		fi; \
-	fi
+# device probing + mtd info are storage-domain (live in storage/); always
+# compiled (device_is_mtd / mtd_parse_dev_num are used even in non-MTD builds).
+STORAGE_OBJ = storage/storage.o storage/device.o storage/mtd_info.o \
+              storage/fstab.o storage/mount.o storage/format.o storage/mounts.o
+ifneq ($(filter RK_STORAGE_EMMC RK_STORAGE_UFS,$(RECOVERY_FEATURES)),)
+  STORAGE_OBJ += storage/block_io.o
+endif
+ifneq ($(filter RK_STORAGE_MTD,$(RECOVERY_FEATURES)),)
+  STORAGE_OBJ += storage/mtd.o storage/ubi.o
+endif
 
-$(PROM): $(OBJ)
-	$(CC) -o $(PROM) $(OBJ) $(CFLAGS)
+CORE_OBJ = core/bootmsg.o core/slot.o core/image.o \
+           core/checksum.o core/md5.o core/flash.o \
+           core/download.o
+ifneq ($(filter RK_IDBLOCK_UPDATE,$(RECOVERY_FEATURES)),)
+  CORE_OBJ += core/flash_bootloader.o
+endif
+ifneq ($(filter RK_GPT_UPDATE,$(RECOVERY_FEATURES)),)
+  CORE_OBJ += core/flash_parameter.o
+endif
+ifneq ($(filter RK_DIFF_UPDATE,$(RECOVERY_FEATURES)),)
+  CORE_OBJ += core/patch.o core/flash_diff.o
+endif
+ifneq ($(filter RK_SOURCE_URL,$(RECOVERY_FEATURES)),)
+  LOCAL_CFLAGS += -I$(shell pkg-config --variable=includedir libcurl 2>/dev/null || echo /usr/include)
+endif
 
-$(UPDATE_ENGINE): $(UPDATE_ENGINE_OBJ)
-	$(CC) -o $(UPDATE_ENGINE) $(UPDATE_ENGINE_OBJ) $(CFLAGS)
+COMMON_OBJ = $(UTILS_OBJ) $(STORAGE_OBJ) $(CORE_OBJ)
 
-%.o: %.cpp
-	$(CC) -c $< -o $@ $(CFLAGS)
+# ---- updateEngine ----
+ENGINE_OBJ = app/engine/engine_main.o app/engine/cmd_upgrade.o \
+             app/engine/upgrade_resolver.o app/engine/upgrade_plan.o \
+             app/engine/upgrade_precheck.o app/engine/upgrade_version.o \
+             app/engine/cmd_misc.o app/engine/cmd_slot.o \
+             app/engine/engine_cmd.o app/engine/upgrade_filter.o \
+             app/common/source.o app/common/source_ota.o
 
-%.o: %.c recovery_version
-	$(CC) -c $< -o $@ $(CFLAGS)
+# ---- recovery ----
+RECOVERY_OBJ = app/recovery/recovery_main.o app/recovery/recovery_cmd.o \
+               app/common/source.o app/common/source_ota.o ui/menu.o
+ifneq ($(filter 1 y yes true on,$(strip $(RecoveryNoUi))),)
+  RECOVERY_OBJ += ui/ui_null.o
+else
+  RECOVERY_OBJ += ui/ui.o ui/minui/events.o ui/minui/graphics.o \
+                  ui/minui/graphics_drm.o ui/minui/graphics_fbdev.o \
+                  ui/minui/resources.o \
+                  app/recovery/prompt.o
+  LOCAL_CFLAGS += -DRK_UI_ENABLE -Iui
+  # -lz: libpng pulls zlib transitively for shared link; required explicitly
+  # for static link. -lm reserved if minui ever uses math (not today).
+  LOCAL_LDLIBS_RECOVERY += -ldrm -lpng -lz
+endif
+
+# ---- Targets ----
+all: updateEngine recovery
+
+updateEngine: $(ENGINE_OBJ) $(COMMON_OBJ)
+	$(CC) -o $@ $^ $(LDFLAGS) $(LOCAL_LDLIBS) $(LOCAL_LDLIBS_ENGINE) $(EXTRA_LDLIBS)
+
+recovery: $(RECOVERY_OBJ) $(COMMON_OBJ)
+	$(CC) -o $@ $^ $(LDFLAGS) $(LOCAL_LDLIBS) $(LOCAL_LDLIBS_RECOVERY) $(EXTRA_LDLIBS)
+
+%.o: %.c
+	$(CC) $(LOCAL_CFLAGS) $(CFLAGS) -c -o $@ $<
 
 clean:
-	rm -rf $(OBJ) $(PROM) $(UPDATE_ENGINE_OBJ) $(UPDATE_ENGINE)
+	rm -f updateEngine recovery
+	find . -name '*.o' -delete
 
-install:
-	mkdir -p $(DESTDIR)/res/images $(DESTDIR)/usr/bin
-	install -D -m 755 $(PROJECT_DIR)/recovery $(DESTDIR)/usr/bin/
-	install -D -m 755 $(PROJECT_DIR)/updateEngine $(DESTDIR)/usr/bin/
-	cp $(PROJECT_DIR)/res/images/* $(DESTDIR)/res/images/
-
+.PHONY: all clean

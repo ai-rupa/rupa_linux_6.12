@@ -8,7 +8,7 @@ if(NOT CMAKE_BUILD_TYPE STREQUAL "Release")
     add_definitions(-DBUILD_TYPE_DEBUG)
 endif()
 
-cmake_minimum_required(VERSION 2.8)
+cmake_minimum_required(VERSION 3.5)
 
 PROJECT(rk_stream)
 

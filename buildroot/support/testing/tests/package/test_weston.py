@@ -5,6 +5,7 @@ import infra.basetest
 from ..graphics_base import GraphicsBase
 
 
+# gitlab-runner: 2xlarge
 class TestWeston(infra.basetest.BRTest, GraphicsBase):
     config = \
         """
@@ -22,7 +23,7 @@ class TestWeston(infra.basetest.BRTest, GraphicsBase):
         BR2_LINUX_KERNEL_CONFIG_FRAGMENT_FILES="{}"
         BR2_PACKAGE_LIBDRM=y
         BR2_PACKAGE_MESA3D=y
-        BR2_PACKAGE_MESA3D_GALLIUM_DRIVER_SWRAST=y
+        BR2_PACKAGE_MESA3D_GALLIUM_DRIVER_SOFTPIPE=y
         BR2_PACKAGE_MESA3D_LLVM=y
         BR2_PACKAGE_MESA3D_OPENGL_EGL=y
         BR2_PACKAGE_MESA3D_OPENGL_ES=y

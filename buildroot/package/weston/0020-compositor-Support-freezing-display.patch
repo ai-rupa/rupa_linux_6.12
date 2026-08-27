@@ -1,0 +1,35 @@
+From a8e4d0572c0bb9cd0a02a93a2f9f9497df08aff4 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Mon, 3 Dec 2018 10:40:16 +0800
+Subject: [PATCH 20/98] compositor: Support freezing display
+
+Freeze display when the file specified by WESTON_FREEZE_DISPLAY
+environment variable exists.
+
+For example:
+export WESTON_FREEZE_DISPLAY=/tmp/.freeze
+touch $WESTON_FREEZE_DISPLAY
+weston&
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ libweston/compositor.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/libweston/compositor.c b/libweston/compositor.c
+index a0a61432..cf6ac689 100644
+--- a/libweston/compositor.c
++++ b/libweston/compositor.c
+@@ -4272,6 +4272,9 @@ weston_output_should_freeze(struct weston_output *output)
+ 	if (timespec_sub_to_msec(&output->freeze_until, &now) > 0)
+ 		return true;
+ 
++	if (!access(getenv("WESTON_FREEZE_DISPLAY") ? : "", F_OK))
++		return true;
++
+ 	return false;
+ }
+ 
+-- 
+2.39.5
+

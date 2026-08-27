@@ -3,11 +3,12 @@ import os
 import infra.basetest
 
 
+# gitlab-runner: large
 class TestEdk2(infra.basetest.BRTest):
     config = \
         """
         BR2_aarch64=y
-        BR2_neoverse_n1=y
+        BR2_neoverse_n2=y
         BR2_TOOLCHAIN_EXTERNAL=y
         BR2_TARGET_GENERIC_GETTY_PORT="ttyAMA0"
         BR2_TARGET_ROOTFS_EXT2=y
@@ -42,7 +43,7 @@ class TestEdk2(infra.basetest.BRTest):
         flash1 = os.path.join(self.builddir, "images", "SBSA_FLASH1.fd")
         self.emulator.boot(arch="aarch64",
                            options=["-M", "sbsa-ref",
-                                    "-cpu", "neoverse-n1",
+                                    "-cpu", "neoverse-n2",
                                     "-m", "512M",
                                     "-pflash", flash0,
                                     "-pflash", flash1,
@@ -117,21 +118,6 @@ class TestEdk2BuildArmVexpressFvpAarch64(TestEdk2BuildBase):
 
     def test_run(self) -> None:
         self.assertBinariesExist("FVP_AARCH64_EFI.fd")
-
-
-class TestEdk2BuildSocionextDeveloperbox(TestEdk2BuildBase):
-    config = TestEdk2BuildBase.base_config + \
-        """
-        BR2_aarch64=y
-        BR2_TARGET_EDK2_PLATFORM_SOCIONEXT_DEVELOPERBOX=y
-        BR2_TARGET_ARM_TRUSTED_FIRMWARE=y
-        BR2_TARGET_ARM_TRUSTED_FIRMWARE_PLATFORM="synquacer"
-        BR2_TARGET_ARM_TRUSTED_FIRMWARE_BL31=y
-        BR2_TARGET_ARM_TRUSTED_FIRMWARE_ADDITIONAL_TARGETS="PRELOADED_BL33_BASE=0x8200000"
-        """
-
-    def test_run(self) -> None:
-        self.assertBinariesExist("SPI_NOR_IMAGE.fd", "fip.bin")
 
 
 class TestEdk2BuildQemuSbsa(TestEdk2BuildBase):

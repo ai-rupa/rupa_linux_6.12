@@ -1,30 +1,43 @@
 #!/bin/bash
+# cpu/cpu_stress_test.sh - CPU stress test using stress-ng or stress
+# Supports --duration <seconds> to override default test duration.
 
-# Specify the duration of the stress test in seconds
-DURATION=86400 # 24 hours in seconds
-# Specify the number of CPU cores to stress
-CPU_CORES=$(nproc) # This will use all available CPU cores
+DIR_CPU="$(cd "$(dirname "$0")" && pwd)"
+source "${DIR_CPU}/../common/common.sh"
 
-# Function to perform stress test using stress tool
-stress_test_stress() {
-    echo "Starting 24-hour CPU stress test with stress tool on $CPU_CORES cores."
-    stress --cpu $CPU_CORES --timeout $DURATION
-}
+parse_args "$@"
+DURATION=$(get_duration)
+CPU_CORES=$(nproc)
 
-# Function to perform stress test using stress-ng tool
 stress_test_stress_ng() {
-    echo "Starting 24-hour CPU stress test with stress-ng tool on $CPU_CORES cores."
-    stress-ng --cpu $CPU_CORES --timeout $DURATION
+    log_info "cpu" "Starting CPU stress test with stress-ng on $CPU_CORES cores for ${DURATION}s"
+    stress-ng --cpu "$CPU_CORES" --timeout "$DURATION"
 }
 
-# Check if stress-ng is available
+stress_test_stress() {
+    log_info "cpu" "Starting CPU stress test with stress on $CPU_CORES cores for ${DURATION}s"
+    stress --cpu "$CPU_CORES" --timeout "$DURATION"
+}
+
+TEST_ID=$(test_begin "cpu" "stress" "CPU stress on $CPU_CORES cores for ${DURATION}s")
+
+set +e
 if command -v stress-ng >/dev/null 2>&1; then
     stress_test_stress_ng
+    EXIT_CODE=$?
 elif command -v stress >/dev/null 2>&1; then
     stress_test_stress
+    EXIT_CODE=$?
 else
-    echo "Neither stress nor stress-ng tool is installed. Please install one of them to proceed."
+    log_error "cpu" "Neither stress nor stress-ng tool is installed"
+    test_end "$TEST_ID" "FAIL" "stress tools not found"
     exit 1
 fi
+set -e
 
-echo "24-hour CPU stress test completed."
+if [[ $EXIT_CODE -eq 0 ]]; then
+    test_end "$TEST_ID" "PASS"
+else
+    test_end "$TEST_ID" "FAIL" "stress tool exited with code $EXIT_CODE"
+    exit 1
+fi

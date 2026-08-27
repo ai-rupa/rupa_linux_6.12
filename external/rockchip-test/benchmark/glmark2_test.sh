@@ -1,14 +1,11 @@
 #!/bin/bash
+# benchmark/glmark2_test.sh - Glmark2 benchmark (delegates to GPU module)
 
-# Define the path to the script relative to the current script's location
-SCRIPT_PATH="$(dirname $0)/../gpu/gpu_test.sh"
+SCRIPT_PATH="$(cd "$(dirname "$0")" && pwd)/../gpu/gpu_test.sh"
 
-# Check if the script exists and is executable
-if [ -x "$SCRIPT_PATH" ]; then
-    echo "Executing the GPU test script..."
-    # Execute the script
-    $SCRIPT_PATH
+if [[ -x "$SCRIPT_PATH" ]]; then
+    exec bash "$SCRIPT_PATH" --test fullscreen
 else
-    echo "Error: The script '$SCRIPT_PATH' does not exist or is not executable."
+    echo "Error: GPU test script not found at $SCRIPT_PATH" >&2
     exit 1
 fi

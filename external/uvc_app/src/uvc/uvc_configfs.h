@@ -13,17 +13,24 @@
 extern "C" {
 #endif
 
+#include <linux/usb/ch9.h>
 #include <stdint.h>
+
+#define UVC_BULK_HS_MAXPAYLOAD_DEFAULT 131072U
+
 /*
  * struct uvc_function_config_endpoint - Endpoint parameters
  * @bInterval: Transfer interval (interrupt and isochronous only)
  * @bMaxBurst: Transfer burst size (super-speed only)
  * @wMaxPacketSize: Maximum packet size (including the multiplier)
+ * @streaming_bulk_hs_maxpayload: High-speed bulk max payload size
  */
 struct uvc_function_config_endpoint {
   unsigned int bInterval;
   unsigned int bMaxBurst;
   unsigned int wMaxPacketSize;
+  unsigned int bBulk;
+  unsigned int streaming_bulk_hs_maxpayload;
 };
 
 /*
@@ -109,6 +116,7 @@ struct uvc_function_config {
 
 struct uvc_function_config *configfs_parse_uvc_function(unsigned int index);
 void configfs_free_uvc_function(struct uvc_function_config *fc);
+enum usb_device_speed get_usb_speed_from_sysfs(const char *udc);
 
 #ifdef __cplusplus
 }

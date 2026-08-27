@@ -1,0 +1,13 @@
+# Generated at boot by /usr/bin/rk-audio-switch from this template.
+# @CARD@ is substituted at boot with the detected ALSA device id.
+pcm.!default {
+    type plug
+    slave.pcm {
+        type hw
+        card "@CARD@"
+    }
+}
+ctl.!default {
+    type hw
+    card "@CARD@"
+}

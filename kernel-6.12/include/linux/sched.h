@@ -1110,6 +1110,9 @@ struct task_struct {
 	struct posix_cputimers_work	posix_cputimers_work;
 #endif
 
+#ifdef CONFIG_ROCKCHIP_OPTIMIZE_HRTIMER_LATENCY
+	ktime_t				hrtimer_softexpires;
+#endif
 	/* Process credentials: */
 
 	/* Tracer's credentials at attach: */
@@ -1737,6 +1740,11 @@ static __always_inline bool is_percpu_thread(void)
 #else
 	return true;
 #endif
+}
+
+static __always_inline bool is_user_task(struct task_struct *task)
+{
+	return task->mm && !(task->flags & (PF_KTHREAD | PF_USER_WORKER));
 }
 
 /* Per-process atomic flags. */

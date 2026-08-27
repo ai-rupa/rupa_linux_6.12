@@ -6,7 +6,8 @@
 #ifndef VEPU510_COMMON_H
 #define VEPU510_COMMON_H
 
-#include "rk_venc_cmd.h"
+#include "vepu5xx_common.h"
+#include "vepu51x_common.h"
 
 #define VEPU510_CTL_OFFSET           (0 * sizeof(RK_U32))       /* 0x00000000 reg0    - 0x00000120 reg72 */
 #define VEPU510_FRAME_OFFSET         (156 * sizeof(RK_U32))     /* 0x00000270 reg156  - 0x000003f4 reg253 */
@@ -19,6 +20,35 @@
 #define VEPU510_REG_BASE_HW_STATUS   (0x2c)
 #define VEPU510_MAX_ROI_NUM          8
 #define VEPU510_SLICE_FIFO_LEN       8
+
+#define vepu510_get_dbg_regs(dev, regs, ret_acc) do {    \
+    MppDevRegRdCfg _rd_cfg; \
+    VEPU_REG_RD(dev, regs, reg_ctl,   VEPU510_CTL_OFFSET,      ret_acc); \
+    VEPU_REG_RD(dev, regs, reg_frm,   VEPU510_FRAME_OFFSET,    ret_acc); \
+    VEPU_REG_RD(dev, regs, reg_rc_roi,VEPU510_RC_ROI_OFFSET,   ret_acc); \
+    VEPU_REG_RD(dev, regs, reg_param, VEPU510_PARAM_OFFSET,    ret_acc); \
+    VEPU_REG_RD(dev, regs, reg_sqi,   VEPU510_SQI_OFFSET,      ret_acc); \
+    VEPU_REG_RD(dev, regs, reg_scl,   VEPU510_SCL_OFFSET,      ret_acc); \
+} while (0)
+
+#define vepu510_dump_sw_regs(dbg_ctx, regs) do { \
+    vepu_sw_regs(dbg_ctx, (regs)->reg_ctl, VEPU510_CTL_OFFSET, "w+"); \
+    vepu_sw_regs(dbg_ctx, (regs)->reg_frm, VEPU510_FRAME_OFFSET, "a+"); \
+    vepu_sw_regs(dbg_ctx, (regs)->reg_rc_roi, VEPU510_RC_ROI_OFFSET, "a+"); \
+    vepu_sw_regs(dbg_ctx, (regs)->reg_param, VEPU510_PARAM_OFFSET, "a+"); \
+    vepu_sw_regs(dbg_ctx, (regs)->reg_sqi, VEPU510_SQI_OFFSET, "a+"); \
+    vepu_sw_regs(dbg_ctx, (regs)->reg_scl, VEPU510_SCL_OFFSET, "a+"); \
+} while (0)
+
+#define vepu510_dump_hw_regs(dbg_ctx, regs, st_reg) do { \
+    vepu_hw_regs(dbg_ctx, (regs)->reg_ctl, VEPU510_CTL_OFFSET, "w+"); \
+    vepu_hw_regs(dbg_ctx, (regs)->reg_frm, VEPU510_FRAME_OFFSET, "a+"); \
+    vepu_hw_regs(dbg_ctx, (regs)->reg_rc_roi, VEPU510_RC_ROI_OFFSET, "a+"); \
+    vepu_hw_regs(dbg_ctx, (regs)->reg_param, VEPU510_PARAM_OFFSET, "a+"); \
+    vepu_hw_regs(dbg_ctx, (regs)->reg_sqi, VEPU510_SQI_OFFSET, "a+"); \
+    vepu_hw_regs(dbg_ctx, (regs)->reg_scl, VEPU510_SCL_OFFSET, "a+"); \
+    vepu_hw_regs(dbg_ctx, st_reg, VEPU510_STATUS_OFFSET, "a+"); \
+} while (0)
 
 typedef struct Vepu510Online_t {
     /* 0x00000270 reg156 */
@@ -875,6 +905,98 @@ typedef struct Vepu510RcRoi_t {
     /*0x00001080 reg1056 - 0x0000110c reg1091 */
     Vepu510RoiCfg roi_cfg;
 } Vepu510RcRoi;
+
+/* Shared wgt registers: reg1496 (0x1760) ~ reg1651 (0x19cc) */
+typedef struct Vepu510WgtCommon_t {
+    /* 0x00001760 reg1496 */
+    struct {
+        RK_U32 cime_pmv_num      : 1;
+        RK_U32 cime_fuse         : 1;
+        RK_U32 itp_mode          : 1;
+        RK_U32 reserved          : 1;
+        RK_U32 move_lambda       : 4;
+        RK_U32 rime_lvl_mrg      : 2;
+        RK_U32 rime_prelvl_en    : 2;
+        RK_U32 rime_prersu_en    : 3;
+        RK_U32 reserved1         : 17;
+    } me_sqi_comb;
+
+    /* 0x00001764 reg1497 */
+    struct {
+        RK_U32 cime_mvd_th0    : 9;
+        RK_U32 reserved        : 1;
+        RK_U32 cime_mvd_th1    : 9;
+        RK_U32 reserved1       : 1;
+        RK_U32 cime_mvd_th2    : 9;
+        RK_U32 reserved2       : 3;
+    } cime_mvd_th_comb;
+
+    /* 0x00001768 reg1498 */
+    struct {
+        RK_U32 cime_madp_th    : 12;
+        RK_U32 reserved        : 20;
+    } cime_madp_th_comb;
+
+    /* 0x0000176c reg1499 */
+    struct {
+        RK_U32 cime_multi0    : 8;
+        RK_U32 cime_multi1    : 8;
+        RK_U32 cime_multi2    : 8;
+        RK_U32 cime_multi3    : 8;
+    } cime_multi_comb;
+
+    /* 0x00001770 reg1500 */
+    struct {
+        RK_U32 rime_mvd_th0    : 3;
+        RK_U32 reserved        : 1;
+        RK_U32 rime_mvd_th1    : 3;
+        RK_U32 reserved1       : 9;
+        RK_U32 fme_madp_th     : 12;
+        RK_U32 reserved2       : 4;
+    } rime_mvd_th_comb;
+
+    /* 0x00001774 reg1501 */
+    struct {
+        RK_U32 rime_madp_th0    : 12;
+        RK_U32 reserved         : 4;
+        RK_U32 rime_madp_th1    : 12;
+        RK_U32 reserved1        : 4;
+    } rime_madp_th_comb;
+
+    /* 0x00001778 reg1502 */
+    struct {
+        RK_U32 rime_multi0    : 10;
+        RK_U32 rime_multi1    : 10;
+        RK_U32 rime_multi2    : 10;
+        RK_U32 reserved       : 2;
+    } rime_multi_comb;
+
+    /* 0x0000177c reg1503 */
+    struct {
+        RK_U32 cmv_th0     : 8;
+        RK_U32 cmv_th1     : 8;
+        RK_U32 cmv_th2     : 8;
+        RK_U32 reserved    : 8;
+    } cmv_st_th_comb;
+
+    /* 0x1780 - 0x17fc */
+    RK_U32 reserved1504_1535[32];
+
+    /* 0x00001800 reg1536 - 0x000018cc reg1587 */
+    RK_U32 pprd_lamb_satd_0_51[52];
+
+    /* 0x000018d0 reg1588 */
+    struct {
+        RK_U32 lambda_satd_offset    : 5;
+        RK_U32 reserved              : 27;
+    } iprd_lamb_satd_ofst;
+
+    /* 0x18d4 - 0x18fc */
+    RK_U32 reserved1589_1599[11];
+
+    /* 0x00001900 reg1600 - 0x000019cc reg1651 */
+    RK_U32 rdo_wgta_qp_grpa_0_51[52];
+} Vepu510WgtCommon;
 
 /* class: scaling list  */
 /* 0x00002200 reg2176- 0x00002584 reg2401*/

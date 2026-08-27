@@ -1,0 +1,31 @@
+From dba7f23ca14f103fafda7da7a9727ad4d1c6ad43 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Sun, 13 Aug 2023 11:25:25 +0800
+Subject: [PATCH 75/98] desktop-shell: Always respawn when disconnected
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ desktop-shell/shell.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/desktop-shell/shell.c b/desktop-shell/shell.c
+index be5df294..6002e7c6 100644
+--- a/desktop-shell/shell.c
++++ b/desktop-shell/shell.c
+@@ -4101,11 +4101,13 @@ respawn_desktop_shell_process(struct desktop_shell *shell)
+ 		shell->child.deathcount = 0;
+ 	}
+ 
++#if 0
+ 	shell->child.deathcount++;
+ 	if (shell->child.deathcount > 5) {
+ 		weston_log("%s disconnected, giving up.\n", shell->client);
+ 		return;
+ 	}
++#endif
+ 
+ 	weston_log("%s disconnected, respawning...\n", shell->client);
+ 	launch_desktop_shell_process(shell);
+-- 
+2.39.5
+

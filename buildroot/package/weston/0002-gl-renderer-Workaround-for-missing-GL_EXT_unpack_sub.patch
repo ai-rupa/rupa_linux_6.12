@@ -1,0 +1,52 @@
+From b31d4a272de831a62397ccfb0f065c89c1f4219c Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Wed, 27 Apr 2022 22:59:32 +0800
+Subject: [PATCH 02/98] gl-renderer: Workaround for missing
+ GL_EXT_unpack_subimage
+
+For old Mali GPUs (e.g. Utgard).
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ libweston/renderer-gl/gl-renderer.c | 11 +++++++----
+ 1 file changed, 7 insertions(+), 4 deletions(-)
+
+diff --git a/libweston/renderer-gl/gl-renderer.c b/libweston/renderer-gl/gl-renderer.c
+index cfc06a15..6225fc58 100644
+--- a/libweston/renderer-gl/gl-renderer.c
++++ b/libweston/renderer-gl/gl-renderer.c
+@@ -3350,7 +3350,8 @@ gl_renderer_flush_damage(struct weston_paint_node *pnode)
+ 
+ 	data = wl_shm_buffer_get_data(buffer->shm_buffer);
+ 
+-	if (gb->needs_full_upload || quirks->force_full_upload) {
++	if (gb->needs_full_upload || quirks->force_full_upload ||
++		!gl_extensions_has(gr, EXTENSION_EXT_UNPACK_SUBIMAGE)) {
+ 		wl_shm_buffer_begin_access(buffer->shm_buffer);
+ 
+ 		for (j = 0; j < gb->num_textures; j++) {
+@@ -3358,8 +3359,11 @@ gl_renderer_flush_damage(struct weston_paint_node *pnode)
+ 			int vsub = pixel_format_vsub(buffer->pixel_format, j);
+ 
+ 			glBindTexture(GL_TEXTURE_2D, gb->textures[j]);
+-			glPixelStorei(GL_UNPACK_ROW_LENGTH_EXT,
+-				      gb->pitch / hsub);
++
++			if (gl_extensions_has(gr, EXTENSION_EXT_UNPACK_SUBIMAGE))
++				glPixelStorei(GL_UNPACK_ROW_LENGTH_EXT,
++					      gb->pitch / hsub);
++
+ 			gl_texture_2d_store(gr, 0, 0, 0, buffer->width / hsub,
+ 					    buffer->height / vsub,
+ 					    gb->texture_format[j].external,
+@@ -5544,7 +5548,6 @@ gl_renderer_setup(struct weston_compositor *ec)
+ 	if (gr->gl_version < gl_version(3, 0) &&
+ 	    !gl_extensions_has(gr, EXTENSION_EXT_UNPACK_SUBIMAGE)) {
+ 		weston_log("GL_EXT_unpack_subimage not available.\n");
+-		return -1;
+ 	}
+ 
+ 	if (gl_extensions_has(gr, EXTENSION_OES_MAPBUFFER))
+-- 
+2.39.5
+

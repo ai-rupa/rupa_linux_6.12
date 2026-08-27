@@ -435,6 +435,9 @@ FakeCamHwIsp20::parse_rk_rawdata(void *rawdata, struct rk_aiq_vbuf *vbuf)
         }
     }
      if (_rawfmt.hdr_mode == 1) {
+         if (_finfo.lin_cis_total_gain <= 1.0f) {
+             _finfo.lin_cis_total_gain = _finfo.normal_gain;
+         }
          if (is_actual_rawdata) {
             vbuf->buf_info[0].data_addr = actual_raw[0];
             vbuf->buf_info[0].data_fd = 0;
@@ -464,6 +467,7 @@ FakeCamHwIsp20::parse_rk_rawdata(void *rawdata, struct rk_aiq_vbuf *vbuf)
          vbuf->buf_info[0].exp_gain = (float)_finfo.normal_gain;
          vbuf->buf_info[0].exp_time = (float)_finfo.normal_exp;
          vbuf->buf_info[0].exp_ispdgain = (float)_finfo.isp_dgain[0];
+         vbuf->buf_info[0].cis_total_gain = (float)_finfo.lin_cis_total_gain;
          vbuf->buf_info[0].exp_gain_reg = (uint32_t)_finfo.normal_gain_reg;
          vbuf->buf_info[0].exp_time_reg = (uint32_t)_finfo.normal_exp_reg;
          vbuf->buf_info[0].valid = true;
@@ -473,6 +477,12 @@ FakeCamHwIsp20::parse_rk_rawdata(void *rawdata, struct rk_aiq_vbuf *vbuf)
                                       vbuf->buf_info[0].exp_gain_reg,
                                       vbuf->buf_info[0].exp_time_reg);
     } else if (_rawfmt.hdr_mode == 2) {
+         if (_finfo.hdr_cis_total_gain[0] <= 1.0f) {
+             _finfo.hdr_cis_total_gain[0] = _finfo.hdr_gain_s;
+         }
+         if (_finfo.hdr_cis_total_gain[1] <= 1.0f) {
+             _finfo.hdr_cis_total_gain[1] = _finfo.hdr_gain_m;
+         }
          if (is_actual_rawdata) {
             vbuf->buf_info[0].data_addr = actual_raw[0];
             vbuf->buf_info[0].data_fd = 0;
@@ -496,6 +506,7 @@ FakeCamHwIsp20::parse_rk_rawdata(void *rawdata, struct rk_aiq_vbuf *vbuf)
          vbuf->buf_info[0].exp_gain = (float)_finfo.hdr_gain_s;
          vbuf->buf_info[0].exp_time = (float)_finfo.hdr_exp_s;
          vbuf->buf_info[0].exp_ispdgain = (float)_finfo.isp_dgain[0];
+         vbuf->buf_info[0].cis_total_gain = (float)_finfo.hdr_cis_total_gain[0];
          vbuf->buf_info[0].exp_gain_reg = (uint32_t)_finfo.hdr_gain_s_reg;
          vbuf->buf_info[0].exp_time_reg = (uint32_t)_finfo.hdr_exp_s_reg;
          vbuf->buf_info[0].valid = true;
@@ -531,6 +542,7 @@ FakeCamHwIsp20::parse_rk_rawdata(void *rawdata, struct rk_aiq_vbuf *vbuf)
          vbuf->buf_info[1].exp_gain = (float)_finfo.hdr_gain_m;
          vbuf->buf_info[1].exp_time = (float)_finfo.hdr_exp_m;
          vbuf->buf_info[1].exp_ispdgain = (float)_finfo.isp_dgain[1];
+         vbuf->buf_info[1].cis_total_gain = (float)_finfo.hdr_cis_total_gain[1];
          vbuf->buf_info[1].exp_gain_reg = (uint32_t)_finfo.hdr_gain_m_reg;
          vbuf->buf_info[1].exp_time_reg = (uint32_t)_finfo.hdr_exp_m_reg;
          vbuf->buf_info[1].valid = true;
@@ -544,6 +556,15 @@ FakeCamHwIsp20::parse_rk_rawdata(void *rawdata, struct rk_aiq_vbuf *vbuf)
                                       vbuf->buf_info[1].exp_gain_reg,
                                       vbuf->buf_info[1].exp_time_reg);
     } else if (_rawfmt.hdr_mode == 3) {
+         if (_finfo.hdr_cis_total_gain[0] <= 1.0f) {
+             _finfo.hdr_cis_total_gain[0] = _finfo.hdr_gain_s;
+         }
+         if (_finfo.hdr_cis_total_gain[1] <= 1.0f) {
+             _finfo.hdr_cis_total_gain[1] = _finfo.hdr_gain_m;
+         }
+         if (_finfo.hdr_cis_total_gain[2] <= 1.0f) {
+             _finfo.hdr_cis_total_gain[2] = _finfo.hdr_gain_l;
+         }
          if (is_actual_rawdata) {
             vbuf->buf_info[0].data_addr = actual_raw[0];
             vbuf->buf_info[0].data_fd = 0;
@@ -567,6 +588,7 @@ FakeCamHwIsp20::parse_rk_rawdata(void *rawdata, struct rk_aiq_vbuf *vbuf)
          vbuf->buf_info[0].exp_gain = (float)_finfo.hdr_gain_s;
          vbuf->buf_info[0].exp_time = (float)_finfo.hdr_exp_s;
          vbuf->buf_info[0].exp_ispdgain = (float)_finfo.isp_dgain[0];
+         vbuf->buf_info[0].cis_total_gain = (float)_finfo.hdr_cis_total_gain[0];
          vbuf->buf_info[0].exp_gain_reg = (uint32_t)_finfo.hdr_gain_s_reg;
          vbuf->buf_info[0].exp_time_reg = (uint32_t)_finfo.hdr_exp_s_reg;
          vbuf->buf_info[0].valid = true;
@@ -603,6 +625,7 @@ FakeCamHwIsp20::parse_rk_rawdata(void *rawdata, struct rk_aiq_vbuf *vbuf)
          vbuf->buf_info[1].exp_gain = (float)_finfo.hdr_gain_m;
          vbuf->buf_info[1].exp_time = (float)_finfo.hdr_exp_m;
          vbuf->buf_info[1].exp_ispdgain = (float)_finfo.isp_dgain[1];
+         vbuf->buf_info[1].cis_total_gain = (float)_finfo.hdr_cis_total_gain[1];
          vbuf->buf_info[1].exp_gain_reg = (uint32_t)_finfo.hdr_gain_m_reg;
          vbuf->buf_info[1].exp_time_reg = (uint32_t)_finfo.hdr_exp_m_reg;
          vbuf->buf_info[1].valid = true;
@@ -639,6 +662,7 @@ FakeCamHwIsp20::parse_rk_rawdata(void *rawdata, struct rk_aiq_vbuf *vbuf)
          vbuf->buf_info[2].exp_gain = (float)_finfo.hdr_gain_l;
          vbuf->buf_info[2].exp_time = (float)_finfo.hdr_exp_l;
          vbuf->buf_info[2].exp_ispdgain = (float)_finfo.isp_dgain[2];
+         vbuf->buf_info[2].cis_total_gain = (float)_finfo.hdr_cis_total_gain[2];
          vbuf->buf_info[2].exp_gain_reg = (uint32_t)_finfo.hdr_gain_l_reg;
          vbuf->buf_info[2].exp_time_reg = (uint32_t)_finfo.hdr_exp_l_reg;
          vbuf->buf_info[2].valid = true;
@@ -796,6 +820,9 @@ FakeCamHwIsp20::parse_rk_rawfile(FILE *fp, struct rk_aiq_vbuf *vbuf)
         }
     }
      if (_rawfmt.hdr_mode == 1) {
+         if (_finfo.lin_cis_total_gain <= 1.0f) {
+             _finfo.lin_cis_total_gain = _finfo.normal_gain;
+         }
           LOGD_CAMHW_SUBM(FAKECAM_SUBM,"data_addr=%p,fd=%d,length=%d\n",
                                        vbuf->buf_info[0].data_addr,
                                        vbuf->buf_info[0].data_fd,
@@ -805,6 +832,7 @@ FakeCamHwIsp20::parse_rk_rawfile(FILE *fp, struct rk_aiq_vbuf *vbuf)
          vbuf->buf_info[0].exp_gain = (float)_finfo.normal_gain;
          vbuf->buf_info[0].exp_time = (float)_finfo.normal_exp;
          vbuf->buf_info[0].exp_ispdgain = (float)_finfo.isp_dgain[0];
+         vbuf->buf_info[0].cis_total_gain = (float)_finfo.lin_cis_total_gain;
          vbuf->buf_info[0].exp_gain_reg = (uint32_t)_finfo.normal_gain_reg;
          vbuf->buf_info[0].exp_time_reg = (uint32_t)_finfo.normal_exp_reg;
          vbuf->buf_info[0].valid = true;
@@ -814,10 +842,17 @@ FakeCamHwIsp20::parse_rk_rawfile(FILE *fp, struct rk_aiq_vbuf *vbuf)
                                       vbuf->buf_info[0].exp_gain_reg,
                                       vbuf->buf_info[0].exp_time_reg);
     }else if (_rawfmt.hdr_mode == 2) {
+         if (_finfo.hdr_cis_total_gain[0] <= 1.0f) {
+             _finfo.hdr_cis_total_gain[0] = _finfo.hdr_gain_s;
+         }
+         if (_finfo.hdr_cis_total_gain[1] <= 1.0f) {
+             _finfo.hdr_cis_total_gain[1] = _finfo.hdr_gain_m;
+         }
          vbuf->buf_info[0].frame_id = _rawfmt.frame_id;
          vbuf->buf_info[0].exp_gain = (float)_finfo.hdr_gain_s;
          vbuf->buf_info[0].exp_time = (float)_finfo.hdr_exp_s;
          vbuf->buf_info[0].exp_ispdgain = (float)_finfo.isp_dgain[0];
+         vbuf->buf_info[0].cis_total_gain = (float)_finfo.hdr_cis_total_gain[0];
          vbuf->buf_info[0].exp_gain_reg = (uint32_t)_finfo.hdr_gain_s_reg;
          vbuf->buf_info[0].exp_time_reg = (uint32_t)_finfo.hdr_exp_s_reg;
          vbuf->buf_info[0].valid = true;
@@ -835,6 +870,7 @@ FakeCamHwIsp20::parse_rk_rawfile(FILE *fp, struct rk_aiq_vbuf *vbuf)
          vbuf->buf_info[1].exp_gain = (float)_finfo.hdr_gain_m;
          vbuf->buf_info[1].exp_time = (float)_finfo.hdr_exp_m;
          vbuf->buf_info[1].exp_ispdgain = (float)_finfo.isp_dgain[1];
+         vbuf->buf_info[1].cis_total_gain = (float)_finfo.hdr_cis_total_gain[1];
          vbuf->buf_info[1].exp_gain_reg = (uint32_t)_finfo.hdr_gain_m_reg;
          vbuf->buf_info[1].exp_time_reg = (uint32_t)_finfo.hdr_exp_m_reg;
          vbuf->buf_info[1].valid = true;
@@ -848,10 +884,20 @@ FakeCamHwIsp20::parse_rk_rawfile(FILE *fp, struct rk_aiq_vbuf *vbuf)
                                       vbuf->buf_info[1].exp_gain_reg,
                                       vbuf->buf_info[1].exp_time_reg);
     }else if (_rawfmt.hdr_mode == 3) {
+         if (_finfo.hdr_cis_total_gain[0] <= 1.0f) {
+             _finfo.hdr_cis_total_gain[0] = _finfo.hdr_gain_s;
+         }
+         if (_finfo.hdr_cis_total_gain[1] <= 1.0f) {
+             _finfo.hdr_cis_total_gain[1] = _finfo.hdr_gain_m;
+         }
+         if (_finfo.hdr_cis_total_gain[2] <= 1.0f) {
+             _finfo.hdr_cis_total_gain[2] = _finfo.hdr_gain_l;
+         }
          vbuf->buf_info[0].frame_id = _rawfmt.frame_id;
          vbuf->buf_info[0].exp_gain = (float)_finfo.hdr_gain_s;
          vbuf->buf_info[0].exp_time = (float)_finfo.hdr_exp_s;
          vbuf->buf_info[0].exp_ispdgain = (float)_finfo.isp_dgain[0];
+         vbuf->buf_info[0].cis_total_gain = (float)_finfo.hdr_cis_total_gain[0];
          vbuf->buf_info[0].exp_gain_reg = (uint32_t)_finfo.hdr_gain_s_reg;
          vbuf->buf_info[0].exp_time_reg = (uint32_t)_finfo.hdr_exp_s_reg;
          vbuf->buf_info[0].valid = true;
@@ -869,6 +915,7 @@ FakeCamHwIsp20::parse_rk_rawfile(FILE *fp, struct rk_aiq_vbuf *vbuf)
          vbuf->buf_info[1].exp_gain = (float)_finfo.hdr_gain_m;
          vbuf->buf_info[1].exp_time = (float)_finfo.hdr_exp_m;
          vbuf->buf_info[1].exp_ispdgain = (float)_finfo.isp_dgain[1];
+         vbuf->buf_info[1].cis_total_gain = (float)_finfo.hdr_cis_total_gain[1];
          vbuf->buf_info[1].exp_gain_reg = (uint32_t)_finfo.hdr_gain_m_reg;
          vbuf->buf_info[1].exp_time_reg = (uint32_t)_finfo.hdr_exp_m_reg;
          vbuf->buf_info[1].valid = true;
@@ -886,6 +933,7 @@ FakeCamHwIsp20::parse_rk_rawfile(FILE *fp, struct rk_aiq_vbuf *vbuf)
          vbuf->buf_info[2].exp_gain = (float)_finfo.hdr_gain_l;
          vbuf->buf_info[2].exp_time = (float)_finfo.hdr_exp_l;
          vbuf->buf_info[2].exp_ispdgain = (float)_finfo.isp_dgain[2];
+         vbuf->buf_info[2].cis_total_gain = (float)_finfo.hdr_cis_total_gain[2];
          vbuf->buf_info[2].exp_gain_reg = (uint32_t)_finfo.hdr_gain_l_reg;
          vbuf->buf_info[2].exp_time_reg = (uint32_t)_finfo.hdr_exp_l_reg;
          vbuf->buf_info[2].valid = true;

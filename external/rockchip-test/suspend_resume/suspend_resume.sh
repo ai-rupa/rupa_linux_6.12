@@ -1,48 +1,38 @@
 #!/bin/bash
+# suspend_resume/suspend_resume.sh - Suspend-to-RAM test
 
-RESULT_DIR=/userdata/rockchip-test/
-RESULT_LOG=${RESULT_DIR}/suspend_resume.txt
+DIR_SR="$(cd "$(dirname "$0")" && pwd)"
+source "${DIR_SR}/../common/common.sh"
+
 SUSPEND_TIME=60
 WAKE_DELAY=5
 MAX_CYCLES=10000
 
-# Get device compatibility (handle null delimiter)
-COMPATIBLE=$(tr '\0' ' ' < /proc/device-tree/compatible)
-
-# Debug options
-# To enable the debug configuration, the CONFIG_RK_CONSOLE_THREAD in the kernel configuration needs to be disabled.
-# echo N > /sys/module/printk/parameters/console_suspend
-# echo 1 > /sys/power/pm_print_times
-
 # Verify RTC existence
-if [ ! -e "/sys/class/rtc/rtc0/wakealarm" ]; then
-    echo "RTC not detected, please check RTC configuration"
+if [[ ! -e "/sys/class/rtc/rtc0/wakealarm" ]]; then
+    log_error "suspend_resume" "RTC not detected, please check RTC configuration"
     exit 1
 fi
 
 # Platform-specific configuration
-if [[ "$COMPATIBLE" =~ "rv1126b" ]]; then
-    echo "RV1126B platform detected, skipping DMC governor and wake interval setup"
-    # For non-RV1126B platforms:
-    # 2. Configure hardware wake interval (0x8000 = 1 second wake interval)
+if [[ "$SOC_FAMILY" == "rv1126b" ]]; then
+    log_info "suspend_resume" "RV1126B platform detected, skipping DMC governor and wake interval setup"
+    # Configure hardware wake interval (0x8000 = 1 second wake interval)
     io -4 0x20834310 0x8000
     SUSPEND_TIME=1
-else
-    continue
 fi
 
-# Create result directory
-mkdir -p ${RESULT_DIR}
+TEST_ID=$(test_begin "suspend_resume" "rtc" "Suspend/resume test: $MAX_CYCLES cycles, ${SUSPEND_TIME}s suspend")
 
 auto_suspend_resume_rtc() {
     local cnt=0
 
     # Sync system time to RTC
     hwclock --systohc
-    echo "$(date): Automated suspend/resume test initiated" > ${RESULT_LOG}
+    log_info "suspend_resume" "Automated suspend/resume test initiated"
 
-    while [ $cnt -lt $MAX_CYCLES ]; do
-        echo "Completed $cnt suspend/resume cycles"
+    while [[ $cnt -lt $MAX_CYCLES ]]; do
+        log_info "suspend_resume" "Cycle $cnt/$MAX_CYCLES"
 
         # Set RTC wakeup timer
         echo 0 > /sys/class/rtc/rtc0/wakealarm
@@ -52,15 +42,15 @@ auto_suspend_resume_rtc() {
         pm-suspend
 
         # Post-wakeup handling
-        echo "System resumed, next cycle in ${WAKE_DELAY} seconds"
-        sleep ${WAKE_DELAY}
-
-        # Log status
-        echo "$(date): Cycle: $cnt - Suspend: ${SUSPEND_TIME}s Wake delay: ${WAKE_DELAY}s" >> ${RESULT_LOG}
+        log_debug "suspend_resume" "System resumed, next cycle in ${WAKE_DELAY}s"
+        sleep "${WAKE_DELAY}"
 
         cnt=$((cnt + 1))
     done
+
+    test_end "$TEST_ID" "PASS" "Completed $MAX_CYCLES suspend/resume cycles"
 }
 
-# Start test sequence
+set +e
 auto_suspend_resume_rtc
+set -e

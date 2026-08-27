@@ -4,7 +4,7 @@ if(NOT CMAKE_BUILD_TYPE)
         FORCE)
 endif()
 
-cmake_minimum_required(VERSION 2.8...3.22)
+cmake_minimum_required(VERSION 3.5)
 
 PROJECT(rkisp_demo)
 
@@ -237,3 +237,5 @@ else ()
 endif()
 target_link_libraries(rkisp_demo
     m)
+
+install(TARGETS rkisp_demo RUNTIME DESTINATION bin)

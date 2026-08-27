@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 2.8.0 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.5)
 option(COMPILE_FOR_UVC_TINY_RV1126B_4K "compile for uvc tiny rv1126b 4k" OFF)
 option(COMPILE_FOR_UVC_TINY_RV1126B_WINHELLO "compile for uvc tiny rv1126b winhello" OFF)
 option(COMPILE_FOR_UVC_TINY_RK3588_4K "compile for uvc tiny rk3588 4k" OFF)

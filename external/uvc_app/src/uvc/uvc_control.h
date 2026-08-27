@@ -37,6 +37,7 @@
 extern "C" {
 #endif
 #include "uvc_process_unit.h"
+#include "uvc_video.h"
 #include <stdint.h>
 
 #ifdef USE_RK_MODULE

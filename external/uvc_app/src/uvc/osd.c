@@ -32,6 +32,7 @@
 
 #include "osd.h"
 #include "osd_rockchip_logo.h"
+#include "param.h"
 #include "uvc_log.h"
 #include "uvc_mpi_config.h"
 #include "uvc_video.h"
@@ -302,6 +303,7 @@ static RK_S32 osd_test_init(UVC_MPI_CFG *uvcCfg) {
   RK_S32 s32Ret;
 
   if (uvcCfg->uvc_cfg.fcc == V4L2_PIX_FMT_YUYV ||
+      uvcCfg->uvc_cfg.fcc == V4L2_PIX_FMT_BGR24 ||
       uvcCfg->osd_cfg.force_use_vpss) {
     mppChn.enModId = RK_ID_VPSS;
     mppChn.s32DevId = uvcCfg->vpss_cfg[MPI_VPSS_CHANNEL_TYPE_UVC].group_id;
@@ -333,6 +335,7 @@ static RK_S32 osd_test_deinit(UVC_MPI_CFG *uvcCfg) {
   RGN_HANDLE handle_2bpp = 1 + 3 * uvcCfg->vi_cfg->dev_id;
   RGN_HANDLE handle_asd = 2 + 3 * uvcCfg->vi_cfg->dev_id;
   if (uvcCfg->uvc_cfg.fcc == V4L2_PIX_FMT_YUYV ||
+      uvcCfg->uvc_cfg.fcc == V4L2_PIX_FMT_BGR24 ||
       uvcCfg->osd_cfg.force_use_vpss) {
     mppChn.enModId = RK_ID_VPSS;
     mppChn.s32DevId = uvcCfg->vpss_cfg[MPI_VPSS_CHANNEL_TYPE_UVC].group_id;

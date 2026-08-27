@@ -1,0 +1,43 @@
+From 371ae3a428d7c6a6783ab1124b562129eb8ceeaf Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Fri, 27 May 2022 15:39:10 +0800
+Subject: [PATCH 64/98] compositor: Update animation before repainting outputs
+
+Update animation states before output repaint to prevent visual jumps
+after system resume, ensuring animations use current time for calculations.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ libweston/compositor.c | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/libweston/compositor.c b/libweston/compositor.c
+index be9e81a2..294a44dc 100644
+--- a/libweston/compositor.c
++++ b/libweston/compositor.c
+@@ -4389,12 +4389,22 @@ output_repaint_timer_handler(int fd, uint32_t mask, void *data)
+ 			backend->repaint_begin(backend);
+ 
+ 		wl_list_for_each(output, &compositor->output_list, link) {
++			struct weston_animation *animation, *next;
++
+ 			if (output->backend != backend)
+ 				continue;
+ 
+ 			if (!output->will_repaint)
+ 				continue;
+ 
++			/* Update animations before repainting to ensure correct
++			 * animation state after system suspend/resume cycles.
++			 * This prevents visual jumps in animations when
++			 * repainting resumes after a long pause. */
++			wl_list_for_each_safe(animation, next,
++					      &output->animation_list, link)
++				animation->frame(animation, output, &now);
++
+ 			ret = weston_output_repaint(output);
+ 			if (ret)
+ 				break;
+-- 
+2.39.5
+

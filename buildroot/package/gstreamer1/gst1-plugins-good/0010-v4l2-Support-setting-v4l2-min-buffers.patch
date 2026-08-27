@@ -1,4 +1,4 @@
-From 7663f32b96cd97727bb7369f80c2569885bd6879 Mon Sep 17 00:00:00 2001
+From e7fc918739e6e5ba2fd03a0c89594f12e3d1b9e3 Mon Sep 17 00:00:00 2001
 From: Jeffy Chen <jeffy.chen@rock-chips.com>
 Date: Thu, 23 Jun 2022 16:04:18 +0800
 Subject: [PATCH 10/12] v4l2: Support setting v4l2 min buffers
@@ -13,7 +13,7 @@ Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
  2 files changed, 26 insertions(+), 1 deletion(-)
 
 diff --git a/sys/v4l2/gstv4l2object.c b/sys/v4l2/gstv4l2object.c
-index 8045b10..7b9c3bd 100644
+index ebba0b7..db742b0 100644
 --- a/sys/v4l2/gstv4l2object.c
 +++ b/sys/v4l2/gstv4l2object.c
 @@ -60,6 +60,8 @@ GST_DEBUG_CATEGORY_EXTERN (v4l2_debug);
@@ -25,7 +25,7 @@ index 8045b10..7b9c3bd 100644
  enum
  {
    PROP_0,
-@@ -399,6 +401,11 @@ void
+@@ -400,6 +402,11 @@ void
  gst_v4l2_object_install_properties_helper (GObjectClass * gobject_class,
      const char *default_device)
  {
@@ -37,7 +37,7 @@ index 8045b10..7b9c3bd 100644
    g_object_class_install_property (gobject_class, PROP_DEVICE,
        g_param_spec_string ("device", "Device", "Device location",
            default_device, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-@@ -518,6 +525,12 @@ gst_v4l2_object_install_properties_helper (GObjectClass * gobject_class,
+@@ -519,6 +526,12 @@ gst_v4l2_object_install_properties_helper (GObjectClass * gobject_class,
            "When enabled, the pixel aspect ratio will be enforced", TRUE,
            G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
  
@@ -50,7 +50,7 @@ index 8045b10..7b9c3bd 100644
    gst_type_mark_as_plugin_api (GST_TYPE_V4L2_DEVICE_FLAGS, 0);
    gst_type_mark_as_plugin_api (GST_TYPE_V4L2_TV_NORM, 0);
    gst_type_mark_as_plugin_api (GST_TYPE_V4L2_IO_MODE, 0);
-@@ -659,6 +672,8 @@ gst_v4l2_object_new (GstElement * element,
+@@ -662,6 +675,8 @@ gst_v4l2_object_new (GstElement * element,
      v4l2object->munmap = munmap;
    }
  
@@ -59,7 +59,7 @@ index 8045b10..7b9c3bd 100644
    return v4l2object;
  }
  
-@@ -831,6 +846,9 @@ gst_v4l2_object_set_property_helper (GstV4l2Object * v4l2object,
+@@ -834,6 +849,9 @@ gst_v4l2_object_set_property_helper (GstV4l2Object * v4l2object,
      case PROP_FORCE_ASPECT_RATIO:
        v4l2object->keep_aspect = g_value_get_boolean (value);
        break;
@@ -69,7 +69,7 @@ index 8045b10..7b9c3bd 100644
      default:
        return FALSE;
        break;
-@@ -928,6 +946,9 @@ gst_v4l2_object_get_property_helper (GstV4l2Object * v4l2object,
+@@ -931,6 +949,9 @@ gst_v4l2_object_get_property_helper (GstV4l2Object * v4l2object,
      case PROP_FORCE_ASPECT_RATIO:
        g_value_set_boolean (value, v4l2object->keep_aspect);
        break;
@@ -79,7 +79,7 @@ index 8045b10..7b9c3bd 100644
      default:
        return FALSE;
        break;
-@@ -940,6 +961,9 @@ gst_v4l2_get_driver_min_buffers (GstV4l2Object * v4l2object)
+@@ -943,6 +964,9 @@ gst_v4l2_get_driver_min_buffers (GstV4l2Object * v4l2object)
  {
    struct v4l2_control control = { 0, };
  

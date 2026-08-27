@@ -169,7 +169,7 @@ template <class T, int INIT>
 class DynArray
 {
 public:
-    DynArray< T, INIT >()
+    DynArray()
     {
         mem = pool;
         allocated = INIT;

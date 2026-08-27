@@ -31,6 +31,7 @@ enum {
 	RK_DRV_NR_GET_INFO,
 	RK_DRV_NR_SET_HDCP_BYPASS,
 	RK_DRV_NR_GET_HDCP_BYPASS,
+	RK_DRV_NR_SET_HDCP14,
 
 	HL_DRV_NR_MAX
 };
@@ -38,6 +39,8 @@ enum {
 enum dw_hdcp_event {
 	DW_HDCP_SET_HDMI_BYPASS_EVENT = 0x01,
 	DW_HDCP_GET_HDMI_BYPASS_EVENT,
+	DW_HDCP_GET_HDMI_CONNECT_STATUS,
+	DW_HDCP_SET_HDMI_HDCP14_EVENT,
 	DW_HDCP_EVENT_MAX
 };
 
@@ -159,8 +162,10 @@ struct hl_drv_ioc_intf_info {
 struct hdcp_event {
 	__u8 port;
 	__u8 bypass;
+	__u8 connect_status;
 };
 
 #define RK_DRV_IOC_GET_HDCP_BYPASS _IOWR('H', RK_DRV_NR_GET_HDCP_BYPASS, struct hdcp_event)
+#define RK_DRV_IOC_SET_HDCP14 _IOW('H', RK_DRV_NR_SET_HDCP14, struct hdcp_event)
 
 #endif /* _DW_HDCP_HOST_LIB_DRIVER_LINUX_IF_H_ */

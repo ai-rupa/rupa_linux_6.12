@@ -525,7 +525,9 @@ XCamReturn AiqAlgoHandler_genIspResult_byType(AiqAlgoHandler_t* pAlgoHandler,
             pBase->bypass    = pCurBase->bypass;
             pBase->is_update = true;
         } else {
-            LOGE("%s: no latest params !", ResTypeStr);
+            LOGW("%s: no latest params !", ResTypeStr);
+            //fallback in case algo didn't output initial params
+            cur_params->pParamsArray[restype] = pBase;
             pBase->is_update = false;
         }
         LOGD("%s: [%d] params from latest [%d]", ResTypeStr, shared->frameId, pAlgoHandler->mSyncFlag);

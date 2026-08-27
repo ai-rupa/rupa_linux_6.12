@@ -1,0 +1,31 @@
+From 55e217e184fc599228e16554b3b0b779bd5699f8 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Fri, 10 Apr 2026 18:16:55 +0800
+Subject: [PATCH 67/98] renderer-gl: Zero RGB for fully transparent fragments
+
+Set RGB to black when alpha is zero to avoid potential color bleeding
+from transparent fragments during blending operations.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ libweston/renderer-gl/fragment.glsl | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/libweston/renderer-gl/fragment.glsl b/libweston/renderer-gl/fragment.glsl
+index c7b4f5f8..c78974e4 100644
+--- a/libweston/renderer-gl/fragment.glsl
++++ b/libweston/renderer-gl/fragment.glsl
+@@ -557,6 +557,10 @@ fragment_input_color_premult()
+ 		color = color * vec4(1.0 - src.a) + src;
+ 	}
+ 
++	/* Zero RGB for fully transparent fragments to prevent color artifacts */
++	if (color.a == 0.0)
++		color.rgb = vec3(0, 0, 0);
++
+ 	return color;
+ }
+ 
+-- 
+2.39.5
+

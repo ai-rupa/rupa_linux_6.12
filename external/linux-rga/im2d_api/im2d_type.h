@@ -150,6 +150,7 @@ typedef enum {
     IM_RGB_TO_YUV_BT601_LIMIT   = 2 << 2,
     IM_RGB_TO_YUV_BT709_LIMIT   = 3 << 2,
     IM_RGB_TO_YUV_MASK          = 3 << 2,
+    IM_LEGACY_CSC_MASK          = (IM_YUV_TO_RGB_MASK | IM_RGB_TO_YUV_MASK),
     IM_RGB_TO_Y4                = 1 << 4,
     IM_RGB_TO_Y4_DITHER         = 2 << 4,
     IM_RGB_TO_Y1_DITHER         = 3 << 4,
@@ -160,6 +161,12 @@ typedef enum {
     IM_YUV_BT601_FULL_RANGE     = 4 << 8,
     IM_YUV_BT709_LIMIT_RANGE    = 5 << 8,
     IM_YUV_BT709_FULL_RANGE     = 6 << 8,
+    IM_YUV_BT2020_LIMIT_RANGE   = 7 << 8,
+    IM_YUV_BT2020_FULL_RANGE    = 8 << 8,
+    IM_RGB_FULL_RANGE           = IM_RGB_FULL,
+    IM_RGB_LIMIT_RANGE          = IM_RGB_CLIP,
+    IM_RGB_BT2020_LIMIT_RANGE   = 9 << 8,
+    IM_RGB_BT2020_FULL_RANGE    = 10 << 8,
     IM_FULL_CSC_MASK            = 0xf << 8,
     IM_COLOR_SPACE_DEFAULT      = 0,
 } IM_COLOR_SPACE_MODE;
@@ -349,12 +356,12 @@ typedef struct {
 
 
 typedef struct im_nn {
-    int scale_r;                /* scaling factor on R channal */
-    int scale_g;                /* scaling factor on G channal */
-    int scale_b;                /* scaling factor on B channal */
-    int offset_r;               /* offset on R channal */
-    int offset_g;               /* offset on G channal */
-    int offset_b;               /* offset on B channal */
+    int scale_r;                /* scaling factor on R channel */
+    int scale_g;                /* scaling factor on G channel */
+    int scale_b;                /* scaling factor on B channel */
+    int offset_r;               /* offset on R channel */
+    int offset_g;               /* offset on G channel */
+    int offset_b;               /* offset on B channel */
 } im_nn_t;
 
 /* im_info definition */
@@ -454,7 +461,7 @@ typedef struct im_osd_invert {
                                 //   IM_OSD_INVERT_CHANNEL_ALPHA
                                 //   IM_OSD_INVERT_CHANNEL_COLOR
                                 //   IM_OSD_INVERT_CHANNEL_BOTH
-    int flags_mode;             // use external or inertnal RAM invert flags
+    int flags_mode;             // use external or internal RAM invert flags
                                 //   IM_OSD_FLAGS_EXTERNAL
                                 //   IM_OSD_FLAGS_INTERNAL
     int flags_index;            // flags index when using internal RAM invert flags
@@ -467,7 +474,10 @@ typedef struct im_osd_invert {
                                 //   IM_OSD_INVERT_USE_SWAP
     im_osd_invert_factor_t factor;
 
-    int threash;
+    union {
+        int threash;            // Deprecated typo, do not use.
+        int threshold;
+    };
 } im_osd_invert_t;
 
 typedef struct im_osd {

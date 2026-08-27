@@ -1,7 +1,7 @@
-From 4c9b9420f2d5b8c7a9a6b42ef26046f81fb58a1f Mon Sep 17 00:00:00 2001
+From 101d3240dd1b4f513f7b246c7e92667e4428126a Mon Sep 17 00:00:00 2001
 From: "james.lin" <james.lin@rock-chips.com>
 Date: Tue, 17 Apr 2018 11:14:01 +0800
-Subject: [PATCH 02/43] interim fix vc1 stream may memory leak when pending
+Subject: [PATCH 02/41] interim fix vc1 stream may memory leak when pending
 
 Signed-off-by: james.lin <james.lin@rock-chips.com>
 Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
@@ -10,10 +10,10 @@ Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
  1 file changed, 8 insertions(+)
 
 diff --git a/gst/mpegtsdemux/tsdemux.c b/gst/mpegtsdemux/tsdemux.c
-index def790e..e82ab81 100644
+index a0c30e9..7466d02 100644
 --- a/gst/mpegtsdemux/tsdemux.c
 +++ b/gst/mpegtsdemux/tsdemux.c
-@@ -3735,6 +3735,14 @@ gst_ts_demux_push_pending_data (GstTSDemux * demux, TSDemuxStream * stream,
+@@ -3724,6 +3724,14 @@ gst_ts_demux_push_pending_data (GstTSDemux * demux, TSDemuxStream * stream,
  
      if (G_UNLIKELY (stream->pending_ts && !check_pending_buffers (demux))) {
        if (buffer) {

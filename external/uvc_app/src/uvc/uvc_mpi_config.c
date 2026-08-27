@@ -1258,6 +1258,7 @@ static int parse_check_uvc_mpi_venc_cfg(cJSON *root, UVC_MPI_CFG *mpiCfg,
   case V4L2_PIX_FMT_YUYV:
   case V4L2_PIX_FMT_NV12:
   case V4L2_PIX_FMT_UYVY:
+  case V4L2_PIX_FMT_BGR24:
     break;
   case V4L2_PIX_FMT_MJPEG:
     ret |= parse_check_uvc_mpi_venc_common_cfg(child_venc_cfg, mpiCfg, init);

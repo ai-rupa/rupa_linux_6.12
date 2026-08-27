@@ -1477,3 +1477,8 @@ int rk_isp_asd_get_face_win(int cam_id, FaceInfo *face_info) {
 		memset(face_info, 0, sizeof(FaceInfo));
 	return 0;
 }
+
+bool rk_isp_need_raw_pipe_ctrl(int cam_id) {
+	(void)cam_id;
+	return false;
+}

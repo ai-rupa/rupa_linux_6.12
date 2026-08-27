@@ -1,6 +1,8 @@
 #!/bin/bash -e
+# chromium/test_chromium_with_video.sh - Chromium with video playback test
 
-PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+DIR_CHROMIUM="$(cd "$(dirname "$0")" && pwd)"
+source "${DIR_CHROMIUM}/../common/common.sh"
 
 export mpp_syslog_perror=1
 
@@ -12,23 +14,7 @@ else
     echo 0x100 > /sys/module/rk_vcodec/parameters/mpp_dev_debug
 fi
 
-# Set performance mode
-echo performance | tee $(find /sys/ -name *governor) /dev/null || true
-
-# Improved chip detection logic
-detect_chip() {
-    local compatible
-    compatible=$(cat /proc/device-tree/compatible 2>/dev/null || echo "")
-
-    if [[ "$compatible" =~ "rk3328" ]]; then
-        echo "rk3328"
-    else
-        echo "rockchip"
-    fi
-}
-
-CHIPNAME=$(detect_chip)
-echo "Detected chip: $CHIPNAME"
+set_performance_governor
 
 # Create device node and symbolic link
 touch /dev/video-dec0
@@ -45,19 +31,20 @@ CHROMIUM_ARGS=(
     "--enable-wayland-ime"
 )
 
-# Adjust parameters based on chip type
-if [[ "$CHIPNAME" == "rk3328" ]]; then
+# RK3328 specific optimization
+if [[ "$SOC_FAMILY" == "rk3328" ]]; then
     CHROMIUM_ARGS+=("--in-process-gpu")
-    echo "Applying RK3328 specific optimizations"
+    log_info "chromium" "Applying RK3328 specific optimizations"
 fi
 
-# Launch Chromium
+TEST_ID=$(test_begin "chromium" "chromium" "Chromium video test on $SOC_FAMILY")
+log_info "chromium" "Detected SoC: $SOC_FAMILY"
+
 if [[ -e "/usr/bin/chromium" ]]; then
     chromium "${CHROMIUM_ARGS[@]}" "file:///oem/SampleVideo_1280x720_5mb.mp4"
+    test_end "$TEST_ID" "PASS"
 else
-    echo "Error: Chromium not found at /usr/bin/chromium"
-    echo "Please ensure the config/rockchip_xxxx_defconfig includes 'chromium.config'"
+    log_error "chromium" "Chromium not found at /usr/bin/chromium"
+    test_end "$TEST_ID" "FAIL" "Chromium not installed"
     exit 1
 fi
-
-echo "The governor is set to performance mode. A restart may be required for full effect."

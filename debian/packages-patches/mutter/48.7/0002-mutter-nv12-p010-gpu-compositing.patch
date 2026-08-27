@@ -1,0 +1,111 @@
+From 77ce0cff942b4731e082c8898d0c33af41cd8607 Mon Sep 17 00:00:00 2001
+From: Weiye Chen <weiye.chen@rock-chips.com>
+Date: Sat, 16 May 2026 08:50:47 +0000
+Subject: [PATCH 2/3] mutter: NV12/P010/NV15 GPU compositing via
+ GL_OES_EGL_image_external
+
+meta-multi-texture-format:
+- Add NV12_EXT_OES and P010_EXT_OES format entries using passthrough
+  samplerExternalOES shader (GPU performs YUV->RGB via EGL color hints)
+- Add nv12_ext_oes_shader (passthrough: GPU handles format conversion)
+
+debian/rules:
+- dh_shlibdeps: add -x libmali + --ignore-missing-info to exclude
+  GPU-board-specific mali dependency from package Depends
+
+Change-Id: I203e81c0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c
+Signed-off-by: Weiye Chen <weiye.chen@rock-chips.com>
+---
+ debian/rules                               |  3 +-
+ src/compositor/meta-multi-texture-format.c | 35 ++++++++++++++++++++++
+ src/meta/meta-multi-texture-format.h       | 10 +++++++
+ 3 files changed, 47 insertions(+), 1 deletion(-)
+
+diff --git a/debian/rules b/debian/rules
+index 19c720f..639bd11 100755
+--- a/debian/rules
++++ b/debian/rules
+@@ -94,4 +94,5 @@ override_dh_makeshlibs:
+
+ override_dh_shlibdeps:
+ 	dh_shlibdeps -Llibmutter-$(MUTTER_API_VERSION)-$(MUTTER_SONAME) \
+-		-l/usr/lib/$(DEB_HOST_MULTIARCH)/mutter-$(MUTTER_API_VERSION)
++		-l/usr/lib/$(DEB_HOST_MULTIARCH)/mutter-$(MUTTER_API_VERSION) \
++		-- -x libmali-valhall-g310-g29p1-wayland-gbm --ignore-missing-info
+diff --git a/src/compositor/meta-multi-texture-format.c b/src/compositor/meta-multi-texture-format.c
+index fa27efa..8ad49c9 100644
+--- a/src/compositor/meta-multi-texture-format.c
++++ b/src/compositor/meta-multi-texture-format.c
+@@ -80,6 +80,12 @@ typedef struct _MetaMultiTextureFormatFullInfo
+
+ /* NOTE: The actual enum values are used as the index, so you don't need to
+  * loop over the table */
++/* Shader for META_MULTI_TEXTURE_FORMAT_NV12_EXT_OES.
++ * NV12 imported as GL_TEXTURE_EXTERNAL_OES; GPU driver performs
++ * YUV->RGB conversion via EGL BT.601 color space hints at import time. */
++static const char nv12_ext_oes_shader[] =
++  "cogl_color_out = vec4(texture2D(cogl_sampler0, cogl_tex_coord0_in.st).rgb, cogl_color_in.a);\n";
++
+ static MetaMultiTextureFormatFullInfo multi_format_table[] = {
+   /* Invalid */
+   [META_MULTI_TEXTURE_FORMAT_INVALID] = {},
+@@ -147,6 +153,35 @@ static MetaMultiTextureFormatFullInfo multi_format_table[] = {
+       .vsub = { 1, 2, 2 },
+     },
+   },
++
++
++  /* NV12 imported as single external OES texture - GPU performs YUV->RGB */
++  [META_MULTI_TEXTURE_FORMAT_NV12_EXT_OES] = {
++    .name = "NV12_EXT_OES",
++    .rgb_shader = nv12_ext_oes_shader,
++    .snippet_once = G_ONCE_INIT,
++    .info = {
++      .n_planes = 1,
++      .subformats = { COGL_PIXEL_FORMAT_ANY },
++      .plane_indices = { 0 },
++      .hsub = { 1 },
++      .vsub = { 1 },
++    },
++  },
++
++  /* P010 imported as single external OES texture - GPU performs YUV->RGB */
++  [META_MULTI_TEXTURE_FORMAT_P010_EXT_OES] = {
++    .name = "P010_EXT_OES",
++    .rgb_shader = nv12_ext_oes_shader,
++    .snippet_once = G_ONCE_INIT,
++    .info = {
++      .n_planes = 1,
++      .subformats = { COGL_PIXEL_FORMAT_ANY },
++      .plane_indices = { 0 },
++      .hsub = { 1 },
++      .vsub = { 1 },
++    },
++  },
+ };
+
+ const char *
+diff --git a/src/meta/meta-multi-texture-format.h b/src/meta/meta-multi-texture-format.h
+index 9ed9962..9d0a206 100644
+--- a/src/meta/meta-multi-texture-format.h
++++ b/src/meta/meta-multi-texture-format.h
+@@ -48,6 +48,16 @@ typedef enum _MetaMultiTextureFormat
+   META_MULTI_TEXTURE_FORMAT_NV12,
+   META_MULTI_TEXTURE_FORMAT_P010,
+   META_MULTI_TEXTURE_FORMAT_YUV420,
++  /* NV12 via GL_OES_EGL_image_external: import the full NV12 DMA-buf (both
++   * Y and UV planes) as a single EGL image, bind as GL_TEXTURE_EXTERNAL_OES,
++   * and sample via samplerExternalOES with explicit BT.601 YUV->RGB shader.
++   * Mali G310 supports this path even though per-plane GR88 EGL import fails.
++   * MUST be last to avoid changing existing enum values (ABI with clutter). */
++  META_MULTI_TEXTURE_FORMAT_NV12_EXT_OES,
++
++  /* P010 (10-bit NV12) via GL_OES_EGL_image_external: full-buffer EGL import
++   * with BT.709 color space hints. Mali G310 performs YUV->RGB conversion. */
++  META_MULTI_TEXTURE_FORMAT_P010_EXT_OES,
+ } MetaMultiTextureFormat;
+
+ G_END_DECLS
+--
+2.47.3
+

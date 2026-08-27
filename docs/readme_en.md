@@ -2,42 +2,218 @@
 
 # Documentation Directory Overview
 
-In the Rockchip Linux SDK, the `docs` directory is divided into Chinese documentation (`cn`), English documentation (`en`), and the Software Bill of Materials (`sbom`) directories. The `sbom` directory includes the following structure:
+In the Rockchip Linux SDK, the `docs` directory is divided into Chinese documentation (`cn`), English documentation (`en`), Software Bill of Materials (`sbom`), and Patches (`Patches`) directories.
+
+```
+docs/
+├── cn/                  # Chinese documentation
+├── en/                  # English documentation
+├── sbom/                # Software Bill of Materials and security reports
+├── Patches/             # Patch files
+├── LICENSE              # Document license statement
+├── readme_cn.md         # Chinese documentation overview
+└── readme_en.md         # English documentation overview
+```
+
+## Chinese Documentation Directory (cn)
+
+The Chinese documentation directory contains common development guides, Linux system development documents, release notes, chip platform related documents, and other reference documents.
+
+```
+docs/cn/
+├── Common/                                    # Common development guides
+│   ├── ALGORITHM/                             # Algorithm modules (EIS/IDC)
+│   ├── AMP/                                   # Asymmetric Multi-Processing
+│   ├── AUDIO/                                 # Audio module
+│   ├── AVL/                                   # Approved Vendor List
+│   ├── CAMERA/                                # Camera module
+│   ├── CAN/                                   # CAN bus module
+│   ├── CLK/                                   # Clock module
+│   ├── CRYPTO/                                # Crypto module
+│   ├── DDR/                                   # DDR module
+│   ├── DEBUG/                                 # Debug module
+│   ├── DISPLAY/                               # Display module (DP/HDMI/LVDS/MIPI etc.)
+│   ├── DSMC/                                  # Double Data Rate Serial Memory Controller
+│   ├── DVFS/                                  # Dynamic Voltage and Frequency Scaling
+│   ├── FLEXBUS/                               # FLEXBUS module
+│   ├── GMAC/                                  # Ethernet module
+│   ├── GPIO/                                  # GPIO module
+│   ├── HDMI-IN/                               # HDMI-IN module
+│   ├── I2C/                                   # I2C module
+│   ├── IMU/                                   # Inertial Measurement Unit
+│   ├── IO-DOMAIN/                             # IO Power Domain module
+│   ├── IOMMU/                                 # IOMMU module
+│   ├── ISP/                                   # Image Signal Processor
+│   ├── MCU/                                   # Microcontroller Unit
+│   ├── MEMORY/                                # Memory module (CMA/DMABUF etc.)
+│   ├── MMC/                                   # MMC/SD/eMMC module
+│   ├── MPP/                                   # Multimedia Processing Platform
+│   ├── NPU/                                   # Neural Network Processing Unit
+│   ├── NVM/                                   # Non-Volatile Memory module
+│   ├── PCIe/                                  # PCIe module
+│   ├── PERF/                                  # Performance analysis module
+│   ├── PINCTRL/                               # Pin Control module
+│   ├── PMIC/                                  # Power Management IC
+│   ├── POWER/                                 # Power module
+│   ├── PWM/                                   # Pulse Width Modulation module
+│   ├── RGA/                                   # 2D Graphics Acceleration
+│   ├── RTT/                                   # RT-Thread RTOS
+│   ├── SARADC/                                # SARADC module
+│   ├── SECURITY/                              # Security module
+│   ├── SPI/                                   # SPI module
+│   ├── THERMAL/                               # Thermal module
+│   ├── TOOL/                                  # Tool module
+│   ├── TRUST/                                 # Trust security module
+│   ├── UART/                                  # UART module
+│   ├── UBOOT/                                 # U-Boot module
+│   ├── USB/                                   # USB module
+│   └── WATCHDOG/                              # Watchdog module
+├── Linux/                                     # Linux system development documents
+│   ├── ApplicationNote/                       # Application notes
+│   ├── Audio/                                 # Audio development
+│   ├── Camera/                                # Camera development
+│   ├── DPDK/                                  # DPDK development
+│   ├── Docker/                                # Docker container development
+│   ├── Graphics/                              # Graphics development
+│   ├── Multimedia/                            # Multimedia development
+│   ├── Profile/                               # Software test/Benchmark
+│   ├── RKAI/                                  # AI framework development
+│   ├── Recovery/                              # OTA upgrade/Recovery
+│   ├── Security/                              # Secure boot solution
+│   ├── System/                                # System porting development
+│   ├── Uefi/                                  # UEFI boot solution
+│   └── Wifibt/                                # WIFI/BT development
+├── Others/                                    # Other reference documents
+├── Release/                                   # Release notes and quick start
+├── Rockchip_Developer_Guide_Linux_Software_CN.pdf  # Linux software development guide
+└── docs_list_cn.txt                           # Document list
+```
+
+## English Documentation Directory (en)
+
+The English documentation directory has the same structure as the Chinese documentation directory, containing the same modules and subdirectories with English versions of the development documents.
+
+```
+docs/en/
+├── Common/                                    # Common development guides
+├── Linux/                                     # Linux system development documents
+├── Others/                                    # Other reference documents
+├── Release/                                   # Release notes and quick start
+├── Rockchip_Developer_Guide_Linux_Software_EN.pdf  # Linux software development guide
+└── docs_list_en.txt                           # Document list
+```
+
+## Software Bill of Materials (SBOM)
+
+`sbom` stands for Software Bill of Materials, which provides detailed information about the **open-source components, third-party libraries, version information, licenses, dependencies, and vulnerability mapping data** included in the software. The `sbom` directory in Rockchip Linux SDK provides complete SBOM and security vulnerability scan reports for different operating systems (Buildroot, Debian, Yocto), SDK, and U-Boot.
+
+**Each operating system and SDK provides SBOM and security analysis reports in 4 formats**: SPDX JSON, CycloneDX JSON, CSV, and HTML, to meet the needs of different tools and scenarios.
 
 ```
 sbom/
-├── buildroot
-│   ├── copyright
-│   │   ├── BUILDROOT_README
-│   │   ├── host-software_copyright_list.csv
-│   │   └── software_copyright_list.csv
-│   └── cve
-│       └── software_vulnerability_check_list.html
-└── kernel
-    ├── Latest-Release-Rockchip-Kernel-CVEs-Link.txt
-    └── cve
-        ├── 2025-01.md
-        ├── 2025-02.md
-        ├── 2025-03.md
-        ├── 2025-04.md
-        ├── 2025-05.md
-        ├── 2025-06.md
-        ├── 2025-07.md
-        ├── 2025-08.md
-        ├── 2025-09.md
-        ├── 2025-10.md
-        └── 2025-11.md
+├── buildroot/
+│   ├── sbom/                               # Buildroot system SBOM files
+│   │   ├── sbom.spdx.json                 # SPDX format
+│   │   ├── sbom.cyclonedx.json            # CycloneDX format
+│   │   ├── sbom.csv                       # CSV format
+│   │   └── sbom.html                      # HTML format
+│   └── security/                           # Buildroot security scan reports
+│       ├── cve-report.spdx.json           # SPDX format
+│       ├── cve-report.cyclonedx.json      # CycloneDX format
+│       ├── cve-report.csv                 # CSV format
+│       └── cve-report.html                # HTML format
+├── debian/
+│   ├── sbom/                               # Debian system SBOM files
+│   │   ├── sbom.spdx.json                 # SPDX format
+│   │   ├── sbom.cyclonedx.json            # CycloneDX format
+│   │   ├── sbom.csv                       # CSV format
+│   │   └── sbom.html                      # HTML format
+│   └── security/                           # Debian security scan reports
+│       ├── cve-report.spdx.json           # SPDX format
+│       ├── cve-report.cyclonedx.json      # CycloneDX format
+│       ├── cve-report.csv                 # CSV format
+│       └── cve-report.html                # HTML format
+├── yocto/
+│   ├── sbom/                               # Yocto system SBOM files
+│   │   ├── sbom.spdx.json                 # SPDX format
+│   │   ├── sbom.cyclonedx.json            # CycloneDX format
+│   │   ├── sbom.csv                       # CSV format
+│   │   └── sbom.html                      # HTML format
+│   └── security/                           # Yocto security scan reports
+│       ├── cve-report.spdx.json           # SPDX format
+│       ├── cve-report.cyclonedx.json      # CycloneDX format
+│       ├── cve-report.csv                 # CSV format
+│       └── cve-report.html                # HTML format
+├── sdk/
+│   ├── sbom/                               # SDK SBOM files
+│   │   ├── sdk-sbom.spdx.json             # SPDX format
+│   │   ├── sdk-sbom.cyclonedx.json        # CycloneDX format
+│   │   ├── sdk-sbom.csv                   # CSV format
+│   │   └── sdk-sbom.html                  # HTML format
+│   └── security/                           # SDK security scan reports
+│       ├── sdk-security-report.spdx.json   # SPDX format
+│       ├── sdk-security-report.cyclonedx.json  # CycloneDX format
+│       ├── sdk-security-report.csv         # CSV format
+│       └── sdk-security-report.html        # HTML format
+├── kernel/
+│   ├── Latest-Release-Rockchip-Kernel-CVEs-Link.txt  # Kernel CVE latest link
+│   └── cve/                                # Kernel monthly CVE reports
+│       ├── 2025-06.md
+│       ├── ...
+│       └── 2026-05.md
+├── u-boot/
+│   ├── Latest-Release-Rockchip-U-Boot-CVEs-Link.txt  # U-Boot CVE latest link
+│   └── cve/                                # U-Boot CVE reports
+│       ├── U-Boot-CVE-2026-06_CN.md
+│       └── U-Boot-CVE-2026-06_EN.md
+├── SBOM_Security_Scan_Reference_CN.md      # SBOM and security scan reference (Chinese)
+└── SBOM_Security_Scan_Reference_EN.md      # SBOM and security scan reference (English)
 ```
 
-`LICENSE` is the document license statement published by Rockchip.
-`sbom` stands for Software Bill of Materials, which provides detailed information about the **open-source components, third-party libraries, version information, licenses, dependencies, and vulnerability mapping data** included in the software.
+### SBOM Descriptions by System
 
-`host-software_copyright_list.csv`, `software_copyright_list.csv`, and `BUILDROOT_README` contain detailed license information for third-party packages built by default in Buildroot.
-`software_vulnerability_check_list.html` is used by Buildroot to generate a report listing all packages under the current configuration, as well as to detect known CVE vulnerabilities and upstream version update status.
+- **Buildroot System**: The `sbom/buildroot/sbom/` directory contains the complete SBOM files for the Buildroot system. The `sbom/buildroot/security/` directory contains security vulnerability scan reports. Open `sbom/buildroot/security/cve-report.html` in a browser to view the complete report.
+- **Debian System**: The `sbom/debian/sbom/` directory contains the SBOM (SPDX format) for the Debian system. The `sbom/debian/security/` directory contains security vulnerability scan reports. Open `sbom/debian/security/cve-report.html` in a browser to view the complete report.
+- **Yocto System**: The `sbom/yocto/sbom/` directory contains the complete SBOM for the Yocto system. The `sbom/yocto/security/` directory contains CVE vulnerability summary information. Open `sbom/yocto/security/cve-report.html` in a browser to view the complete report.
+- **SDK**: The `sbom/sdk/sbom/` directory contains the complete SBOM files for the SDK. The `sbom/sdk/security/` directory contains the SDK's security vulnerability scan reports. Open `sbom/sdk/security/sdk-security-report.html` in a browser to view the complete report.
+- **Kernel**: Kernel CVE reports are organized monthly and stored in the `sbom/kernel/cve/` directory. Each report contains the CVE vulnerability list for the kernel in that month, affected kernel versions, vulnerability severity, and fix status. For the latest CVE link, please refer to `sbom/kernel/Latest-Release-Rockchip-Kernel-CVEs-Link.txt`.
+- **U-Boot**: U-Boot CVE reports are stored in the `sbom/u-boot/cve/` directory, available in both Chinese and English. For the latest CVE link, please refer to `sbom/u-boot/Latest-Release-Rockchip-U-Boot-CVEs-Link.txt`.
+
+> **Note**: For detailed usage instructions on SBOM file formats and security vulnerability scanning tools, please refer to `<SDK>/docs/sbom/SBOM_Security_Scan_Reference_EN.md`.
+
+## Patches
+
+The Patches directory contains various patch files for the Rockchip Linux SDK, used for system feature enhancements and bug fixes.
+
+```
+Patches/
+├── Kernel-6.1/                  # Linux Kernel 6.1 patches
+│   ├── rkr1-rkr4/              # RKR1-RKR4 version patches
+│   └── rkr5+/                  # RKR5+ version patches
+├── ROS2/                        # ROS2 related patches
+│   ├── cross-compile/          # Cross-compilation related
+│   └── patches/                # ROS2 patch files
+└── Real-Time-Performance/       # Real-time performance optimization patches
+│   ├── PREEMPT_RT/             # PREEMPT_RT real-time patches
+│   └── XENOMAI/                # Xenomai real-time patches
+```
+
+> **Note**: For detailed usage instructions on patches, please refer to the readme.txt or related documents in each subdirectory.
 
 The documentation released with the Rockchip Linux SDK is intended to help developers quickly get started with development and debugging. The content covered in the documentation does not encompass all development knowledge and issues. The list of documents will continue to be updated. If you have any questions or needs regarding the documentation, please contact our FAE support at fae@rock-chips.com.
 
-In the Rockchip Linux SDK, the docs directory is divided into Chinese (cn) and English (en). The Chinese directory includes Common (general development guidance documents), Socs (chip platform-related documents), Linux (Linux system development-related documents), Others (other reference documents), and docs_list_en.txt (docs file directory structure). The specific introduction is as follows: (Note: The last sentence seems to be incomplete in the original text, so it is translated as provided.)
+In the Rockchip Linux SDK, the docs directory is divided into Chinese (cn) and English (en). The English directory includes Common (general development guidance documents), Release (release notes), Linux (Linux system development-related documents), Others (other reference documents), and docs_list_en.txt (docs file directory structure). The specific introduction is as follows:
+
+## Release Notes
+
+The Release directory contains Rockchip Linux SDK release notes and quick start guides.
+
+```
+en/Release/
+├── Rockchip_Linux6.12_SDK_Release_V1.0.0_20260620_EN.pdf  # SDK release notes
+├── Rockchip_Quick_Start_Linux6.12_EN.pdf                  # Quick start guide
+└── Linux6.12_SDK_Note.md                                  # SDK version notes
+```
 
 ## General Development Guidance Document (Common)
 
@@ -246,6 +422,7 @@ This module document primarily includes the development documentation related to
 
 ```
 docs/en/Common/GMAC/
+├── Rockchip_Developer_Guide_GMAC_PTP1588_EN.pdf
 ├── Rockchip_Developer_Guide_Linux_GMAC_EN.pdf
 ├── Rockchip_Developer_Guide_Linux_GMAC_DPDK_EN.pdf
 ├── Rockchip_Developer_Guide_Linux_GMAC_Mode_Configuration_EN.pdf
@@ -259,7 +436,6 @@ This module document mainly contains development documents related to the HDMI-I
 
 ```
 docs/en/Common/HDMI-IN/
-├── Rockchip_Developer_Guide_HDMI_IN_Based_On_CameraHal3_EN.pdf
 └── Rockchip_Developer_Guide_HDMI_RX_EN.pdf
 ```
 
@@ -297,6 +473,7 @@ ISP21 is mainly suitable for RK3566_RK3568, etc.
 ISP30 is mainly suitable for RK3588, etc.
 ISP32-lite is mainly suitable for RK3562, etc.
 ISP35 is mainly suitable for RV1126B, etc.
+ISP351 is mainly suitable for RK3572, etc.
 ISP39 is mainly suitable for RK3576, etc.
 
 It contains ISP development documents, VI driver development documents, IQ Tool development documents, debugging documents and color debugging documents. The reference documents are as follows:
@@ -433,7 +610,11 @@ docs/en/Common/PCIe/
 ├── Rockchip_Developer_Guide_PCIE_EP_Standard_Card_APIs_EN.pdf
 ├── Rockchip_Developer_Guide_PCIE_EP_Standard_Card_EN.pdf
 ├── Rockchip_Developer_Guide_PCIe_EN.pdf
-└── Rockchip_Developer_Guide_PCIe_Performance_EN.pdf
+├── Rockchip_Developer_Guide_PCIe_EP_EN.pdf
+├── Rockchip_Developer_Guide_PCIe_Performance_EN.pdf
+├── Rockchip_PCIe_Virtualization_Developer_Guide_EN.pdf
+├── Rockchip_RK3399_Developer_Guide_PCIe_EN.pdf
+└── Rockchip_Trouble_Shooting_Linux_PCIe_EN.pdf
 ```
 
 ### Performance Module Document (PERF)
@@ -569,6 +750,7 @@ Introduction to U-Boot related development on the Rockchip platform
 
 ```
 docs/en/Common/UBOOT/
+├── Rockchip_Developer_Guide_U-Boot_V5_EN.pdf
 └── Rockchip_Developer_Guide_UBoot_Nextdev_EN.pdf
 ```
 
@@ -578,18 +760,17 @@ Introduction to USB development guide, USB signal testing and debugging tools on
 
 ```
 docs/en/Common/USB/
-├── Rockchip_Developer_Guide_Linux_USB_Initialization_Log_Analysis_EN.pdf
 ├── Rockchip_Developer_Guide_Linux_USB_Performance_Analysis_EN.pdf
 ├── Rockchip_Developer_Guide_USB2_Compliance_Test_EN.pdf
 ├── Rockchip_Developer_Guide_USB_EN.pdf
-├── Rockchip_Developer_Guide_USB_FFS_Test_Demo_EN.pdf
 ├── Rockchip_Developer_Guide_USB_Gadget_UAC_EN.pdf
 ├── Rockchip_Developer_Guide_USB_SQ_Test_EN.pdf
 ├── Rockchip_Introduction_USB_SQ_Tool_EN.pdf
 ├── Rockchip_RK3399_Developer_Guide_USB_EN.pdf
 ├── Rockchip_RK356x_Developer_Guide_USB_EN.pdf
+├── Rockchip_RK3572_Developer_Guide_USB_EN.pdf
+├── Rockchip_RK3576_Developer_Guide_USB_EN.pdf
 ├── Rockchip_RK3588_Developer_Guide_USB_EN.pdf
-├── Rockchip_Trouble_Shooting_Linux4.19_USB_Gadget_UVC_EN.pdf
 └── Rockchip_Trouble_Shooting_Linux_USB_Host_UVC_EN.pdf
 ```
 
@@ -600,6 +781,55 @@ Development instructions for Watchdog on the Rockchip platform.
 ```
 docs/en/Common/WATCHDOG/
 └── Rockchip_Developer_Guide_Linux_WDT_EN.pdf
+```
+
+### Algorithm Module (ALGORITHM)
+
+This module mainly contains algorithm development documents for Rockchip platform EIS (Electronic Image Stabilization) and IDC (Image Distortion Correction).
+
+```
+docs/en/Common/ALGORITHM/
+├── EIS/
+│   └── Rockchip_Developer_Guide_EIS_EN.pdf
+└── IDC/
+    ├── Rockchip_IDC_Developer_Guide_EN.pdf
+    └── Rockchip_IDC_Developer_Tutorial_EN.pdf
+```
+
+### GPIO Module (GPIO)
+
+This module mainly contains GPIO related development documents for Rockchip platform.
+
+```
+docs/en/Common/GPIO/
+└── Rockchip_Developer_Guide_GPIO_EN.pdf
+```
+
+### IMU Module (IMU)
+
+This module mainly contains IMU (Inertial Measurement Unit) related development documents for Rockchip platform.
+
+```
+docs/en/Common/IMU/
+└── Rockchip_Developer_Guide_Linux_IMU_EN.pdf
+```
+
+### RT-Thread Module (RTT)
+
+This module mainly contains RT-Thread real-time operating system related development documents for Rockchip platform, including Display, I2C, PWM, SPI, UART, USB and other peripheral driver development guides.
+
+```
+docs/en/Common/RTT/
+├── Rockchip_Developer_Guide_RT-Thread_Display_EN.pdf
+├── Rockchip_Developer_Guide_RT-Thread_I2C_EN.pdf
+├── Rockchip_Developer_Guide_RT-Thread_PWM_EN.pdf
+├── Rockchip_Developer_Guide_RT-Thread_SPI2APB_EN.pdf
+├── Rockchip_Developer_Guide_RT-Thread_SPIFLASH_EN.pdf
+├── Rockchip_Developer_Guide_RT-Thread_SPI_EN.pdf
+├── Rockchip_Developer_Guide_RT-Thread_SPI_Screen_EN.pdf
+├── Rockchip_Developer_Guide_RT-Thread_UART.pdf
+├── Rockchip_Developer_Guide_RT-Thread_USB_EN.pdf
+└── Rockchip_Developer_Guide_RT-Thread_rkdemo_EN.pdf
 ```
 
 ## Linux System Development Documents (Linux)
@@ -615,6 +845,7 @@ Please refer to documents under the `<SDK>/docs/en/Linux`:
 ├── Graphics
 ├── Multimedia
 ├── Profile
+├── RKAI
 ├── Recovery
 ├── Security
 ├── System
@@ -628,10 +859,8 @@ Development instructions for applications on the Rockchip platform, such as ROS,
 
 ```
 docs/en/Linux/ApplicationNote/
-├── Rockchip_Developer_Guide_Linux_PCBA_EN.pdf
 ├── Rockchip_Developer_Guide_Linux_RKIPC_EN.pdf
 ├── Rockchip_Instruction_Linux_ROS2_EN.pdf
-├── Rockchip_Instruction_Linux_ROS_EN.pdf
 ├── Rockchip_Quick_Start_Linux_USB_Gadget_EN.pdf
 └── Rockchip_Use_Guide_Linux_EtherCAT_IgH_EN.pdf
 ```
@@ -642,7 +871,10 @@ Self developed audio algorithm on Rockchip platform.
 
 ```
 docs/en/Linux/Audio/
-├── Algorithms
+├── Algorithms/
+│   ├── Rockchip_Developer_Guide_Audio_Algorithm_VQE_Introduction_EN.pdf
+│   ├── Rockchip_Developer_Guide_RockAA_Utils_EN.pdf
+│   └── Rockchip_Developer_Guide_Sound_Event_Detection_EN.pdf
 └── Rockchip_Developer_Guide_PulseAudio_EN.pdf
 ```
 
@@ -665,8 +897,7 @@ Docker build and development of third-party systems such as Debian/Buildroot on 
 ```
 docs/en/Linux/Docker/
 ├── Rockchip_Developer_Guide_Debian_Docker_EN.pdf
-├── Rockchip_Developer_Guide_Linux_Docker_Deploy_EN.pdf
-└── Rockchip_User_Guide_SDK_Docker_EN.pdf
+└── Rockchip_Developer_Guide_Linux_Docker_Deploy_EN.pdf
 ```
 
 ### DPDK Module (DPDK)
@@ -773,7 +1004,6 @@ An introduction to the recovery development process and upgrade during OTA upgra
 
 ```
 docs/en/Linux/Recovery/
-├── Rockchip_Developer_Guide_Linux_Recovery_EN.pdf
 └── Rockchip_Developer_Guide_Linux_Upgrade_EN.pd
 ```
 
@@ -814,7 +1044,27 @@ Introduction to the development of WIFI, BT, etc. on Rockchip Linux platform.
 docs/en/Linux/Wifibt/
 ├── Rockchip_Developer_Guide_Linux_WIFI_BT_EN.pdf
 └── The-Latest-Wifibt-Documents-Link.txt
+```
 
+### AI Framework (RKAI)
+
+Introduction to RKAI related development on Rockchip Linux platform.
+
+```
+docs/en/Linux/RKAI/
+└── Rockchip_Developer_Guide_Linux_RKAI_EN.pdf
+```
+
+### Multimedia Development (Multimedia)
+
+Introduction to multimedia related development on Rockchip Linux platform, including RKADK, Rockit Runtime, Gstreamer, etc.
+
+```
+docs/en/Linux/Multimedia/
+├── Rockchip_Developer_Guide_Linux_Rkadk_EN.pdf
+├── Rockchip_Developer_Guide_Linux_Rockit_Runtime_EN.pdf
+├── Rockchip_User_Guide_Linux_Gstreamer_EN.pdf
+└── Rockchip_User_Guide_Linux_Rockit_EN.pdf
 ```
 
 ## Chip Platform Related Documents (Socs)

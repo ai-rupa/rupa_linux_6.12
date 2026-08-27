@@ -91,6 +91,9 @@ DECLARE_GLOBAL_DATA_PTR;
 #define VCCIO0_IOC_GPIO1A_IOMUX_SEL_0	0x00020
 #define VCCIO0_IOC_GPIO1A_IOMUX_SEL_1	0x00024
 #define VCCIO0_IOC_GPIO1B_IOMUX_SEL_0	0x00028
+#define VCCIO0_3_IOC_GPIO1A_DS_0	0x00120
+#define VCCIO0_3_IOC_GPIO1A_DS_1	0x00124
+#define VCCIO0_3_IOC_GPIO1B_DS_0	0x00128
 
 #define VCCIO1_2_4_IOC_BASE		0x26084000
 #define VCCIO1_IOC_GPIO2A_IOMUX_SEL_0	0x00040
@@ -290,16 +293,6 @@ void rockchip_stimer_init(void)
 	writel(0xffffffff, CONFIG_ROCKCHIP_STIMER_BASE + 0x18);
 	writel(0x00010001, CONFIG_ROCKCHIP_STIMER_BASE + 0x04);
 }
-
-void spl_board_storages_fixup(struct spl_image_loader *loader)
-{
-	if (!loader)
-		return;
-
-	if (loader->boot_device == BOOT_DEVICE_MMC2)
-		/* Unset the sdmmc0 iomux */
-		board_unset_iomux(UCLASS_MMC, 1, 0);
-}
 #endif
 
 #ifndef CONFIG_TPL_BUILD
@@ -411,10 +404,21 @@ int arch_cpu_init(void)
 	board_set_iomux(UCLASS_MTD, 0, 0);
 #endif
 
-#if defined(CONFIG_ROCKCHIP_SDMMC_IOMUX)
-	/* Set the sdmmc iomux and power cycle */
-	board_set_iomux(UCLASS_MMC, 1, 0);
-#endif
+	/* Enabled SDMMC iomux in default except FSPI1_M0 boot */
+	if (readl(VCCIO1_2_4_IOC_BASE + VCCIO1_IOC_GPIO2A_IOMUX_SEL_0) != 0x1111)
+		board_set_iomux(UCLASS_MMC, 1, 0);
+
+	/* Set the EMMC IO drive strength when the IOMUX is configured for EMMC. */
+	if (readl(VCCIO0_3_IOC_BASE + VCCIO0_IOC_GPIO1A_IOMUX_SEL_0) == 0x1111) {
+		/*
+		 * set the emmc io drive strength:
+		 * data and cmd: 50ohm
+		 * clock: 35ohm
+		 */
+		writel(0x77772222, VCCIO0_3_IOC_BASE + VCCIO0_3_IOC_GPIO1A_DS_0);
+		writel(0x77772222, VCCIO0_3_IOC_BASE + VCCIO0_3_IOC_GPIO1A_DS_1);
+		writel(0x07770242, VCCIO0_3_IOC_BASE + VCCIO0_3_IOC_GPIO1B_DS_0);
+	}
 #endif
 
 #if defined(CONFIG_UFS)
@@ -473,13 +477,16 @@ int rk_board_dm_fdt_fixup(const void *blob)
 
 	node = fdt_node_offset_by_compatible(blob, 0, "rockchip,rk-ahci");
 	if (node >= 0) {
-		/*
-		* Set SATA FBSCP and PORTS_IMPL for kernel drivers
-		*/
-		writel(SATA_FBS_ENABLE, SATA0_BASE_ADDR + SATA_PORT_CMD);
-		writel(1, SATA0_BASE_ADDR + SATA_PI);
-		writel(SATA_FBS_ENABLE, SATA1_BASE_ADDR + SATA_PORT_CMD);
-		writel(1, SATA1_BASE_ADDR + SATA_PI);
+		status = fdt_getprop(blob, node, "status", NULL);
+		if (status && strcmp(status, "disabled")) {
+			/*
+			* Set SATA FBSCP and PORTS_IMPL for kernel drivers
+			*/
+			writel(SATA_FBS_ENABLE, SATA0_BASE_ADDR + SATA_PORT_CMD);
+			writel(1, SATA0_BASE_ADDR + SATA_PI);
+			writel(SATA_FBS_ENABLE, SATA1_BASE_ADDR + SATA_PORT_CMD);
+			writel(1, SATA1_BASE_ADDR + SATA_PI);
+		}
 	}
 
 	return 0;
@@ -498,6 +505,24 @@ int fit_standalone_release(char *id, uintptr_t entry_point)
 
 	/* release bus_mcu */
 	writel(0x004C0000, CRU_BASE + CRU_SOFTRST_CON21);
+
+	return 0;
+}
+
+int rk_board_init(void)
+{
+#if defined(CONFIG_ROCKCHIP_VENDOR_PARTITION)
+	char licence_str[1024] = {0};
+	int ret, size;
+	char *ip_verify = "npu";
+
+	size = vendor_storage_read(MULTI_MODULE_KEY_ID, licence_str, 1024);
+	if (size > 0) {
+		ret = optee_verify_config_ip(licence_str, ip_verify);
+		if (ret)
+			printf("%s: %s verification failed!!!\n", __func__, ip_verify);
+	}
+#endif
 
 	return 0;
 }

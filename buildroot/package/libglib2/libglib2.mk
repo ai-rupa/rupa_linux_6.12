@@ -4,7 +4,7 @@
 #
 ################################################################################
 
-LIBGLIB2_VERSION_MAJOR = 2.82
+LIBGLIB2_VERSION_MAJOR = 2.86
 LIBGLIB2_VERSION = $(LIBGLIB2_VERSION_MAJOR).5
 LIBGLIB2_SOURCE = glib-$(LIBGLIB2_VERSION).tar.xz
 LIBGLIB2_SITE = https://download.gnome.org/sources/glib/$(LIBGLIB2_VERSION_MAJOR)
@@ -21,9 +21,6 @@ LIBGLIB2_LDFLAGS = $(TARGET_LDFLAGS) $(TARGET_NLS_LIBS)
 ifeq ($(BR2_ARM_INSTRUCTIONS_THUMB),y)
 LIBGLIB2_CFLAGS += -marm
 endif
-
-# 0001-gstring-Fix-overflow-check-when-expanding-the-string.patch
-LIBGLIB2_IGNORE_CVES += CVE-2025-6052
 
 HOST_LIBGLIB2_CONF_OPTS = \
 	-Ddtrace=false \

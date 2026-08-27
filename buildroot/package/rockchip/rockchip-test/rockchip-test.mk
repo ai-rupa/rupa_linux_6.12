@@ -12,12 +12,16 @@ define ROCKCHIP_TEST_INSTALL_TARGET_CMDS
 endef
 
 define ROCKCHIP_TEST_INSTALL_INIT_SYSV
-        $(INSTALL) -D -m 0755 $(@D)/auto_reboot/S99-auto-reboot \
+	$(INSTALL) -D -m 0755 $(@D)/auto_reboot/S99-auto-reboot \
+		$(TARGET_DIR)/etc/init.d/
+	$(INSTALL) -D -m 0755 $(@D)/ab_update_test/S99-ab-stress \
 		$(TARGET_DIR)/etc/init.d/
 endef
 
 define ROCKCHIP_TEST_INSTALL_INIT_SYSTEMD
 	$(INSTALL) -D -m 0644 $(@D)/auto_reboot/autoreboot.service \
+		$(TARGET_DIR)/usr/lib/systemd/system/
+	$(INSTALL) -D -m 0644 $(@D)/ab_update_test/abupdatestress.service \
 		$(TARGET_DIR)/usr/lib/systemd/system/
 endef
 

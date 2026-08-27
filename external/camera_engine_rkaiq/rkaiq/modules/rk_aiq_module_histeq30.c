@@ -183,7 +183,7 @@ void rk_aiq_histeq30_params_cvt(void* attr, isp_params_t* isp_params, common_cvt
     pFix->flt_offset = ClipFloatValue(psta->statsFltCfg.hw_histCfg_cdfFlt_offset, 4, 0, true);
     pFix->gain_max   = ClipFloatValue(psta->statsFltCfg.hw_histCfg_boost_max, 4, 6, true);
     pFix->gain_min   = ClipFloatValue(psta->statsFltCfg.hw_histCfg_suppress_min, 1, 6, true);
-    int kernel_coeffs[9];
+    int kernel_coeffs[10];
     histeqCreateKernelCoeffs(3, 3, psta->statsFltCfg.hw_histCfg_cdfFlt_coefMax, kernel_coeffs, 8,
                              1);
     pFix->coef_max0 = kernel_coeffs[0] > 255 ? 255 : kernel_coeffs[0];

@@ -143,6 +143,8 @@ uvc_device_config()
       echo 3072 > ${USB_FUNCTIONS_DIR}/$UVC_GS/streaming_maxpacket
    fi
    echo 2 > ${USB_FUNCTIONS_DIR}/$UVC_GS/uvc_num_request
+   # set bulk maxpayload to 1M beacause some uvc host (like windows) will get wrong when payload is too large
+   echo 1048576 > ${USB_FUNCTIONS_DIR}/$UVC_GS/streaming_bulk_hs_maxpayload
    #echo 1 > /sys/kernel/config/usb_gadget/rockchip/functions/$UVC_GS/streaming_bulk
    echo 12 > /sys/kernel/config/usb_gadget/rockchip/functions/$UVC_GS/streaming_maxburst
 

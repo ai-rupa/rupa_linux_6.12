@@ -21,13 +21,9 @@
 #include <linux/iommu.h>
 #include <linux/iopoll.h>
 
-#ifndef FPGA_PLATFORM
-#include <soc/rockchip/rockchip_iommu.h>
-#endif
-
-/* IOMMU poll timeout for power off */
-#define NPU_MMU_DISABLED_POLL_PERIOD_US		1000
-#define NPU_MMU_DISABLED_POLL_TIMEOUT_US	20000
+/* IOMMU poll timeout for runtime suspend */
+#define NPU_MMU_SUSPEND_POLL_PERIOD_US		1000
+#define NPU_MMU_SUSPEND_POLL_TIMEOUT_US		20000
 
 #include "rknpu3_drv.h"
 #include "rknpu3_core.h"
@@ -132,6 +128,27 @@ static int rknpu3_get_driver_version(uint32_t *version_code)
 /* Power management functions */
 static int rknpu3_power_on(struct rknpu3_device *rknpu3_dev);
 static int rknpu3_power_off(struct rknpu3_device *rknpu3_dev);
+
+#ifndef FPGA_PLATFORM
+static int rknpu3_wait_iommu_suspended(struct rknpu3_device *rknpu3_dev)
+{
+	struct device *dev = rknpu3_dev->dev;
+	bool suspended;
+	int ret;
+
+	if (!rknpu3_dev->iommu_en || !rknpu3_dev->iommu_dev)
+		return 0;
+
+	ret = read_poll_timeout(pm_runtime_status_suspended, suspended, suspended,
+				NPU_MMU_SUSPEND_POLL_PERIOD_US,
+				NPU_MMU_SUSPEND_POLL_TIMEOUT_US, false,
+				rknpu3_dev->iommu_dev);
+	if (ret)
+		LOG_DEV_ERROR(dev, "timed out waiting for IOMMU suspend\n");
+
+	return ret;
+}
+#endif
 
 static void rknpu3_power_off_delay_work(struct work_struct *power_off_work)
 {
@@ -251,11 +268,10 @@ static int rknpu3_power_on(struct rknpu3_device *rknpu3_dev)
 #endif
 
 	/* Enable runtime PM */
-	ret = pm_runtime_get_sync(dev);
+	ret = pm_runtime_resume_and_get(dev);
 	if (ret < 0) {
 		LOG_DEV_ERROR(dev,
 			      "failed to get pm runtime for rknpu: %d\n", ret);
-		pm_runtime_put_noidle(dev);
 		goto err_devfreq_unlock;
 	}
 
@@ -294,9 +310,25 @@ static int rknpu3_power_off(struct rknpu3_device *rknpu3_dev)
 #endif
 
 	/* Release runtime PM */
-	pm_runtime_put_sync(dev);
+	ret = pm_runtime_put_sync_suspend(dev);
+	if (ret < 0) {
+		LOG_DEV_ERROR(dev, "failed to put pm runtime for rknpu: %d\n", ret);
+		goto err_devfreq_unlock;
+	}
 
 #ifndef FPGA_PLATFORM
+	ret = rknpu3_wait_iommu_suspended(rknpu3_dev);
+	if (ret) {
+		int resume_ret;
+
+		resume_ret = pm_runtime_resume_and_get(dev);
+		if (resume_ret < 0)
+			LOG_DEV_ERROR(dev,
+				      "failed to restore pm runtime for rknpu: %d\n",
+				      resume_ret);
+		goto err_devfreq_unlock;
+	}
+
 	rknpu3_devfreq_unlock(rknpu3_dev);
 #endif
 
@@ -313,6 +345,12 @@ static int rknpu3_power_off(struct rknpu3_device *rknpu3_dev)
 		regulator_disable(rknpu3_dev->vdd);
 #endif
 
+	return ret;
+
+err_devfreq_unlock:
+#ifndef FPGA_PLATFORM
+	rknpu3_devfreq_unlock(rknpu3_dev);
+#endif
 	return ret;
 }
 
@@ -704,49 +742,19 @@ static int rknpu3_probe(struct platform_device *pdev)
 				     domain->geometry.aperture_end);
 		}
 
-		/*
-		 * Map NBUF physical address to same IOVA (identity mapping)
-		 * NBUF is NPU internal buffer at fixed physical address
-		 * Physical: 0x3ff00000 - 0x3ff60000 (384KB)
-		 * IOVA:     0x3ff00000 - 0x3ff60000 (same)
-		 */
-		rknpu3_dev->nbuf_phyaddr = 0x3ff00000;
-		rknpu3_dev->nbuf_size = 0x60000;  /* 384KB */
-		rknpu3_dev->nbuf_mapped = false;
-
-		ret = iommu_map(domain, rknpu3_dev->nbuf_phyaddr,
-				rknpu3_dev->nbuf_phyaddr, rknpu3_dev->nbuf_size,
-				IOMMU_READ | IOMMU_WRITE, GFP_KERNEL);
-		if (ret) {
-			LOG_DEV_ERROR(dev,
-				      "Failed to map NBUF: phys=0x%llx size=0x%zx ret=%d\n",
-				      (u64)rknpu3_dev->nbuf_phyaddr,
-				      rknpu3_dev->nbuf_size, ret);
-			/* Continue without NBUF mapping - not fatal */
-		} else {
-			rknpu3_dev->nbuf_mapped = true;
-			LOG_DEV_INFO(dev,
-				     "NBUF mapped: phys=0x%llx iova=0x%llx size=0x%zx\n",
-				     (u64)rknpu3_dev->nbuf_phyaddr,
-				     (u64)rknpu3_dev->nbuf_phyaddr,
-				     rknpu3_dev->nbuf_size);
-		}
-
-	}
-
-	rknpu3_dev->reserved_mem_attached = false;
-	ret = of_reserved_mem_device_init(dev);
-	if (ret) {
-		if (ret != -ENODEV) {
-			LOG_DEV_ERROR(dev,
-				"failed to init reserved memory: %d\n", ret);
-			goto err_power_off;
-		}
-		LOG_DEV_INFO(dev, "no reserved memory configured\n");
 	} else {
-		rknpu3_dev->reserved_mem_attached = true;
-		LOG_DEV_INFO(dev, "reserved memory attached%s\n",
-			rknpu3_dev->iommu_en ? " with IOMMU enabled" : "");
+		ret = of_reserved_mem_device_init(dev);
+		if (ret) {
+			if (ret != -ENODEV) {
+				LOG_DEV_ERROR(dev, "failed to init reserved memory: %d\n", ret);
+				goto err_power_off;
+			}
+
+			LOG_DEV_INFO(dev, "no reserved memory configured\n");
+		} else {
+			rknpu3_dev->reserved_mem_attached = true;
+			LOG_DEV_INFO(dev, "reserved memory attached\n");
+		}
 	}
 
 	/* Initialize memory management module */
@@ -808,12 +816,6 @@ err_memory_deinit:
 err_reserved_mem_release:
 	if (rknpu3_dev->reserved_mem_attached)
 		of_reserved_mem_device_release(dev);
-	/* Unmap NBUF if it was mapped */
-	if (rknpu3_dev->nbuf_mapped && rknpu3_dev->iommu_domain) {
-		iommu_unmap(rknpu3_dev->iommu_domain,
-			    rknpu3_dev->nbuf_phyaddr, rknpu3_dev->nbuf_size);
-		rknpu3_dev->nbuf_mapped = false;
-	}
 err_power_off:
 	rknpu3_power_off(rknpu3_dev);
 err_destroy_wq:
@@ -860,15 +862,6 @@ static void rknpu3_remove(struct platform_device *pdev)
 
 	if (rknpu3_dev->reserved_mem_attached)
 		of_reserved_mem_device_release(dev);
-
-	/* Unmap NBUF if it was mapped */
-	if (rknpu3_dev->nbuf_mapped && rknpu3_dev->iommu_domain) {
-		iommu_unmap(rknpu3_dev->iommu_domain,
-			    rknpu3_dev->nbuf_phyaddr, rknpu3_dev->nbuf_size);
-		rknpu3_dev->nbuf_mapped = false;
-		LOG_DEV_INFO(dev, "NBUF unmapped: iova=0x%llx size=0x%zx\n",
-			     (u64)rknpu3_dev->nbuf_phyaddr, rknpu3_dev->nbuf_size);
-	}
 
 	/* Power off if still powered on */
 	mutex_lock(&rknpu3_dev->power_lock);

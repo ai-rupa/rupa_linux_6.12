@@ -62,6 +62,7 @@ This document defines commit message format requirements for patches of differen
 
 - Make the current version traceable to the source repository through the commit message
 - Unify the commit style
+- `Build from...` and `Update features...` are currently mandatory. If you are unsure what to put in `Update features`, it is recommended to use the same content as `Build from`.
 
 > **Note**: This document only defines the basic guideline requirements. To improve traceability, submitters may make reasonable adjustments based on these rules.
 
@@ -249,6 +250,8 @@ Description:
 
 ## Release Documents
 
+### Content Requirements
+
 When binary files are updated, please update both the Chinese and English documents under `doc/release/` accordingly. Refer to the existing documents for the specific format. Important notes:
 
 - `File`: If multiple files are updated, `{}` can be used as a wildcard expression.
@@ -259,7 +262,16 @@ When binary files are updated, please update both the Chinese and English docume
 
   > Chinese version: 紧急 > 重要 > 普通。
 
-- `New`: Use this when new features are updated, and describe them item by item in text form.
+- `New`: Use this when new features are updated, and describe them
+  item by item in text form. Each item must have a sequence number,
+  even if there is only one item.
+
+  For example:
+
+  ```
+  1. Add ...
+  2. Improve ...
+  ```
 
 - `Fixed`: Use this when fixing issues, and describe them item by item in table form.
 
@@ -268,3 +280,13 @@ When binary files are updated, please update both the Chinese and English docume
 - Insert a horizontal separator at the end after the update is complete: `------`.
 
 - Run the pre-submission check: `./scripts/checkpatch.sh`.
+
+### **Auto Generation**
+
+In addition to manually adding release document content, you can also modify `scripts/doc-template.txt` as needed, and then run the following command to automatically generate the corresponding content for `doc/release/*.md`.
+
+```shell
+./scripts/release-doc.sh -f scripts/doc-template.txt
+```
+
+> With this approach, you only need to focus on the document content itself, without worrying about the Markdown document structure or content format.

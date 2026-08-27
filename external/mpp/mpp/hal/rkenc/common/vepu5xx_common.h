@@ -19,6 +19,37 @@
 
 #include "rk_venc_cmd.h"
 #include "mpp_device.h"
+#include "hal_dbg.h"
+
+#define VEPU_REG_RD(dev, regs, field, off, ret_acc) do { \
+    _rd_cfg.reg = &((regs)->field);                       \
+    _rd_cfg.size = sizeof((regs)->field);                 \
+    _rd_cfg.offset = off;                                 \
+    (ret_acc) |= mpp_dev_ioctl(dev, MPP_DEV_REG_RD, &_rd_cfg); \
+} while (0)
+
+#define VEPU_REG_RD_PTR(dev, ptr, off, ret_acc) do { \
+    _rd_cfg.reg = (ptr);                              \
+    _rd_cfg.size = sizeof(*(ptr));                    \
+    _rd_cfg.offset = off;                             \
+    (ret_acc) |= mpp_dev_ioctl(dev, MPP_DEV_REG_RD, &_rd_cfg); \
+} while (0)
+
+#define vepu_sw_regs(dbg_ctx, regs, offset, mode) \
+    hal_dbg_dump_set_regs(dbg_ctx, (RK_U32 *)&(regs), sizeof(regs) / sizeof(RK_U32), \
+                          offset / sizeof(RK_U32), mode)
+
+#define vepu_hw_regs(dbg_ctx, regs, offset, mode) \
+    hal_dbg_dump_get_regs(dbg_ctx, (RK_U32 *)&(regs), sizeof(regs) / sizeof(RK_U32), \
+                          offset / sizeof(RK_U32), mode)
+
+#define vepu_dump_fbc_buf(dbg_ctx, prefix, hal_buf, fbc_hdr, line_bits) do { \
+    size_t _total = mpp_buffer_get_size((hal_buf)->buf[0]); \
+    size_t _dsp   = mpp_buffer_get_size((hal_buf)->buf[1]); \
+    hal_dbg_dumpf_buf(dbg_ctx, prefix "fbh.bin", (hal_buf)->buf[0], 0,       fbc_hdr,          line_bits, "w+"); \
+    hal_dbg_dumpf_buf(dbg_ctx, prefix "fbd.bin", (hal_buf)->buf[0], fbc_hdr,  _total - fbc_hdr, line_bits, "w+"); \
+    hal_dbg_dumpf_buf(dbg_ctx, prefix "dsp.bin", (hal_buf)->buf[1], 0,        _dsp,             line_bits, "w+"); \
+} while (0)
 
 /*
  * Invert color threshold is for the absolute difference between background
@@ -75,6 +106,15 @@ typedef struct Vepu5xxOsdCfg_t {
     MppEncOSDData2      *osd_data2;
 } Vepu5xxOsdCfg;
 
+typedef struct Vepu5xxRoiH264BsCfg_t {
+    RK_U64 force_inter   : 42;
+    RK_U64 mode_mask     : 9;
+    RK_U64 reserved      : 10;
+    RK_U64 force_intra   : 1;
+    RK_U64 qp_adj_en     : 1;
+    RK_U64 amv_en        : 1;
+} Vepu5xxRoiH264BsCfg;
+
 typedef struct VepuRgb2YuvCoeffs_t {
     RK_S16 r_coeff;
     RK_S16 g_coeff;
@@ -105,6 +145,9 @@ MPP_RET copy2osd2(MppEncOSDData2* dst, MppEncOSDData *src1, MppEncOSDData2 *src2
 
 MPP_RET vepu5xx_set_fmt(VepuFmtCfg *cfg, MppFrameFormat format);
 
+MPP_RET vepu5xx_h264_set_one_roi(void *buf, MppEncROIRegion *region, RK_S32 w, RK_S32 h);
+
+extern const RK_U32 vepu5xx_h264e_lambda_default_58[58];
 extern const RK_U32 vepu580_540_h264_flat_scl_tab[576];
 
 extern const RK_U32 klut_weight[24];

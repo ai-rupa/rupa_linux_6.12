@@ -417,6 +417,7 @@ struct rk_aiq_vbuf_info {
     float    exp_time;
     float    exp_gain;
     float    exp_ispdgain;
+    float    cis_total_gain;
     uint32_t exp_time_reg;
     uint32_t exp_gain_reg;
     uint32_t data_fd;
@@ -936,9 +937,26 @@ typedef struct _RkAiqBay3dStat {
 
 typedef enum _RkAiqIspUniteMode {
     RK_AIQ_ISP_UNITE_MODE_NORMAL = 0,
-    RK_AIQ_ISP_UNITE_MODE_TWO_GRID,
-    RK_AIQ_ISP_UNITE_MODE_FOUR_GRID,
+    RK_AIQ_ISP_UNITE_MODE_1X2 = 1,
+    RK_AIQ_ISP_UNITE_MODE_TWO_GRID = 1,
+    RK_AIQ_ISP_UNITE_MODE_2X2 = 2,
+    RK_AIQ_ISP_UNITE_MODE_FOUR_GRID = 2,
+    RK_AIQ_ISP_UNITE_MODE_3X3,
 } RkAiqIspUniteMode;
+
+typedef struct Rectangle_s {
+    uint32_t x;
+    uint32_t y;
+    uint32_t w;
+    uint32_t h;
+} Rectangle_t;
+
+typedef struct _RkAiqIspUniteInfo_s {
+    RkAiqIspUniteMode mode;
+    uint8_t h_num;
+    uint8_t v_num;
+    Rectangle_t isp_rect[3][3];
+} RkAiqIspUniteInfo_t;
 
 #if defined(ISP_HW_V32_LITE)
 #define RK_AIQ_ISP_CIF_INPUT_MAX_SIZE 4224 * 3136

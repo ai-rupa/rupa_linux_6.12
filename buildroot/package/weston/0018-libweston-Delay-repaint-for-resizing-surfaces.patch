@@ -1,0 +1,218 @@
+From da5b5ee62abb12ea1f9d701e94fa5b91795dfc1a Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Mon, 23 Mar 2026 18:41:23 +0800
+Subject: [PATCH 18/98] libweston: Delay repaint for resizing surfaces
+
+Delay repaint when a fullscreen or maximized desktop surface, panel, or
+background surface is changing size. This prevents visual glitches
+during resize.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ desktop-shell/shell.c         |  7 +++++++
+ include/libweston/libweston.h |  3 +++
+ libweston/compositor.c        | 39 ++++++++++++++++++++++++++++++++---
+ libweston/desktop/surface.c   | 34 ++++++++++++++++++++++++++++++
+ 4 files changed, 80 insertions(+), 3 deletions(-)
+
+diff --git a/desktop-shell/shell.c b/desktop-shell/shell.c
+index 75b1fa07..5ffa0d99 100644
+--- a/desktop-shell/shell.c
++++ b/desktop-shell/shell.c
+@@ -2650,6 +2650,8 @@ background_committed(struct weston_surface *es,
+ 	weston_view_move_to_layer(sh_output->background_view,
+ 				  &shell->background_layer.view_list);
+ 	weston_output_set_ready(sh_output->output);
++
++	es->wait_for_resizing = false;
+ }
+ 
+ static void
+@@ -2700,6 +2702,7 @@ desktop_shell_set_background(struct wl_client *client,
+ 	str_printf(&label, "background for output %s", surface->output->name);
+ 	weston_surface_set_label(surface, label);
+ 
++	surface->wait_for_resizing = true;
+ 	weston_desktop_shell_send_configure(resource, 0,
+ 					    surface_resource,
+ 					    surface->output->width,
+@@ -2763,6 +2766,8 @@ panel_committed(struct weston_surface *es,
+ 	assert(sh_output->panel_view);
+ 	pos = weston_coord_global_add(output->pos, sh_output->panel_offset);
+ 	weston_view_set_position(sh_output->panel_view, pos);
++
++	es->wait_for_resizing = false;
+ }
+ 
+ static void
+@@ -2823,6 +2828,7 @@ desktop_shell_set_panel(struct wl_client *client,
+ 	str_printf(&label, "panel for output %s", surface->output->name);
+ 	weston_surface_set_label(surface, label);
+ 
++	surface->wait_for_resizing = true;
+ 	weston_desktop_shell_send_configure(resource, 0,
+ 					    surface_resource,
+ 					    surface->output->width,
+@@ -4452,6 +4458,7 @@ shell_resize_surface_to_output(struct desktop_shell *shell,
+ 	if (!surface)
+ 		return;
+ 
++	surface->wait_for_resizing = true;
+ 	weston_desktop_shell_send_configure(shell->child.desktop_shell, 0,
+ 					surface->resource,
+ 					output->width,
+diff --git a/include/libweston/libweston.h b/include/libweston/libweston.h
+index 3ab97725..7f74a1fc 100644
+--- a/include/libweston/libweston.h
++++ b/include/libweston/libweston.h
+@@ -2088,6 +2088,9 @@ struct weston_surface {
+ 
+ 	/** commit_timing_v1 */
+ 	struct weston_commit_timer *commit_timer;
++
++	/** delay output repaint when surface is resizing */
++	bool wait_for_resizing;
+ };
+ 
+ struct weston_subsurface {
+diff --git a/libweston/compositor.c b/libweston/compositor.c
+index ce3680d2..9b993d49 100644
+--- a/libweston/compositor.c
++++ b/libweston/compositor.c
+@@ -3895,8 +3895,11 @@ weston_output_repaint(struct weston_output *output)
+ 		 * feedback to the respective lists if pnode/surface is
+ 		 * occluded
+ 		 */
+-		if (!pixman_region32_not_empty(&pnode->visible))
+-			continue;
++		if (!pixman_region32_not_empty(&pnode->visible)) {
++			/* Allow resizing */
++			if (!pnode->surface->wait_for_resizing)
++				continue;
++		}
+ 
+ 		wl_list_insert_list(&frame_callback_list,
+ 				    &pnode->surface->frame_callback_list);
+@@ -4248,6 +4251,21 @@ surface_statistics_timer_handler(void *data)
+ 	return 0;
+ }
+ 
++static bool
++weston_output_should_freeze(struct weston_output *output)
++{
++	struct weston_paint_node *pnode;
++
++	wl_list_for_each(pnode, &output->paint_node_z_order_list,
++			 z_order_link) {
++		/* Freeze output during ongoing surface resize */
++		if (pnode->surface->wait_for_resizing)
++			return true;
++	}
++
++	return false;
++}
++
+ static int
+ output_repaint_timer_handler(int fd, uint32_t mask, void *data)
+ {
+@@ -4259,6 +4277,7 @@ output_repaint_timer_handler(int fd, uint32_t mask, void *data)
+ 	int ret = 0;
+ 	uint64_t e;
+ 	ssize_t size;
++	bool should_freeze = false;
+ 
+ 	do {
+ 		size = read(compositor->repaint_timer_fd, &e, sizeof e);
+@@ -4315,8 +4334,22 @@ output_repaint_timer_handler(int fd, uint32_t mask, void *data)
+ 			ret = weston_output_repaint(output);
+ 			if (ret)
+ 				break;
++
++			if (!weston_output_should_freeze(output))
++				continue;
++
++			timespec_add_nsec(&output->next_repaint,
++					  &output->next_repaint,
++					  millihz_to_nsec(output->current_mode->refresh));
++
++			output->repainted = false;
++			output->repaint_status = REPAINT_SCHEDULED;
++			weston_output_damage(output);
++
++			should_freeze = true;
+ 		}
+-		if (ret == 0) {
++
++		if (!should_freeze && ret == 0) {
+ 			if (backend->repaint_flush)
+ 				backend->repaint_flush(backend);
+ 		} else {
+diff --git a/libweston/desktop/surface.c b/libweston/desktop/surface.c
+index 8efff15f..dfcc85e0 100644
+--- a/libweston/desktop/surface.c
++++ b/libweston/desktop/surface.c
+@@ -78,6 +78,9 @@ struct weston_desktop_surface {
+ 		struct wl_list grab_link;
+ 	};
+ 	struct wl_list grabbing_seats;
++
++	/** target size */
++	int32_t width, height;
+ };
+ 
+ static void
+@@ -184,6 +187,28 @@ weston_desktop_surface_destroy(struct weston_desktop_surface *surface)
+ 	free(surface);
+ }
+ 
++/* Check if a desktop surface is currently resizing and should delay
++ * output repaint. Returns true only for fullscreen/maximized surfaces
++ * whose current size doesn't match the target size. */
++static bool
++weston_desktop_surface_wait_for_resizing(struct weston_desktop_surface *surface)
++{
++	if (!weston_desktop_surface_get_maximized(surface) &&
++	    !weston_desktop_surface_get_pending_maximized(surface) &&
++	    !weston_desktop_surface_get_fullscreen(surface) &&
++	    !weston_desktop_surface_get_pending_fullscreen(surface))
++		return false;
++
++	if (!surface->width && !surface->height)
++		return false;
++
++	if (surface->surface->width != surface->width ||
++	    surface->surface->height != surface->height)
++		return true;
++
++	return false;
++}
++
+ static void
+ weston_desktop_surface_surface_committed(struct wl_listener *listener,
+ 					 void *data)
+@@ -217,6 +242,9 @@ weston_desktop_surface_surface_committed(struct wl_listener *listener,
+ 	}
+ 
+ 	surface->buffer_move = weston_coord_surface(0, 0, wsurface);
++
++	surface->surface->wait_for_resizing =
++		weston_desktop_surface_wait_for_resizing(surface);
+ }
+ 
+ static void
+@@ -522,6 +550,12 @@ weston_desktop_surface_set_size(struct weston_desktop_surface *surface, int32_t
+ 		surface->implementation->set_size(surface,
+ 						  surface->implementation_data,
+ 						  width, height);
++
++	surface->width = width;
++	surface->height = height;
++
++	surface->surface->wait_for_resizing =
++		weston_desktop_surface_wait_for_resizing(surface);
+ }
+ 
+ WL_EXPORT void
+-- 
+2.39.5
+

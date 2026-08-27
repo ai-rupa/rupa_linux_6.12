@@ -23,12 +23,12 @@ PERF_MAKE_FLAGS = \
 	JOBS=$(PARALLEL_JOBS) \
 	ARCH=$(PERF_ARCH) \
 	DESTDIR=$(TARGET_DIR) \
+	PKG_CONFIG_LIBDIR="$(STAGING_DIR)/usr/lib/pkgconfig" \
 	prefix=/usr \
 	NO_GTK2=1 \
 	NO_LIBPERL=1 \
 	NO_LIBPYTHON=1 \
 	NO_LIBBIONIC=1 \
-	NO_LIBTRACEEVENT=1 \
 	NO_SHELLCHECK=1
 
 PERF_LDFLAGS=$(TARGET_LDFLAGS)
@@ -140,6 +140,12 @@ PERF_MAKE_FLAGS += CORESIGHT=1
 # bare "ifdef CORESIGHT" constructs.
 endif
 
+ifeq ($(BR2_PACKAGE_LIBTRACEEVENT),y)
+PERF_DEPENDENCIES += libtraceevent
+else
+PERF_MAKE_FLAGS += NO_LIBTRACEEVENT=1
+endif
+
 PERF_MAKE_FLAGS += LDFLAGS="$(PERF_LDFLAGS)"
 
 # We really do not want to build the perf documentation, because it
@@ -154,6 +160,14 @@ define PERF_DISABLE_DOCUMENTATION
 	fi
 endef
 LINUX_TOOLS_POST_PATCH_HOOKS += PERF_DISABLE_DOCUMENTATION
+
+# bpftool bootstrap is built with the host compiler but inherits LDFLAGS
+# from perf (e.g. -lunwind-aarch64). Clear LDFLAGS for the bpftool build.
+define PERF_FIX_BPFTOOL_LDFLAGS
+	$(SED) 's/\$$(Q)CFLAGS= \$$(MAKE) -C ..\/bpf\/bpftool/$$(Q)CFLAGS= LDFLAGS= $$(MAKE) -C ..\/bpf\/bpftool/' \
+		$(LINUX_DIR)/tools/perf/Makefile.perf
+endef
+LINUX_TOOLS_POST_PATCH_HOOKS += PERF_FIX_BPFTOOL_LDFLAGS
 
 # O must be redefined here to overwrite the one used by Buildroot for
 # out of tree build. We build perf in $(LINUX_DIR)/tools/perf/ and not just

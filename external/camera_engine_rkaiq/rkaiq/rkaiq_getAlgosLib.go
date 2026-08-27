@@ -291,6 +291,7 @@ func rkaiq_getAlgosLib(macros_map map[string]bool) []string {
     flag0 = macros_map["RKAIQ_HAVE_PDAF"]
     if (flag0) {
         static_lib = append(static_lib, "librkaiq_pdaf")
+        static_lib = append(static_lib, "librkaiq_pdlibsony")
     }
 
     flag0 = macros_map["RKAIQ_HAVE_3DLUT_V1"]

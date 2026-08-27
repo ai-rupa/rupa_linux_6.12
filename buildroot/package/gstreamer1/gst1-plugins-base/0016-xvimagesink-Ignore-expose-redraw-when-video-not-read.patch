@@ -1,4 +1,4 @@
-From 062e2bc5d412347e9e9a687673dfa8a8916c7afe Mon Sep 17 00:00:00 2001
+From d3878e7219a1851f8444ad78525cb95cfd1a4c46 Mon Sep 17 00:00:00 2001
 From: Jeffy Chen <jeffy.chen@rock-chips.com>
 Date: Thu, 4 May 2023 09:12:49 +0800
 Subject: [PATCH 16/21] xvimagesink: Ignore expose-redraw when video not ready

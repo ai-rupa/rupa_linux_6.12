@@ -1,4 +1,4 @@
-From 6669124f2c3c28122939644eb25acedb9ef57136 Mon Sep 17 00:00:00 2001
+From 8a8f582eb1eb09ba43f8cdbe8db94f2f79d009c3 Mon Sep 17 00:00:00 2001
 From: Yao Xiao <xiaoyao@rock-chips.com>
 Date: Tue, 6 Aug 2024 16:45:02 +0800
 Subject: [PATCH 5/5] bluez: modified only for rockchip
@@ -2033,5 +2033,5 @@ index 9db3f52..08ba6d6 100644
  		return false;
  
 -- 
-2.20.1
+2.39.5
 

@@ -167,7 +167,7 @@ static int mesh_interpolation(CcmContext_t *pCcmCtx, float fSaturation, int mesh
     float fSatB = pTable2->sw_ccmC_ccmSat_val;
 
     if (fSatA == fSatB) {
-        memcpy(&pCcmCtx->undamped_matrix, &pTable1->ccMatrix, sizeof(ccm_matrix_t));
+        memcpy(&pCcmCtx->ccm_satIntp, &pTable1->ccMatrix, sizeof(ccm_matrix_t));
         return 0;
     }
 
@@ -178,19 +178,20 @@ static int mesh_interpolation(CcmContext_t *pCcmCtx, float fSaturation, int mesh
 
     int i;
     for ( i = 0; i < 9; i++) {
-        pCcmCtx->undamped_matrix.hw_ccmC_matrix_coeff[i] = f1 * pMatrixA->hw_ccmC_matrix_coeff[i] + f2 * pMatrixB->hw_ccmC_matrix_coeff[i];
+        pCcmCtx->ccm_satIntp.hw_ccmC_matrix_coeff[i] = f1 * pMatrixA->hw_ccmC_matrix_coeff[i] + f2 * pMatrixB->hw_ccmC_matrix_coeff[i];
     }
 
     for ( i = 0; i < 3; i++) {
-        pCcmCtx->undamped_matrix.hw_ccmC_matrix_offset[i] = f1 * pMatrixA->hw_ccmC_matrix_offset[i] + f2 * pMatrixB->hw_ccmC_matrix_offset[i];
+        pCcmCtx->ccm_satIntp.hw_ccmC_matrix_offset[i] = f1 * pMatrixA->hw_ccmC_matrix_offset[i] + f2 * pMatrixB->hw_ccmC_matrix_offset[i];
     }
 
     return 0;
 }
 
-void Saturationadjust(float fScale, float flevel1, float *pccMatrixA)
+void Saturationadjust(float fScale, float flevel1, float *pccMatrixA, float *out)
 {
-    float  Matrix_tmp[9];
+    float Matrix_tmp[9];
+    float Matrix_tmp2[9];
     if (fScale < DIVMIN) {
         if(fabs((flevel1-50))>DIVMIN){
             LOGW_ACCM("fScale is  %f, so saturation adjust bypass\n", fScale);
@@ -202,9 +203,14 @@ void Saturationadjust(float fScale, float flevel1, float *pccMatrixA)
             LOGE_ACCM("%s: pointer pccMatrixA is NULL", __FUNCTION__);
             return;
         }
+        if (fabs(flevel1 - 1.0f) < DIVMIN) {
+            LOGD_ACCM("%s: flevel1 is 1.0f, so saturation adjust bypassed", __FUNCTION__);
+            return;
+        }
         memcpy(&Matrix_tmp, pccMatrixA, sizeof(Matrix_tmp));
+        memcpy(&Matrix_tmp2, pccMatrixA, sizeof(Matrix_tmp2));
         float *pccMatrixB;
-        pccMatrixB = Matrix_tmp;
+        pccMatrixB = Matrix_tmp2;
         /* ************************************
         *  M_A =  (M0 - E) * fscale + E
         *  M_B = rgb2ycbcr(M_A)
@@ -217,44 +223,44 @@ void Saturationadjust(float fScale, float flevel1, float *pccMatrixA)
             for(int i =0; i < 9; i++)
             {
                 if (i == 0 || i == 4 || i == 8){
-                  pccMatrixA[i] = (pccMatrixA[i] - 1)*fScale+1;
+                  Matrix_tmp[i] = (pccMatrixA[i] - 1)*fScale+1;
                 }
                 else{
-                  pccMatrixA[i] = pccMatrixA[i]*fScale;
+                  Matrix_tmp[i] = pccMatrixA[i]*fScale;
                 }
             }
-            pccMatrixB[0] = 0.299 * pccMatrixA[0] + 0.587 * pccMatrixA[3] + 0.114 * pccMatrixA[6];
-            pccMatrixB[1] = 0.299 * pccMatrixA[1] + 0.587 * pccMatrixA[4] + 0.114 * pccMatrixA[7];
-            pccMatrixB[2] = 0.299 * pccMatrixA[2] + 0.587 * pccMatrixA[5] + 0.114 * pccMatrixA[8];
-            pccMatrixB[3] = -0.1687 * pccMatrixA[0] - 0.3313 * pccMatrixA[3] + 0.5 * pccMatrixA[6];
-            pccMatrixB[4] = -0.1687 * pccMatrixA[1] - 0.3313 * pccMatrixA[4] + 0.5 * pccMatrixA[7];
-            pccMatrixB[5] = -0.1687 * pccMatrixA[2] - 0.3313 * pccMatrixA[5] + 0.5 * pccMatrixA[8];
-            pccMatrixB[6] = 0.5 * pccMatrixA[0]  - 0.4187 * pccMatrixA[3] - 0.0813 * pccMatrixA[6];
-            pccMatrixB[7] = 0.5 * pccMatrixA[1]  - 0.4187 * pccMatrixA[4] - 0.0813 * pccMatrixA[7];
-            pccMatrixB[8] = 0.5 * pccMatrixA[2]  - 0.4187 * pccMatrixA[5] - 0.0813 * pccMatrixA[8];
+            pccMatrixB[0] = 0.299 * Matrix_tmp[0] + 0.587 * Matrix_tmp[3] + 0.114 * Matrix_tmp[6];
+            pccMatrixB[1] = 0.299 * Matrix_tmp[1] + 0.587 * Matrix_tmp[4] + 0.114 * Matrix_tmp[7];
+            pccMatrixB[2] = 0.299 * Matrix_tmp[2] + 0.587 * Matrix_tmp[5] + 0.114 * Matrix_tmp[8];
+            pccMatrixB[3] = -0.1687 * Matrix_tmp[0] - 0.3313 * Matrix_tmp[3] + 0.5 * Matrix_tmp[6];
+            pccMatrixB[4] = -0.1687 * Matrix_tmp[1] - 0.3313 * Matrix_tmp[4] + 0.5 * Matrix_tmp[7];
+            pccMatrixB[5] = -0.1687 * Matrix_tmp[2] - 0.3313 * Matrix_tmp[5] + 0.5 * Matrix_tmp[8];
+            pccMatrixB[6] = 0.5 * Matrix_tmp[0]  - 0.4187 * Matrix_tmp[3] - 0.0813 * Matrix_tmp[6];
+            pccMatrixB[7] = 0.5 * Matrix_tmp[1]  - 0.4187 * Matrix_tmp[4] - 0.0813 * Matrix_tmp[7];
+            pccMatrixB[8] = 0.5 * Matrix_tmp[2]  - 0.4187 * Matrix_tmp[5] - 0.0813 * Matrix_tmp[8];
 
             for(int i = 3; i < 9; i++)
             {
                  pccMatrixB[i] = flevel1 * pccMatrixB[i];
-             }
-            pccMatrixA[0] = 1 * pccMatrixB[0] + 0 * pccMatrixB[3] + 1.402 * pccMatrixB[6];
-            pccMatrixA[1] = 1 * pccMatrixB[1] + 0 * pccMatrixB[4] + 1.402 * pccMatrixB[7];
-            pccMatrixA[2] = 1 * pccMatrixB[2] + 0 * pccMatrixB[5] + 1.402 * pccMatrixB[8];
-            pccMatrixA[3] = 1 * pccMatrixB[0] - 0.34414 * pccMatrixB[3]  - 0.71414 * pccMatrixB[6];
-            pccMatrixA[4] = 1 * pccMatrixB[1] - 0.34414 * pccMatrixB[4]  - 0.71414 * pccMatrixB[7];
-            pccMatrixA[5] = 1 * pccMatrixB[2] - 0.34414 * pccMatrixB[5]  - 0.71414 * pccMatrixB[8];
-            pccMatrixA[6] = 1 * pccMatrixB[0]  + 1.772 * pccMatrixB[3] + 0 * pccMatrixB[6];
-            pccMatrixA[7] = 1 * pccMatrixB[1]  + 1.772 * pccMatrixB[4] + 0 * pccMatrixB[7];
-            pccMatrixA[8] = 1 * pccMatrixB[2]  + 1.772 * pccMatrixB[5] + 0 * pccMatrixB[8];
+            }
+            Matrix_tmp[0] = 1 * pccMatrixB[0] + 0 * pccMatrixB[3] + 1.402 * pccMatrixB[6];
+            Matrix_tmp[1] = 1 * pccMatrixB[1] + 0 * pccMatrixB[4] + 1.402 * pccMatrixB[7];
+            Matrix_tmp[2] = 1 * pccMatrixB[2] + 0 * pccMatrixB[5] + 1.402 * pccMatrixB[8];
+            Matrix_tmp[3] = 1 * pccMatrixB[0] - 0.34414 * pccMatrixB[3]  - 0.71414 * pccMatrixB[6];
+            Matrix_tmp[4] = 1 * pccMatrixB[1] - 0.34414 * pccMatrixB[4]  - 0.71414 * pccMatrixB[7];
+            Matrix_tmp[5] = 1 * pccMatrixB[2] - 0.34414 * pccMatrixB[5]  - 0.71414 * pccMatrixB[8];
+            Matrix_tmp[6] = 1 * pccMatrixB[0]  + 1.772 * pccMatrixB[3] + 0 * pccMatrixB[6];
+            Matrix_tmp[7] = 1 * pccMatrixB[1]  + 1.772 * pccMatrixB[4] + 0 * pccMatrixB[7];
+            Matrix_tmp[8] = 1 * pccMatrixB[2]  + 1.772 * pccMatrixB[5] + 0 * pccMatrixB[8];
 
 
             for(int i =0; i < 9; i++)
             {
                 if (i == 0 || i == 4 || i == 8){
-                  pccMatrixA[i] = (pccMatrixA[i] - 1)/fScale+1;
+                  out[i] = (Matrix_tmp[i] - 1)/fScale+1;
                 }
                 else{
-                  pccMatrixA[i] = pccMatrixA[i]/fScale;
+                  out[i] = Matrix_tmp[i]/fScale;
                 }
             }
         }
@@ -364,7 +370,6 @@ XCamReturn Accm_prepare(RkAiqAlgoCom* params)
     pCcmCtx->fScale = 0.0;
     pCcmCtx->damp_converged = false;
     pCcmCtx->is_calib_update = true;
-    pCcmCtx->isReCal_ = true;
     return XCAM_RETURN_NO_ERROR;
 }
 
@@ -378,9 +383,10 @@ XCamReturn Accm_processing(const RkAiqAlgoCom* inparams, RkAiqAlgoResCom* outpar
 
     int iso = inparams->u.proc.iso;
 
-    bool need_recal = pCcmCtx->isReCal_;
-
-    bool isReCal_ = inparams->u.proc.is_attrib_update || inparams->u.proc.init;
+    bool illuCase_change = false;
+    bool sat_change = false;
+    bool force_recal = pCcmCtx->is_calib_update || inparams->u.proc.is_attrib_update || inparams->u.proc.init;
+    bool need_recal = false;
 
     if (pCcmCtx->ccm_selector.frame_num == 0 || inparams->u.proc.is_attrib_update) {
         for (int i = 0; i < pdyn->sw_ccmT_illuLink_len; i++) {
@@ -392,20 +398,17 @@ XCamReturn Accm_processing(const RkAiqAlgoCom* inparams, RkAiqAlgoResCom* outpar
         pCcmCtx->ccm_selector.source_count = MIN(pdyn->sw_ccmT_illuLink_len, ILLUM_MAX_NUM);
     }
 
-    if (isReCal_) {
-        need_recal = true;
-    }
     LOGD_ACCM("awbGain= (%f, %f)", swinfo->awbGain[0], swinfo->awbGain[1]);
     int illu_idx = -1;
 
     selector_process_frame(&pCcmCtx->ccm_selector, swinfo->awbGain, &illu_idx);
 
     accm_param_illuLink_t *pIlluCase = &pdyn->illuLink[illu_idx];
-
+    //pick the mesh list according to illum case
     if (illu_idx != pCcmCtx->pre_illu_idx || pCcmCtx->is_calib_update) {
         if (illu_idx != pCcmCtx->pre_illu_idx) {
             pCcmCtx->pre_illu_idx  = illu_idx;
-            need_recal = true;
+            illuCase_change = true;
         }
         pCcmCtx->illu_mesh_len =
             get_all_mesh_by_name(pCcmCtx, pIlluCase->sw_ccmC_illu_name);
@@ -414,53 +417,42 @@ XCamReturn Accm_processing(const RkAiqAlgoCom* inparams, RkAiqAlgoResCom* outpar
     float sat = get_sat_by_gain(pIlluCase->gain2SatCurve.sw_ccmT_isoIdx_val, pIlluCase->gain2SatCurve.sw_ccmT_glbSat_val, swinfo->sensorGain);
     if (sat != pCcmCtx->pre_saturation) {
         pCcmCtx->pre_saturation  = sat;
-        need_recal = true;
+        sat_change = true;
     }
 
-    if (need_recal || pCcmCtx->is_calib_update) {
-        pCcmCtx->is_calib_update = false;
+    if (sat_change || illuCase_change || force_recal) {
         int mesh_out[2] = {-1, -1};
         int ret = get_mesh_by_sat(pCcmCtx, sat, mesh_out);
         if (ret == 0) {
-            LOGE_ACCM("no valid mesh!!");
+            LOGE_ACCM("no valid mesh!! use last valid mesh");
         } else if (ret == 1) {
             uint8_t id = mesh_out[0];
             accm_matrixAll_t *pTable = &calibdb->matrixAll[id];
             LOGD_ACCM("copy mesh id %d", id);
-            memcpy(&pCcmCtx->undamped_matrix, &pTable->ccMatrix, sizeof(ccm_matrix_t));
+            memcpy(&pCcmCtx->ccm_satIntp, &pTable->ccMatrix, sizeof(ccm_matrix_t));
         } else {
             mesh_interpolation(pCcmCtx, sat, mesh_out);
         }
-        need_recal = true;
     }
 
     // TODO
     bool damp_en = tunning->stAuto.sta.sw_ccmT_damp_en;
-    if (damp_en) {
-        if (need_recal || !pCcmCtx->damp_converged) {
-            need_recal = true;
-        }
-    }
     int delta_iso = abs(iso - pCcmCtx->pre_iso);
-    //if(delta_iso > 1 || pCcmCtx->isReCal_) {
-    if(delta_iso > 1 || need_recal) {
+    need_recal = sat_change || illuCase_change || force_recal || (damp_en && !pCcmCtx->damp_converged) || delta_iso > 1;
+    if (need_recal) {
         CcmSelectParam(pCcmCtx, outparams->algoRes, iso);
         pCcmCtx->pre_iso = iso;
-        need_recal = true;
     }
-
-    if (fabs(pCcmCtx->pre_scale - pCcmCtx->fScale) > 0.01) {
-        Saturationadjust(pCcmCtx->fScale, 50, pCcmCtx->undamped_matrix.hw_ccmC_matrix_coeff);
+    pCcmCtx->undamped_matrix = pCcmCtx->ccm_satIntp;
+    if (fabs(pCcmCtx->pre_scale - pCcmCtx->fScale) > 0.01 || sat_change || illuCase_change || pCcmCtx->is_calib_update) {
+        Saturationadjust(pCcmCtx->fScale, 50, pCcmCtx->ccm_satIntp.hw_ccmC_matrix_coeff, pCcmCtx->undamped_matrix.hw_ccmC_matrix_coeff);
         pCcmCtx->pre_scale = pCcmCtx->fScale;
-        need_recal = true;
     }
 
-    // bool damp_en = tunning->stAuto.sta.sw_ccmT_damp_en;
     if (damp_en) {
-        if (need_recal || !pCcmCtx->damp_converged) {
+        if (need_recal) {
             float dampCoef = swinfo->awbIIRDampCoef;
             Damping(pCcmCtx, dampCoef);
-            need_recal = true;
         }
     }
 
@@ -479,7 +471,7 @@ XCamReturn Accm_processing(const RkAiqAlgoCom* inparams, RkAiqAlgoResCom* outpar
     } else {
         outparams->cfg_update = false;
     }
-    pCcmCtx->isReCal_ = false;
+    pCcmCtx->is_calib_update = false;
     return XCAM_RETURN_NO_ERROR;
 }
 
@@ -496,6 +488,11 @@ create_context(RkAiqAlgoContext **context, const AlgoCtxInstanceCfg* cfg)
     ctx->pre_saturation = 0.0;
     ctx->pre_scale = 0.0;
     ctx->pre_iso = 0;
+    memset(&ctx->undamped_matrix, 0, sizeof(ccm_matrix_t));
+    ctx->undamped_matrix.hw_ccmC_matrix_coeff[0] = 1.0f;
+    ctx->undamped_matrix.hw_ccmC_matrix_coeff[4] = 1.0f;
+    ctx->undamped_matrix.hw_ccmC_matrix_coeff[8] = 1.0f;
+    memcpy(&ctx->ccm_satIntp, &ctx->undamped_matrix, sizeof(ccm_matrix_t));
 
     selector_init(&ctx->ccm_selector);
 

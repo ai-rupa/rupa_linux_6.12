@@ -20,19 +20,20 @@
 #include "algos/aiisp/rk_aiisp.h"
 #include "c_base/aiq_cond.h"
 #include "common/aiq_notifier.h"
+#include "common/rkcif-config.h"
+#include "hwi_c/aiq_AiRmsStreamProcUnit.h"
 #include "hwi_c/aiq_aiIspLoader.h"
 #include "hwi_c/aiq_ispParamsSplitter.h"
 #include "hwi_c/aiq_sensorHw.h"
 #include "hwi_c/aiq_spStreamProcUnit.h"
 #include "hwi_c/aiq_stream.h"
-#include "hwi_c/aiq_AiRmsStreamProcUnit.h"
+#include "hwi_c/rawReprocess/RkAiqMemcManager.h"
+#include "hwi_c/rawReprocess/aiq_fpnSwStreamProcUnit.h"
 #include "include/iq_parser_v2/aec_head.h"
 #include "include/iq_parser_v2/af_head.h"
 #include "include/iq_parser_v2/sensorinfo_head.h"
 #include "xcore_c/aiq_v4l2_buffer.h"
 #include "xcore_c/aiq_v4l2_device.h"
-#include "hwi_c/rawReprocess/aiq_fpnSwStreamProcUnit.h"
-#include "hwi_c/rawReprocess/RkAiqMemcManager.h"
 
 XCAM_BEGIN_DECLARE
 
@@ -165,6 +166,44 @@ typedef struct exgain_s {
     bool gain_module_en;
 } exgain_t;
 
+#define CAPTURE_TS_QSIZE 8
+/**
+ * Per-frame capture pipeline timestamps. All values in us (CLOCK_MONOTONIC).
+ * t0: triggerCapture (queueFreeBuffer)
+ * t1: sendToAirms (cap thread)
+ * t2: sendToISP   (proc thread)
+ * T3 (isp_done) is computed on-the-fly in ISP_POLL_RX
+ */
+typedef struct AiqCaptureFrameTs_s {
+    int64_t t0;
+    int64_t t1; /* 0 if AIRMS not active */
+    int64_t t2;
+} AiqCaptureFrameTs_t;
+
+/**
+ * FIFO of per-frame timestamps for the capture pipeline.
+ * wr: T0 push,           queueFreeBuffer (triggerCapture / ISP_POLL_RX)
+ * t1: T1 record+advance, sendToAirms (cap thread)
+ * t2: T2 record+advance, sendToISP   (proc thread)
+ * rd: T3 pop,            isp_done    (poll thread)
+ */
+typedef struct AiqCaptureTsStats_s {
+    AiqCaptureFrameTs_t queue[CAPTURE_TS_QSIZE];
+    uint32_t wr;
+    uint32_t t1;
+    uint32_t t2;
+    uint32_t rd;
+} AiqCaptureTsStats_t;
+
+typedef struct AiqCamHwBnrDrvBuf_s {
+    struct rkisp_bnr_buf_info _bay3dbuf;
+    void* iir_address[RKISP_BUFFER_MAX];
+    void* gain_address[RKISP_BUFFER_MAX];
+    void* aiisp_address[RKISP_BUFFER_MAX];
+    void* wgt_address[RKISP_BUFFER_MAX];
+    bool _init;
+} AiqCamHwBnrDrvBuf_t;
+
 typedef struct AiqCamHwBase_s {
     AiqSensorHw_t* _mSensorDev;
     AiqIspParamsCvt_t* _mIspParamsCvt;
@@ -264,14 +303,7 @@ typedef struct AiqCamHwBase_s {
     bool mIsFake;
     AiqManager_t* rkAiqManager;
     // bay3d fuf
-    struct {
-        struct rkisp_bnr_buf_info _bay3dbuf;
-        void* iir_address[RKISP_BUFFER_MAX];
-        void* gain_address[RKISP_BUFFER_MAX];
-        void* aiisp_address[RKISP_BUFFER_MAX];
-        void* wgt_address[RKISP_BUFFER_MAX];
-        bool _init;
-    } _bnrDrvBuf;
+    AiqCamHwBnrDrvBuf_t _bnrDrvBuf;
     XCamReturn (*prepare)(AiqCamHwBase_t* pCamHw, uint32_t width, uint32_t height, int mode,
                           int t_delay, int g_delay);
     // internal override
@@ -334,8 +366,22 @@ typedef struct AiqCamHwBase_s {
     XCamReturn (*btnrWgtReproc_updateEn)(AiqCamHwBase_t* pCamHw, bool en);
 #endif
 
-// AIRMS
+    // BAY3DIIR external processing
+    struct {
+        bool inited;
+        bool ai_cfg_need_init;
+        XCamReturn (*init)(AiqCamHwBase_t* pCamHw, struct rkisp_aiisp_cfg* aibnr_cfg);
+        XCamReturn (*start)(AiqCamHwBase_t* pCamHw);
+        XCamReturn (*stop)(AiqCamHwBase_t* pCamHw);
+        XCamReturn (*deinit)(AiqCamHwBase_t* pCamHw);
+        void (*setIspBufInf)(AiqCamHwBase_t* pCamHw, AiqCamHwBnrDrvBuf_t** p_bnrDrvBuf);
+        XCamReturn (*setLinecnt)(AiqCamHwBase_t* pCamHw, struct rkisp_aiisp_cfg* aibnr_cfg);
+        XCamReturn (*doIspBe)(AiqCamHwBase_t* pCamHw, struct rkisp_aiisp_st* isp_in);
+    } mBtnrIirExtproc;
+
+    // AIRMS
     char airms_model_file[AIRMS_MODEL_FILENAME_LEN];
+    airms_wbgain_apply_mode_t airms_wbgain_mode;
 
 #if RKAIQ_HAVE_AIYNR
     RkAiqAiynrModelInfo_t mAiynrModelInfo;
@@ -381,8 +427,15 @@ typedef struct AiqCamHwBase_s {
     FrameDumpInfo_t stats;
 #endif
     rk_aiq_exposure_sensor_descriptor mSnsDes;
-} AiqCamHwBase_t;
 
+    enum vicap_output_path mVicapOutputPath;
+    bool mIsVicapVirtualSensor;
+    bool isPreviewCaptureMode;
+    rk_aiq_capture_trigger_t mCaptureTrigger;
+    AiqCaptureTsStats_t mCaptureTs;
+    // protects mCaptureTrigger and mCaptureTs (user thread vs poll thread)
+    AiqMutex_t _capture_trigger_mutex;
+} AiqCamHwBase_t;
 rk_aiq_static_info_t* AiqCamHw_getStaticCamHwInfo(const char* sns_ent_name, uint16_t index);
 rk_aiq_static_info_t* AiqCamHw_getStaticCamHwInfoByPhyId(const char* sns_ent_name, uint16_t);
 XCamReturn AiqCamHw_clearStaticCamHwInfo();
@@ -467,13 +520,14 @@ XCamReturn AiqCamHw_setVicapStreamMode(AiqCamHwBase_t* pCamHw, int mode, bool is
 rk_sensor_full_info_t* AiqCamHw_getFullSnsInfo(const char* sensor_name);
 aiq_isp_effect_params_t* AiqCamHw_getParamsForEffMap(AiqCamHwBase_t* pCamHw, uint32_t frame_id);
 XCamReturn AiqCam_FastBootSetLastEffectParam(AiqCamHwBase_t* pCamHw);
-RkAiqIspUniteMode AiqCamHw_getIspUniteMode(AiqCamHwBase_t* pCamHw);
+XCamReturn AiqCamHw_getIspUniteInfo(AiqCamHwBase_t* pCamHw, RkAiqIspUniteInfo_t* info);
 XCamReturn AiqCamHw_setNoReadbackMode(AiqCamHwBase_t* pCamHw, bool on);
 XCamReturn AiqCamHw_setRawBufNum(AiqCamHwBase_t* pCamHw, uint16_t buf_num);
 XCamReturn AiqCamHw_setAibnrDelayCnt(AiqCamHwBase_t* pCamHw, int delayCnt);
 XCamReturn AiqCamHw_setAiynrDelayCnt(AiqCamHwBase_t* pCamHw, int delayCnt);
 XCamReturn AiqCamHw_setSnsOtpInfo(AiqCamHwBase_t* pCamHw, struct rkmodule_awb_inf* otp_awb,
-                                  struct rkmodule_lsc_inf* otp_lsc, rk_aiq_user_otp_info_t* user_otp);
+                                  struct rkmodule_lsc_inf* otp_lsc,  struct rkmodule_af_inf* otp_af,
+                                  struct rkmodule_pdaf_inf* otp_pdaf,rk_aiq_user_otp_info_t* user_otp);
 XCamReturn AiqCamHw_pushImuData(AiqCamHwBase_t* pCamHw, AiqImuData_t *data);
 bool AiqCamHw_getMemcNeededDelay(AiqCamHwBase_t* pCamHw);
 XCamReturn AiqCamHw_queryFpnSwStatus(AiqCamHwBase_t* pCamHw, void *status);
@@ -496,6 +550,27 @@ XCamReturn AiqCamHw_getAiBnrBufCnt(AiqCamHwBase_t* pCamHw,
 
 bool AiqCamHw_getAiqReadbackOn(AiqCamHwBase_t* pCamHw);
 XCamReturn AiqCamHw_setPdType1Params(AiqCamHwBase_t* pCamHw, rk_aiq_pdt1_param_t* pdt1);
+
+/**
+ * @brief Trigger capture by queuing free buffers to the driver.
+ *
+ * Save the trigger parameters and queue one free buffer per device
+ * in each call, decrementing frame_count until it reaches zero.
+ *
+ * @param pCamHw   Camera hardware base pointer
+ * @param trigger  Capture trigger parameters (frame_count, etc.)
+ * @return XCamReturn XCAM_RETURN_NO_ERROR on success, error code on failure
+ */
+XCamReturn AiqCamHw_triggerCapture(AiqCamHwBase_t* pCamHw, const rk_aiq_capture_trigger_t* trigger);
+
+/**
+ * @brief Check if this camera instance is a vicap virtual sensor.
+ * @param pCamHw   Camera hardware base pointer
+ * @return true if vicap virtual sensor, false otherwise.
+ */
+bool AiqCamHw_isVicapVirtualSensor(AiqCamHwBase_t* pCamHw);
+
+XCamReturn AiqCamHw_setCifSclStartFlag(AiqCamHwBase_t* pCamHw, int ratio, bool mode);
 
 XCAM_END_DECLARE
 

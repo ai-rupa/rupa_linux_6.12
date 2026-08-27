@@ -1,0 +1,46 @@
+From c64e9a38864fa1c4d3ea9721aa25c23229a781ab Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Wed, 1 Apr 2026 11:57:00 +0800
+Subject: [PATCH 31/98] pointer: Provide fallback output for clamping
+
+Ensure valid output for clamping when pointer is outside all outputs.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ libweston/input.c | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/libweston/input.c b/libweston/input.c
+index 02c91e66..bc4f4b51 100644
+--- a/libweston/input.c
++++ b/libweston/input.c
+@@ -497,7 +497,7 @@ WL_EXPORT struct weston_coord_global
+ weston_pointer_clamp(struct weston_pointer *pointer, struct weston_coord_global pos)
+ {
+ 	struct weston_compositor *ec = pointer->seat->compositor;
+-	struct weston_output *output, *prev = NULL;
++	struct weston_output *output, *prev = NULL, *fallback = NULL;
+ 	int valid = 0;
+ 
+ 	wl_list_for_each(output, &ec->output_list, link) {
+@@ -507,11 +507,17 @@ weston_pointer_clamp(struct weston_pointer *pointer, struct weston_coord_global
+ 			valid = 1;
+ 		if (weston_output_contains_coord(output, pointer->pos))
+ 			prev = output;
++		if (!fallback)
++			fallback = output;
+ 	}
+ 
+ 	if (!prev)
+ 		prev = pointer->seat->output;
+ 
++	/* Use first output as final fallback */
++	if (!prev)
++		prev = fallback;
++
+ 	if (prev && !valid)
+ 		pos = weston_pointer_clamp_for_output(pointer, prev, pos);
+ 
+-- 
+2.39.5
+

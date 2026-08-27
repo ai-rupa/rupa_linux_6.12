@@ -1,4 +1,4 @@
-From b4a7c0df6f62aa0579b444d27296ea538878b195 Mon Sep 17 00:00:00 2001
+From 9a32c89090f34a9d21b9e1541c5873c46278219d Mon Sep 17 00:00:00 2001
 From: Jeffy Chen <jeffy.chen@rock-chips.com>
 Date: Thu, 4 May 2023 17:52:33 +0800
 Subject: [PATCH 17/21] gl: x11: Honor render-rectangle for toplevel window
@@ -12,10 +12,10 @@ Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
  1 file changed, 13 insertions(+)
 
 diff --git a/gst-libs/gst/gl/x11/gstglwindow_x11.c b/gst-libs/gst/gl/x11/gstglwindow_x11.c
-index f047b67..e7fd1aa 100644
+index 77eecd1..6b90443 100644
 --- a/gst-libs/gst/gl/x11/gstglwindow_x11.c
 +++ b/gst-libs/gst/gl/x11/gstglwindow_x11.c
-@@ -230,6 +230,13 @@ gst_gl_window_x11_create_window (GstGLWindowX11 * window_x11)
+@@ -229,6 +229,13 @@ gst_gl_window_x11_create_window (GstGLWindowX11 * window_x11)
        window_x11->visual_info->depth, InputOutput,
        window_x11->visual_info->visual, mask, &win_attr);
  
@@ -29,7 +29,7 @@ index f047b67..e7fd1aa 100644
    gst_gl_window_x11_handle_events (GST_GL_WINDOW (window_x11),
        window_x11->priv->handle_events);
  
-@@ -411,6 +418,12 @@ _show_window (GstGLWindow * window)
+@@ -410,6 +417,12 @@ _show_window (GstGLWindow * window)
    guint width = window_x11->priv->preferred_width;
    guint height = window_x11->priv->preferred_height;
  

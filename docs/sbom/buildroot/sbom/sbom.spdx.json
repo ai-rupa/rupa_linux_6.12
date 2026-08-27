@@ -1,0 +1,4794 @@
+{
+  "spdxVersion": "SPDX-2.2",
+  "dataLicense": "CC0-1.0",
+  "SPDXID": "SPDXRef-Document-97c4b47d1dee",
+  "name": "Rockchip Linux SDK - Buildroot SBOM",
+  "documentNamespace": "https://rockchip.com/sbom/f2bbad43002f",
+  "creationInfo": {
+    "created": "2026-07-01T09:43:03Z",
+    "creators": [
+      "Tool: sdk_sbom.py"
+    ],
+    "licenseListVersion": "3.20"
+  },
+  "packages": [
+    {
+      "SPDXID": "SPDXRef-Package-0000",
+      "name": "gcc-final",
+      "versionInfo": "14.3.0",
+      "downloadLocation": "https://mirrors.ustc.edu.cn/gnu/gcc/gcc-14.3.0",
+      "filesAnalyzed": false,
+      "licenseConcluded": "GPL-3.0-with-GCC-exception",
+      "licenseDeclared": "GPL-3.0-with-GCC-exception",
+      "copyrightText": "Copyright (c) Free Software Foundation, Inc.",
+      "supplier": "Organization: Free Software Foundation",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/gcc-final@14.3.0"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0001",
+      "name": "glibc",
+      "versionInfo": "2.42-67-g4ebd33dd77eabe8d4c45232bed4b42a31d2f9edc",
+      "downloadLocation": "https://sourceware.org/git/glibc.git",
+      "filesAnalyzed": false,
+      "licenseConcluded": "GPL-2.0+ (programs), LGPL-2.1+, BSD-3-Clause, MIT (library)",
+      "licenseDeclared": "GPL-2.0+ (programs), LGPL-2.1+, BSD-3-Clause, MIT (library)",
+      "copyrightText": "Copyright (c) Free Software Foundation, Inc.",
+      "supplier": "Organization: Free Software Foundation",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/glibc@2.42-67-g4ebd33dd77eabe8d4c45232bed4b42a31d2f9edc"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0002",
+      "name": "linux-headers",
+      "versionInfo": "6.12.69",
+      "downloadLocation": "https://github.com/rockchip-linux/kernel",
+      "filesAnalyzed": false,
+      "licenseConcluded": "GPL-2.0",
+      "licenseDeclared": "GPL-2.0",
+      "copyrightText": "Copyright (c) Linus Torvalds and contributors",
+      "supplier": "Organization: The Linux Foundation",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/rockchip/linux-headers@6.12.69"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0003",
+      "name": "alsa-lib",
+      "versionInfo": "1.2.15.3",
+      "downloadLocation": "https://www.alsa-project.org/files/pub/lib",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LGPL-2.1+ (library), GPL-2.0+ (aserver)",
+      "licenseDeclared": "LGPL-2.1+ (library), GPL-2.0+ (aserver)",
+      "copyrightText": "Copyright (c) Jaroslav Kysela <perex@perex.cz>",
+      "supplier": "Organization: The ALSA Project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/alsa-lib@1.2.15.3"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0004",
+      "name": "alsa-plugins",
+      "versionInfo": "1.2.12",
+      "downloadLocation": "https://www.alsa-project.org/files/pub/plugins",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LGPL-2.1+, GPL-2.0+ (samplerate plugin)",
+      "licenseDeclared": "LGPL-2.1+, GPL-2.0+ (samplerate plugin)",
+      "copyrightText": "Copyright (c) Jaroslav Kysela <perex@perex.cz>",
+      "supplier": "Organization: The ALSA Project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/alsa-plugins@1.2.12"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0005",
+      "name": "alsa-utils",
+      "versionInfo": "1.2.15.2",
+      "downloadLocation": "https://www.alsa-project.org/files/pub/utils",
+      "filesAnalyzed": false,
+      "licenseConcluded": "GPL-2.0",
+      "licenseDeclared": "GPL-2.0",
+      "copyrightText": "Copyright (c) Jaroslav Kysela <perex@perex.cz>",
+      "supplier": "Organization: The ALSA Project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/alsa-utils@1.2.15.2"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0006",
+      "name": "libsamplerate",
+      "versionInfo": "0.2.2",
+      "downloadLocation": "https://github.com/libsndfile/libsamplerate/releases/download/0.2.2",
+      "filesAnalyzed": false,
+      "licenseConcluded": "BSD-2-Clause",
+      "licenseDeclared": "BSD-2-Clause",
+      "copyrightText": "Copyright information is provided by the upstream libsamplerate license files.",
+      "supplier": "Organization: libsamplerate upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/libsndfile/libsamplerate@0.2.2"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0007",
+      "name": "ncurses",
+      "versionInfo": "6.6-20251231",
+      "downloadLocation": "https://github.com/ThomasDickey/ncurses-snapshots/archive/v6_6_20251231",
+      "filesAnalyzed": false,
+      "licenseConcluded": "MIT with advertising clause",
+      "licenseDeclared": "MIT with advertising clause",
+      "copyrightText": "Copyright (c) Thomas E. Dickey and contributors",
+      "supplier": "Organization: Thomas E. Dickey",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/ThomasDickey/ncurses@6.6-20251231"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0008",
+      "name": "alsa-ucm-conf",
+      "versionInfo": "v1.2.6.3",
+      "downloadLocation": "https://github.com/alsa-project/alsa-ucm-conf/archive/v1.2.6.3",
+      "filesAnalyzed": false,
+      "licenseConcluded": "BSD-3-Clause",
+      "licenseDeclared": "BSD-3-Clause",
+      "copyrightText": "Copyright (c) Jaroslav Kysela <perex@perex.cz>",
+      "supplier": "Organization: The ALSA Project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/alsa-project/alsa-ucm-conf@v1.2.6.3"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0009",
+      "name": "at-spi2-core",
+      "versionInfo": "2.58.2",
+      "downloadLocation": "https://download.gnome.org/sources/at-spi2-core/2.58",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LGPL-2.1+",
+      "licenseDeclared": "LGPL-2.1+",
+      "copyrightText": "Copyright (c) Freedesktop.org contributors",
+      "supplier": "Organization: Freedesktop.org",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/at-spi2-core@2.58.2"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0010",
+      "name": "dbus",
+      "versionInfo": "1.14.10",
+      "downloadLocation": "https://dbus.freedesktop.org/releases/dbus",
+      "filesAnalyzed": false,
+      "licenseConcluded": "AFL-2.1 or GPL-2.0+ (library, tools), GPL-2.0+ (tools)",
+      "licenseDeclared": "AFL-2.1 or GPL-2.0+ (library, tools), GPL-2.0+ (tools)",
+      "copyrightText": "Copyright (c) 2002-2005 CodeFactory AB, 2005 Red Hat, Inc.",
+      "supplier": "Organization: Freedesktop.org",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/dbus@1.14.10"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0011",
+      "name": "expat",
+      "versionInfo": "2.8.1",
+      "downloadLocation": "https://github.com/libexpat/libexpat/releases/download/R_2_8_1",
+      "filesAnalyzed": false,
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "copyrightText": "Copyright (c) 1998-2000 Thai Open Source Software Center Ltd",
+      "supplier": "Organization: The Expat maintainers",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/libexpat/expat@2.8.1"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0012",
+      "name": "libglib2",
+      "versionInfo": "2.86.5",
+      "downloadLocation": "https://download.gnome.org/sources/glib/2.86",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LGPL-2.1+",
+      "licenseDeclared": "LGPL-2.1+",
+      "copyrightText": "Copyright information is provided by the upstream libglib2 license files.",
+      "supplier": "Organization: libglib2 upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/libglib2@2.86.5"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0013",
+      "name": "libffi",
+      "versionInfo": "3.4.8",
+      "downloadLocation": "https://github.com/libffi/libffi/releases/download/v3.4.8",
+      "filesAnalyzed": false,
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "copyrightText": "Copyright (c) GNOME Foundation contributors",
+      "supplier": "Organization: GNOME Foundation",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/libffi/libffi@3.4.8"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0014",
+      "name": "pcre2",
+      "versionInfo": "10.47",
+      "downloadLocation": "https://github.com/PCRE2Project/pcre2/releases/download/pcre2-10.47",
+      "filesAnalyzed": false,
+      "licenseConcluded": "BSD-3-Clause",
+      "licenseDeclared": "BSD-3-Clause",
+      "copyrightText": "Copyright information is provided by the upstream pcre2 license files.",
+      "supplier": "Organization: pcre2 upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/PCRE2Project/pcre2@10.47"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0015",
+      "name": "util-linux-libs",
+      "versionInfo": "2.41.4",
+      "downloadLocation": "https://cdn.kernel.org/pub/linux/utils/util-linux/v2.41",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LGPL-2.1+ (libblkid, libfdisk, libmount), BSD-3-Clause (libuuid)",
+      "licenseDeclared": "LGPL-2.1+ (libblkid, libfdisk, libmount), BSD-3-Clause (libuuid)",
+      "copyrightText": "Copyright (c) util-linux contributors",
+      "supplier": "Organization: kernel.org util-linux project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/util-linux-libs@2.41.4"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0016",
+      "name": "libxcrypt",
+      "versionInfo": "4.5.2",
+      "downloadLocation": "https://github.com/besser82/libxcrypt/releases/download/v4.5.2",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LGPL-2.1+",
+      "licenseDeclared": "LGPL-2.1+",
+      "copyrightText": "Copyright information is provided by the upstream libxcrypt license files.",
+      "supplier": "Organization: libxcrypt upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/besser82/libxcrypt@4.5.2"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0017",
+      "name": "libzlib",
+      "versionInfo": "1.3.2",
+      "downloadLocation": "https://www.zlib.net",
+      "filesAnalyzed": false,
+      "licenseConcluded": "Zlib",
+      "licenseDeclared": "Zlib",
+      "copyrightText": "Copyright information is provided by the upstream libzlib license files.",
+      "supplier": "Organization: libzlib upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/libzlib@1.3.2"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0018",
+      "name": "libxml2",
+      "versionInfo": "2.15.3",
+      "downloadLocation": "https://download.gnome.org/sources/libxml2/2.15",
+      "filesAnalyzed": false,
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "copyrightText": "Copyright information is provided by the upstream libxml2 license files.",
+      "supplier": "Organization: libxml2 upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/libxml2@2.15.3"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0019",
+      "name": "bash",
+      "versionInfo": "5.2.37",
+      "downloadLocation": "https://mirrors.ustc.edu.cn/gnu/bash",
+      "filesAnalyzed": false,
+      "licenseConcluded": "GPL-3.0+",
+      "licenseDeclared": "GPL-3.0+",
+      "copyrightText": "Copyright (c) Free Software Foundation, Inc.",
+      "supplier": "Organization: Free Software Foundation",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/bash@5.2.37"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0020",
+      "name": "readline",
+      "versionInfo": "8.3",
+      "downloadLocation": "https://mirrors.ustc.edu.cn/gnu/readline",
+      "filesAnalyzed": false,
+      "licenseConcluded": "GPL-3.0+",
+      "licenseDeclared": "GPL-3.0+",
+      "copyrightText": "Copyright information is provided by the upstream readline license files.",
+      "supplier": "Organization: readline upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/readline@8.3"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0021",
+      "name": "bluez-alsa",
+      "versionInfo": "4.3.1",
+      "downloadLocation": "https://github.com/Arkq/bluez-alsa/archive/v4.3.1",
+      "filesAnalyzed": false,
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "copyrightText": "Copyright (c) BlueZ Project contributors",
+      "supplier": "Organization: BlueZ Project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/Arkq/bluez-alsa@4.3.1"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0022",
+      "name": "bluez5_utils",
+      "versionInfo": "5.79",
+      "downloadLocation": "https://cdn.kernel.org/pub/linux/bluetooth",
+      "filesAnalyzed": false,
+      "licenseConcluded": "GPL-2.0+, LGPL-2.1+",
+      "licenseDeclared": "GPL-2.0+, LGPL-2.1+",
+      "copyrightText": "Copyright (c) BlueZ Project contributors",
+      "supplier": "Organization: BlueZ Project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/bluez5-utils@5.79"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0023",
+      "name": "libical",
+      "versionInfo": "3.0.20",
+      "downloadLocation": "https://github.com/libical/libical/releases/download/v3.0.20",
+      "filesAnalyzed": false,
+      "licenseConcluded": "MPL-2.0 or LGPL-2.1",
+      "licenseDeclared": "MPL-2.0 or LGPL-2.1",
+      "copyrightText": "Copyright (c) Free Software Foundation",
+      "supplier": "Organization: Free Software Foundation",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/libical/libical@3.0.20"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0024",
+      "name": "eudev",
+      "versionInfo": "3.2.14",
+      "downloadLocation": "https://github.com/eudev-project/eudev/releases/download/v3.2.14",
+      "filesAnalyzed": false,
+      "licenseConcluded": "GPL-2.0+ (programs), LGPL-2.1+ (libraries)",
+      "licenseDeclared": "GPL-2.0+ (programs), LGPL-2.1+ (libraries)",
+      "copyrightText": "Copyright (c) Lennart Poettering",
+      "supplier": "Organization: systemd Project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/eudev-project/eudev@3.2.14"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0025",
+      "name": "kmod",
+      "versionInfo": "33",
+      "downloadLocation": "https://cdn.kernel.org/pub/linux/utils/kernel/kmod",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LGPL-2.1+ (library)",
+      "licenseDeclared": "LGPL-2.1+ (library)",
+      "copyrightText": "Copyright (c) Professional Open Source",
+      "supplier": "Organization: Professional Open Source",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/kmod@33"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0026",
+      "name": "libopenssl",
+      "versionInfo": "3.6.2",
+      "downloadLocation": "https://github.com/openssl/openssl/releases/download/openssl-3.6.2",
+      "filesAnalyzed": false,
+      "licenseConcluded": "Apache-2.0",
+      "licenseDeclared": "Apache-2.0",
+      "copyrightText": "Copyright (c) The OpenSSL Project",
+      "supplier": "Organization: OpenSSL Software Foundation",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/openssl/libopenssl@3.6.2"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0027",
+      "name": "libbsd",
+      "versionInfo": "0.12.2",
+      "downloadLocation": "https://libbsd.freedesktop.org/releases",
+      "filesAnalyzed": false,
+      "licenseConcluded": "BSD-2-Clause, BSD-3-Clause, BSD-5-Clause, MIT, ISC, Beerware",
+      "licenseDeclared": "BSD-2-Clause, BSD-3-Clause, BSD-5-Clause, MIT, ISC, Beerware",
+      "copyrightText": "Copyright (c) FreeBSD Foundation",
+      "supplier": "Organization: FreeBSD Foundation",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/libbsd@0.12.2"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0028",
+      "name": "libmd",
+      "versionInfo": "1.1.0",
+      "downloadLocation": "https://archive.hadrons.org/software/libmd",
+      "filesAnalyzed": false,
+      "licenseConcluded": "BSD-2-Clause, BSD-3-Clause, Beerware, ISC, Public Domain",
+      "licenseDeclared": "BSD-2-Clause, BSD-3-Clause, Beerware, ISC, Public Domain",
+      "copyrightText": "Copyright information is provided by the upstream libmd license files.",
+      "supplier": "Organization: libmd upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/libmd@1.1.0"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0029",
+      "name": "mpg123",
+      "versionInfo": "1.33.4",
+      "downloadLocation": "https://downloads.sourceforge.net/project/mpg123/mpg123/1.33.4",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LGPL-2.1",
+      "licenseDeclared": "LGPL-2.1",
+      "copyrightText": "Copyright information is provided by the upstream mpg123 license files.",
+      "supplier": "Organization: mpg123 upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/mpg123@1.33.4"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0030",
+      "name": "opus",
+      "versionInfo": "1.6.1",
+      "downloadLocation": "https://downloads.xiph.org/releases/opus",
+      "filesAnalyzed": false,
+      "licenseConcluded": "BSD-3-Clause",
+      "licenseDeclared": "BSD-3-Clause",
+      "copyrightText": "Copyright information is provided by the upstream opus license files.",
+      "supplier": "Organization: opus upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/opus@1.6.1"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0031",
+      "name": "sbc",
+      "versionInfo": "2.1",
+      "downloadLocation": "https://cdn.kernel.org/pub/linux/bluetooth",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LGPL-2.1+ (library)",
+      "licenseDeclared": "LGPL-2.1+ (library)",
+      "copyrightText": "Copyright information is provided by the upstream sbc license files.",
+      "supplier": "Organization: sbc upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/sbc@2.1"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0032",
+      "name": "spandsp",
+      "versionInfo": "3.0.0-6ec23e5a7e",
+      "downloadLocation": "https://files.freeswitch.org/downloads/libs",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LGPL-2.1 (library), GPL-2.0 (test suite)",
+      "licenseDeclared": "LGPL-2.1 (library), GPL-2.0 (test suite)",
+      "copyrightText": "Copyright information is provided by the upstream spandsp license files.",
+      "supplier": "Organization: spandsp upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/spandsp@3.0.0-6ec23e5a7e"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0033",
+      "name": "tiff",
+      "versionInfo": "4.7.1",
+      "downloadLocation": "https://download.osgeo.org/libtiff",
+      "filesAnalyzed": false,
+      "licenseConcluded": "tiff license",
+      "licenseDeclared": "tiff license",
+      "copyrightText": "Copyright information is provided by the upstream tiff license files.",
+      "supplier": "Organization: tiff upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/tiff@4.7.1"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0034",
+      "name": "jpeg-turbo",
+      "versionInfo": "3.1.2",
+      "downloadLocation": "https://github.com/libjpeg-turbo/libjpeg-turbo/releases/download/3.1.2",
+      "filesAnalyzed": false,
+      "licenseConcluded": "IJG (libjpeg), BSD-3-Clause (TurboJPEG), Zlib (SIMD)",
+      "licenseDeclared": "IJG (libjpeg), BSD-3-Clause (TurboJPEG), Zlib (SIMD)",
+      "copyrightText": "Copyright (c) libjpeg-turbo Project",
+      "supplier": "Organization: libjpeg-turbo Project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/libjpeg-turbo/jpeg-turbo@3.1.2"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0035",
+      "name": "busybox",
+      "versionInfo": "1.38.0",
+      "downloadLocation": "https://www.busybox.net/downloads",
+      "filesAnalyzed": false,
+      "licenseConcluded": "GPL-2.0, bzip2-1.0.4",
+      "licenseDeclared": "GPL-2.0, bzip2-1.0.4",
+      "copyrightText": "Copyright (c) Erik Andersen and contributors",
+      "supplier": "Organization: BusyBox.net",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/busybox@1.38.0"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0036",
+      "name": "coreutils",
+      "versionInfo": "9.10",
+      "downloadLocation": "https://mirrors.ustc.edu.cn/gnu/coreutils",
+      "filesAnalyzed": false,
+      "licenseConcluded": "GPL-3.0+",
+      "licenseDeclared": "GPL-3.0+",
+      "copyrightText": "Copyright (c) Free Software Foundation, Inc.",
+      "supplier": "Organization: Free Software Foundation",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/coreutils@9.10"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0037",
+      "name": "libcap",
+      "versionInfo": "2.78",
+      "downloadLocation": "https://www.kernel.org/pub/linux/libs/security/linux-privs/libcap2",
+      "filesAnalyzed": false,
+      "licenseConcluded": "GPL-2.0 or BSD-3-Clause",
+      "licenseDeclared": "GPL-2.0 or BSD-3-Clause",
+      "copyrightText": "Copyright (c) Andrew G. Morgan",
+      "supplier": "Organization: Andrew G. Morgan",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/libcap@2.78"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0038",
+      "name": "dosfstools",
+      "versionInfo": "4.2",
+      "downloadLocation": "https://github.com/dosfstools/dosfstools/releases/download/v4.2",
+      "filesAnalyzed": false,
+      "licenseConcluded": "GPL-3.0+",
+      "licenseDeclared": "GPL-3.0+",
+      "copyrightText": "Copyright (c) Werner Almesberger",
+      "supplier": "Organization: Werner Almesberger",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/dosfstools/dosfstools@4.2"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0039",
+      "name": "e2fsprogs",
+      "versionInfo": "1.47.3",
+      "downloadLocation": "https://cdn.kernel.org/pub/linux/kernel/people/tytso/e2fsprogs/v1.47.3",
+      "filesAnalyzed": false,
+      "licenseConcluded": "GPL-2.0, MIT-like with advertising clause (libss and libet)",
+      "licenseDeclared": "GPL-2.0, MIT-like with advertising clause (libss and libet)",
+      "copyrightText": "Copyright (c) Theodore Ts'o",
+      "supplier": "Organization: Theodore Ts'o",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/e2fsprogs@1.47.3"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0040",
+      "name": "util-linux",
+      "versionInfo": "2.41.4",
+      "downloadLocation": "https://cdn.kernel.org/pub/linux/utils/util-linux/v2.41",
+      "filesAnalyzed": false,
+      "licenseConcluded": "GPL-2.0+, BSD-4-Clause, LGPL-2.1+ (libblkid, libfdisk, libmount), BSD-3-Clause (libuuid), BSD-2-Clause (xxhash), ISC (rfkill), MIT (hardlink, flock)",
+      "licenseDeclared": "GPL-2.0+, BSD-4-Clause, LGPL-2.1+ (libblkid, libfdisk, libmount), BSD-3-Clause (libuuid), BSD-2-Clause (xxhash), ISC (rfkill), MIT (hardlink, flock)",
+      "copyrightText": "Copyright (c) util-linux contributors",
+      "supplier": "Organization: kernel.org util-linux project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/util-linux@2.41.4"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0041",
+      "name": "i2c-tools",
+      "versionInfo": "4.4",
+      "downloadLocation": "https://www.kernel.org/pub/software/utils/i2c-tools",
+      "filesAnalyzed": false,
+      "licenseConcluded": "GPL-2.0+, GPL-2.0 (py-smbus), LGPL-2.1+ (libi2c)",
+      "licenseDeclared": "GPL-2.0+, GPL-2.0 (py-smbus), LGPL-2.1+ (libi2c)",
+      "copyrightText": "Copyright (c) Jean Delvare",
+      "supplier": "Organization: Jean Delvare",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/i2c-tools@4.4"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0042",
+      "name": "iproute2",
+      "versionInfo": "6.17.0",
+      "downloadLocation": "https://cdn.kernel.org/pub/linux/utils/net/iproute2",
+      "filesAnalyzed": false,
+      "licenseConcluded": "GPL-2.0+",
+      "licenseDeclared": "GPL-2.0+",
+      "copyrightText": "Copyright information is provided by the upstream iproute2 license files.",
+      "supplier": "Organization: iproute2 upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/iproute2@6.17.0"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0043",
+      "name": "iputils",
+      "versionInfo": "20250605",
+      "downloadLocation": "https://github.com/iputils/iputils/releases/download/20250605",
+      "filesAnalyzed": false,
+      "licenseConcluded": "GPL-2.0+, BSD-3-Clause",
+      "licenseDeclared": "GPL-2.0+, BSD-3-Clause",
+      "copyrightText": "Copyright (c) iputils developers",
+      "supplier": "Organization: iputils developers",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/iputils/iputils@20250605"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0044",
+      "name": "libidn2",
+      "versionInfo": "2.3.8",
+      "downloadLocation": "https://mirrors.ustc.edu.cn/gnu/libidn",
+      "filesAnalyzed": false,
+      "licenseConcluded": "GPL-2.0+ or LGPL-3.0+ (library)",
+      "licenseDeclared": "GPL-2.0+ or LGPL-3.0+ (library)",
+      "copyrightText": "Copyright information is provided by the upstream libidn2 license files.",
+      "supplier": "Organization: Free Software Foundation",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/libidn2@2.3.8"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0045",
+      "name": "libunistring",
+      "versionInfo": "1.4.2",
+      "downloadLocation": "https://mirrors.ustc.edu.cn/gnu/libunistring",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LGPL-3.0+ or GPL-2.0",
+      "licenseDeclared": "LGPL-3.0+ or GPL-2.0",
+      "copyrightText": "Copyright (c) Free Software Foundation, Inc.",
+      "supplier": "Organization: Free Software Foundation",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/libunistring@1.4.2"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0046",
+      "name": "libtirpc",
+      "versionInfo": "1.3.7",
+      "downloadLocation": "http://downloads.sourceforge.net/project/libtirpc/libtirpc/1.3.7",
+      "filesAnalyzed": false,
+      "licenseConcluded": "BSD-3-Clause",
+      "licenseDeclared": "BSD-3-Clause",
+      "copyrightText": "Copyright information is provided by the upstream libtirpc license files.",
+      "supplier": "Organization: libtirpc upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/libtirpc@1.3.7"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0047",
+      "name": "pciutils",
+      "versionInfo": "3.14.0",
+      "downloadLocation": "https://cdn.kernel.org/pub/software/utils/pciutils",
+      "filesAnalyzed": false,
+      "licenseConcluded": "GPL-2.0+",
+      "licenseDeclared": "GPL-2.0+",
+      "copyrightText": "Copyright information is provided by the upstream pciutils license files.",
+      "supplier": "Organization: pciutils upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/pciutils@3.14.0"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0048",
+      "name": "procps-ng",
+      "versionInfo": "4.0.6",
+      "downloadLocation": "https://downloads.sourceforge.net/project/procps-ng/Production",
+      "filesAnalyzed": false,
+      "licenseConcluded": "GPL-2.0+, LGPL-2.0+ (libproc and libps)",
+      "licenseDeclared": "GPL-2.0+, LGPL-2.0+ (libproc and libps)",
+      "copyrightText": "Copyright information is provided by the upstream procps-ng license files.",
+      "supplier": "Organization: procps-ng upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/procps-ng@4.0.6"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0049",
+      "name": "bzip2",
+      "versionInfo": "1.0.8",
+      "downloadLocation": "https://sourceware.org/pub/bzip2",
+      "filesAnalyzed": false,
+      "licenseConcluded": "bzip2 license",
+      "licenseDeclared": "bzip2 license",
+      "copyrightText": "Copyright (c) Julian Seward",
+      "supplier": "Organization: Julian Seward",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/bzip2@1.0.8"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0050",
+      "name": "ca-certificates",
+      "versionInfo": "20260223",
+      "downloadLocation": "https://snapshot.debian.org/archive/debian/20260223T202245Z/pool/main/c/ca-certificates",
+      "filesAnalyzed": false,
+      "licenseConcluded": "GPL-2.0+ (script), MPL-2.0 (data)",
+      "licenseDeclared": "GPL-2.0+ (script), MPL-2.0 (data)",
+      "copyrightText": "Copyright (c) Mozilla Foundation",
+      "supplier": "Organization: Mozilla Foundation",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/ca-certificates@20260223"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0051",
+      "name": "cairo",
+      "versionInfo": "1.18.4",
+      "downloadLocation": "http://cairographics.org/releases",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LGPL-2.1 or MPL-1.1 (library)",
+      "licenseDeclared": "LGPL-2.1 or MPL-1.1 (library)",
+      "copyrightText": "Copyright (c) 2002 University of Southern California",
+      "supplier": "Organization: Cairo Project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/cairo@1.18.4"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0052",
+      "name": "fontconfig",
+      "versionInfo": "2.17.1",
+      "downloadLocation": "https://gitlab.freedesktop.org/api/v4/projects/890/packages/generic/fontconfig/2.17.1",
+      "filesAnalyzed": false,
+      "licenseConcluded": "fontconfig license",
+      "licenseDeclared": "fontconfig license",
+      "copyrightText": "Copyright (c) Freedesktop.org",
+      "supplier": "Organization: Freedesktop.org",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/fontconfig@2.17.1"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0053",
+      "name": "freetype",
+      "versionInfo": "2.14.3",
+      "downloadLocation": "https://download.savannah.gnu.org/releases/freetype",
+      "filesAnalyzed": false,
+      "licenseConcluded": "FTL or GPL-2.0+",
+      "licenseDeclared": "FTL or GPL-2.0+",
+      "copyrightText": "Copyright (c) 1996-2025 David Turner, Robert Wilhelm, and Werner Lemberg",
+      "supplier": "Organization: The FreeType Project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:gnu/freetype@2.14.3"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0054",
+      "name": "libpng",
+      "versionInfo": "1.6.58",
+      "downloadLocation": "https://downloads.sourceforge.net/project/libpng/libpng16/1.6.58",
+      "filesAnalyzed": false,
+      "licenseConcluded": "Libpng-2.0",
+      "licenseDeclared": "Libpng-2.0",
+      "copyrightText": "Copyright (c) 1995-2025 Jean-loup Gailly and Mark Adler",
+      "supplier": "Organization: PNG Reference Library",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/libpng@1.6.58"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0055",
+      "name": "pixman",
+      "versionInfo": "0.46.4",
+      "downloadLocation": "https://xorg.freedesktop.org/releases/individual/lib",
+      "filesAnalyzed": false,
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "copyrightText": "Copyright information is provided by the upstream pixman license files.",
+      "supplier": "Organization: pixman upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/pixman@0.46.4"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0056",
+      "name": "can-utils",
+      "versionInfo": "2025.01",
+      "downloadLocation": "https://github.com/linux-can/can-utils/archive/v2025.01",
+      "filesAnalyzed": false,
+      "licenseConcluded": "BSD-3-Clause or GPL-2.0",
+      "licenseDeclared": "BSD-3-Clause or GPL-2.0",
+      "copyrightText": "Copyright information is provided by the upstream can-utils license files.",
+      "supplier": "Organization: can-utils upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/linux-can/can-utils@2025.01"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0057",
+      "name": "chromium-wayland",
+      "versionInfo": "132.0.6834.83",
+      "downloadLocation": "https://github.com/rockchip-linux/chromium",
+      "filesAnalyzed": false,
+      "licenseConcluded": "BSD-3-Clause",
+      "licenseDeclared": "BSD-3-Clause",
+      "copyrightText": "Copyright (c) Google LLC and Chromium contributors",
+      "supplier": "Organization: Google LLC",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/rockchip/chromium-wayland"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0058",
+      "name": "chrony",
+      "versionInfo": "4.8",
+      "downloadLocation": "https://chrony-project.org/releases",
+      "filesAnalyzed": false,
+      "licenseConcluded": "GPL-2.0",
+      "licenseDeclared": "GPL-2.0",
+      "copyrightText": "Copyright (c) Richard Cochran",
+      "supplier": "Organization: Richard Cochran",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/chrony@4.8"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0059",
+      "name": "libnss",
+      "versionInfo": "3.120.1",
+      "downloadLocation": "https://ftp.mozilla.org/pub/mozilla.org/security/nss/releases/NSS_3_120_1_RTM/src",
+      "filesAnalyzed": false,
+      "licenseConcluded": "MPL-2.0",
+      "licenseDeclared": "MPL-2.0",
+      "copyrightText": "Copyright information is provided by the upstream libnss license files.",
+      "supplier": "Organization: libnss upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/libnss@3.120.1"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0060",
+      "name": "libnspr",
+      "versionInfo": "4.38.2",
+      "downloadLocation": "https://ftp.mozilla.org/pub/mozilla.org/nspr/releases/v4.38.2/src",
+      "filesAnalyzed": false,
+      "licenseConcluded": "MPL-2.0",
+      "licenseDeclared": "MPL-2.0",
+      "copyrightText": "Copyright information is provided by the upstream libnspr license files.",
+      "supplier": "Organization: libnspr upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/libnspr@4.38.2"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0061",
+      "name": "sqlite",
+      "versionInfo": "3.51.3",
+      "downloadLocation": "https://www.sqlite.org/2026",
+      "filesAnalyzed": false,
+      "licenseConcluded": "blessing",
+      "licenseDeclared": "blessing",
+      "copyrightText": "Copyright (c) D. Richard Hipp",
+      "supplier": "Organization: D. Richard Hipp",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/sqlite@3.51.3"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0062",
+      "name": "dejavu",
+      "versionInfo": "2.37",
+      "downloadLocation": "https://sourceforge.net/projects/dejavu/files/dejavu/2.37",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LicenseRef-DejaVu-Fonts",
+      "licenseDeclared": "LicenseRef-DejaVu-Fonts",
+      "copyrightText": "Copyright (c) Bitstream, Inc. and DejaVu Fonts contributors",
+      "supplier": "Organization: DejaVu Fonts project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/dejavu@2.37"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0063",
+      "name": "dhcpcd",
+      "versionInfo": "10.2.4",
+      "downloadLocation": "https://github.com/NetworkConfiguration/dhcpcd/releases/download/v10.2.4",
+      "filesAnalyzed": false,
+      "licenseConcluded": "BSD-2-Clause",
+      "licenseDeclared": "BSD-2-Clause",
+      "copyrightText": "Copyright (c) Roy Marples",
+      "supplier": "Organization: Roy Marples",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/NetworkConfiguration/dhcpcd@10.2.4"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0064",
+      "name": "dhrystone",
+      "versionInfo": "2",
+      "downloadLocation": "http://www.netlib.org/benchmark",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LicenseRef-Dhrystone",
+      "licenseDeclared": "LicenseRef-Dhrystone",
+      "copyrightText": "Copyright (c) Reinhold P. Weicker and Dhrystone contributors",
+      "supplier": "Organization: Reinhold P. Weicker",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/dhrystone@2"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0065",
+      "name": "dnsmasq",
+      "versionInfo": "2.92rel2",
+      "downloadLocation": "https://thekelleys.org.uk/dnsmasq",
+      "filesAnalyzed": false,
+      "licenseConcluded": "GPL-2.0 or GPL-3.0",
+      "licenseDeclared": "GPL-2.0 or GPL-3.0",
+      "copyrightText": "Copyright (c) Simon Kelley",
+      "supplier": "Organization: Simon Kelley",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/dnsmasq@2.92rel2"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0066",
+      "name": "dropbear",
+      "versionInfo": "2026.91",
+      "downloadLocation": "https://matt.ucc.asn.au/dropbear/releases",
+      "filesAnalyzed": false,
+      "licenseConcluded": "MIT, BSD-2-Clause, Public domain, Unlicense, WTFPL",
+      "licenseDeclared": "MIT, BSD-2-Clause, Public domain, Unlicense, WTFPL",
+      "copyrightText": "Copyright (c) Matt Johnston",
+      "supplier": "Organization: Matt Johnston",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/dropbear@2026.91"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0067",
+      "name": "evtest",
+      "versionInfo": "1.36",
+      "downloadLocation": "https://gitlab.freedesktop.org/libevdev/evtest/-/archive/evtest-1.36",
+      "filesAnalyzed": false,
+      "licenseConcluded": "GPL-2.0+",
+      "licenseDeclared": "GPL-2.0+",
+      "copyrightText": "Copyright (c) Arnd Bergmann",
+      "supplier": "Organization: Arnd Bergmann",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/evtest@1.36"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0068",
+      "name": "exfat-utils",
+      "versionInfo": "1.4.0",
+      "downloadLocation": "https://github.com/relan/exfat/releases/download/v1.4.0",
+      "filesAnalyzed": false,
+      "licenseConcluded": "GPL-2.0+",
+      "licenseDeclared": "GPL-2.0+",
+      "copyrightText": "Copyright (c) Andrew Nayenko",
+      "supplier": "Organization: Andrew Nayenko",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/relan/exfat-utils@1.4.0"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0069",
+      "name": "exfat",
+      "versionInfo": "1.4.0",
+      "downloadLocation": "https://github.com/relan/exfat/releases/download/v1.4.0",
+      "filesAnalyzed": false,
+      "licenseConcluded": "GPL-2.0+",
+      "licenseDeclared": "GPL-2.0+",
+      "copyrightText": "Copyright (c) Andrew Nayenko",
+      "supplier": "Organization: Andrew Nayenko",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/relan/exfat@1.4.0"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0070",
+      "name": "libfuse3",
+      "versionInfo": "3.18.1",
+      "downloadLocation": "https://github.com/libfuse/libfuse/archive/fuse-3.18.1",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LGPL-2.1",
+      "licenseDeclared": "LGPL-2.1",
+      "copyrightText": "Copyright (c) libfuse developers",
+      "supplier": "Organization: libfuse developers",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/libfuse/libfuse3@3.18.1"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0071",
+      "name": "faad2",
+      "versionInfo": "2.11.2",
+      "downloadLocation": "https://github.com/knik0/faad2/archive/2.11.2",
+      "filesAnalyzed": false,
+      "licenseConcluded": "GPL-2.0",
+      "licenseDeclared": "GPL-2.0",
+      "copyrightText": "Copyright (c) FAAD2 developers",
+      "supplier": "Organization: FAAD2 developers",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/knik0/faad2@2.11.2"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0072",
+      "name": "fatresize",
+      "versionInfo": "321973ba156bbf2489e82c47c94b2bca74b16316",
+      "downloadLocation": "https://github.com/ya-mouse/fatresize/archive/321973ba156bbf2489e82c47c94b2bca74b16316",
+      "filesAnalyzed": false,
+      "licenseConcluded": "GPL-3.0",
+      "licenseDeclared": "GPL-3.0",
+      "copyrightText": "Copyright information is provided by the upstream fatresize license files.",
+      "supplier": "Organization: fatresize upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/ya-mouse/fatresize@321973ba156bbf2489e82c47c94b2bca74b16316"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0073",
+      "name": "parted",
+      "versionInfo": "3.6",
+      "downloadLocation": "https://mirrors.ustc.edu.cn/gnu/parted",
+      "filesAnalyzed": false,
+      "licenseConcluded": "GPL-3.0+",
+      "licenseDeclared": "GPL-3.0+",
+      "copyrightText": "Copyright information is provided by the upstream parted license files.",
+      "supplier": "Organization: parted upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/parted@3.6"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0074",
+      "name": "flac",
+      "versionInfo": "1.5.0",
+      "downloadLocation": "https://ftp.osuosl.org/pub/xiph/releases/flac",
+      "filesAnalyzed": false,
+      "licenseConcluded": "Xiph BSD-like (libFLAC), GPL-2.0+ (tools), LGPL-2.1+ (other libraries)",
+      "licenseDeclared": "Xiph BSD-like (libFLAC), GPL-2.0+ (tools), LGPL-2.1+ (other libraries)",
+      "copyrightText": "Copyright (c) Xiph.Org Foundation",
+      "supplier": "Organization: Xiph.Org Foundation",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/flac@1.5.0"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0075",
+      "name": "libogg",
+      "versionInfo": "1.3.6",
+      "downloadLocation": "http://downloads.xiph.org/releases/ogg",
+      "filesAnalyzed": false,
+      "licenseConcluded": "BSD-3-Clause",
+      "licenseDeclared": "BSD-3-Clause",
+      "copyrightText": "Copyright (c) Xiph.Org Foundation",
+      "supplier": "Organization: Xiph.Org Foundation",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/libogg@1.3.6"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0076",
+      "name": "fluidsynth",
+      "versionInfo": "2.4.7",
+      "downloadLocation": "https://github.com/FluidSynth/fluidsynth/archive/v2.4.7",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LGPL-2.1+",
+      "licenseDeclared": "LGPL-2.1+",
+      "copyrightText": "Copyright (c) FluidSynth developers",
+      "supplier": "Organization: FluidSynth developers",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/FluidSynth/fluidsynth@2.4.7"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0077",
+      "name": "font-awesome",
+      "versionInfo": "4.7.0",
+      "downloadLocation": "https://github.com/FortAwesome/Font-Awesome/archive/v4.7.0",
+      "filesAnalyzed": false,
+      "licenseConcluded": "OFL-1.1 (font), MIT (CSS, LESS and Sass files)",
+      "licenseDeclared": "OFL-1.1 (font), MIT (CSS, LESS and Sass files)",
+      "copyrightText": "Copyright (c) Fonticons Inc",
+      "supplier": "Organization: Fonticons Inc",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/FortAwesome/font-awesome@4.7.0"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0078",
+      "name": "gdk-pixbuf",
+      "versionInfo": "2.42.12",
+      "downloadLocation": "https://download.gnome.org/sources/gdk-pixbuf/2.42",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LGPL-2.1+",
+      "licenseDeclared": "LGPL-2.1+",
+      "copyrightText": "Copyright information is provided by the upstream gdk-pixbuf license files.",
+      "supplier": "Organization: GNOME Foundation",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/gdk-pixbuf@2.42.12"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0079",
+      "name": "gesftpserver",
+      "versionInfo": "2",
+      "downloadLocation": "http://www.greenend.org.uk/rjk/sftpserver",
+      "filesAnalyzed": false,
+      "licenseConcluded": "GPL-2.0+",
+      "licenseDeclared": "GPL-2.0+",
+      "copyrightText": "Copyright information is provided by the upstream gesftpserver license files.",
+      "supplier": "Organization: gesftpserver upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/gesftpserver@2"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0080",
+      "name": "glmark2",
+      "versionInfo": "2023.01",
+      "downloadLocation": "https://github.com/glmark2/glmark2/archive/2023.01",
+      "filesAnalyzed": false,
+      "licenseConcluded": "GPL-3.0+, SGIv1",
+      "licenseDeclared": "GPL-3.0+, SGIv1",
+      "copyrightText": "Copyright (c) Canonical",
+      "supplier": "Organization: Canonical",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/glmark2/glmark2@2023.01"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0081",
+      "name": "libdrm",
+      "versionInfo": "2.4.131",
+      "downloadLocation": "https://dri.freedesktop.org/libdrm",
+      "filesAnalyzed": false,
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "copyrightText": "Copyright information is provided by the upstream libdrm license files.",
+      "supplier": "Organization: The Linux Foundation",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/libdrm@2.4.131"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0082",
+      "name": "libpthread-stubs",
+      "versionInfo": "0.5",
+      "downloadLocation": "http://xcb.freedesktop.org/dist",
+      "filesAnalyzed": false,
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "copyrightText": "Copyright information is provided by the upstream libpthread-stubs license files.",
+      "supplier": "Organization: libpthread-stubs upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/libpthread-stubs@0.5"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0083",
+      "name": "rockchip-mali",
+      "versionInfo": "master",
+      "downloadLocation": "https://github.com/rockchip-linux/libmali",
+      "filesAnalyzed": false,
+      "licenseConcluded": "ARM",
+      "licenseDeclared": "ARM",
+      "copyrightText": "Copyright (c) Rockchip Electronics Co., Ltd.",
+      "supplier": "Organization: Rockchip Electronics Co., Ltd.",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/rockchip/rockchip-mali"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0084",
+      "name": "wayland",
+      "versionInfo": "1.24.0",
+      "downloadLocation": "https://gitlab.freedesktop.org/wayland/wayland/-/releases/1.24.0/downloads",
+      "filesAnalyzed": false,
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "copyrightText": "Copyright (c) 2008-2012 Kristian Høgsberg",
+      "supplier": "Organization: Freedesktop.org",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/wayland@1.24.0"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0085",
+      "name": "wayland-protocols",
+      "versionInfo": "1.48",
+      "downloadLocation": "https://gitlab.freedesktop.org/wayland/wayland-protocols/-/releases/1.48/downloads",
+      "filesAnalyzed": false,
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "copyrightText": "Copyright (c) 2008-2012 Kristian Høgsberg",
+      "supplier": "Organization: Freedesktop.org",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/wayland-protocols@1.48"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0086",
+      "name": "gst1-plugins-bad",
+      "versionInfo": "1.28.2",
+      "downloadLocation": "https://gstreamer.freedesktop.org/src/gst-plugins-bad",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LGPL-2.0-or-later AND GPL-2.0-or-later",
+      "licenseDeclared": "LGPL-2.0-or-later AND GPL-2.0-or-later",
+      "copyrightText": "Copyright (c) GStreamer Project",
+      "supplier": "Organization: GStreamer Project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/gst1-plugins-bad@1.28.2"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0087",
+      "name": "gst1-plugins-base",
+      "versionInfo": "1.28.2",
+      "downloadLocation": "https://gstreamer.freedesktop.org/src/gst-plugins-base",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LGPL-2.1+",
+      "licenseDeclared": "LGPL-2.1+",
+      "copyrightText": "Copyright (c) GStreamer Project",
+      "supplier": "Organization: GStreamer Project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/gst1-plugins-base@1.28.2"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0088",
+      "name": "gstreamer1",
+      "versionInfo": "1.28.2",
+      "downloadLocation": "https://gstreamer.freedesktop.org/src/gstreamer",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LGPL-2.1+",
+      "licenseDeclared": "LGPL-2.1+",
+      "copyrightText": "Copyright (c) GStreamer Project contributors",
+      "supplier": "Organization: GStreamer Project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/gstreamer1@1.28.2"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0089",
+      "name": "libtheora",
+      "versionInfo": "1.2.0",
+      "downloadLocation": "http://downloads.xiph.org/releases/theora",
+      "filesAnalyzed": false,
+      "licenseConcluded": "BSD-3-Clause",
+      "licenseDeclared": "BSD-3-Clause",
+      "copyrightText": "Copyright information is provided by the upstream libtheora license files.",
+      "supplier": "Organization: libtheora upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/libtheora@1.2.0"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0090",
+      "name": "libvorbis",
+      "versionInfo": "1.3.7",
+      "downloadLocation": "https://downloads.xiph.org/releases/vorbis",
+      "filesAnalyzed": false,
+      "licenseConcluded": "BSD-3-Clause",
+      "licenseDeclared": "BSD-3-Clause",
+      "copyrightText": "Copyright information is provided by the upstream libvorbis license files.",
+      "supplier": "Organization: libvorbis upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/libvorbis@1.3.7"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0091",
+      "name": "rockchip-rga",
+      "versionInfo": "master",
+      "downloadLocation": "https://github.com/airockchip/librga",
+      "filesAnalyzed": false,
+      "licenseConcluded": "Apache-2.0",
+      "licenseDeclared": "Apache-2.0",
+      "copyrightText": "Copyright (c) Rockchip Electronics Co., Ltd.",
+      "supplier": "Organization: Rockchip Electronics Co., Ltd.",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/rockchip/rockchip-rga"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0092",
+      "name": "libmpeg2",
+      "versionInfo": "0.5.1",
+      "downloadLocation": "https://code.videolan.org/videolan/libmpeg2/-/archive/41f78cf4d30d0da0a24c8ecbc38b0c9dfd43f871",
+      "filesAnalyzed": false,
+      "licenseConcluded": "GPL-2.0+",
+      "licenseDeclared": "GPL-2.0+",
+      "copyrightText": "Copyright information is provided by the upstream libmpeg2 license files.",
+      "supplier": "Organization: libmpeg2 upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/libmpeg2@0.5.1"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0093",
+      "name": "mjpegtools",
+      "versionInfo": "2.2.1",
+      "downloadLocation": "http://sourceforge.net/projects/mjpeg/files/mjpegtools/2.2.1",
+      "filesAnalyzed": false,
+      "licenseConcluded": "GPL-2.0+",
+      "licenseDeclared": "GPL-2.0+",
+      "copyrightText": "Copyright information is provided by the upstream mjpegtools license files.",
+      "supplier": "Organization: mjpegtools upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/mjpegtools@2.2.1"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0094",
+      "name": "rtmpdump",
+      "versionInfo": "6f6bb1353fc84f4cc37138baa99f586750028a01",
+      "downloadLocation": "https://git.ffmpeg.org/rtmpdump",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LGPL-2.1+",
+      "licenseDeclared": "LGPL-2.1+",
+      "copyrightText": "Copyright information is provided by the upstream rtmpdump license files.",
+      "supplier": "Organization: rtmpdump upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/rtmpdump@6f6bb1353fc84f4cc37138baa99f586750028a01"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0095",
+      "name": "gst1-plugins-good",
+      "versionInfo": "1.28.2",
+      "downloadLocation": "https://gstreamer.freedesktop.org/src/gst-plugins-good",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LGPL-2.1+",
+      "licenseDeclared": "LGPL-2.1+",
+      "copyrightText": "Copyright (c) GStreamer Project",
+      "supplier": "Organization: GStreamer Project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/gst1-plugins-good@1.28.2"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0096",
+      "name": "libgudev",
+      "versionInfo": "238",
+      "downloadLocation": "https://download.gnome.org/sources/libgudev/238",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LGPL-2.1+",
+      "licenseDeclared": "LGPL-2.1+",
+      "copyrightText": "Copyright (c) GNOME Foundation",
+      "supplier": "Organization: GNOME Foundation",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/libgudev@238"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0097",
+      "name": "libsoup3",
+      "versionInfo": "3.6.6",
+      "downloadLocation": "https://download.gnome.org/sources/libsoup/3.6",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LGPL-2.0+",
+      "licenseDeclared": "LGPL-2.0+",
+      "copyrightText": "Copyright information is provided by the upstream libsoup3 license files.",
+      "supplier": "Organization: libsoup3 upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/libsoup3@3.6.6"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0098",
+      "name": "libpsl",
+      "versionInfo": "0.21.5",
+      "downloadLocation": "https://github.com/rockdaboot/libpsl/releases/download/0.21.5",
+      "filesAnalyzed": false,
+      "licenseConcluded": "MIT, BSD-3-Clause",
+      "licenseDeclared": "MIT, BSD-3-Clause",
+      "copyrightText": "Copyright information is provided by the upstream libpsl license files.",
+      "supplier": "Organization: libpsl upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/rockdaboot/libpsl@0.21.5"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0099",
+      "name": "nghttp2",
+      "versionInfo": "1.64.0",
+      "downloadLocation": "https://github.com/nghttp2/nghttp2/releases/download/v1.64.0",
+      "filesAnalyzed": false,
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "copyrightText": "Copyright information is provided by the upstream nghttp2 license files.",
+      "supplier": "Organization: nghttp2 upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/nghttp2/nghttp2@1.64.0"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0100",
+      "name": "libv4l",
+      "versionInfo": "1.28.1",
+      "downloadLocation": "https://linuxtv.org/downloads/v4l-utils",
+      "filesAnalyzed": false,
+      "licenseConcluded": "GPL-2.0+ (utilities), LGPL-2.1+ (libraries)",
+      "licenseDeclared": "GPL-2.0+ (utilities), LGPL-2.1+ (libraries)",
+      "copyrightText": "Copyright information is provided by the upstream libv4l license files.",
+      "supplier": "Organization: libv4l upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/libv4l@1.28.1"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0101",
+      "name": "gst1-plugins-ugly",
+      "versionInfo": "1.28.2",
+      "downloadLocation": "https://gstreamer.freedesktop.org/src/gst-plugins-ugly",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LGPL-2.1+, GPL-2.0",
+      "licenseDeclared": "LGPL-2.1+, GPL-2.0",
+      "copyrightText": "Copyright (c) GStreamer Project",
+      "supplier": "Organization: GStreamer Project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/gst1-plugins-ugly@1.28.2"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0102",
+      "name": "harfbuzz",
+      "versionInfo": "12.3.2",
+      "downloadLocation": "https://github.com/harfbuzz/harfbuzz/releases/download/12.3.2",
+      "filesAnalyzed": false,
+      "licenseConcluded": "MIT, ISC (ucdn library)",
+      "licenseDeclared": "MIT, ISC (ucdn library)",
+      "copyrightText": "Copyright (c) GNOME Foundation contributors",
+      "supplier": "Organization: GNOME Foundation",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/harfbuzz/harfbuzz@12.3.2"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0103",
+      "name": "hostapd",
+      "versionInfo": "2.11",
+      "downloadLocation": "http://w1.fi/releases",
+      "filesAnalyzed": false,
+      "licenseConcluded": "BSD-3-Clause",
+      "licenseDeclared": "BSD-3-Clause",
+      "copyrightText": "Copyright (c) Jouni Malinen",
+      "supplier": "Organization: Jouni Malinen",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/hostapd@2.11"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0104",
+      "name": "libnl",
+      "versionInfo": "3.11.0",
+      "downloadLocation": "https://github.com/thom311/libnl/releases/download/libnl3_11_0",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LGPL-2.1+",
+      "licenseDeclared": "LGPL-2.1+",
+      "copyrightText": "Copyright information is provided by the upstream libnl license files.",
+      "supplier": "Organization: libnl upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/thom311/libnl@3.11.0"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0105",
+      "name": "hwdata",
+      "versionInfo": "0.403",
+      "downloadLocation": "https://github.com/vcrhonek/hwdata/archive/v0.403",
+      "filesAnalyzed": false,
+      "licenseConcluded": "GPL-2.0+, BSD-3-Clause, XFree86 1.0",
+      "licenseDeclared": "GPL-2.0+, BSD-3-Clause, XFree86 1.0",
+      "copyrightText": "Copyright (c) Vojtech Pavlik",
+      "supplier": "Organization: Vojtech Pavlik",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/vcrhonek/hwdata@0.403"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0106",
+      "name": "iperf",
+      "versionInfo": "2.2.1",
+      "downloadLocation": "https://downloads.sourceforge.net/project/iperf2",
+      "filesAnalyzed": false,
+      "licenseConcluded": "MIT-like",
+      "licenseDeclared": "MIT-like",
+      "copyrightText": "Copyright (c) ESnet",
+      "supplier": "Organization: ESnet",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/iperf@2.2.1"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0107",
+      "name": "iw",
+      "versionInfo": "6.17",
+      "downloadLocation": "https://cdn.kernel.org/pub/software/network/iw",
+      "filesAnalyzed": false,
+      "licenseConcluded": "ISC",
+      "licenseDeclared": "ISC",
+      "copyrightText": "Copyright (c) Linux Wireless",
+      "supplier": "Organization: Linux Wireless",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/iw@6.17"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0108",
+      "name": "libabseil-cpp",
+      "versionInfo": "20260107.1",
+      "downloadLocation": "https://github.com/abseil/abseil-cpp/archive/20260107.1",
+      "filesAnalyzed": false,
+      "licenseConcluded": "Apache-2.0",
+      "licenseDeclared": "Apache-2.0",
+      "copyrightText": "Copyright information is provided by the upstream libabseil-cpp license files.",
+      "supplier": "Organization: libabseil-cpp upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/abseil/libabseil-cpp@20260107.1"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0109",
+      "name": "libcurl",
+      "versionInfo": "8.20.0",
+      "downloadLocation": "https://curl.se/download",
+      "filesAnalyzed": false,
+      "licenseConcluded": "curl",
+      "licenseDeclared": "curl",
+      "copyrightText": "Copyright (c) 1996-2025 Daniel Stenberg",
+      "supplier": "Organization: Daniel Stenberg",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/libcurl@8.20.0"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0110",
+      "name": "libdisplay-info",
+      "versionInfo": "0.3.0",
+      "downloadLocation": "https://gitlab.freedesktop.org/emersion/libdisplay-info/-/releases/0.3.0/downloads",
+      "filesAnalyzed": false,
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "copyrightText": "Copyright information is provided by the upstream libdisplay-info license files.",
+      "supplier": "Organization: libdisplay-info upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/libdisplay-info@0.3.0"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0111",
+      "name": "liberation",
+      "versionInfo": "2.1.5",
+      "downloadLocation": "https://github.com/liberationfonts/liberation-fonts/files/7261482",
+      "filesAnalyzed": false,
+      "licenseConcluded": "OFL-1.1",
+      "licenseDeclared": "OFL-1.1",
+      "copyrightText": "Copyright (c) Red Hat",
+      "supplier": "Organization: Red Hat",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/liberationfonts/liberation@2.1.5"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0112",
+      "name": "libevdev",
+      "versionInfo": "1.13.5",
+      "downloadLocation": "http://www.freedesktop.org/software/libevdev",
+      "filesAnalyzed": false,
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "copyrightText": "Copyright (c) Freedesktop.org",
+      "supplier": "Organization: Freedesktop.org",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/libevdev@1.13.5"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0113",
+      "name": "libfribidi",
+      "versionInfo": "1.0.16",
+      "downloadLocation": "https://github.com/fribidi/fribidi/releases/download/v1.0.16",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LGPL-2.1+",
+      "licenseDeclared": "LGPL-2.1+",
+      "copyrightText": "Copyright (c) GNOME Foundation contributors",
+      "supplier": "Organization: GNOME Foundation",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/fribidi/libfribidi@1.0.16"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0114",
+      "name": "libinput",
+      "versionInfo": "1.31.1",
+      "downloadLocation": "https://gitlab.freedesktop.org/libinput/libinput/-/archive/1.31.1",
+      "filesAnalyzed": false,
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "copyrightText": "Copyright (c) Freedesktop.org",
+      "supplier": "Organization: Freedesktop.org",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/libinput@1.31.1"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0115",
+      "name": "mtdev",
+      "versionInfo": "1.1.7",
+      "downloadLocation": "http://bitmath.org/code/mtdev",
+      "filesAnalyzed": false,
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "copyrightText": "Copyright (c) Linux MTD Project contributors",
+      "supplier": "Organization: Linux MTD Project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/mtdev@1.1.7"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0116",
+      "name": "libmad",
+      "versionInfo": "0.15.1b",
+      "downloadLocation": "http://snapshot.debian.org/archive/debian/20190310T213528Z/pool/main/libm/libmad",
+      "filesAnalyzed": false,
+      "licenseConcluded": "GPL-2.0+",
+      "licenseDeclared": "GPL-2.0+",
+      "copyrightText": "Copyright information is provided by the upstream libmad license files.",
+      "supplier": "Organization: libmad upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/libmad@0.15.1b"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0117",
+      "name": "libsndfile",
+      "versionInfo": "1.2.2",
+      "downloadLocation": "https://github.com/libsndfile/libsndfile/releases/download/1.2.2",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LGPL-2.1+",
+      "licenseDeclared": "LGPL-2.1+",
+      "copyrightText": "Copyright information is provided by the upstream libsndfile license files.",
+      "supplier": "Organization: libsndfile upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/libsndfile/libsndfile@1.2.2"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0118",
+      "name": "libsocketcan",
+      "versionInfo": "0.0.12",
+      "downloadLocation": "http://www.pengutronix.de/software/libsocketcan/download",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LGPL-2.1+",
+      "licenseDeclared": "LGPL-2.1+",
+      "copyrightText": "Copyright information is provided by the upstream libsocketcan license files.",
+      "supplier": "Organization: libsocketcan upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/libsocketcan@0.0.12"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0119",
+      "name": "libtool",
+      "versionInfo": "2.4.6",
+      "downloadLocation": "https://mirrors.ustc.edu.cn/gnu/libtool",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LGPL-2.1+",
+      "licenseDeclared": "LGPL-2.1+",
+      "copyrightText": "Copyright information is provided by the upstream libtool license files.",
+      "supplier": "Organization: libtool upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/libtool@2.4.6"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0120",
+      "name": "libvpx",
+      "versionInfo": "1.16.0",
+      "downloadLocation": "https://github.com/webmproject/libvpx/archive/v1.16.0",
+      "filesAnalyzed": false,
+      "licenseConcluded": "BSD-3-Clause",
+      "licenseDeclared": "BSD-3-Clause",
+      "copyrightText": "Copyright information is provided by the upstream libvpx license files.",
+      "supplier": "Organization: libvpx upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/webmproject/libvpx@1.16.0"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0121",
+      "name": "libxkbcommon",
+      "versionInfo": "1.9.2",
+      "downloadLocation": "https://github.com/xkbcommon/libxkbcommon/archive/xkbcommon-1.9.2",
+      "filesAnalyzed": false,
+      "licenseConcluded": "MIT/X11",
+      "licenseDeclared": "MIT/X11",
+      "copyrightText": "Copyright information is provided by the upstream libxkbcommon license files.",
+      "supplier": "Organization: libxkbcommon upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/xkbcommon/libxkbcommon@1.9.2"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0122",
+      "name": "libxslt",
+      "versionInfo": "1.1.45",
+      "downloadLocation": "https://download.gnome.org/sources/libxslt/1.1",
+      "filesAnalyzed": false,
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "copyrightText": "Copyright information is provided by the upstream libxslt license files.",
+      "supplier": "Organization: libxslt upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/libxslt@1.1.45"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0123",
+      "name": "lmbench",
+      "versionInfo": "8b3ddfa52ee4a886abe5af4550f404142966eb88",
+      "downloadLocation": "https://github.com/intel/lmbench/archive/8b3ddfa52ee4a886abe5af4550f404142966eb88",
+      "filesAnalyzed": false,
+      "licenseConcluded": "lmbench license (based on GPL-2.0)",
+      "licenseDeclared": "lmbench license (based on GPL-2.0)",
+      "copyrightText": "Copyright information is provided by the upstream lmbench license files.",
+      "supplier": "Organization: lmbench upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/intel/lmbench@8b3ddfa52ee4a886abe5af4550f404142966eb88"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0124",
+      "name": "lrzsz",
+      "versionInfo": "0.12.21rc",
+      "downloadLocation": "http://www.ohse.de/uwe/testing",
+      "filesAnalyzed": false,
+      "licenseConcluded": "GPL-2.0+",
+      "licenseDeclared": "GPL-2.0+",
+      "copyrightText": "Copyright information is provided by the upstream lrzsz license files.",
+      "supplier": "Organization: lrzsz upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/lrzsz@0.12.21rc"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0125",
+      "name": "make",
+      "versionInfo": "4.3",
+      "downloadLocation": "https://mirrors.ustc.edu.cn/gnu/make",
+      "filesAnalyzed": false,
+      "licenseConcluded": "GPL-3.0+",
+      "licenseDeclared": "GPL-3.0+",
+      "copyrightText": "Copyright (c) Free Software Foundation, Inc.",
+      "supplier": "Organization: Free Software Foundation",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/make@4.3"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0126",
+      "name": "memtester",
+      "versionInfo": "4.7.1",
+      "downloadLocation": "http://pyropus.ca/software/memtester/old-versions",
+      "filesAnalyzed": false,
+      "licenseConcluded": "GPL-2.0",
+      "licenseDeclared": "GPL-2.0",
+      "copyrightText": "Copyright information is provided by the upstream memtester license files.",
+      "supplier": "Organization: memtester upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/memtester@4.7.1"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0127",
+      "name": "ntfs-3g",
+      "versionInfo": "2022.10.3",
+      "downloadLocation": "http://tuxera.com/opensource",
+      "filesAnalyzed": false,
+      "licenseConcluded": "GPL-2.0+, LGPL-2.0+",
+      "licenseDeclared": "GPL-2.0+, LGPL-2.0+",
+      "copyrightText": "Copyright information is provided by the upstream ntfs-3g license files.",
+      "supplier": "Organization: ntfs-3g upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/ntfs-3g@2022.10.3"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0128",
+      "name": "numactl",
+      "versionInfo": "2.0.19",
+      "downloadLocation": "https://github.com/numactl/numactl/releases/download/v2.0.19",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LGPL-2.1 (libnuma), GPL-2.0 (programs)",
+      "licenseDeclared": "LGPL-2.1 (libnuma), GPL-2.0 (programs)",
+      "copyrightText": "Copyright information is provided by the upstream numactl license files.",
+      "supplier": "Organization: numactl upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/numactl/numactl@2.0.19"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0129",
+      "name": "opencv4",
+      "versionInfo": "4.13.0",
+      "downloadLocation": "https://github.com/opencv/opencv/archive/4.13.0",
+      "filesAnalyzed": false,
+      "licenseConcluded": "Apache-2.0",
+      "licenseDeclared": "Apache-2.0",
+      "copyrightText": "Copyright information is provided by the upstream opencv4 license files.",
+      "supplier": "Organization: opencv4 upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/opencv/opencv4@4.13.0"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0130",
+      "name": "protobuf",
+      "versionInfo": "33.5",
+      "downloadLocation": "https://github.com/protocolbuffers/protobuf/releases/download/v33.5",
+      "filesAnalyzed": false,
+      "licenseConcluded": "BSD-3-Clause",
+      "licenseDeclared": "BSD-3-Clause",
+      "copyrightText": "Copyright information is provided by the upstream protobuf license files.",
+      "supplier": "Organization: protobuf upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/protocolbuffers/protobuf@33.5"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0131",
+      "name": "pango",
+      "versionInfo": "1.56.4",
+      "downloadLocation": "https://download.gnome.org/sources/pango/1.56",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LGPL-2.0+",
+      "licenseDeclared": "LGPL-2.0+",
+      "copyrightText": "Copyright (c) Red Hat, Inc.",
+      "supplier": "Organization: GNOME Project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/pango@1.56.4"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0132",
+      "name": "perl",
+      "versionInfo": "5.42.2",
+      "downloadLocation": "https://www.cpan.org/src/5.0",
+      "filesAnalyzed": false,
+      "licenseConcluded": "Artistic or GPL-1.0+",
+      "licenseDeclared": "Artistic or GPL-1.0+",
+      "copyrightText": "Copyright information is provided by the upstream perl license files.",
+      "supplier": "Organization: perl upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/perl@5.42.2"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0133",
+      "name": "pm-utils",
+      "versionInfo": "1.4.1",
+      "downloadLocation": "http://pm-utils.freedesktop.org/releases",
+      "filesAnalyzed": false,
+      "licenseConcluded": "GPL-2.0+",
+      "licenseDeclared": "GPL-2.0+",
+      "copyrightText": "Copyright information is provided by the upstream pm-utils license files.",
+      "supplier": "Organization: pm-utils upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/pm-utils@1.4.1"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0134",
+      "name": "procrank_linux",
+      "versionInfo": "21c30ab4514a5b15ac6e813e21bee0d3d714cb08",
+      "downloadLocation": "https://github.com/csimmonds/procrank_linux/archive/21c30ab4514a5b15ac6e813e21bee0d3d714cb08",
+      "filesAnalyzed": false,
+      "licenseConcluded": "Apache-2.0",
+      "licenseDeclared": "Apache-2.0",
+      "copyrightText": "Copyright information is provided by the upstream procrank_linux license files.",
+      "supplier": "Organization: procrank_linux upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/csimmonds/procrank-linux@21c30ab4514a5b15ac6e813e21bee0d3d714cb08"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0135",
+      "name": "camera-engine-rkaiq",
+      "versionInfo": "1.0",
+      "downloadLocation": "/home/wxt/linux-develop/linux6.12/buildroot/../external/camera_engine_rkaiq",
+      "filesAnalyzed": false,
+      "licenseConcluded": "Apache-2.0",
+      "licenseDeclared": "Apache-2.0",
+      "copyrightText": "Copyright information is provided by the upstream camera-engine-rkaiq license files.",
+      "supplier": "Organization: camera-engine-rkaiq upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/camera-engine-rkaiq@1.0"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0136",
+      "name": "gstreamer1-rockchip",
+      "versionInfo": "master",
+      "downloadLocation": "/home/wxt/linux-develop/linux6.12/buildroot/../external/gstreamer-rockchip",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LGPL-2.1",
+      "licenseDeclared": "LGPL-2.1",
+      "copyrightText": "Copyright (c) GStreamer Project contributors",
+      "supplier": "Organization: GStreamer Project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/gstreamer1-rockchip@master"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0137",
+      "name": "rockchip-mpp",
+      "versionInfo": "develop",
+      "downloadLocation": "https://github.com/rockchip-linux/mpp",
+      "filesAnalyzed": false,
+      "licenseConcluded": "Apache-2.0, MIT",
+      "licenseDeclared": "Apache-2.0, MIT",
+      "copyrightText": "Copyright (c) Rockchip Electronics Co., Ltd.",
+      "supplier": "Organization: Rockchip Electronics Co., Ltd.",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/rockchip/rockchip-mpp"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0138",
+      "name": "libv4l-rkmpp",
+      "versionInfo": "1.7.1",
+      "downloadLocation": "https://github.com/JeffyCN/libv4l-rkmpp.git",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LGPL-2.1",
+      "licenseDeclared": "LGPL-2.1",
+      "copyrightText": "Copyright information is provided by the upstream libv4l-rkmpp license files.",
+      "supplier": "Organization: libv4l-rkmpp upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/JeffyCN/libv4l-rkmpp@1.7.1"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0139",
+      "name": "recovery",
+      "versionInfo": "develop",
+      "downloadLocation": "/home/wxt/linux-develop/linux6.12/buildroot/../external/recovery",
+      "filesAnalyzed": false,
+      "licenseConcluded": "ROCKCHIP",
+      "licenseDeclared": "ROCKCHIP",
+      "copyrightText": "Copyright information is provided by the upstream recovery license files.",
+      "supplier": "Organization: recovery upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/recovery@develop"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0140",
+      "name": "rknn3-runtime",
+      "versionInfo": "1.0.0",
+      "downloadLocation": "/home/wxt/linux-develop/linux6.12/buildroot/../external/rknn3-runtime",
+      "filesAnalyzed": false,
+      "licenseConcluded": "ROCKCHIP",
+      "licenseDeclared": "ROCKCHIP",
+      "copyrightText": "Copyright information is provided by the upstream rknn3-runtime license files.",
+      "supplier": "Organization: rknn3-runtime upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/rknn3-runtime@1.0.0"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0141",
+      "name": "rknn3-test",
+      "versionInfo": "1.0.0",
+      "downloadLocation": "/home/wxt/linux-develop/linux6.12/buildroot/../external/rknn3-test",
+      "filesAnalyzed": false,
+      "licenseConcluded": "ROCKCHIP",
+      "licenseDeclared": "ROCKCHIP",
+      "copyrightText": "Copyright information is provided by the upstream rknn3-test license files.",
+      "supplier": "Organization: rknn3-test upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/rknn3-test@1.0.0"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0142",
+      "name": "rknpu2",
+      "versionInfo": "1.0.0",
+      "downloadLocation": "https://github.com/rockchip-linux/rknpu2",
+      "filesAnalyzed": false,
+      "licenseConcluded": "ROCKCHIP",
+      "licenseDeclared": "ROCKCHIP",
+      "copyrightText": "Copyright (c) Rockchip Electronics Co., Ltd.",
+      "supplier": "Organization: Rockchip Electronics Co., Ltd.",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/rockchip/rknpu2"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0143",
+      "name": "rktoolkit",
+      "versionInfo": "master",
+      "downloadLocation": "/home/wxt/linux-develop/linux6.12/buildroot/../external/rktoolkit",
+      "filesAnalyzed": false,
+      "licenseConcluded": "Apache-2.0",
+      "licenseDeclared": "Apache-2.0",
+      "copyrightText": "Copyright information is provided by the upstream rktoolkit license files.",
+      "supplier": "Organization: rktoolkit upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/rktoolkit@master"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0144",
+      "name": "wpa_supplicant",
+      "versionInfo": "2.11",
+      "downloadLocation": "http://w1.fi/releases",
+      "filesAnalyzed": false,
+      "licenseConcluded": "BSD-3-Clause",
+      "licenseDeclared": "BSD-3-Clause",
+      "copyrightText": "Copyright information is provided by the upstream wpa_supplicant license files.",
+      "supplier": "Organization: wpa_supplicant upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/wpa-supplicant@2.11"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0145",
+      "name": "rkwifibt",
+      "versionInfo": "1.0.0",
+      "downloadLocation": "/home/wxt/linux-develop/linux6.12/buildroot/../external/rkwifibt",
+      "filesAnalyzed": false,
+      "licenseConcluded": "ROCKCHIP",
+      "licenseDeclared": "ROCKCHIP",
+      "copyrightText": "Copyright information is provided by the upstream rkwifibt license files.",
+      "supplier": "Organization: rkwifibt upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/rkwifibt@1.0.0"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0146",
+      "name": "rockchip-ai",
+      "versionInfo": "1.0",
+      "downloadLocation": "/home/wxt/linux-develop/linux6.12/buildroot/../app/rkai",
+      "filesAnalyzed": false,
+      "licenseConcluded": "ROCKCHIP",
+      "licenseDeclared": "ROCKCHIP",
+      "copyrightText": "Copyright (c) Rockchip Electronics Co., Ltd.",
+      "supplier": "Organization: Rockchip Electronics Co., Ltd.",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/rockchip-ai@1.0"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0147",
+      "name": "rockchip-alsa-config",
+      "versionInfo": "1.0",
+      "downloadLocation": "/home/wxt/linux-develop/linux6.12/buildroot/../external/alsa-config",
+      "filesAnalyzed": false,
+      "licenseConcluded": "Apache-2.0",
+      "licenseDeclared": "Apache-2.0",
+      "copyrightText": "Copyright (c) Rockchip Electronics Co., Ltd.",
+      "supplier": "Organization: Rockchip Electronics Co., Ltd.",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/rockchip-alsa-config@1.0"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0148",
+      "name": "rockchip-test",
+      "versionInfo": "master",
+      "downloadLocation": "/home/wxt/linux-develop/linux6.12/buildroot/../external/rockchip-test",
+      "filesAnalyzed": false,
+      "licenseConcluded": "ROCKCHIP",
+      "licenseDeclared": "ROCKCHIP",
+      "copyrightText": "Copyright (c) Rockchip Electronics Co., Ltd.",
+      "supplier": "Organization: Rockchip Electronics Co., Ltd.",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/rockchip-test@master"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0149",
+      "name": "rt-tests",
+      "versionInfo": "2.8",
+      "downloadLocation": "https://cdn.kernel.org/pub/linux/utils/rt-tests/older",
+      "filesAnalyzed": false,
+      "licenseConcluded": "GPL-2.0+",
+      "licenseDeclared": "GPL-2.0+",
+      "copyrightText": "Copyright information is provided by the upstream rt-tests license files.",
+      "supplier": "Organization: rt-tests upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/rt-tests@2.8"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0150",
+      "name": "source-han-sans-cn",
+      "versionInfo": "2.004R",
+      "downloadLocation": "https://github.com/adobe-fonts/source-han-sans/releases/download/2.004R",
+      "filesAnalyzed": false,
+      "licenseConcluded": "OFL-1.1",
+      "licenseDeclared": "OFL-1.1",
+      "copyrightText": "Copyright information is provided by the upstream source-han-sans-cn license files.",
+      "supplier": "Organization: source-han-sans-cn upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/adobe-fonts/source-han-sans-cn@2.004R"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0151",
+      "name": "sox",
+      "versionInfo": "7524160b29a476f7e87bc14fddf12d349f9a3c5e",
+      "downloadLocation": "https://git.code.sf.net/p/sox/code",
+      "filesAnalyzed": false,
+      "licenseConcluded": "GPL-2.0+ (sox binary), LGPL-2.1+ (libraries)",
+      "licenseDeclared": "GPL-2.0+ (sox binary), LGPL-2.1+ (libraries)",
+      "copyrightText": "Copyright information is provided by the upstream sox license files.",
+      "supplier": "Organization: sox upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/sox@7524160b29a476f7e87bc14fddf12d349f9a3c5e"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0152",
+      "name": "strace",
+      "versionInfo": "6.19",
+      "downloadLocation": "https://github.com/strace/strace/releases/download/v6.19",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LGPL-2.1+",
+      "licenseDeclared": "LGPL-2.1+",
+      "copyrightText": "Copyright information is provided by the upstream strace license files.",
+      "supplier": "Organization: strace upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/strace/strace@6.19"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0153",
+      "name": "stress-ng",
+      "versionInfo": "0.21.00",
+      "downloadLocation": "https://github.com/ColinIanKing/stress-ng/archive/V0.21.00",
+      "filesAnalyzed": false,
+      "licenseConcluded": "GPL-2.0+",
+      "licenseDeclared": "GPL-2.0+",
+      "copyrightText": "Copyright information is provided by the upstream stress-ng license files.",
+      "supplier": "Organization: stress-ng upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/ColinIanKing/stress-ng@0.21.00"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0154",
+      "name": "stress",
+      "versionInfo": "1.0.7",
+      "downloadLocation": "https://github.com/resurrecting-open-source-projects/stress/releases/download/1.0.7",
+      "filesAnalyzed": false,
+      "licenseConcluded": "GPL-2.0+",
+      "licenseDeclared": "GPL-2.0+",
+      "copyrightText": "Copyright information is provided by the upstream stress license files.",
+      "supplier": "Organization: stress upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/resurrecting-open-source-projects/stress@1.0.7"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0155",
+      "name": "stressapptest",
+      "versionInfo": "6714c57d0d67f5a2a7a9987791af6729289bf64e",
+      "downloadLocation": "https://github.com/stressapptest/stressapptest.git",
+      "filesAnalyzed": false,
+      "licenseConcluded": "Apache-2.0",
+      "licenseDeclared": "Apache-2.0",
+      "copyrightText": "Copyright information is provided by the upstream stressapptest license files.",
+      "supplier": "Organization: stressapptest upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/stressapptest/stressapptest@6714c57d0d67f5a2a7a9987791af6729289bf64e"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0156",
+      "name": "tzdata",
+      "versionInfo": "2026b",
+      "downloadLocation": "https://www.iana.org/time-zones/repository/releases",
+      "filesAnalyzed": false,
+      "licenseConcluded": "Public domain",
+      "licenseDeclared": "Public domain",
+      "copyrightText": "Copyright information is provided by the upstream tzdata license files.",
+      "supplier": "Organization: tzdata upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/tzdata@2026b"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0157",
+      "name": "unixbench",
+      "versionInfo": "e477bc034137f994f2bbaba52952ca6e1de53856",
+      "downloadLocation": "https://github.com/kdlucas/byte-unixbench.git",
+      "filesAnalyzed": false,
+      "licenseConcluded": "GPL-2.0+",
+      "licenseDeclared": "GPL-2.0+",
+      "copyrightText": "Copyright information is provided by the upstream unixbench license files.",
+      "supplier": "Organization: unixbench upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/kdlucas/unixbench@e477bc034137f994f2bbaba52952ca6e1de53856"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0158",
+      "name": "usbmount",
+      "versionInfo": "0.0.22",
+      "downloadLocation": "http://snapshot.debian.org/archive/debian/20141023T043132Z/pool/main/u/usbmount",
+      "filesAnalyzed": false,
+      "licenseConcluded": "BSD-2-Clause",
+      "licenseDeclared": "BSD-2-Clause",
+      "copyrightText": "Copyright information is provided by the upstream usbmount license files.",
+      "supplier": "Organization: usbmount upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/usbmount@0.0.22"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0159",
+      "name": "wayland-utils",
+      "versionInfo": "1.2.0",
+      "downloadLocation": "https://gitlab.freedesktop.org/wayland/wayland-utils/-/releases/1.2.0/downloads",
+      "filesAnalyzed": false,
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "copyrightText": "Copyright (c) 2008-2012 Kristian Høgsberg",
+      "supplier": "Organization: Freedesktop.org",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/wayland-utils@1.2.0"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0160",
+      "name": "webp",
+      "versionInfo": "1.6.0",
+      "downloadLocation": "http://downloads.webmproject.org/releases/webp",
+      "filesAnalyzed": false,
+      "licenseConcluded": "BSD-3-Clause",
+      "licenseDeclared": "BSD-3-Clause",
+      "copyrightText": "Copyright information is provided by the upstream webp license files.",
+      "supplier": "Organization: webp upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/webp@1.6.0"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0161",
+      "name": "weston",
+      "versionInfo": "e0c5b8a26b1332300bdbdc098ae92ebfaf435c8c",
+      "downloadLocation": "https://gitlab.freedesktop.org/wayland/weston.git",
+      "filesAnalyzed": false,
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "copyrightText": "Copyright (c) 2008-2012 Kristian Høgsberg",
+      "supplier": "Organization: Freedesktop.org",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/weston@e0c5b8a26b1332300bdbdc098ae92ebfaf435c8c"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0162",
+      "name": "whetstone",
+      "versionInfo": "1.2",
+      "downloadLocation": "http://www.netlib.org/benchmark",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LicenseRef-Whetstone",
+      "licenseDeclared": "LicenseRef-Whetstone",
+      "copyrightText": "Copyright (c) 1998 Painter Engineering, Inc.",
+      "supplier": "Organization: Painter Engineering, Inc.",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/whetstone@1.2"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0163",
+      "name": "wireless_tools",
+      "versionInfo": "30.pre9",
+      "downloadLocation": "https://hewlettpackard.github.io/wireless-tools",
+      "filesAnalyzed": false,
+      "licenseConcluded": "GPL-2.0",
+      "licenseDeclared": "GPL-2.0",
+      "copyrightText": "Copyright information is provided by the upstream wireless_tools license files.",
+      "supplier": "Organization: wireless_tools upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/wireless-tools@30.pre9"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0164",
+      "name": "xkeyboard-config",
+      "versionInfo": "2.38",
+      "downloadLocation": "https://www.x.org/releases/individual/data/xkeyboard-config",
+      "filesAnalyzed": false,
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "copyrightText": "Copyright information is provided by the upstream xkeyboard-config license files.",
+      "supplier": "Organization: xkeyboard-config upstream project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/xkeyboard-config@2.38"
+        }
+      ],
+      "comment": "Scope: buildroot-target"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0165",
+      "name": "linux-kernel",
+      "versionInfo": "6.12.69",
+      "downloadLocation": "https://github.com/rockchip-linux/kernel",
+      "filesAnalyzed": false,
+      "licenseConcluded": "GPL-2.0-only",
+      "licenseDeclared": "GPL-2.0-only",
+      "copyrightText": "Copyright (c) Linus Torvalds and Linux kernel contributors",
+      "supplier": "Organization: The Linux Foundation",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/rockchip/linux-kernel@6.12.69"
+        }
+      ],
+      "comment": "Scope: sdk-kernel"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0166",
+      "name": "u-boot",
+      "versionInfo": "2025.04",
+      "downloadLocation": "https://github.com/rockchip-linux/u-boot",
+      "filesAnalyzed": false,
+      "licenseConcluded": "GPL-2.0-or-later",
+      "licenseDeclared": "GPL-2.0-or-later",
+      "copyrightText": "Copyright (c) DENX Software Engineering and U-Boot contributors",
+      "supplier": "Organization: DENX Software Engineering",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/rockchip/u-boot@2025.04"
+        }
+      ],
+      "comment": "Scope: sdk-bootloader"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0167",
+      "name": "rkbin",
+      "versionInfo": "sdk-release",
+      "downloadLocation": "https://github.com/rockchip-linux/rkbin",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LicenseRef-ROCKCHIP",
+      "licenseDeclared": "LicenseRef-ROCKCHIP",
+      "copyrightText": "Copyright (c) Rockchip Electronics Co., Ltd.",
+      "supplier": "Organization: Rockchip Electronics Co., Ltd.",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/rockchip/rkbin@sdk-release"
+        }
+      ],
+      "comment": "Scope: sdk-firmware"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0168",
+      "name": "buildroot",
+      "versionInfo": "sdk-release",
+      "downloadLocation": "https://github.com/buildroot/buildroot",
+      "filesAnalyzed": false,
+      "licenseConcluded": "GPL-2.0-or-later",
+      "licenseDeclared": "GPL-2.0-or-later",
+      "copyrightText": "Copyright (c) Buildroot contributors",
+      "supplier": "Organization: Buildroot project",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/rockchip/buildroot@sdk-release"
+        }
+      ],
+      "comment": "Scope: sdk-build-system"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0169",
+      "name": "rk3572-device-tree",
+      "versionInfo": "6.12.69",
+      "downloadLocation": "https://github.com/rockchip-linux/kernel",
+      "filesAnalyzed": false,
+      "licenseConcluded": "GPL-2.0-only",
+      "licenseDeclared": "GPL-2.0-only",
+      "copyrightText": "Copyright (c) Rockchip Electronics Co., Ltd. and Linux kernel contributors",
+      "supplier": "Organization: Rockchip Electronics Co., Ltd.",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/rockchip/rk3572-device-tree@6.12.69"
+        }
+      ],
+      "comment": "Scope: sdk-device-tree"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0170",
+      "name": "u-boot-spl",
+      "versionInfo": "2025.04",
+      "downloadLocation": "https://github.com/rockchip-linux/u-boot",
+      "filesAnalyzed": false,
+      "licenseConcluded": "GPL-2.0-or-later",
+      "licenseDeclared": "GPL-2.0-or-later",
+      "copyrightText": "Copyright (c) DENX Software Engineering and U-Boot contributors",
+      "supplier": "Organization: DENX Software Engineering",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/rockchip/u-boot-spl@2025.04"
+        }
+      ],
+      "comment": "Scope: sdk-bootloader-spl"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0171",
+      "name": "rk3572-ddr-init",
+      "versionInfo": "1.09",
+      "downloadLocation": "https://github.com/rockchip-linux/rkbin",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LicenseRef-ROCKCHIP",
+      "licenseDeclared": "LicenseRef-ROCKCHIP",
+      "copyrightText": "Copyright (c) Rockchip Electronics Co., Ltd.",
+      "supplier": "Organization: Rockchip Electronics Co., Ltd.",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/rockchip/rk3572-ddr-init@1.09"
+        }
+      ],
+      "comment": "Scope: sdk-ddr-firmware"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0172",
+      "name": "rk3572-trustzone-bl31",
+      "versionInfo": "1.23",
+      "downloadLocation": "https://github.com/rockchip-linux/rkbin",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LicenseRef-ROCKCHIP",
+      "licenseDeclared": "LicenseRef-ROCKCHIP",
+      "copyrightText": "Copyright (c) Rockchip Electronics Co., Ltd.",
+      "supplier": "Organization: Rockchip Electronics Co., Ltd.",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/rockchip/rk3572-trustzone-bl31@1.23"
+        }
+      ],
+      "comment": "Scope: sdk-trustzone"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0173",
+      "name": "rk3572-trustzone-bl32",
+      "versionInfo": "1.08",
+      "downloadLocation": "https://github.com/rockchip-linux/rkbin",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LicenseRef-ROCKCHIP",
+      "licenseDeclared": "LicenseRef-ROCKCHIP",
+      "copyrightText": "Copyright (c) Rockchip Electronics Co., Ltd.",
+      "supplier": "Organization: Rockchip Electronics Co., Ltd.",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/rockchip/rk3572-trustzone-bl32@1.08"
+        }
+      ],
+      "comment": "Scope: sdk-trustzone"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0174",
+      "name": "rk3572-secure-boot-trust-config",
+      "versionInfo": "sdk-release",
+      "downloadLocation": "https://github.com/rockchip-linux/rkbin",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LicenseRef-ROCKCHIP",
+      "licenseDeclared": "LicenseRef-ROCKCHIP",
+      "copyrightText": "Copyright (c) Rockchip Electronics Co., Ltd.",
+      "supplier": "Organization: Rockchip Electronics Co., Ltd.",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/rockchip/rk3572-secure-boot-trust-config@sdk-release"
+        }
+      ],
+      "comment": "Scope: sdk-secure-boot"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0175",
+      "name": "rk3572-update-image",
+      "versionInfo": "product-update-image",
+      "downloadLocation": "output/update/Image",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LicenseRef-Product-Image-Composite",
+      "licenseDeclared": "LicenseRef-Product-Image-Composite",
+      "copyrightText": "Copyright and license obligations are inherited from the contained product image components listed in this SBOM.",
+      "supplier": "Organization: Rockchip Electronics Co., Ltd.",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/rockchip/rk3572-update-image@product-update-image"
+        }
+      ],
+      "comment": "Scope: product-image"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0176",
+      "name": "rk3572-update-raw-image",
+      "versionInfo": "product-update-raw-image",
+      "downloadLocation": "output/update/Image",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LicenseRef-Product-Image-Composite",
+      "licenseDeclared": "LicenseRef-Product-Image-Composite",
+      "copyrightText": "Copyright and license obligations are inherited from the contained product image components listed in this SBOM.",
+      "supplier": "Organization: Rockchip Electronics Co., Ltd.",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/rockchip/rk3572-update-raw-image@product-update-raw-image"
+        }
+      ],
+      "comment": "Scope: product-image"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0177",
+      "name": "buildroot-rootfs-image",
+      "versionInfo": "product-rootfs",
+      "downloadLocation": "output/update/Image",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LicenseRef-Product-Image-Composite",
+      "licenseDeclared": "LicenseRef-Product-Image-Composite",
+      "copyrightText": "Copyright and license obligations are inherited from the contained product image components listed in this SBOM.",
+      "supplier": "Organization: Rockchip Electronics Co., Ltd.",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/rockchip/buildroot-rootfs-image@product-rootfs"
+        }
+      ],
+      "comment": "Scope: product-rootfs"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0178",
+      "name": "rk3572-boot-image",
+      "versionInfo": "product-boot",
+      "downloadLocation": "output/update/Image",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LicenseRef-Product-Image-Composite",
+      "licenseDeclared": "LicenseRef-Product-Image-Composite",
+      "copyrightText": "Copyright and license obligations are inherited from the contained product image components listed in this SBOM.",
+      "supplier": "Organization: Rockchip Electronics Co., Ltd.",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/rockchip/rk3572-boot-image@product-boot"
+        }
+      ],
+      "comment": "Scope: product-boot"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0179",
+      "name": "rk3572-recovery-image",
+      "versionInfo": "product-recovery",
+      "downloadLocation": "output/update/Image",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LicenseRef-Product-Image-Composite",
+      "licenseDeclared": "LicenseRef-Product-Image-Composite",
+      "copyrightText": "Copyright and license obligations are inherited from the contained product image components listed in this SBOM.",
+      "supplier": "Organization: Rockchip Electronics Co., Ltd.",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/rockchip/rk3572-recovery-image@product-recovery"
+        }
+      ],
+      "comment": "Scope: product-recovery"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0180",
+      "name": "rk3572-uboot-image",
+      "versionInfo": "product-bootloader",
+      "downloadLocation": "output/update/Image",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LicenseRef-Product-Image-Composite",
+      "licenseDeclared": "LicenseRef-Product-Image-Composite",
+      "copyrightText": "Copyright and license obligations are inherited from the contained product image components listed in this SBOM.",
+      "supplier": "Organization: Rockchip Electronics Co., Ltd.",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/rockchip/rk3572-uboot-image@product-bootloader"
+        }
+      ],
+      "comment": "Scope: product-bootloader"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0181",
+      "name": "rk3572-misc-image",
+      "versionInfo": "product-partition",
+      "downloadLocation": "output/update/Image",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LicenseRef-Product-Image-Composite",
+      "licenseDeclared": "LicenseRef-Product-Image-Composite",
+      "copyrightText": "Copyright and license obligations are inherited from the contained product image components listed in this SBOM.",
+      "supplier": "Organization: Rockchip Electronics Co., Ltd.",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/rockchip/rk3572-misc-image@product-partition"
+        }
+      ],
+      "comment": "Scope: product-partition"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0182",
+      "name": "rk3572-oem-image",
+      "versionInfo": "product-partition",
+      "downloadLocation": "output/update/Image",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LicenseRef-Product-Image-Composite",
+      "licenseDeclared": "LicenseRef-Product-Image-Composite",
+      "copyrightText": "Copyright and license obligations are inherited from the contained product image components listed in this SBOM.",
+      "supplier": "Organization: Rockchip Electronics Co., Ltd.",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/rockchip/rk3572-oem-image@product-partition"
+        }
+      ],
+      "comment": "Scope: product-partition"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0183",
+      "name": "rk3572-userdata-image",
+      "versionInfo": "product-partition",
+      "downloadLocation": "output/update/Image",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LicenseRef-Product-Image-Composite",
+      "licenseDeclared": "LicenseRef-Product-Image-Composite",
+      "copyrightText": "Copyright and license obligations are inherited from the contained product image components listed in this SBOM.",
+      "supplier": "Organization: Rockchip Electronics Co., Ltd.",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/rockchip/rk3572-userdata-image@product-partition"
+        }
+      ],
+      "comment": "Scope: product-partition"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0184",
+      "name": "rk3572-parameter-file",
+      "versionInfo": "product-partition-table",
+      "downloadLocation": "output/update/Image",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LicenseRef-Product-Image-Composite",
+      "licenseDeclared": "LicenseRef-Product-Image-Composite",
+      "copyrightText": "Copyright and license obligations are inherited from the contained product image components listed in this SBOM.",
+      "supplier": "Organization: Rockchip Electronics Co., Ltd.",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/rockchip/rk3572-parameter-file@product-partition-table"
+        }
+      ],
+      "comment": "Scope: product-partition-table"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0185",
+      "name": "rk3572-package-file",
+      "versionInfo": "product-update-manifest",
+      "downloadLocation": "output/update/Image",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LicenseRef-Product-Image-Composite",
+      "licenseDeclared": "LicenseRef-Product-Image-Composite",
+      "copyrightText": "Copyright and license obligations are inherited from the contained product image components listed in this SBOM.",
+      "supplier": "Organization: Rockchip Electronics Co., Ltd.",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/rockchip/rk3572-package-file@product-update-manifest"
+        }
+      ],
+      "comment": "Scope: product-update-manifest"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0186",
+      "name": "rk3572_ddr_lp4_2112MHz_lp5_2736MHz_ultra_v1.07.bin",
+      "versionInfo": "1.07.",
+      "downloadLocation": "https://github.com/rockchip-linux/rkbin",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LicenseRef-ROCKCHIP",
+      "licenseDeclared": "LicenseRef-ROCKCHIP",
+      "copyrightText": "Copyright (c) Rockchip Electronics Co., Ltd.",
+      "supplier": "Organization: Rockchip Electronics Co., Ltd.",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/rockchip/rkbin/rk3572_ddr_lp4_2112MHz_lp5_2736MHz_ultra_v1.07.bin@1.07."
+        }
+      ],
+      "comment": "Scope: rkbin"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0187",
+      "name": "rk3572_ddr_lp4_2112MHz_lp5_2736MHz_v1.07.bin",
+      "versionInfo": "1.07.",
+      "downloadLocation": "https://github.com/rockchip-linux/rkbin",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LicenseRef-ROCKCHIP",
+      "licenseDeclared": "LicenseRef-ROCKCHIP",
+      "copyrightText": "Copyright (c) Rockchip Electronics Co., Ltd.",
+      "supplier": "Organization: Rockchip Electronics Co., Ltd.",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/rockchip/rkbin/rk3572_ddr_lp4_2112MHz_lp5_2736MHz_v1.07.bin@1.07."
+        }
+      ],
+      "comment": "Scope: rkbin"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0188",
+      "name": "rk3572_bl31_v1.10.elf",
+      "versionInfo": "1.10.",
+      "downloadLocation": "https://github.com/rockchip-linux/rkbin",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LicenseRef-ROCKCHIP",
+      "licenseDeclared": "LicenseRef-ROCKCHIP",
+      "copyrightText": "Copyright (c) Rockchip Electronics Co., Ltd.",
+      "supplier": "Organization: Rockchip Electronics Co., Ltd.",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/rockchip/rkbin/rk3572_bl31_v1.10.elf@1.10."
+        }
+      ],
+      "comment": "Scope: rkbin"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0189",
+      "name": "rk3572_spl_v1.03.bin",
+      "versionInfo": "1.03.",
+      "downloadLocation": "https://github.com/rockchip-linux/rkbin",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LicenseRef-ROCKCHIP",
+      "licenseDeclared": "LicenseRef-ROCKCHIP",
+      "copyrightText": "Copyright (c) Rockchip Electronics Co., Ltd.",
+      "supplier": "Organization: Rockchip Electronics Co., Ltd.",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/rockchip/rkbin/rk3572_spl_v1.03.bin@1.03."
+        }
+      ],
+      "comment": "Scope: rkbin"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0190",
+      "name": "rk3572_usbplug_fspi1_v1.00.bin",
+      "versionInfo": "1.00.",
+      "downloadLocation": "https://github.com/rockchip-linux/rkbin",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LicenseRef-ROCKCHIP",
+      "licenseDeclared": "LicenseRef-ROCKCHIP",
+      "copyrightText": "Copyright (c) Rockchip Electronics Co., Ltd.",
+      "supplier": "Organization: Rockchip Electronics Co., Ltd.",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/rockchip/rkbin/rk3572_usbplug_fspi1_v1.00.bin@1.00."
+        }
+      ],
+      "comment": "Scope: rkbin"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0191",
+      "name": "rk3572_spl_fspi1_v1.03.bin",
+      "versionInfo": "1.03.",
+      "downloadLocation": "https://github.com/rockchip-linux/rkbin",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LicenseRef-ROCKCHIP",
+      "licenseDeclared": "LicenseRef-ROCKCHIP",
+      "copyrightText": "Copyright (c) Rockchip Electronics Co., Ltd.",
+      "supplier": "Organization: Rockchip Electronics Co., Ltd.",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/rockchip/rkbin/rk3572_spl_fspi1_v1.03.bin@1.03."
+        }
+      ],
+      "comment": "Scope: rkbin"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0192",
+      "name": "rk3572_ddr_lp4_2112MHz_lp5_2736MHz_eyescan_v1.07.bin",
+      "versionInfo": "1.07.",
+      "downloadLocation": "https://github.com/rockchip-linux/rkbin",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LicenseRef-ROCKCHIP",
+      "licenseDeclared": "LicenseRef-ROCKCHIP",
+      "copyrightText": "Copyright (c) Rockchip Electronics Co., Ltd.",
+      "supplier": "Organization: Rockchip Electronics Co., Ltd.",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/rockchip/rkbin/rk3572_ddr_lp4_2112MHz_lp5_2736MHz_eyescan_v1.07.bin@1.07."
+        }
+      ],
+      "comment": "Scope: rkbin"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0193",
+      "name": "rk3572_ddr_lp4_2112MHz_lp5_2736MHz_rt_v1.07.bin",
+      "versionInfo": "1.07.",
+      "downloadLocation": "https://github.com/rockchip-linux/rkbin",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LicenseRef-ROCKCHIP",
+      "licenseDeclared": "LicenseRef-ROCKCHIP",
+      "copyrightText": "Copyright (c) Rockchip Electronics Co., Ltd.",
+      "supplier": "Organization: Rockchip Electronics Co., Ltd.",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/rockchip/rkbin/rk3572_ddr_lp4_2112MHz_lp5_2736MHz_rt_v1.07.bin@1.07."
+        }
+      ],
+      "comment": "Scope: rkbin"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0194",
+      "name": "rk3572_usbplug_v1.00.bin",
+      "versionInfo": "1.00.",
+      "downloadLocation": "https://github.com/rockchip-linux/rkbin",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LicenseRef-ROCKCHIP",
+      "licenseDeclared": "LicenseRef-ROCKCHIP",
+      "copyrightText": "Copyright (c) Rockchip Electronics Co., Ltd.",
+      "supplier": "Organization: Rockchip Electronics Co., Ltd.",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/rockchip/rkbin/rk3572_usbplug_v1.00.bin@1.00."
+        }
+      ],
+      "comment": "Scope: rkbin"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0195",
+      "name": "rk3572_dboot_v1.00.bin",
+      "versionInfo": "1.00.",
+      "downloadLocation": "https://github.com/rockchip-linux/rkbin",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LicenseRef-ROCKCHIP",
+      "licenseDeclared": "LicenseRef-ROCKCHIP",
+      "copyrightText": "Copyright (c) Rockchip Electronics Co., Ltd.",
+      "supplier": "Organization: Rockchip Electronics Co., Ltd.",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/rockchip/rkbin/rk3572_dboot_v1.00.bin@1.00."
+        }
+      ],
+      "comment": "Scope: rkbin"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0196",
+      "name": "rk3572_rboot_v1.00.bin",
+      "versionInfo": "1.00.",
+      "downloadLocation": "https://github.com/rockchip-linux/rkbin",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LicenseRef-ROCKCHIP",
+      "licenseDeclared": "LicenseRef-ROCKCHIP",
+      "copyrightText": "Copyright (c) Rockchip Electronics Co., Ltd.",
+      "supplier": "Organization: Rockchip Electronics Co., Ltd.",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/rockchip/rkbin/rk3572_rboot_v1.00.bin@1.00."
+        }
+      ],
+      "comment": "Scope: rkbin"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0197",
+      "name": "rk3572_bl32_v1.06.bin",
+      "versionInfo": "1.06.",
+      "downloadLocation": "https://github.com/rockchip-linux/rkbin",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LicenseRef-ROCKCHIP",
+      "licenseDeclared": "LicenseRef-ROCKCHIP",
+      "copyrightText": "Copyright (c) Rockchip Electronics Co., Ltd.",
+      "supplier": "Organization: Rockchip Electronics Co., Ltd.",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/rockchip/rkbin/rk3572_bl32_v1.06.bin@1.06."
+        }
+      ],
+      "comment": "Scope: rkbin"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0198",
+      "name": "MiniLoaderAll.bin",
+      "versionInfo": "unknown",
+      "downloadLocation": "https://github.com/rockchip-linux/rkbin",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LicenseRef-ROCKCHIP",
+      "licenseDeclared": "LicenseRef-ROCKCHIP",
+      "copyrightText": "Copyright (c) Rockchip Electronics Co., Ltd.",
+      "supplier": "Organization: Rockchip Electronics Co., Ltd.",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/rockchip/rkbin/MiniLoaderAll.bin"
+        }
+      ],
+      "comment": "Scope: rkbin"
+    }
+  ],
+  "relationships": [
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0000"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0001"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0002"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0003"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0004"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0005"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0006"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0007"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0008"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0009"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0010"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0011"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0012"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0013"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0014"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0015"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0016"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0017"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0018"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0019"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0020"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0021"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0022"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0023"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0024"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0025"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0026"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0027"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0028"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0029"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0030"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0031"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0032"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0033"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0034"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0035"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0036"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0037"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0038"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0039"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0040"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0041"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0042"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0043"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0044"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0045"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0046"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0047"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0048"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0049"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0050"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0051"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0052"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0053"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0054"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0055"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0056"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0057"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0058"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0059"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0060"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0061"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0062"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0063"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0064"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0065"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0066"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0067"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0068"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0069"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0070"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0071"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0072"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0073"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0074"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0075"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0076"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0077"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0078"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0079"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0080"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0081"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0082"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0083"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0084"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0085"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0086"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0087"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0088"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0089"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0090"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0091"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0092"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0093"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0094"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0095"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0096"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0097"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0098"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0099"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0100"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0101"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0102"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0103"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0104"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0105"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0106"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0107"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0108"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0109"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0110"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0111"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0112"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0113"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0114"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0115"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0116"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0117"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0118"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0119"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0120"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0121"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0122"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0123"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0124"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0125"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0126"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0127"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0128"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0129"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0130"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0131"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0132"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0133"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0134"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0135"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0136"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0137"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0138"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0139"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0140"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0141"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0142"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0143"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0144"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0145"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0146"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0147"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0148"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0149"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0150"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0151"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0152"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0153"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0154"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0155"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0156"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0157"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0158"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0159"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0160"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0161"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0162"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0163"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0164"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0165"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0166"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0167"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0168"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0169"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0170"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0171"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0172"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0173"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0174"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0175"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0176"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0177"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0178"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0179"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0180"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0181"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0182"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0183"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0184"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0185"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0186"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0187"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0188"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0189"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0190"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0191"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0192"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0193"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0194"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0195"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0196"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0197"
+    },
+    {
+      "spdxElementId": "SPDXRef-Document-97c4b47d1dee",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-0198"
+    }
+  ]
+}

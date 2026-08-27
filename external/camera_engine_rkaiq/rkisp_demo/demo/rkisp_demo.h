@@ -37,6 +37,8 @@ typedef struct fakecam_rawbuffer_s {
     struct list_head list;
 } fakecam_rawbuffer;
 
+#define DEMO_CTX_MAX_PEERS 4
+
 typedef struct _demo_context {
     char                    out_file[255];
     char                    dev_name[255];
@@ -100,6 +102,11 @@ typedef struct _demo_context {
     int                     aovContinueRunCnt;
     char                    main_scene[2][32];
     char                    sub_scene[2][32];
+    int                     testCamId;   /* which camera to run test on (1-5, default 1) */
+
+    struct _demo_context*   peer_ctx[DEMO_CTX_MAX_PEERS];
+    int                     num_peers;
+    bool                    extproc_bay3d_iir;
 } demo_context_t;
 
 #ifndef CAM_STATIC_FPS_CALCULATION

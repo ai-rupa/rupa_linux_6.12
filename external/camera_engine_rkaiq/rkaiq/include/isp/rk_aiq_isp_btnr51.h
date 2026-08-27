@@ -3341,7 +3341,6 @@ typedef struct btnr_md_dyn_s {
         M4_HIDE_EX(0),
         M4_RO(0),
         M4_ORDER(1),
-        M4_GROUP(md_en_group),
         M4_MARK(TNR),
         M4_NOTES(TODO))  */
     btnr_frmFusion_dyn_t frmFusion;

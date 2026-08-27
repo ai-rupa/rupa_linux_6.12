@@ -56,8 +56,9 @@ typedef struct AiqFpnSwStreamProcUnit_s {
     void* _fpn_correct_raw;
 } AiqFpnSwStreamProcUnit_t;
 
-XCamReturn AiqFpnSwStreamProcUnit_init(AiqFpnSwStreamProcUnit_t* pFpnProc, void *sns_dev);
+XCamReturn AiqFpnSwStreamProcUnit_init(AiqFpnSwStreamProcUnit_t* pFpnProc);
 XCamReturn AiqFpnSwStreamProcUnit_deinit(AiqFpnSwStreamProcUnit_t* pFpnProc);
+XCamReturn AiqFpnSwStreamProcUnit_prepare(AiqFpnSwStreamProcUnit_t* pFpnProc, void *sns_dev);
 XCamReturn AiqFpnSwStreamProcUnit_start(AiqFpnSwStreamProcUnit_t* pFpnProc);
 XCamReturn AiqFpnSwStreamProcUnit_stop(AiqFpnSwStreamProcUnit_t* pFpnProc);
 XCamReturn AiqFpnSwStreamProcUnit_setFormat(AiqFpnSwStreamProcUnit_t* pFpnProc, uint32_t width, uint32_t height, uint32_t bpp);

@@ -107,6 +107,10 @@ RK_S32 aiq_ipcs_server_stop() {
 #ifdef HAVE_RK_OSAL
             rkos_kthread_destory(gIPCThread, 1);
 #else
+            // Close the server socket first so that select() returns immediately
+            // (EBADF), allowing the thread loop to check mKeepWorking and exit
+            // without waiting for the 1-second select() timeout.
+            AIQIPCSockServer_stop(gIPCServer);
             bool ret = aiqThread_stop(gIPCThread);
             if (!ret)
                 printf("Failed to start the thread of `ipcs_server`\n");
@@ -114,9 +118,10 @@ RK_S32 aiq_ipcs_server_stop() {
 #endif
             gIPCThread = RK_NULL;
         }
-        AIQIPCSockServer_stop(gIPCServer);
-        AIQIPCSockServerDestroy(gIPCServer);
-        gIPCServer = RK_NULL;
+        if (gIPCServer != RK_NULL) {
+            AIQIPCSockServerDestroy(gIPCServer);
+            gIPCServer = RK_NULL;
+        }
     }
 #endif
     return result;

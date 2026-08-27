@@ -64,6 +64,8 @@ HOST_TAR_CONF_ENV = \
 	CC="$(HOSTCC_NOCCACHE)" \
 	CXX="$(HOSTCXX_NOCCACHE)"
 
+HOST_TAR_CONF_OPTS += --disable-gcc-warnings
+
 # Patches 0002-Fix-savannah-bug-#64441.patch and
 # 0003-tests-fix-LDADD.patch are patching Makefile.am, so they do
 # require TAR_AUTORECONF = YES above. However, for the host-tar

@@ -1,0 +1,1475 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SDK SBOM - Rockchip Linux SDK - Buildroot</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f0f2f5;color:#333}
+.header{background:linear-gradient(135deg,#0d47a1 0%,#1565c0 50%,#1976d2 100%);color:white;padding:1.5rem 2rem}
+.header h1{font-size:1.5rem;margin-bottom:.2rem}
+.header p{opacity:.85;font-size:.85rem}
+.container{max-width:1600px;margin:0 auto;padding:1.2rem}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:.7rem;margin-bottom:1rem}
+.stat{background:white;border-radius:8px;padding:.8rem;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.stat .label{font-size:.7rem;color:#888;text-transform:uppercase;letter-spacing:.5px}
+.stat .value{font-size:1.4rem;font-weight:700;margin-top:.15rem}
+.stat.yocto .value{color:#2e7d32}.stat.buildroot .value{color:#e65100}
+.stat.debian .value{color:#1565c0}.stat.sdk .value{color:#7b1fa2}
+.stat.rkbin .value{color:#c62828}
+.filters{background:white;border-radius:8px;padding:.7rem;margin-bottom:.8rem;box-shadow:0 1px 3px rgba(0,0,0,.08);display:flex;gap:.6rem;flex-wrap:wrap;align-items:center}
+.filters input,.filters select{padding:.35rem .5rem;border:1px solid #ddd;border-radius:4px;font-size:.82rem}
+.filters input{flex:1;min-width:160px}
+table{width:100%;border-collapse:collapse;background:white;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+th{background:#fafafa;padding:.5rem .7rem;text-align:left;font-weight:600;font-size:.75rem;color:#555;border-bottom:2px solid #e0e0e0;cursor:pointer;position:sticky;top:0;white-space:nowrap}
+th:hover{background:#eee}
+td{padding:.4rem .7rem;border-bottom:1px solid #f5f5f5;font-size:.8rem}
+tr:hover{background:#f8f9fa}
+.scope-badge{padding:.1rem .35rem;border-radius:3px;font-size:.7rem;font-weight:600}
+.scope-yocto{background:#e8f5e9;color:#2e7d32}
+.scope-buildroot{background:#fff3e0;color:#e65100}
+.scope-debian{background:#e3f2fd;color:#1565c0}
+.scope-sdk{background:#f3e5f5;color:#7b1fa2}
+.scope-rkbin{background:#fce4ec;color:#c62828}
+.lic{background:#e3f2fd;color:#1565c0;padding:.1rem .3rem;border-radius:3px;font-size:.72rem}
+.url{max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.72rem;color:#777}
+.footer{text-align:center;padding:1.5rem;color:#999;font-size:.78rem}
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>Rockchip Linux SDK - Full SBOM</h1>
+  <p>Generated: 2026-07-01 17:43:03 | Format: Buildroot legal-info compatible | EU CRA (2024/2847)</p>
+</div>
+<div class="container">
+  <div class="stats">
+    <div class="stat"><div class="label">Total</div><div class="value">199</div></div>
+    <div class="stat yocto"><div class="label">Yocto</div><div class="value">0</div></div>
+    <div class="stat buildroot"><div class="label">Buildroot</div><div class="value">165</div></div>
+    <div class="stat debian"><div class="label">Debian</div><div class="value">0</div></div>
+    <div class="stat sdk"><div class="label">SDK</div><div class="value">0</div></div>
+    <div class="stat rkbin"><div class="label">rkbin</div><div class="value">13</div></div>
+  </div>
+  <div class="filters">
+    <input type="text" id="q" placeholder="Search packages..." onkeyup="ft()">
+    <select id="sf" onchange="ft()">
+      <option value="">All Sources</option>
+      <option value="yocto-target">Yocto</option>
+      <option value="buildroot-target">Buildroot</option>
+      <option value="debian-target">Debian</option>
+      <option value="sdk-component">SDK Component</option>
+      <option value="rkbin">rkbin</option>
+    </select>
+    <span id="cnt" style="font-size:.78rem;color:#888">199 packages</span>
+  </div>
+  <table id="t">
+    <thead><tr>
+      <th onclick="st(0)">Package</th><th onclick="st(1)">Version</th>
+      <th onclick="st(2)">Source</th><th onclick="st(3)">License</th>
+      <th onclick="st(4)">Type</th><th onclick="st(5)">Supplier</th>
+      <th onclick="st(6)">Source Site</th>
+    </tr></thead>
+    <tbody><tr data-scope="buildroot-target">
+  <td>gcc-final</td><td>14.3.0</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">GPL-3.0-with-GCC-exception</span></td>
+  <td>COMPILER</td><td>Free Software Foundation</td>
+  <td class="url">https://mirrors.ustc.edu.cn/gnu/gcc/gcc-14.3.0</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>glibc</td><td>2.42-67-g4ebd33dd77eabe8d4c45232bed4b42a31d2f9edc</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">GPL-2.0+ (programs), LGPL-2.1+, BSD-3-Clause, MIT (library)</span></td>
+  <td>LIBRARY</td><td>Free Software Foundation</td>
+  <td class="url">https://sourceware.org/git/glibc.git</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>linux-headers</td><td>6.12.69</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">GPL-2.0</span></td>
+  <td>OPERATING_SYSTEM</td><td>The Linux Foundation</td>
+  <td class="url">https://github.com/rockchip-linux/kernel</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>alsa-lib</td><td>1.2.15.3</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">LGPL-2.1+ (library), GPL-2.0+ (aserver)</span></td>
+  <td>LIBRARY</td><td>The ALSA Project</td>
+  <td class="url">https://www.alsa-project.org/files/pub/lib</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>alsa-plugins</td><td>1.2.12</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">LGPL-2.1+, GPL-2.0+ (samplerate plugin)</span></td>
+  <td>APPLICATION</td><td>The ALSA Project</td>
+  <td class="url">https://www.alsa-project.org/files/pub/plugins</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>alsa-utils</td><td>1.2.15.2</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">GPL-2.0</span></td>
+  <td>APPLICATION</td><td>The ALSA Project</td>
+  <td class="url">https://www.alsa-project.org/files/pub/utils</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>libsamplerate</td><td>0.2.2</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">BSD-2-Clause</span></td>
+  <td>LIBRARY</td><td>libsamplerate upstream project</td>
+  <td class="url">https://github.com/libsndfile/libsamplerate/releases/download/0.2.2</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>ncurses</td><td>6.6-20251231</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">MIT with advertising clause</span></td>
+  <td>APPLICATION</td><td>Thomas E. Dickey</td>
+  <td class="url">https://github.com/ThomasDickey/ncurses-snapshots/archive/v6_6_20251231</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>alsa-ucm-conf</td><td>v1.2.6.3</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">BSD-3-Clause</span></td>
+  <td>APPLICATION</td><td>The ALSA Project</td>
+  <td class="url">https://github.com/alsa-project/alsa-ucm-conf/archive/v1.2.6.3</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>at-spi2-core</td><td>2.58.2</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">LGPL-2.1+</span></td>
+  <td>APPLICATION</td><td>Freedesktop.org</td>
+  <td class="url">https://download.gnome.org/sources/at-spi2-core/2.58</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>dbus</td><td>1.14.10</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">AFL-2.1 or GPL-2.0+ (library, tools), GPL-2.0+ (tools)</span></td>
+  <td>LIBRARY</td><td>Freedesktop.org</td>
+  <td class="url">https://dbus.freedesktop.org/releases/dbus</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>expat</td><td>2.8.1</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">MIT</span></td>
+  <td>LIBRARY</td><td>The Expat maintainers</td>
+  <td class="url">https://github.com/libexpat/libexpat/releases/download/R_2_8_1</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>libglib2</td><td>2.86.5</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">LGPL-2.1+</span></td>
+  <td>LIBRARY</td><td>libglib2 upstream project</td>
+  <td class="url">https://download.gnome.org/sources/glib/2.86</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>libffi</td><td>3.4.8</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">MIT</span></td>
+  <td>LIBRARY</td><td>GNOME Foundation</td>
+  <td class="url">https://github.com/libffi/libffi/releases/download/v3.4.8</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>pcre2</td><td>10.47</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">BSD-3-Clause</span></td>
+  <td>APPLICATION</td><td>pcre2 upstream project</td>
+  <td class="url">https://github.com/PCRE2Project/pcre2/releases/download/pcre2-10.47</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>util-linux-libs</td><td>2.41.4</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">LGPL-2.1+ (libblkid, libfdisk, libmount), BSD-3-Clause (libuuid)</span></td>
+  <td>APPLICATION</td><td>kernel.org util-linux project</td>
+  <td class="url">https://cdn.kernel.org/pub/linux/utils/util-linux/v2.41</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>libxcrypt</td><td>4.5.2</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">LGPL-2.1+</span></td>
+  <td>LIBRARY</td><td>libxcrypt upstream project</td>
+  <td class="url">https://github.com/besser82/libxcrypt/releases/download/v4.5.2</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>libzlib</td><td>1.3.2</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">Zlib</span></td>
+  <td>LIBRARY</td><td>libzlib upstream project</td>
+  <td class="url">https://www.zlib.net</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>libxml2</td><td>2.15.3</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">MIT</span></td>
+  <td>LIBRARY</td><td>libxml2 upstream project</td>
+  <td class="url">https://download.gnome.org/sources/libxml2/2.15</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>bash</td><td>5.2.37</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">GPL-3.0+</span></td>
+  <td>APPLICATION</td><td>Free Software Foundation</td>
+  <td class="url">https://mirrors.ustc.edu.cn/gnu/bash</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>readline</td><td>8.3</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">GPL-3.0+</span></td>
+  <td>APPLICATION</td><td>readline upstream project</td>
+  <td class="url">https://mirrors.ustc.edu.cn/gnu/readline</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>bluez-alsa</td><td>4.3.1</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">MIT</span></td>
+  <td>LIBRARY</td><td>BlueZ Project</td>
+  <td class="url">https://github.com/Arkq/bluez-alsa/archive/v4.3.1</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>bluez5_utils</td><td>5.79</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">GPL-2.0+, LGPL-2.1+</span></td>
+  <td>LIBRARY</td><td>BlueZ Project</td>
+  <td class="url">https://cdn.kernel.org/pub/linux/bluetooth</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>libical</td><td>3.0.20</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">MPL-2.0 or LGPL-2.1</span></td>
+  <td>LIBRARY</td><td>Free Software Foundation</td>
+  <td class="url">https://github.com/libical/libical/releases/download/v3.0.20</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>eudev</td><td>3.2.14</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">GPL-2.0+ (programs), LGPL-2.1+ (libraries)</span></td>
+  <td>APPLICATION</td><td>systemd Project</td>
+  <td class="url">https://github.com/eudev-project/eudev/releases/download/v3.2.14</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>kmod</td><td>33</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">LGPL-2.1+ (library)</span></td>
+  <td>APPLICATION</td><td>Professional Open Source</td>
+  <td class="url">https://cdn.kernel.org/pub/linux/utils/kernel/kmod</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>libopenssl</td><td>3.6.2</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">Apache-2.0</span></td>
+  <td>LIBRARY</td><td>OpenSSL Software Foundation</td>
+  <td class="url">https://github.com/openssl/openssl/releases/download/openssl-3.6.2</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>libbsd</td><td>0.12.2</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">BSD-2-Clause, BSD-3-Clause, BSD-5-Clause, MIT, ISC, Beerware</span></td>
+  <td>LIBRARY</td><td>FreeBSD Foundation</td>
+  <td class="url">https://libbsd.freedesktop.org/releases</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>libmd</td><td>1.1.0</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">BSD-2-Clause, BSD-3-Clause, Beerware, ISC, Public Domain</span></td>
+  <td>LIBRARY</td><td>libmd upstream project</td>
+  <td class="url">https://archive.hadrons.org/software/libmd</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>mpg123</td><td>1.33.4</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">LGPL-2.1</span></td>
+  <td>APPLICATION</td><td>mpg123 upstream project</td>
+  <td class="url">https://downloads.sourceforge.net/project/mpg123/mpg123/1.33.4</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>opus</td><td>1.6.1</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">BSD-3-Clause</span></td>
+  <td>APPLICATION</td><td>opus upstream project</td>
+  <td class="url">https://downloads.xiph.org/releases/opus</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>sbc</td><td>2.1</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">LGPL-2.1+ (library)</span></td>
+  <td>APPLICATION</td><td>sbc upstream project</td>
+  <td class="url">https://cdn.kernel.org/pub/linux/bluetooth</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>spandsp</td><td>3.0.0-6ec23e5a7e</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">LGPL-2.1 (library), GPL-2.0 (test suite)</span></td>
+  <td>APPLICATION</td><td>spandsp upstream project</td>
+  <td class="url">https://files.freeswitch.org/downloads/libs</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>tiff</td><td>4.7.1</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">tiff license</span></td>
+  <td>APPLICATION</td><td>tiff upstream project</td>
+  <td class="url">https://download.osgeo.org/libtiff</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>jpeg-turbo</td><td>3.1.2</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">IJG (libjpeg), BSD-3-Clause (TurboJPEG), Zlib (SIMD)</span></td>
+  <td>APPLICATION</td><td>libjpeg-turbo Project</td>
+  <td class="url">https://github.com/libjpeg-turbo/libjpeg-turbo/releases/download/3.1.2</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>busybox</td><td>1.38.0</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">GPL-2.0, bzip2-1.0.4</span></td>
+  <td>APPLICATION</td><td>BusyBox.net</td>
+  <td class="url">https://www.busybox.net/downloads</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>coreutils</td><td>9.10</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">GPL-3.0+</span></td>
+  <td>APPLICATION</td><td>Free Software Foundation</td>
+  <td class="url">https://mirrors.ustc.edu.cn/gnu/coreutils</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>libcap</td><td>2.78</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">GPL-2.0 or BSD-3-Clause</span></td>
+  <td>LIBRARY</td><td>Andrew G. Morgan</td>
+  <td class="url">https://www.kernel.org/pub/linux/libs/security/linux-privs/libcap2</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>dosfstools</td><td>4.2</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">GPL-3.0+</span></td>
+  <td>APPLICATION</td><td>Werner Almesberger</td>
+  <td class="url">https://github.com/dosfstools/dosfstools/releases/download/v4.2</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>e2fsprogs</td><td>1.47.3</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">GPL-2.0, MIT-like with advertising clause (libss and libet)</span></td>
+  <td>APPLICATION</td><td>Theodore Ts'o</td>
+  <td class="url">https://cdn.kernel.org/pub/linux/kernel/people/tytso/e2fsprogs/v1.47.3</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>util-linux</td><td>2.41.4</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">GPL-2.0+, BSD-4-Clause, LGPL-2.1+ (libblkid, libfdisk, libmount), BSD-3-Clause (libuuid), BSD-2-Clause (xxhash), ISC (rfkill), MIT (hardlink, flock)</span></td>
+  <td>APPLICATION</td><td>kernel.org util-linux project</td>
+  <td class="url">https://cdn.kernel.org/pub/linux/utils/util-linux/v2.41</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>i2c-tools</td><td>4.4</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">GPL-2.0+, GPL-2.0 (py-smbus), LGPL-2.1+ (libi2c)</span></td>
+  <td>APPLICATION</td><td>Jean Delvare</td>
+  <td class="url">https://www.kernel.org/pub/software/utils/i2c-tools</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>iproute2</td><td>6.17.0</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">GPL-2.0+</span></td>
+  <td>APPLICATION</td><td>iproute2 upstream project</td>
+  <td class="url">https://cdn.kernel.org/pub/linux/utils/net/iproute2</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>iputils</td><td>20250605</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">GPL-2.0+, BSD-3-Clause</span></td>
+  <td>APPLICATION</td><td>iputils developers</td>
+  <td class="url">https://github.com/iputils/iputils/releases/download/20250605</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>libidn2</td><td>2.3.8</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">GPL-2.0+ or LGPL-3.0+ (library)</span></td>
+  <td>LIBRARY</td><td>Free Software Foundation</td>
+  <td class="url">https://mirrors.ustc.edu.cn/gnu/libidn</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>libunistring</td><td>1.4.2</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">LGPL-3.0+ or GPL-2.0</span></td>
+  <td>LIBRARY</td><td>Free Software Foundation</td>
+  <td class="url">https://mirrors.ustc.edu.cn/gnu/libunistring</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>libtirpc</td><td>1.3.7</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">BSD-3-Clause</span></td>
+  <td>LIBRARY</td><td>libtirpc upstream project</td>
+  <td class="url">http://downloads.sourceforge.net/project/libtirpc/libtirpc/1.3.7</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>pciutils</td><td>3.14.0</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">GPL-2.0+</span></td>
+  <td>APPLICATION</td><td>pciutils upstream project</td>
+  <td class="url">https://cdn.kernel.org/pub/software/utils/pciutils</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>procps-ng</td><td>4.0.6</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">GPL-2.0+, LGPL-2.0+ (libproc and libps)</span></td>
+  <td>APPLICATION</td><td>procps-ng upstream project</td>
+  <td class="url">https://downloads.sourceforge.net/project/procps-ng/Production</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>bzip2</td><td>1.0.8</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">bzip2 license</span></td>
+  <td>LIBRARY</td><td>Julian Seward</td>
+  <td class="url">https://sourceware.org/pub/bzip2</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>ca-certificates</td><td>20260223</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">GPL-2.0+ (script), MPL-2.0 (data)</span></td>
+  <td>DATA</td><td>Mozilla Foundation</td>
+  <td class="url">https://snapshot.debian.org/archive/debian/20260223T202245Z/pool/main/c/ca-certificates</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>cairo</td><td>1.18.4</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">LGPL-2.1 or MPL-1.1 (library)</span></td>
+  <td>LIBRARY</td><td>Cairo Project</td>
+  <td class="url">http://cairographics.org/releases</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>fontconfig</td><td>2.17.1</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">fontconfig license</span></td>
+  <td>DATA</td><td>Freedesktop.org</td>
+  <td class="url">https://gitlab.freedesktop.org/api/v4/projects/890/packages/generic/fontconfig/2.17.1</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>freetype</td><td>2.14.3</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">FTL or GPL-2.0+</span></td>
+  <td>LIBRARY</td><td>The FreeType Project</td>
+  <td class="url">https://download.savannah.gnu.org/releases/freetype</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>libpng</td><td>1.6.58</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">Libpng-2.0</span></td>
+  <td>LIBRARY</td><td>PNG Reference Library</td>
+  <td class="url">https://downloads.sourceforge.net/project/libpng/libpng16/1.6.58</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>pixman</td><td>0.46.4</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">MIT</span></td>
+  <td>APPLICATION</td><td>pixman upstream project</td>
+  <td class="url">https://xorg.freedesktop.org/releases/individual/lib</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>can-utils</td><td>2025.01</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">BSD-3-Clause or GPL-2.0</span></td>
+  <td>APPLICATION</td><td>can-utils upstream project</td>
+  <td class="url">https://github.com/linux-can/can-utils/archive/v2025.01</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>chromium-wayland</td><td>132.0.6834.83</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">BSD-3-Clause</span></td>
+  <td>APPLICATION</td><td>Google LLC</td>
+  <td class="url">https://github.com/rockchip-linux/chromium</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>chrony</td><td>4.8</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">GPL-2.0</span></td>
+  <td>APPLICATION</td><td>Richard Cochran</td>
+  <td class="url">https://chrony-project.org/releases</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>libnss</td><td>3.120.1</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">MPL-2.0</span></td>
+  <td>LIBRARY</td><td>libnss upstream project</td>
+  <td class="url">https://ftp.mozilla.org/pub/mozilla.org/security/nss/releases/NSS_3_120_1_RTM/src</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>libnspr</td><td>4.38.2</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">MPL-2.0</span></td>
+  <td>LIBRARY</td><td>libnspr upstream project</td>
+  <td class="url">https://ftp.mozilla.org/pub/mozilla.org/nspr/releases/v4.38.2/src</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>sqlite</td><td>3.51.3</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">blessing</span></td>
+  <td>LIBRARY</td><td>D. Richard Hipp</td>
+  <td class="url">https://www.sqlite.org/2026</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>dejavu</td><td>2.37</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">LicenseRef-DejaVu-Fonts</span></td>
+  <td>APPLICATION</td><td>DejaVu Fonts project</td>
+  <td class="url">https://sourceforge.net/projects/dejavu/files/dejavu/2.37</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>dhcpcd</td><td>10.2.4</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">BSD-2-Clause</span></td>
+  <td>APPLICATION</td><td>Roy Marples</td>
+  <td class="url">https://github.com/NetworkConfiguration/dhcpcd/releases/download/v10.2.4</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>dhrystone</td><td>2</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">LicenseRef-Dhrystone</span></td>
+  <td>APPLICATION</td><td>Reinhold P. Weicker</td>
+  <td class="url">http://www.netlib.org/benchmark</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>dnsmasq</td><td>2.92rel2</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">GPL-2.0 or GPL-3.0</span></td>
+  <td>APPLICATION</td><td>Simon Kelley</td>
+  <td class="url">https://thekelleys.org.uk/dnsmasq</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>dropbear</td><td>2026.91</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">MIT, BSD-2-Clause, Public domain, Unlicense, WTFPL</span></td>
+  <td>APPLICATION</td><td>Matt Johnston</td>
+  <td class="url">https://matt.ucc.asn.au/dropbear/releases</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>evtest</td><td>1.36</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">GPL-2.0+</span></td>
+  <td>APPLICATION</td><td>Arnd Bergmann</td>
+  <td class="url">https://gitlab.freedesktop.org/libevdev/evtest/-/archive/evtest-1.36</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>exfat-utils</td><td>1.4.0</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">GPL-2.0+</span></td>
+  <td>APPLICATION</td><td>Andrew Nayenko</td>
+  <td class="url">https://github.com/relan/exfat/releases/download/v1.4.0</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>exfat</td><td>1.4.0</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">GPL-2.0+</span></td>
+  <td>APPLICATION</td><td>Andrew Nayenko</td>
+  <td class="url">https://github.com/relan/exfat/releases/download/v1.4.0</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>libfuse3</td><td>3.18.1</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">LGPL-2.1</span></td>
+  <td>LIBRARY</td><td>libfuse developers</td>
+  <td class="url">https://github.com/libfuse/libfuse/archive/fuse-3.18.1</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>faad2</td><td>2.11.2</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">GPL-2.0</span></td>
+  <td>APPLICATION</td><td>FAAD2 developers</td>
+  <td class="url">https://github.com/knik0/faad2/archive/2.11.2</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>fatresize</td><td>321973ba156bbf2489e82c47c94b2bca74b16316</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">GPL-3.0</span></td>
+  <td>APPLICATION</td><td>fatresize upstream project</td>
+  <td class="url">https://github.com/ya-mouse/fatresize/archive/321973ba156bbf2489e82c47c94b2bca74b16316</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>parted</td><td>3.6</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">GPL-3.0+</span></td>
+  <td>APPLICATION</td><td>parted upstream project</td>
+  <td class="url">https://mirrors.ustc.edu.cn/gnu/parted</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>flac</td><td>1.5.0</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">Xiph BSD-like (libFLAC), GPL-2.0+ (tools), LGPL-2.1+ (other libraries)</span></td>
+  <td>APPLICATION</td><td>Xiph.Org Foundation</td>
+  <td class="url">https://ftp.osuosl.org/pub/xiph/releases/flac</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>libogg</td><td>1.3.6</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">BSD-3-Clause</span></td>
+  <td>LIBRARY</td><td>Xiph.Org Foundation</td>
+  <td class="url">http://downloads.xiph.org/releases/ogg</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>fluidsynth</td><td>2.4.7</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">LGPL-2.1+</span></td>
+  <td>APPLICATION</td><td>FluidSynth developers</td>
+  <td class="url">https://github.com/FluidSynth/fluidsynth/archive/v2.4.7</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>font-awesome</td><td>4.7.0</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">OFL-1.1 (font), MIT (CSS, LESS and Sass files)</span></td>
+  <td>DATA</td><td>Fonticons Inc</td>
+  <td class="url">https://github.com/FortAwesome/Font-Awesome/archive/v4.7.0</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>gdk-pixbuf</td><td>2.42.12</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">LGPL-2.1+</span></td>
+  <td>APPLICATION</td><td>GNOME Foundation</td>
+  <td class="url">https://download.gnome.org/sources/gdk-pixbuf/2.42</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>gesftpserver</td><td>2</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">GPL-2.0+</span></td>
+  <td>APPLICATION</td><td>gesftpserver upstream project</td>
+  <td class="url">http://www.greenend.org.uk/rjk/sftpserver</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>glmark2</td><td>2023.01</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">GPL-3.0+, SGIv1</span></td>
+  <td>APPLICATION</td><td>Canonical</td>
+  <td class="url">https://github.com/glmark2/glmark2/archive/2023.01</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>libdrm</td><td>2.4.131</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">MIT</span></td>
+  <td>LIBRARY</td><td>The Linux Foundation</td>
+  <td class="url">https://dri.freedesktop.org/libdrm</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>libpthread-stubs</td><td>0.5</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">MIT</span></td>
+  <td>LIBRARY</td><td>libpthread-stubs upstream project</td>
+  <td class="url">http://xcb.freedesktop.org/dist</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>rockchip-mali</td><td>master</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">ARM</span></td>
+  <td>LIBRARY</td><td>Rockchip Electronics Co., Ltd.</td>
+  <td class="url">https://github.com/rockchip-linux/libmali</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>wayland</td><td>1.24.0</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">MIT</span></td>
+  <td>LIBRARY</td><td>Freedesktop.org</td>
+  <td class="url">https://gitlab.freedesktop.org/wayland/wayland/-/releases/1.24.0/downloads</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>wayland-protocols</td><td>1.48</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">MIT</span></td>
+  <td>LIBRARY</td><td>Freedesktop.org</td>
+  <td class="url">https://gitlab.freedesktop.org/wayland/wayland-protocols/-/releases/1.48/downloads</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>gst1-plugins-bad</td><td>1.28.2</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">LGPL-2.0-or-later AND GPL-2.0-or-later</span></td>
+  <td>APPLICATION</td><td>GStreamer Project</td>
+  <td class="url">https://gstreamer.freedesktop.org/src/gst-plugins-bad</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>gst1-plugins-base</td><td>1.28.2</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">LGPL-2.1+</span></td>
+  <td>APPLICATION</td><td>GStreamer Project</td>
+  <td class="url">https://gstreamer.freedesktop.org/src/gst-plugins-base</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>gstreamer1</td><td>1.28.2</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">LGPL-2.1+</span></td>
+  <td>LIBRARY</td><td>GStreamer Project</td>
+  <td class="url">https://gstreamer.freedesktop.org/src/gstreamer</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>libtheora</td><td>1.2.0</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">BSD-3-Clause</span></td>
+  <td>LIBRARY</td><td>libtheora upstream project</td>
+  <td class="url">http://downloads.xiph.org/releases/theora</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>libvorbis</td><td>1.3.7</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">BSD-3-Clause</span></td>
+  <td>LIBRARY</td><td>libvorbis upstream project</td>
+  <td class="url">https://downloads.xiph.org/releases/vorbis</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>rockchip-rga</td><td>master</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">Apache-2.0</span></td>
+  <td>LIBRARY</td><td>Rockchip Electronics Co., Ltd.</td>
+  <td class="url">https://github.com/airockchip/librga</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>libmpeg2</td><td>0.5.1</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">GPL-2.0+</span></td>
+  <td>LIBRARY</td><td>libmpeg2 upstream project</td>
+  <td class="url">https://code.videolan.org/videolan/libmpeg2/-/archive/41f78cf4d30d0da0a24c8ecbc38b0c9dfd43f871</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>mjpegtools</td><td>2.2.1</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">GPL-2.0+</span></td>
+  <td>APPLICATION</td><td>mjpegtools upstream project</td>
+  <td class="url">http://sourceforge.net/projects/mjpeg/files/mjpegtools/2.2.1</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>rtmpdump</td><td>6f6bb1353fc84f4cc37138baa99f586750028a01</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">LGPL-2.1+</span></td>
+  <td>APPLICATION</td><td>rtmpdump upstream project</td>
+  <td class="url">https://git.ffmpeg.org/rtmpdump</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>gst1-plugins-good</td><td>1.28.2</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">LGPL-2.1+</span></td>
+  <td>APPLICATION</td><td>GStreamer Project</td>
+  <td class="url">https://gstreamer.freedesktop.org/src/gst-plugins-good</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>libgudev</td><td>238</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">LGPL-2.1+</span></td>
+  <td>LIBRARY</td><td>GNOME Foundation</td>
+  <td class="url">https://download.gnome.org/sources/libgudev/238</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>libsoup3</td><td>3.6.6</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">LGPL-2.0+</span></td>
+  <td>LIBRARY</td><td>libsoup3 upstream project</td>
+  <td class="url">https://download.gnome.org/sources/libsoup/3.6</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>libpsl</td><td>0.21.5</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">MIT, BSD-3-Clause</span></td>
+  <td>LIBRARY</td><td>libpsl upstream project</td>
+  <td class="url">https://github.com/rockdaboot/libpsl/releases/download/0.21.5</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>nghttp2</td><td>1.64.0</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">MIT</span></td>
+  <td>APPLICATION</td><td>nghttp2 upstream project</td>
+  <td class="url">https://github.com/nghttp2/nghttp2/releases/download/v1.64.0</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>libv4l</td><td>1.28.1</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">GPL-2.0+ (utilities), LGPL-2.1+ (libraries)</span></td>
+  <td>LIBRARY</td><td>libv4l upstream project</td>
+  <td class="url">https://linuxtv.org/downloads/v4l-utils</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>gst1-plugins-ugly</td><td>1.28.2</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">LGPL-2.1+, GPL-2.0</span></td>
+  <td>APPLICATION</td><td>GStreamer Project</td>
+  <td class="url">https://gstreamer.freedesktop.org/src/gst-plugins-ugly</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>harfbuzz</td><td>12.3.2</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">MIT, ISC (ucdn library)</span></td>
+  <td>APPLICATION</td><td>GNOME Foundation</td>
+  <td class="url">https://github.com/harfbuzz/harfbuzz/releases/download/12.3.2</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>hostapd</td><td>2.11</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">BSD-3-Clause</span></td>
+  <td>APPLICATION</td><td>Jouni Malinen</td>
+  <td class="url">http://w1.fi/releases</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>libnl</td><td>3.11.0</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">LGPL-2.1+</span></td>
+  <td>LIBRARY</td><td>libnl upstream project</td>
+  <td class="url">https://github.com/thom311/libnl/releases/download/libnl3_11_0</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>hwdata</td><td>0.403</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">GPL-2.0+, BSD-3-Clause, XFree86 1.0</span></td>
+  <td>DATA</td><td>Vojtech Pavlik</td>
+  <td class="url">https://github.com/vcrhonek/hwdata/archive/v0.403</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>iperf</td><td>2.2.1</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">MIT-like</span></td>
+  <td>APPLICATION</td><td>ESnet</td>
+  <td class="url">https://downloads.sourceforge.net/project/iperf2</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>iw</td><td>6.17</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">ISC</span></td>
+  <td>APPLICATION</td><td>Linux Wireless</td>
+  <td class="url">https://cdn.kernel.org/pub/software/network/iw</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>libabseil-cpp</td><td>20260107.1</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">Apache-2.0</span></td>
+  <td>LIBRARY</td><td>libabseil-cpp upstream project</td>
+  <td class="url">https://github.com/abseil/abseil-cpp/archive/20260107.1</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>libcurl</td><td>8.20.0</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">curl</span></td>
+  <td>LIBRARY</td><td>Daniel Stenberg</td>
+  <td class="url">https://curl.se/download</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>libdisplay-info</td><td>0.3.0</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">MIT</span></td>
+  <td>LIBRARY</td><td>libdisplay-info upstream project</td>
+  <td class="url">https://gitlab.freedesktop.org/emersion/libdisplay-info/-/releases/0.3.0/downloads</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>liberation</td><td>2.1.5</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">OFL-1.1</span></td>
+  <td>LIBRARY</td><td>Red Hat</td>
+  <td class="url">https://github.com/liberationfonts/liberation-fonts/files/7261482</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>libevdev</td><td>1.13.5</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">MIT</span></td>
+  <td>LIBRARY</td><td>Freedesktop.org</td>
+  <td class="url">http://www.freedesktop.org/software/libevdev</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>libfribidi</td><td>1.0.16</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">LGPL-2.1+</span></td>
+  <td>LIBRARY</td><td>GNOME Foundation</td>
+  <td class="url">https://github.com/fribidi/fribidi/releases/download/v1.0.16</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>libinput</td><td>1.31.1</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">MIT</span></td>
+  <td>LIBRARY</td><td>Freedesktop.org</td>
+  <td class="url">https://gitlab.freedesktop.org/libinput/libinput/-/archive/1.31.1</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>mtdev</td><td>1.1.7</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">MIT</span></td>
+  <td>APPLICATION</td><td>Linux MTD Project</td>
+  <td class="url">http://bitmath.org/code/mtdev</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>libmad</td><td>0.15.1b</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">GPL-2.0+</span></td>
+  <td>LIBRARY</td><td>libmad upstream project</td>
+  <td class="url">http://snapshot.debian.org/archive/debian/20190310T213528Z/pool/main/libm/libmad</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>libsndfile</td><td>1.2.2</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">LGPL-2.1+</span></td>
+  <td>LIBRARY</td><td>libsndfile upstream project</td>
+  <td class="url">https://github.com/libsndfile/libsndfile/releases/download/1.2.2</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>libsocketcan</td><td>0.0.12</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">LGPL-2.1+</span></td>
+  <td>LIBRARY</td><td>libsocketcan upstream project</td>
+  <td class="url">http://www.pengutronix.de/software/libsocketcan/download</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>libtool</td><td>2.4.6</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">LGPL-2.1+</span></td>
+  <td>LIBRARY</td><td>libtool upstream project</td>
+  <td class="url">https://mirrors.ustc.edu.cn/gnu/libtool</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>libvpx</td><td>1.16.0</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">BSD-3-Clause</span></td>
+  <td>LIBRARY</td><td>libvpx upstream project</td>
+  <td class="url">https://github.com/webmproject/libvpx/archive/v1.16.0</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>libxkbcommon</td><td>1.9.2</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">MIT/X11</span></td>
+  <td>LIBRARY</td><td>libxkbcommon upstream project</td>
+  <td class="url">https://github.com/xkbcommon/libxkbcommon/archive/xkbcommon-1.9.2</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>libxslt</td><td>1.1.45</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">MIT</span></td>
+  <td>LIBRARY</td><td>libxslt upstream project</td>
+  <td class="url">https://download.gnome.org/sources/libxslt/1.1</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>lmbench</td><td>8b3ddfa52ee4a886abe5af4550f404142966eb88</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">lmbench license (based on GPL-2.0)</span></td>
+  <td>APPLICATION</td><td>lmbench upstream project</td>
+  <td class="url">https://github.com/intel/lmbench/archive/8b3ddfa52ee4a886abe5af4550f404142966eb88</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>lrzsz</td><td>0.12.21rc</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">GPL-2.0+</span></td>
+  <td>APPLICATION</td><td>lrzsz upstream project</td>
+  <td class="url">http://www.ohse.de/uwe/testing</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>make</td><td>4.3</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">GPL-3.0+</span></td>
+  <td>COMPILER</td><td>Free Software Foundation</td>
+  <td class="url">https://mirrors.ustc.edu.cn/gnu/make</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>memtester</td><td>4.7.1</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">GPL-2.0</span></td>
+  <td>APPLICATION</td><td>memtester upstream project</td>
+  <td class="url">http://pyropus.ca/software/memtester/old-versions</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>ntfs-3g</td><td>2022.10.3</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">GPL-2.0+, LGPL-2.0+</span></td>
+  <td>APPLICATION</td><td>ntfs-3g upstream project</td>
+  <td class="url">http://tuxera.com/opensource</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>numactl</td><td>2.0.19</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">LGPL-2.1 (libnuma), GPL-2.0 (programs)</span></td>
+  <td>APPLICATION</td><td>numactl upstream project</td>
+  <td class="url">https://github.com/numactl/numactl/releases/download/v2.0.19</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>opencv4</td><td>4.13.0</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">Apache-2.0</span></td>
+  <td>APPLICATION</td><td>opencv4 upstream project</td>
+  <td class="url">https://github.com/opencv/opencv/archive/4.13.0</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>protobuf</td><td>33.5</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">BSD-3-Clause</span></td>
+  <td>APPLICATION</td><td>protobuf upstream project</td>
+  <td class="url">https://github.com/protocolbuffers/protobuf/releases/download/v33.5</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>pango</td><td>1.56.4</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">LGPL-2.0+</span></td>
+  <td>LIBRARY</td><td>GNOME Project</td>
+  <td class="url">https://download.gnome.org/sources/pango/1.56</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>perl</td><td>5.42.2</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">Artistic or GPL-1.0+</span></td>
+  <td>APPLICATION</td><td>perl upstream project</td>
+  <td class="url">https://www.cpan.org/src/5.0</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>pm-utils</td><td>1.4.1</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">GPL-2.0+</span></td>
+  <td>APPLICATION</td><td>pm-utils upstream project</td>
+  <td class="url">http://pm-utils.freedesktop.org/releases</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>procrank_linux</td><td>21c30ab4514a5b15ac6e813e21bee0d3d714cb08</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">Apache-2.0</span></td>
+  <td>APPLICATION</td><td>procrank_linux upstream project</td>
+  <td class="url">https://github.com/csimmonds/procrank_linux/archive/21c30ab4514a5b15ac6e813e21bee0d3d714cb08</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>camera-engine-rkaiq</td><td>1.0</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">Apache-2.0</span></td>
+  <td>APPLICATION</td><td>camera-engine-rkaiq upstream project</td>
+  <td class="url">/home/wxt/linux-develop/linux6.12/buildroot/../external/camera_engine_rkaiq</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>gstreamer1-rockchip</td><td>master</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">LGPL-2.1</span></td>
+  <td>LIBRARY</td><td>GStreamer Project</td>
+  <td class="url">/home/wxt/linux-develop/linux6.12/buildroot/../external/gstreamer-rockchip</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>rockchip-mpp</td><td>develop</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">Apache-2.0, MIT</span></td>
+  <td>LIBRARY</td><td>Rockchip Electronics Co., Ltd.</td>
+  <td class="url">https://github.com/rockchip-linux/mpp</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>libv4l-rkmpp</td><td>1.7.1</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">LGPL-2.1</span></td>
+  <td>LIBRARY</td><td>libv4l-rkmpp upstream project</td>
+  <td class="url">https://github.com/JeffyCN/libv4l-rkmpp.git</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>recovery</td><td>develop</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">ROCKCHIP</span></td>
+  <td>APPLICATION</td><td>recovery upstream project</td>
+  <td class="url">/home/wxt/linux-develop/linux6.12/buildroot/../external/recovery</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>rknn3-runtime</td><td>1.0.0</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">ROCKCHIP</span></td>
+  <td>APPLICATION</td><td>rknn3-runtime upstream project</td>
+  <td class="url">/home/wxt/linux-develop/linux6.12/buildroot/../external/rknn3-runtime</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>rknn3-test</td><td>1.0.0</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">ROCKCHIP</span></td>
+  <td>APPLICATION</td><td>rknn3-test upstream project</td>
+  <td class="url">/home/wxt/linux-develop/linux6.12/buildroot/../external/rknn3-test</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>rknpu2</td><td>1.0.0</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">ROCKCHIP</span></td>
+  <td>FIRMWARE</td><td>Rockchip Electronics Co., Ltd.</td>
+  <td class="url">https://github.com/rockchip-linux/rknpu2</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>rktoolkit</td><td>master</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">Apache-2.0</span></td>
+  <td>APPLICATION</td><td>rktoolkit upstream project</td>
+  <td class="url">/home/wxt/linux-develop/linux6.12/buildroot/../external/rktoolkit</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>wpa_supplicant</td><td>2.11</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">BSD-3-Clause</span></td>
+  <td>APPLICATION</td><td>wpa_supplicant upstream project</td>
+  <td class="url">http://w1.fi/releases</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>rkwifibt</td><td>1.0.0</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">ROCKCHIP</span></td>
+  <td>APPLICATION</td><td>rkwifibt upstream project</td>
+  <td class="url">/home/wxt/linux-develop/linux6.12/buildroot/../external/rkwifibt</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>rockchip-ai</td><td>1.0</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">ROCKCHIP</span></td>
+  <td>APPLICATION</td><td>Rockchip Electronics Co., Ltd.</td>
+  <td class="url">/home/wxt/linux-develop/linux6.12/buildroot/../app/rkai</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>rockchip-alsa-config</td><td>1.0</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">Apache-2.0</span></td>
+  <td>APPLICATION</td><td>Rockchip Electronics Co., Ltd.</td>
+  <td class="url">/home/wxt/linux-develop/linux6.12/buildroot/../external/alsa-config</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>rockchip-test</td><td>master</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">ROCKCHIP</span></td>
+  <td>APPLICATION</td><td>Rockchip Electronics Co., Ltd.</td>
+  <td class="url">/home/wxt/linux-develop/linux6.12/buildroot/../external/rockchip-test</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>rt-tests</td><td>2.8</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">GPL-2.0+</span></td>
+  <td>APPLICATION</td><td>rt-tests upstream project</td>
+  <td class="url">https://cdn.kernel.org/pub/linux/utils/rt-tests/older</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>source-han-sans-cn</td><td>2.004R</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">OFL-1.1</span></td>
+  <td>APPLICATION</td><td>source-han-sans-cn upstream project</td>
+  <td class="url">https://github.com/adobe-fonts/source-han-sans/releases/download/2.004R</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>sox</td><td>7524160b29a476f7e87bc14fddf12d349f9a3c5e</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">GPL-2.0+ (sox binary), LGPL-2.1+ (libraries)</span></td>
+  <td>APPLICATION</td><td>sox upstream project</td>
+  <td class="url">https://git.code.sf.net/p/sox/code</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>strace</td><td>6.19</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">LGPL-2.1+</span></td>
+  <td>APPLICATION</td><td>strace upstream project</td>
+  <td class="url">https://github.com/strace/strace/releases/download/v6.19</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>stress-ng</td><td>0.21.00</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">GPL-2.0+</span></td>
+  <td>APPLICATION</td><td>stress-ng upstream project</td>
+  <td class="url">https://github.com/ColinIanKing/stress-ng/archive/V0.21.00</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>stress</td><td>1.0.7</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">GPL-2.0+</span></td>
+  <td>APPLICATION</td><td>stress upstream project</td>
+  <td class="url">https://github.com/resurrecting-open-source-projects/stress/releases/download/1.0.7</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>stressapptest</td><td>6714c57d0d67f5a2a7a9987791af6729289bf64e</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">Apache-2.0</span></td>
+  <td>APPLICATION</td><td>stressapptest upstream project</td>
+  <td class="url">https://github.com/stressapptest/stressapptest.git</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>tzdata</td><td>2026b</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">Public domain</span></td>
+  <td>DATA</td><td>tzdata upstream project</td>
+  <td class="url">https://www.iana.org/time-zones/repository/releases</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>unixbench</td><td>e477bc034137f994f2bbaba52952ca6e1de53856</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">GPL-2.0+</span></td>
+  <td>APPLICATION</td><td>unixbench upstream project</td>
+  <td class="url">https://github.com/kdlucas/byte-unixbench.git</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>usbmount</td><td>0.0.22</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">BSD-2-Clause</span></td>
+  <td>APPLICATION</td><td>usbmount upstream project</td>
+  <td class="url">http://snapshot.debian.org/archive/debian/20141023T043132Z/pool/main/u/usbmount</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>wayland-utils</td><td>1.2.0</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">MIT</span></td>
+  <td>LIBRARY</td><td>Freedesktop.org</td>
+  <td class="url">https://gitlab.freedesktop.org/wayland/wayland-utils/-/releases/1.2.0/downloads</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>webp</td><td>1.6.0</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">BSD-3-Clause</span></td>
+  <td>APPLICATION</td><td>webp upstream project</td>
+  <td class="url">http://downloads.webmproject.org/releases/webp</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>weston</td><td>e0c5b8a26b1332300bdbdc098ae92ebfaf435c8c</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">MIT</span></td>
+  <td>APPLICATION</td><td>Freedesktop.org</td>
+  <td class="url">https://gitlab.freedesktop.org/wayland/weston.git</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>whetstone</td><td>1.2</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">LicenseRef-Whetstone</span></td>
+  <td>APPLICATION</td><td>Painter Engineering, Inc.</td>
+  <td class="url">http://www.netlib.org/benchmark</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>wireless_tools</td><td>30.pre9</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">GPL-2.0</span></td>
+  <td>APPLICATION</td><td>wireless_tools upstream project</td>
+  <td class="url">https://hewlettpackard.github.io/wireless-tools</td>
+</tr>
+<tr data-scope="buildroot-target">
+  <td>xkeyboard-config</td><td>2.38</td>
+  <td><span class="scope-badge scope-buildroot">buildroot-target</span></td>
+  <td><span class="lic">MIT</span></td>
+  <td>APPLICATION</td><td>xkeyboard-config upstream project</td>
+  <td class="url">https://www.x.org/releases/individual/data/xkeyboard-config</td>
+</tr>
+<tr data-scope="sdk-kernel">
+  <td>linux-kernel</td><td>6.12.69</td>
+  <td><span class="scope-badge ">sdk-kernel</span></td>
+  <td><span class="lic">GPL-2.0-only</span></td>
+  <td>KERNEL</td><td>The Linux Foundation</td>
+  <td class="url">https://github.com/rockchip-linux/kernel</td>
+</tr>
+<tr data-scope="sdk-bootloader">
+  <td>u-boot</td><td>2025.04</td>
+  <td><span class="scope-badge ">sdk-bootloader</span></td>
+  <td><span class="lic">GPL-2.0-or-later</span></td>
+  <td>BOOTLOADER</td><td>DENX Software Engineering</td>
+  <td class="url">https://github.com/rockchip-linux/u-boot</td>
+</tr>
+<tr data-scope="sdk-firmware">
+  <td>rkbin</td><td>sdk-release</td>
+  <td><span class="scope-badge ">sdk-firmware</span></td>
+  <td><span class="lic">LicenseRef-ROCKCHIP</span></td>
+  <td>FIRMWARE</td><td>Rockchip Electronics Co., Ltd.</td>
+  <td class="url">https://github.com/rockchip-linux/rkbin</td>
+</tr>
+<tr data-scope="sdk-build-system">
+  <td>buildroot</td><td>sdk-release</td>
+  <td><span class="scope-badge ">sdk-build-system</span></td>
+  <td><span class="lic">GPL-2.0-or-later</span></td>
+  <td>BUILD_SYSTEM</td><td>Buildroot project</td>
+  <td class="url">https://github.com/buildroot/buildroot</td>
+</tr>
+<tr data-scope="sdk-device-tree">
+  <td>rk3572-device-tree</td><td>6.12.69</td>
+  <td><span class="scope-badge ">sdk-device-tree</span></td>
+  <td><span class="lic">GPL-2.0-only</span></td>
+  <td>DATA</td><td>Rockchip Electronics Co., Ltd.</td>
+  <td class="url">https://github.com/rockchip-linux/kernel</td>
+</tr>
+<tr data-scope="sdk-bootloader-spl">
+  <td>u-boot-spl</td><td>2025.04</td>
+  <td><span class="scope-badge ">sdk-bootloader-spl</span></td>
+  <td><span class="lic">GPL-2.0-or-later</span></td>
+  <td>BOOTLOADER</td><td>DENX Software Engineering</td>
+  <td class="url">https://github.com/rockchip-linux/u-boot</td>
+</tr>
+<tr data-scope="sdk-ddr-firmware">
+  <td>rk3572-ddr-init</td><td>1.09</td>
+  <td><span class="scope-badge ">sdk-ddr-firmware</span></td>
+  <td><span class="lic">LicenseRef-ROCKCHIP</span></td>
+  <td>FIRMWARE</td><td>Rockchip Electronics Co., Ltd.</td>
+  <td class="url">https://github.com/rockchip-linux/rkbin</td>
+</tr>
+<tr data-scope="sdk-trustzone">
+  <td>rk3572-trustzone-bl31</td><td>1.23</td>
+  <td><span class="scope-badge ">sdk-trustzone</span></td>
+  <td><span class="lic">LicenseRef-ROCKCHIP</span></td>
+  <td>FIRMWARE</td><td>Rockchip Electronics Co., Ltd.</td>
+  <td class="url">https://github.com/rockchip-linux/rkbin</td>
+</tr>
+<tr data-scope="sdk-trustzone">
+  <td>rk3572-trustzone-bl32</td><td>1.08</td>
+  <td><span class="scope-badge ">sdk-trustzone</span></td>
+  <td><span class="lic">LicenseRef-ROCKCHIP</span></td>
+  <td>FIRMWARE</td><td>Rockchip Electronics Co., Ltd.</td>
+  <td class="url">https://github.com/rockchip-linux/rkbin</td>
+</tr>
+<tr data-scope="sdk-secure-boot">
+  <td>rk3572-secure-boot-trust-config</td><td>sdk-release</td>
+  <td><span class="scope-badge ">sdk-secure-boot</span></td>
+  <td><span class="lic">LicenseRef-ROCKCHIP</span></td>
+  <td>FIRMWARE</td><td>Rockchip Electronics Co., Ltd.</td>
+  <td class="url">https://github.com/rockchip-linux/rkbin</td>
+</tr>
+<tr data-scope="product-image">
+  <td>rk3572-update-image</td><td>product-update-image</td>
+  <td><span class="scope-badge ">product-image</span></td>
+  <td><span class="lic">LicenseRef-Product-Image-Composite</span></td>
+  <td>DATA</td><td>Rockchip Electronics Co., Ltd.</td>
+  <td class="url">output/update/Image</td>
+</tr>
+<tr data-scope="product-image">
+  <td>rk3572-update-raw-image</td><td>product-update-raw-image</td>
+  <td><span class="scope-badge ">product-image</span></td>
+  <td><span class="lic">LicenseRef-Product-Image-Composite</span></td>
+  <td>DATA</td><td>Rockchip Electronics Co., Ltd.</td>
+  <td class="url">output/update/Image</td>
+</tr>
+<tr data-scope="product-rootfs">
+  <td>buildroot-rootfs-image</td><td>product-rootfs</td>
+  <td><span class="scope-badge ">product-rootfs</span></td>
+  <td><span class="lic">LicenseRef-Product-Image-Composite</span></td>
+  <td>OPERATING_SYSTEM</td><td>Rockchip Electronics Co., Ltd.</td>
+  <td class="url">output/update/Image</td>
+</tr>
+<tr data-scope="product-boot">
+  <td>rk3572-boot-image</td><td>product-boot</td>
+  <td><span class="scope-badge ">product-boot</span></td>
+  <td><span class="lic">LicenseRef-Product-Image-Composite</span></td>
+  <td>OPERATING_SYSTEM</td><td>Rockchip Electronics Co., Ltd.</td>
+  <td class="url">output/update/Image</td>
+</tr>
+<tr data-scope="product-recovery">
+  <td>rk3572-recovery-image</td><td>product-recovery</td>
+  <td><span class="scope-badge ">product-recovery</span></td>
+  <td><span class="lic">LicenseRef-Product-Image-Composite</span></td>
+  <td>OPERATING_SYSTEM</td><td>Rockchip Electronics Co., Ltd.</td>
+  <td class="url">output/update/Image</td>
+</tr>
+<tr data-scope="product-bootloader">
+  <td>rk3572-uboot-image</td><td>product-bootloader</td>
+  <td><span class="scope-badge ">product-bootloader</span></td>
+  <td><span class="lic">LicenseRef-Product-Image-Composite</span></td>
+  <td>BOOTLOADER</td><td>Rockchip Electronics Co., Ltd.</td>
+  <td class="url">output/update/Image</td>
+</tr>
+<tr data-scope="product-partition">
+  <td>rk3572-misc-image</td><td>product-partition</td>
+  <td><span class="scope-badge ">product-partition</span></td>
+  <td><span class="lic">LicenseRef-Product-Image-Composite</span></td>
+  <td>DATA</td><td>Rockchip Electronics Co., Ltd.</td>
+  <td class="url">output/update/Image</td>
+</tr>
+<tr data-scope="product-partition">
+  <td>rk3572-oem-image</td><td>product-partition</td>
+  <td><span class="scope-badge ">product-partition</span></td>
+  <td><span class="lic">LicenseRef-Product-Image-Composite</span></td>
+  <td>DATA</td><td>Rockchip Electronics Co., Ltd.</td>
+  <td class="url">output/update/Image</td>
+</tr>
+<tr data-scope="product-partition">
+  <td>rk3572-userdata-image</td><td>product-partition</td>
+  <td><span class="scope-badge ">product-partition</span></td>
+  <td><span class="lic">LicenseRef-Product-Image-Composite</span></td>
+  <td>DATA</td><td>Rockchip Electronics Co., Ltd.</td>
+  <td class="url">output/update/Image</td>
+</tr>
+<tr data-scope="product-partition-table">
+  <td>rk3572-parameter-file</td><td>product-partition-table</td>
+  <td><span class="scope-badge ">product-partition-table</span></td>
+  <td><span class="lic">LicenseRef-Product-Image-Composite</span></td>
+  <td>DATA</td><td>Rockchip Electronics Co., Ltd.</td>
+  <td class="url">output/update/Image</td>
+</tr>
+<tr data-scope="product-update-manifest">
+  <td>rk3572-package-file</td><td>product-update-manifest</td>
+  <td><span class="scope-badge ">product-update-manifest</span></td>
+  <td><span class="lic">LicenseRef-Product-Image-Composite</span></td>
+  <td>DATA</td><td>Rockchip Electronics Co., Ltd.</td>
+  <td class="url">output/update/Image</td>
+</tr>
+<tr data-scope="rkbin">
+  <td>rk3572_ddr_lp4_2112MHz_lp5_2736MHz_ultra_v1.07.bin</td><td>1.07.</td>
+  <td><span class="scope-badge scope-rkbin">rkbin</span></td>
+  <td><span class="lic">LicenseRef-ROCKCHIP</span></td>
+  <td>FIRMWARE</td><td>Rockchip Electronics Co., Ltd.</td>
+  <td class="url">https://github.com/rockchip-linux/rkbin</td>
+</tr>
+<tr data-scope="rkbin">
+  <td>rk3572_ddr_lp4_2112MHz_lp5_2736MHz_v1.07.bin</td><td>1.07.</td>
+  <td><span class="scope-badge scope-rkbin">rkbin</span></td>
+  <td><span class="lic">LicenseRef-ROCKCHIP</span></td>
+  <td>FIRMWARE</td><td>Rockchip Electronics Co., Ltd.</td>
+  <td class="url">https://github.com/rockchip-linux/rkbin</td>
+</tr>
+<tr data-scope="rkbin">
+  <td>rk3572_bl31_v1.10.elf</td><td>1.10.</td>
+  <td><span class="scope-badge scope-rkbin">rkbin</span></td>
+  <td><span class="lic">LicenseRef-ROCKCHIP</span></td>
+  <td>FIRMWARE</td><td>Rockchip Electronics Co., Ltd.</td>
+  <td class="url">https://github.com/rockchip-linux/rkbin</td>
+</tr>
+<tr data-scope="rkbin">
+  <td>rk3572_spl_v1.03.bin</td><td>1.03.</td>
+  <td><span class="scope-badge scope-rkbin">rkbin</span></td>
+  <td><span class="lic">LicenseRef-ROCKCHIP</span></td>
+  <td>FIRMWARE</td><td>Rockchip Electronics Co., Ltd.</td>
+  <td class="url">https://github.com/rockchip-linux/rkbin</td>
+</tr>
+<tr data-scope="rkbin">
+  <td>rk3572_usbplug_fspi1_v1.00.bin</td><td>1.00.</td>
+  <td><span class="scope-badge scope-rkbin">rkbin</span></td>
+  <td><span class="lic">LicenseRef-ROCKCHIP</span></td>
+  <td>FIRMWARE</td><td>Rockchip Electronics Co., Ltd.</td>
+  <td class="url">https://github.com/rockchip-linux/rkbin</td>
+</tr>
+<tr data-scope="rkbin">
+  <td>rk3572_spl_fspi1_v1.03.bin</td><td>1.03.</td>
+  <td><span class="scope-badge scope-rkbin">rkbin</span></td>
+  <td><span class="lic">LicenseRef-ROCKCHIP</span></td>
+  <td>FIRMWARE</td><td>Rockchip Electronics Co., Ltd.</td>
+  <td class="url">https://github.com/rockchip-linux/rkbin</td>
+</tr>
+<tr data-scope="rkbin">
+  <td>rk3572_ddr_lp4_2112MHz_lp5_2736MHz_eyescan_v1.07.bin</td><td>1.07.</td>
+  <td><span class="scope-badge scope-rkbin">rkbin</span></td>
+  <td><span class="lic">LicenseRef-ROCKCHIP</span></td>
+  <td>FIRMWARE</td><td>Rockchip Electronics Co., Ltd.</td>
+  <td class="url">https://github.com/rockchip-linux/rkbin</td>
+</tr>
+<tr data-scope="rkbin">
+  <td>rk3572_ddr_lp4_2112MHz_lp5_2736MHz_rt_v1.07.bin</td><td>1.07.</td>
+  <td><span class="scope-badge scope-rkbin">rkbin</span></td>
+  <td><span class="lic">LicenseRef-ROCKCHIP</span></td>
+  <td>FIRMWARE</td><td>Rockchip Electronics Co., Ltd.</td>
+  <td class="url">https://github.com/rockchip-linux/rkbin</td>
+</tr>
+<tr data-scope="rkbin">
+  <td>rk3572_usbplug_v1.00.bin</td><td>1.00.</td>
+  <td><span class="scope-badge scope-rkbin">rkbin</span></td>
+  <td><span class="lic">LicenseRef-ROCKCHIP</span></td>
+  <td>FIRMWARE</td><td>Rockchip Electronics Co., Ltd.</td>
+  <td class="url">https://github.com/rockchip-linux/rkbin</td>
+</tr>
+<tr data-scope="rkbin">
+  <td>rk3572_dboot_v1.00.bin</td><td>1.00.</td>
+  <td><span class="scope-badge scope-rkbin">rkbin</span></td>
+  <td><span class="lic">LicenseRef-ROCKCHIP</span></td>
+  <td>FIRMWARE</td><td>Rockchip Electronics Co., Ltd.</td>
+  <td class="url">https://github.com/rockchip-linux/rkbin</td>
+</tr>
+<tr data-scope="rkbin">
+  <td>rk3572_rboot_v1.00.bin</td><td>1.00.</td>
+  <td><span class="scope-badge scope-rkbin">rkbin</span></td>
+  <td><span class="lic">LicenseRef-ROCKCHIP</span></td>
+  <td>FIRMWARE</td><td>Rockchip Electronics Co., Ltd.</td>
+  <td class="url">https://github.com/rockchip-linux/rkbin</td>
+</tr>
+<tr data-scope="rkbin">
+  <td>rk3572_bl32_v1.06.bin</td><td>1.06.</td>
+  <td><span class="scope-badge scope-rkbin">rkbin</span></td>
+  <td><span class="lic">LicenseRef-ROCKCHIP</span></td>
+  <td>FIRMWARE</td><td>Rockchip Electronics Co., Ltd.</td>
+  <td class="url">https://github.com/rockchip-linux/rkbin</td>
+</tr>
+<tr data-scope="rkbin">
+  <td>MiniLoaderAll.bin</td><td>unknown</td>
+  <td><span class="scope-badge scope-rkbin">rkbin</span></td>
+  <td><span class="lic">LicenseRef-ROCKCHIP</span></td>
+  <td>FIRMWARE</td><td>Rockchip Electronics Co., Ltd.</td>
+  <td class="url">https://github.com/rockchip-linux/rkbin</td>
+</tr></tbody>
+  </table>
+</div>
+<div class="footer">Rockchip Linux SDK SBOM | Buildroot legal-info format | SPDX 2.2 + CycloneDX 1.5</div>
+<script>
+let d={};
+function st(c){const tb=document.querySelector('#t tbody');const r=Array.from(tb.rows);const dir=d[c]||'asc';d[c]=dir==='asc'?'desc':'asc';r.sort((a,b)=>{let va=a.cells[c].textContent.trim(),vb=b.cells[c].textContent.trim();const na=parseFloat(va),nb=parseFloat(vb);if(!isNaN(na)&&!isNaN(nb))return dir==='asc'?na-nb:nb-na;return dir==='asc'?va.localeCompare(vb):vb.localeCompare(va)});r.forEach(r=>tb.appendChild(r))}
+function ft(){const q=document.getElementById('q').value.toLowerCase();const sf=document.getElementById('sf').value;let n=0;document.querySelectorAll('#t tbody tr').forEach(r=>{const ok=r.cells[0].textContent.toLowerCase().includes(q)&&(sf===''||r.dataset.scope===sf);r.style.display=ok?'':'none';if(ok)n++});document.getElementById('cnt').textContent=n+' packages'}
+</script>
+</body>
+</html>

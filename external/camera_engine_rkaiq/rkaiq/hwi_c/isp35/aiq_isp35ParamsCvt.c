@@ -139,9 +139,15 @@ void convertAiqAwbGainToIsp35Params(AiqIspParamsCvt_t* pCvt, aiq_params_base_t* 
     const blc_res_cvt_t* blc = &pCvt->mCommonCvtInfo.blc_res;
 
     // 1)//check awb gain apply position
+    calibdb_cis_wb_t* awb_cis_info = (calibdb_cis_wb_t*)pCvt->awb_cis_info;
     pCvt->awb_gain_final.applyPosition =
         ((rk_aiq_working_mode_t)(pCvt->_working_mode) == RK_AIQ_WORKING_MODE_NORMAL) ? IN_AWBGAIN1
         : IN_AWBGAIN0;
+    if (RK_AIQ_HDR_IS_SENSOR_BUILTIN(pCvt->_working_mode)) {
+        if (awb_cis_info && awb_cis_info->setWbGnInSensor_en == false) {
+            pCvt->awb_gain_final.applyPosition = IN_AWBGAIN1;
+        }
+    }
     // 2) //otp
     rk_aiq_wb_gain_v32_t awb_gain_otp = {1, 1, 1, 1, 1};
     AwbGainOtpAdjust(&awb_gain_otp, &pCvt->mCommonCvtInfo.otp_awb);
@@ -304,7 +310,9 @@ void convertAiqAwbGainToIsp35Params(AiqIspParamsCvt_t* pCvt, aiq_params_base_t* 
 
     pCvt->mLatestWbGainCfg = *cfg; //mLatestWbGainCfg for sensor
 
-    if (RK_AIQ_HDR_IS_SENSOR_BUILTIN(pCvt->_working_mode) || pCvt->mCommonCvtInfo._airms_en) {
+    if ((RK_AIQ_HDR_IS_SENSOR_BUILTIN(pCvt->_working_mode) &&
+         (!awb_cis_info || awb_cis_info->setWbGnInSensor_en)) ||
+        pCvt->mCommonCvtInfo._airms_en) {
 #if defined(ISP_HW_V351s)
         cfg->gain0_r     = (1 << ISP2X_WBGAIN_FIXSCALE_BIT);
         cfg->gain0_b    = (1 << ISP2X_WBGAIN_FIXSCALE_BIT);
@@ -344,8 +352,6 @@ void convertAiqAwbGainToIsp35Params(AiqIspParamsCvt_t* pCvt, aiq_params_base_t* 
         cfg->awb1_gain_gr  = Gr > max_wb_gain ? max_wb_gain : Gr;
         cfg->awb1_gain_gb  = Gb > max_wb_gain ? max_wb_gain : Gb;
     }
-
-
 }
 
 static void WriteDataForIcCmodel(struct isp35_rawawb_meas_cfg* wpDetectPara)
@@ -1010,9 +1016,8 @@ static void ConfigBlc2(const blc_res_cvt_t* ablc, const awbStats_cfg_t* awb_meas
     awb_cfg_v35->bls2_val.gr = 0;
     awb_cfg_v35->bls2_val.gb = 0;
     awb_cfg_v35->bls2_val.b  = 0;
-    if (awb_meas->hw_awbCfg_statsSrc_mode == awbStats_drcOut_mode ||
-            ((awb_meas->hw_awbCfg_statsSrc_mode == awbStats_btnrOut_mode || awb_meas->hw_awbCfg_statsSrc_mode == awbStats_btnrfeOut_mode) &&
-             working_mode != RK_AIQ_WORKING_MODE_NORMAL)) {
+    if (awb_meas->blc.hw_awbCfg_blc_en
+        &&awb_meas->hw_awbCfg_statsSrc_mode == awbStats_drcOut_mode ) {
         LOGW_AWB("The BLC bias of the awbStats pathway is not effective in the current mode and is consistent with the main pathway");
         // don't support to use blc2
         return;
@@ -1072,44 +1077,44 @@ static XCamReturn ConfigOverexposureValue(const blc_res_cvt_t* ablc, float hdrmg
     int max_blc                           = 0;
     short ob                              = 0;
     int overexposure_value                = 254;
-    /*if (ablc)
-        ob = ablc->isp_ob_offset;*/
+    if (ablc && ablc->en && ablc->obcPostTnr.sw_blcT_obcPostTnr_en)
+        ob = ablc->obcPostTnr.sw_blcT_autoOB_offset;
     if (awb_meas->hw_awbCfg_statsSrc_mode == awbStats_drcOut_mode) {
         awb_cfg_v35->in_overexposure_threshold = overexposure_value;
     } else if (awb_meas->hw_awbCfg_statsSrc_mode == awbStats_btnrOut_mode || awb_meas->hw_awbCfg_statsSrc_mode == awbStats_btnrfeOut_mode) {
         if (ablc && ablc->en && isp_ob_predgain > 1) {
             dgain = isp_ob_predgain;
         }
+
+        // need check
+        short int blc[AWB_CHANNEL_MAX] = {0, 0, 0, 0};
+        if (ablc && ablc->en) {
+            blc[AWB_CHANNEL_R]  = ablc->obcPreTnr.hw_blcC_obR_val * dgain - ob;
+            blc[AWB_CHANNEL_GR] = ablc->obcPreTnr.hw_blcC_obGr_val * dgain - ob;
+            blc[AWB_CHANNEL_GB] = ablc->obcPreTnr.hw_blcC_obGb_val * dgain - ob;
+            blc[AWB_CHANNEL_B]  = ablc->obcPreTnr.hw_blcC_obB_val * dgain - ob;
+        }
+        for (int i = 0; i < AWB_CHANNEL_MAX; i++) {
+            if (blc[i] < 0) {
+                blc[i] = 0;
+            }
+        }
+        blc[AWB_CHANNEL_B] += awb_cfg_v35->bls2_val.b + ob;
+        blc[AWB_CHANNEL_R] += awb_cfg_v35->bls2_val.r + ob;
+        blc[AWB_CHANNEL_GB] += awb_cfg_v35->bls2_val.gb + ob;
+        blc[AWB_CHANNEL_GR] += awb_cfg_v35->bls2_val.gr + ob;
+        for (int i = 0; i < AWB_CHANNEL_MAX; i++) {
+            if (blc[i] > max_blc) {
+                max_blc = blc[i];
+            }
+        }
+        if (max_blc < 0) {
+            max_blc = 0;
+        }
         if (working_mode != RK_AIQ_WORKING_MODE_NORMAL) {
-            // hdr mode,awbgain0 will reset the out data to full range
-            LOGV_AWB("hdrmge_gain0_1 %f", hdrmge_gain0_1);
-            awb_cfg_v35->in_overexposure_threshold = overexposure_value * hdrmge_gain0_1 * dgain;
+            awb_cfg_v35->in_overexposure_threshold = overexposure_value * hdrmge_gain0_1 * dgain - max_blc / 16;
+            LOGD_AWB("hdrmge_gain0_1 %f, dgain %f, max_blc %d, overexposure_th %d", hdrmge_gain0_1, dgain, max_blc, awb_cfg_v35->in_overexposure_threshold);
         } else {
-            // need check
-            short int blc[AWB_CHANNEL_MAX] = {0, 0, 0, 0};
-            if (ablc && ablc->en) {
-                blc[AWB_CHANNEL_R]  = ablc->obcPreTnr.hw_blcC_obR_val * dgain - ob;
-                blc[AWB_CHANNEL_GR] = ablc->obcPreTnr.hw_blcC_obGr_val * dgain - ob;
-                blc[AWB_CHANNEL_GB] = ablc->obcPreTnr.hw_blcC_obGb_val * dgain - ob;
-                blc[AWB_CHANNEL_B]  = ablc->obcPreTnr.hw_blcC_obB_val * dgain - ob;
-            }
-            for (int i = 0; i < AWB_CHANNEL_MAX; i++) {
-                if (blc[i] < 0) {
-                    blc[i] = 0;
-                }
-            }
-            blc[AWB_CHANNEL_B] += awb_cfg_v35->bls2_val.b + ob;
-            blc[AWB_CHANNEL_R] += awb_cfg_v35->bls2_val.r + ob;
-            blc[AWB_CHANNEL_GB] += awb_cfg_v35->bls2_val.gb + ob;
-            blc[AWB_CHANNEL_GR] += awb_cfg_v35->bls2_val.gr + ob;
-            for (int i = 0; i < AWB_CHANNEL_MAX; i++) {
-                if (blc[i] > max_blc) {
-                    max_blc = blc[i];
-                }
-            }
-            if (max_blc < 0) {
-                max_blc = 0;
-            }
             awb_cfg_v35->in_overexposure_threshold = overexposure_value * dgain - max_blc / 16;
         }
 
@@ -1310,14 +1315,12 @@ void convertAiqAwbToIsp35Params(AiqIspParamsCvt_t* pCvt, aiq_params_base_t* pBas
             isp_dgain = MAX(1.0f, ae_exp->LinearExp.exp_real_params.isp_dgain);
         } else {
             isp_dgain   = MAX(1.0f, ae_exp->HdrExp[0].exp_real_params.isp_dgain);
-            float sExpo = ae_exp->HdrExp[0].exp_real_params.analog_gain *
-                          ae_exp->HdrExp[0].exp_real_params.digital_gain *
+            float sExpo = ae_exp->HdrExp[0].exp_real_params.cis_total_gain *
                           ae_exp->HdrExp[0].exp_real_params.integration_time;
 
-            float lExpo = ae_exp->HdrExp[1].exp_real_params.analog_gain *
-                          ae_exp->HdrExp[1].exp_real_params.digital_gain *
+            float lExpo = ae_exp->HdrExp[1].exp_real_params.cis_total_gain *
                           ae_exp->HdrExp[1].exp_real_params.integration_time;
-            if (sExpo > 0.001) {
+            if (sExpo > 0.00000001) {
                 hdrmge_gain0_1 = lExpo / sExpo;
             }
         }
@@ -2068,8 +2071,8 @@ struct params_cvt_info_isp35 {
 static const struct params_cvt_info_isp35 params_cvts_isp35[] = {
     CVT_INFO(RESULT_TYPE_DEBAYER_PARAM, convertAiqDmToIsp35Params),
     CVT_INFO(RESULT_TYPE_AESTATS_PARAM, convertAiqAeToIsp39Params),
-    CVT_INFO(RESULT_TYPE_AWB_PARAM, convertAiqAwbToIsp35Params),
     CVT_INFO(RESULT_TYPE_AWBGAIN_PARAM, convertAiqAwbGainToIsp35Params),
+    CVT_INFO(RESULT_TYPE_AWB_PARAM, convertAiqAwbToIsp35Params),  // must place convertAiqAwbGainToIsp35Params before convertAiqAwbToIsp35Params
     CVT_INFO(RESULT_TYPE_CCM_PARAM, convertAiqCcmToIsp39Params),
 #if RKAIQ_HAVE_AF_V33 || RKAIQ_ONLY_AF_STATS_V33
     CVT_INFO(RESULT_TYPE_AF_PARAM, convertAiqAfToIsp39Params),

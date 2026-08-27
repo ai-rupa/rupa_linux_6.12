@@ -1,0 +1,30 @@
+From bec8d2a14272694d3fa63103993c530d5a3c24a7 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Wed, 23 Nov 2022 10:21:13 +0800
+Subject: [PATCH 09/98] gl-renderer: Use GL_TEXTURE_EXTERNAL_OES for importing
+ dma-buf
+
+Mali GPUs require it.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ libweston/renderer-gl/gl-renderer.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/libweston/renderer-gl/gl-renderer.c b/libweston/renderer-gl/gl-renderer.c
+index 1a7274b7..018c46cf 100644
+--- a/libweston/renderer-gl/gl-renderer.c
++++ b/libweston/renderer-gl/gl-renderer.c
+@@ -4110,6 +4110,9 @@ import_dmabuf(struct gl_renderer *gr,
+ 		const GLint swizzles[] = { GL_RED, GL_GREEN, GL_BLUE, GL_ALPHA };
+ 		GLenum target = choose_texture_target(gr, &dmabuf->attributes);
+ 
++		/* HACK: Mali GPUs require it for dma-buf import. */
++		target = GL_TEXTURE_EXTERNAL_OES;
++
+ 		gb->num_images = 1;
+ 		gb->images[0] = egl_image;
+ 		gb->egl_image_import_color_rep = color_rep;
+-- 
+2.39.5
+

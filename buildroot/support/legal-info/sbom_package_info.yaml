@@ -1,0 +1,270 @@
+- name_pattern: gcc-final|gcc-initial|gcc
+  supplier: Free Software Foundation
+  cpe: cpe:2.3:a:gnu:gcc:*:*:*:*:*:*:*:*
+  pkg_type: COMPILER
+  copyright: Copyright (c) Free Software Foundation, Inc.
+- name_pattern: glibc
+  supplier: Free Software Foundation
+  cpe: cpe:2.3:a:gnu:glibc:*:*:*:*:*:*:*:*
+  pkg_type: LIBRARY
+  copyright: Copyright (c) Free Software Foundation, Inc.
+- name_pattern: binutils
+  supplier: Free Software Foundation
+  cpe: cpe:2.3:a:gnu:binutils:*:*:*:*:*:*:*:*
+  pkg_type: COMPILER
+  copyright: Copyright (c) Free Software Foundation, Inc.
+- name_pattern: ^linux-headers$|^linux$
+  supplier: The Linux Foundation
+  cpe: cpe:2.3:o:linux:linux_kernel:*:*:*:*:*:*:*:*
+  pkg_type: OPERATING_SYSTEM
+  copyright: Copyright (c) Linus Torvalds and contributors
+- name_pattern: ^uboot$|^u-boot$
+  supplier: DENX Software Engineering
+  cpe: cpe:2.3:a:denx:u-boot:*:*:*:*:*:*:*:*
+  pkg_type: BOOTLOADER
+  copyright: Copyright (c) DENX Software Engineering
+- name_pattern: busybox
+  supplier: BusyBox.net
+  cpe: cpe:2.3:a:busybox:busybox:*:*:*:*:*:*:*:*
+  pkg_type: APPLICATION
+  copyright: Copyright (c) Erik Andersen and contributors
+- name_pattern: openssl|libopenssl
+  supplier: OpenSSL Software Foundation
+  cpe: cpe:2.3:a:openssl:openssl:*:*:*:*:*:*:*:*
+  pkg_type: LIBRARY
+  copyright: Copyright (c) The OpenSSL Project
+- name_pattern: ^python3?$|^python[0-9.]+$
+  supplier: Python Software Foundation
+  cpe: cpe:2.3:a:python:python:*:*:*:*:*:*:*:*
+  pkg_type: APPLICATION
+  copyright: Copyright (c) Python Software Foundation
+- name_pattern: bash
+  supplier: Free Software Foundation
+  cpe: cpe:2.3:a:gnu:bash:*:*:*:*:*:*:*:*
+  pkg_type: APPLICATION
+  copyright: Copyright (c) Free Software Foundation, Inc.
+- name_pattern: coreutils
+  supplier: Free Software Foundation
+  cpe: cpe:2.3:a:gnu:coreutils:*:*:*:*:*:*:*:*
+  pkg_type: APPLICATION
+  copyright: Copyright (c) Free Software Foundation, Inc.
+- name_pattern: alsa-lib
+  supplier: The ALSA Project
+  cpe: cpe:2.3:a:alsa-project:alsa-lib:*:*:*:*:*:*:*:*
+  pkg_type: LIBRARY
+  copyright: Copyright (c) Jaroslav Kysela <perex@perex.cz>
+- name_pattern: zlib
+  supplier: zlib.net
+  cpe: cpe:2.3:a:zlib:zlib:*:*:*:*:*:*:*:*
+  pkg_type: LIBRARY
+  copyright: Copyright (c) Jean-loup Gailly and Mark Adler
+- name_pattern: expat
+  supplier: The Expat maintainers
+  cpe: cpe:2.3:a:libexpat:expat:*:*:*:*:*:*:*:*
+  pkg_type: LIBRARY
+  copyright: Copyright (c) 1998-2000 Thai Open Source Software Center Ltd
+- name_pattern: libcurl|curl
+  supplier: Daniel Stenberg
+  cpe: cpe:2.3:a:curl:curl:*:*:*:*:*:*:*:*
+  pkg_type: LIBRARY
+  copyright: Copyright (c) 1996-2025 Daniel Stenberg
+- name_pattern: sqlite
+  supplier: D. Richard Hipp
+  cpe: cpe:2.3:a:sqlite:sqlite:*:*:*:*:*:*:*:*
+  pkg_type: LIBRARY
+  copyright: Copyright (c) D. Richard Hipp
+- name_pattern: libpng
+  supplier: PNG Reference Library
+  cpe: cpe:2.3:a:libpng:libpng:*:*:*:*:*:*:*:*
+  pkg_type: LIBRARY
+  copyright: Copyright (c) 1995-2025 Jean-loup Gailly and Mark Adler
+- name_pattern: freetype
+  supplier: The FreeType Project
+  cpe: cpe:2.3:a:freetype:freetype:*:*:*:*:*:*:*:*
+  pkg_type: LIBRARY
+  copyright: Copyright (c) 1996-2025 David Turner, Robert Wilhelm, and Werner Lemberg
+- name_pattern: dbus
+  supplier: Freedesktop.org
+  cpe: cpe:2.3:a:freedesktop:dbus:*:*:*:*:*:*:*:*
+  pkg_type: LIBRARY
+  copyright: Copyright (c) 2002-2005 CodeFactory AB, 2005 Red Hat, Inc.
+- name_pattern: gstreamer.*
+  supplier: GStreamer Project
+  cpe: cpe:2.3:a:gstreamer:gstreamer:*:*:*:*:*:*:*:*
+  pkg_type: LIBRARY
+  copyright: Copyright (c) GStreamer Project contributors
+- name_pattern: ffmpeg
+  supplier: FFmpeg developers
+  cpe: cpe:2.3:a:ffmpeg:ffmpeg:*:*:*:*:*:*:*:*
+  pkg_type: APPLICATION
+  copyright: Copyright (c) FFmpeg developers
+- name_pattern: chromium.*
+  supplier: Google LLC
+  cpe: cpe:2.3:a:google:chrome:*:*:*:*:*:*:*:*
+  pkg_type: APPLICATION
+  copyright: Copyright (c) Google LLC
+- name_pattern: wayland
+  supplier: Freedesktop.org
+  cpe: cpe:2.3:a:freedesktop:wayland:*:*:*:*:*:*:*:*
+  pkg_type: LIBRARY
+  copyright: "Copyright (c) 2008-2012 Kristian H\u00F8gsberg"
+- name_pattern: qt5.*|qt6.*
+  supplier: The Qt Company
+  cpe: cpe:2.3:a:qt:qt:*:*:*:*:*:*:*:*
+  pkg_type: LIBRARY
+  copyright: Copyright (c) The Qt Company Ltd
+- name_pattern: glib
+  supplier: GNOME Project
+  cpe: cpe:2.3:a:gnome:glib:*:*:*:*:*:*:*:*
+  pkg_type: LIBRARY
+  copyright: Copyright (c) GNOME Project contributors
+- name_pattern: cairo
+  supplier: Cairo Project
+  cpe: cpe:2.3:a:cairographics:cairo:*:*:*:*:*:*:*:*
+  pkg_type: LIBRARY
+  copyright: Copyright (c) 2002 University of Southern California
+- name_pattern: pango
+  supplier: GNOME Project
+  cpe: cpe:2.3:a:gnome:pango:*:*:*:*:*:*:*:*
+  pkg_type: LIBRARY
+  copyright: Copyright (c) Red Hat, Inc.
+- name_pattern: gtk3|gtk4
+  supplier: GNOME Project
+  cpe: cpe:2.3:a:gnome:gtk:*:*:*:*:*:*:*:*
+  pkg_type: LIBRARY
+  copyright: Copyright (c) GNOME Project contributors
+- name_pattern: weston
+  supplier: Freedesktop.org
+  cpe: cpe:2.3:a:freedesktop:weston:*:*:*:*:*:*:*:*
+  pkg_type: APPLICATION
+  copyright: "Copyright (c) 2008-2012 Kristian H\u00F8gsberg"
+- name_pattern: pulseaudio
+  supplier: PulseAudio
+  cpe: cpe:2.3:a:pulseaudio:pulseaudio:*:*:*:*:*:*:*:*
+  pkg_type: APPLICATION
+  copyright: Copyright (c) Lennart Poettering
+- name_pattern: bluez.*
+  supplier: BlueZ Project
+  cpe: cpe:2.3:a:bluez:bluez:*:*:*:*:*:*:*:*
+  pkg_type: LIBRARY
+  copyright: Copyright (c) BlueZ Project contributors
+- name_pattern: systemd
+  supplier: systemd Project
+  cpe: cpe:2.3:a:systemd:systemd:*:*:*:*:*:*:*:*
+  pkg_type: APPLICATION
+  copyright: Copyright (c) 2010 Lennart Poettering
+- name_pattern: udev
+  supplier: systemd Project
+  cpe: cpe:2.3:a:systemd:udev:*:*:*:*:*:*:*:*
+  pkg_type: LIBRARY
+  copyright: Copyright (c) 2002-2012 Lennart Poettering, Kay Sievers
+- name_pattern: mtd|mtd-utils
+  supplier: Linux MTD Project
+  cpe: cpe:2.3:a:linux-mtd:mtd-utils:*:*:*:*:*:*:*:*
+  pkg_type: APPLICATION
+  copyright: Copyright (c) Linux MTD Project contributors
+- name_pattern: ^uboot-tools$
+  supplier: DENX Software Engineering
+  cpe: cpe:2.3:a:denx:uboot-tools:*:*:*:*:*:*:*:*
+  pkg_type: BOOTLOADER
+  copyright: Copyright (c) DENX Software Engineering
+- name_pattern: ^rockchip-mali$
+  supplier: Rockchip Electronics Co., Ltd.
+  cpe: cpe:2.3:a:rockchip:rockchip_mali:*:*:*:*:*:*:*:*
+  pkg_type: LIBRARY
+  copyright: Copyright (c) Rockchip Electronics Co., Ltd.
+- name_pattern: ^rockchip-rga$
+  supplier: Rockchip Electronics Co., Ltd.
+  cpe: cpe:2.3:a:rockchip:rockchip_rga:*:*:*:*:*:*:*:*
+  pkg_type: LIBRARY
+  copyright: Copyright (c) Rockchip Electronics Co., Ltd.
+- name_pattern: ^rockchip-mpp$
+  supplier: Rockchip Electronics Co., Ltd.
+  cpe: cpe:2.3:a:rockchip:rockchip_mpp:*:*:*:*:*:*:*:*
+  pkg_type: LIBRARY
+  copyright: Copyright (c) Rockchip Electronics Co., Ltd.
+- name_pattern: ^rkbin$
+  supplier: Rockchip Electronics Co., Ltd.
+  cpe: cpe:2.3:a:rockchip:rkbin:*:*:*:*:*:*:*:*
+  pkg_type: FIRMWARE
+  copyright: Copyright (c) Rockchip Electronics Co., Ltd.
+- name_pattern: ^rknpu2$
+  supplier: Rockchip Electronics Co., Ltd.
+  cpe: cpe:2.3:a:rockchip:rknpu2:*:*:*:*:*:*:*:*
+  pkg_type: FIRMWARE
+  copyright: Copyright (c) Rockchip Electronics Co., Ltd.
+- name_pattern: ^rk[0-9]+-device-tree$
+  supplier: Rockchip Electronics Co., Ltd.
+  cpe: cpe:2.3:o:rockchip:device_tree:*:*:*:*:*:*:*:*
+  pkg_type: DATA
+  copyright: Copyright (c) Rockchip Electronics Co., Ltd.
+- name_pattern: iptables
+  supplier: Netfilter Project
+  cpe: cpe:2.3:a:netfilter:iptables:*:*:*:*:*:*:*:*
+  pkg_type: APPLICATION
+  copyright: Copyright (c) Netfilter Project contributors
+- name_pattern: libnetfilter.*
+  supplier: Netfilter Project
+  cpe: cpe:2.3:a:netfilter:libnetfilter:*:*:*:*:*:*:*:*
+  pkg_type: LIBRARY
+  copyright: Copyright (c) Netfilter Project contributors
+- name_pattern: dropbear
+  supplier: Matt Johnston
+  cpe: cpe:2.3:a:dropbear:dropbear_ssh:*:*:*:*:*:*:*:*
+  pkg_type: APPLICATION
+  copyright: Copyright (c) Matt Johnston
+- name_pattern: openssh
+  supplier: OpenSSH
+  cpe: cpe:2.3:a:openssh:openssh:*:*:*:*:*:*:*:*
+  pkg_type: APPLICATION
+  copyright: Copyright (c) OpenSSH contributors
+- name_pattern: sudo
+  supplier: Todd C. Miller
+  cpe: cpe:2.3:a:sudo_project:sudo:*:*:*:*:*:*:*:*
+  pkg_type: APPLICATION
+  copyright: Copyright (c) 1993-1996, 1998-2025 Todd C. Miller
+- name_pattern: vim
+  supplier: Bram Moolenaar
+  cpe: cpe:2.3:a:vim:vim:*:*:*:*:*:*:*:*
+  pkg_type: APPLICATION
+  copyright: Copyright (c) Bram Moolenaar
+- name_pattern: nano
+  supplier: GNU Project
+  cpe: cpe:2.3:a:gnu:nano:*:*:*:*:*:*:*:*
+  pkg_type: APPLICATION
+  copyright: Copyright (c) Free Software Foundation, Inc.
+- name_pattern: less
+  supplier: Mark Nudelman
+  cpe: cpe:2.3:a:less:less:*:*:*:*:*:*:*:*
+  pkg_type: APPLICATION
+  copyright: Copyright (c) Mark Nudelman
+- name_pattern: grep
+  supplier: Free Software Foundation
+  cpe: cpe:2.3:a:gnu:grep:*:*:*:*:*:*:*:*
+  pkg_type: APPLICATION
+  copyright: Copyright (c) Free Software Foundation, Inc.
+- name_pattern: sed
+  supplier: Free Software Foundation
+  cpe: cpe:2.3:a:gnu:sed:*:*:*:*:*:*:*:*
+  pkg_type: APPLICATION
+  copyright: Copyright (c) Free Software Foundation, Inc.
+- name_pattern: awk|gawk
+  supplier: Free Software Foundation
+  cpe: cpe:2.3:a:gnu:gawk:*:*:*:*:*:*:*:*
+  pkg_type: APPLICATION
+  copyright: Copyright (c) Free Software Foundation, Inc.
+- name_pattern: tar
+  supplier: Free Software Foundation
+  cpe: cpe:2.3:a:gnu:tar:*:*:*:*:*:*:*:*
+  pkg_type: APPLICATION
+  copyright: Copyright (c) Free Software Foundation, Inc.
+- name_pattern: xz
+  supplier: Lasse Collin
+  cpe: cpe:2.3:a:tukaani:xz:*:*:*:*:*:*:*:*
+  pkg_type: APPLICATION
+  copyright: Copyright (c) Lasse Collin
+- name_pattern: bzip2
+  supplier: Julian Seward
+  cpe: cpe:2.3:a:sourceware:bzip2:*:*:*:*:*:*:*:*
+  pkg_type: LIBRARY
+  copyright: Copyright (c) Julian Seward

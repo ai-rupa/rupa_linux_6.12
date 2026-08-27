@@ -1,7 +1,7 @@
-From 8473e035b2531e6807ab8c050de5de478c8141cf Mon Sep 17 00:00:00 2001
+From 0abe29dcdf08d83fc191b851ea7d2fbae3ea24bf Mon Sep 17 00:00:00 2001
 From: Jeffy Chen <jeffy.chen@rock-chips.com>
 Date: Fri, 9 Dec 2022 11:15:45 +0800
-Subject: [PATCH 14/15] Support bypassing Unicode when printing
+Subject: [PATCH 14/16] Support bypassing Unicode when printing
 
 Enabled by default.
 
@@ -20,7 +20,7 @@ Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
  3 files changed, 20 insertions(+), 2 deletions(-)
 
 diff --git a/libbb/Config.src b/libbb/Config.src
-index b980f19..8b833c9 100644
+index 55e670d..292e85a 100644
 --- a/libbb/Config.src
 +++ b/libbb/Config.src
 @@ -264,6 +264,12 @@ config UNICODE_SUPPORT
@@ -85,5 +85,5 @@ index e98cbbf..2f9d0d3 100644
  			}
  		}
 -- 
-2.20.1
+2.39.5
 

@@ -186,6 +186,9 @@ typedef struct _RkAiqAlgoConfigAe {
     rk_aiq_sensor_nr_switch_t nr_switch;
     rk_aiq_sensor_dcg_ratio_t dcg_ratio;
     rk_aiq_sensor_dcg_ratio_t spd_ratio;
+    rk_aiq_sensor_dcg_ratio_t lofic2vs_ratio;
+    rk_aiq_sensor_dcg_ratio_t lcg2lofic_ratio;
+    rk_aiq_sensor_exp_offset_t exp_offset;
     float        LinePeriodsPerField;
     float        PixelClockFreqMHZ;
     float        PixelPeriodsPerLine;
@@ -323,6 +326,10 @@ typedef struct _RkAiqAlgoProcAwb {
     AiqGlobal3AInfo_t* global3AInfo[RK_AIQ_CAM_GROUP_MAX_CAMS];
     uint32_t global3AInfo_count;
     uint32_t masterCamId;
+
+    //af info
+    bool af_converged;
+    float af_focuspos; // 0 near, 1 far
 } RkAiqAlgoProcAwb;
 
 typedef struct _RkAiqAlgoProcResAwb {

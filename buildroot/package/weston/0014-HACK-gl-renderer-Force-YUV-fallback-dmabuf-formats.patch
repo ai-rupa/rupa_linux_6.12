@@ -1,0 +1,30 @@
+From 16a1c4317814637905e139217295b74fdb1f9f34 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Thu, 6 Dec 2018 18:53:05 +0800
+Subject: [PATCH 14/98] HACK: gl-renderer: Force YUV fallback dmabuf formats
+
+For old Mali GPUs (e.g. Utgard).
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ libweston/renderer-gl/gl-renderer.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/libweston/renderer-gl/gl-renderer.c b/libweston/renderer-gl/gl-renderer.c
+index 018c46cf..a876e061 100644
+--- a/libweston/renderer-gl/gl-renderer.c
++++ b/libweston/renderer-gl/gl-renderer.c
+@@ -4168,6 +4168,10 @@ gl_renderer_query_dmabuf_formats(struct weston_compositor *wc,
+ 			num = ARRAY_LENGTH(fallback_formats);
+ 		else
+ 			num = 2;
++
++		/* For old Mali GPUs (e.g. Utgard). */
++		num = ARRAY_LENGTH(fallback_formats);
++
+ 		fallback = true;
+ 	}
+ 
+-- 
+2.39.5
+

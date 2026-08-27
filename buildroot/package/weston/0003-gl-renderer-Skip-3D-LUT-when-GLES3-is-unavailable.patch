@@ -1,0 +1,46 @@
+From d3e6936f66d2ddfa8f176ff6cbacbd105494fac9 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Mon, 14 Nov 2022 16:08:19 +0800
+Subject: [PATCH 03/98] gl-renderer: Skip 3D LUT when GLES3 is unavailable
+
+For old Mali GPUs (e.g. Utgard).
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ libweston/renderer-gl/gl-shader-config-color-transformation.c | 4 ++++
+ libweston/renderer-gl/meson.build                             | 4 ++++
+ 2 files changed, 8 insertions(+)
+
+diff --git a/libweston/renderer-gl/gl-shader-config-color-transformation.c b/libweston/renderer-gl/gl-shader-config-color-transformation.c
+index b225df00..e19a2565 100644
+--- a/libweston/renderer-gl/gl-shader-config-color-transformation.c
++++ b/libweston/renderer-gl/gl-shader-config-color-transformation.c
+@@ -381,6 +381,10 @@ gl_renderer_color_transform_create_3dlut(struct gl_renderer *gr,
+ 	float len_lut3d;
+ 	bool ok;
+ 
++#ifndef HAVE_GLES3
++	goto err;
++#endif
++
+ 	/**
+ 	 * These are values that allow us to have good precision without
+ 	 * excessive memory consumption.
+diff --git a/libweston/renderer-gl/meson.build b/libweston/renderer-gl/meson.build
+index 4614cf86..33c00644 100644
+--- a/libweston/renderer-gl/meson.build
++++ b/libweston/renderer-gl/meson.build
+@@ -48,6 +48,10 @@ foreach name : [ 'egl', 'glesv2' ]
+ 		error('gl-renderer requires @0@ which was not found. Or, you can use \'-Drenderer-gl=false\'.'.format(name))
+ 	endif
+ 	deps_renderer_gl += d
++
++	if cc.has_function('glTexImage3D', dependencies: d)
++		config_h.set('HAVE_GLES3', 1)
++	endif
+ endforeach
+ 
+ plugin_gl = shared_library(
+-- 
+2.39.5
+

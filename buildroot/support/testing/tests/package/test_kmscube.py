@@ -3,6 +3,7 @@ import os
 import infra.basetest
 
 
+# gitlab-runner: xlarge
 class TestKmsCube(infra.basetest.BRTest):
     config = \
         """
@@ -18,7 +19,7 @@ class TestKmsCube(infra.basetest.BRTest):
         BR2_PACKAGE_KMSCUBE=y
         BR2_PACKAGE_LIBDRM=y
         BR2_PACKAGE_MESA3D=y
-        BR2_PACKAGE_MESA3D_GALLIUM_DRIVER_SWRAST=y
+        BR2_PACKAGE_MESA3D_GALLIUM_DRIVER_SOFTPIPE=y
         BR2_PACKAGE_MESA3D_LLVM=y
         BR2_PACKAGE_MESA3D_OPENGL_EGL=y
         BR2_PACKAGE_MESA3D_OPENGL_ES=y

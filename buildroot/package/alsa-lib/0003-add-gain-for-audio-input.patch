@@ -1,7 +1,7 @@
-From d967585c6178fab1e1d39c9bfd278e0b2432664d Mon Sep 17 00:00:00 2001
+From 27e8f40e11673dccb6751327b26a515f781d29f2 Mon Sep 17 00:00:00 2001
 From: Nyx Zheng <zyh@rock-chips.com>
 Date: Mon, 16 Jul 2018 17:33:30 +0800
-Subject: [PATCH 3/4] add gain for audio input
+Subject: [PATCH 3/5] add gain for audio input
 
 Signed-off-by: Nyx Zheng <zyh@rock-chips.com>
 ---
@@ -9,10 +9,10 @@ Signed-off-by: Nyx Zheng <zyh@rock-chips.com>
  1 file changed, 19 insertions(+)
 
 diff --git a/src/pcm/pcm.c b/src/pcm/pcm.c
-index a2eb529..2720f07 100644
+index 598a660..d5a5259 100644
 --- a/src/pcm/pcm.c
 +++ b/src/pcm/pcm.c
-@@ -854,6 +854,24 @@ void DCBDoing(void* pIn, int length, int channels)
+@@ -866,6 +866,24 @@ void DCBDoing(void* pIn, int length, int channels)
  }
  #endif
  
@@ -37,7 +37,7 @@ index a2eb529..2720f07 100644
  /* check whether the PCM is in the unexpected state */
  static int bad_pcm_state(snd_pcm_t *pcm, unsigned int supported_states,
  			 unsigned int noop_states)
-@@ -1813,6 +1831,7 @@ snd_pcm_sframes_t snd_pcm_readi(snd_pcm_t *pcm, void *buffer, snd_pcm_uframes_t
+@@ -1828,6 +1846,7 @@ snd_pcm_sframes_t snd_pcm_readi(snd_pcm_t *pcm, void *buffer, snd_pcm_uframes_t
  #ifdef DCB_FILTER_16BIT
  	DCBDoing((void*)buffer, tmp * pcm->frame_bits / 8 / sizeof(int16_t), pcm->channels);
  #endif
@@ -46,5 +46,5 @@ index a2eb529..2720f07 100644
  }
  
 -- 
-2.20.1
+2.39.5
 

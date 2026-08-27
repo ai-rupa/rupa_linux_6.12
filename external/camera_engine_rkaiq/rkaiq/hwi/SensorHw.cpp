@@ -577,6 +577,31 @@ SensorHw::get_spd_ratio(rk_aiq_sensor_dcg_ratio_t* spd_ratio)
     return 0;
 }
 
+int
+SensorHw::get_exp_offset(rk_aiq_sensor_exp_offset_t* exp_offset)
+{
+    struct rkmodule_exp_offset exp_offset_drv;
+
+    if (io_control(RKMODULE_GET_EXP_OFFSET, &exp_offset_drv) < 0) {
+        //LOGD_CAMHW_SUBM(SENSOR_SUBM,"failed to get sensor exp_offset");
+        exp_offset->valid = false;
+        return XCAM_RETURN_ERROR_IOCTL;
+    }
+
+    exp_offset->valid = true;
+    exp_offset->integer[0] = exp_offset_drv.integer[0];
+    exp_offset->integer[1] = exp_offset_drv.integer[1];
+    exp_offset->integer[2] = exp_offset_drv.integer[2];
+    exp_offset->decimal[0] = exp_offset_drv.decimal[0];
+    exp_offset->decimal[1] = exp_offset_drv.decimal[1];
+    exp_offset->decimal[2] = exp_offset_drv.decimal[2];
+    exp_offset->div_coeff[0] = exp_offset_drv.div_coeff[0];
+    exp_offset->div_coeff[1] = exp_offset_drv.div_coeff[1];
+    exp_offset->div_coeff[2] = exp_offset_drv.div_coeff[2];
+
+    return 0;
+}
+
 XCamReturn
 SensorHw::get_sensor_descriptor(rk_aiq_exposure_sensor_descriptor *sns_des)
 {
@@ -610,6 +635,9 @@ SensorHw::get_sensor_descriptor(rk_aiq_exposure_sensor_descriptor *sns_des)
         // do nothing;
     }
     if (get_spd_ratio(&sns_des->spd_ratio)) {
+        // do nothing;
+    }
+    if (get_exp_offset(&sns_des->exp_offset)) {
         // do nothing;
     }
 
@@ -875,6 +903,7 @@ SensorHw::getSensorModeData(const char* sns_ent_name,
     sns_des.nr_switch = sensor_desc.nr_switch;
     sns_des.dcg_ratio = sensor_desc.dcg_ratio;
     sns_des.spd_ratio = sensor_desc.spd_ratio;
+    sns_des.exp_offset = sensor_desc.exp_offset;
 
     sns_des.sensor_output_width = sensor_desc.sensor_output_width;
     sns_des.sensor_output_height = sensor_desc.sensor_output_height;
@@ -1625,6 +1654,9 @@ SensorHw::set_effecting_exp_map(uint32_t sequence, void *exp_ptr, int mode)
         exp_param_prx->data()->aecExpInfo.LinearExp.exp_sensor_params.isp_digital_gain = 1;
         exp_param_prx->data()->aecExpInfo.LinearExp.exp_real_params.digital_gain = 1.0f;
         exp_param_prx->data()->aecExpInfo.LinearExp.exp_real_params.isp_dgain = 1.0f;
+        exp_param_prx->data()->aecExpInfo.LinearExp.exp_real_params.cis_total_gain =
+            (off_finfo.lin_cis_total_gain <= 1.0f) ? (float)off_finfo.normal_gain
+                                                   : (float)off_finfo.lin_cis_total_gain;
 
         exp_param_prx->data()->aecExpInfo.HdrExp[2].exp_sensor_params.analog_gain_code_global = (uint32_t)off_finfo.hdr_gain_l;
         exp_param_prx->data()->aecExpInfo.HdrExp[2].exp_sensor_params.coarse_integration_time = (uint32_t)off_finfo.hdr_exp_l;
@@ -1634,6 +1666,9 @@ SensorHw::set_effecting_exp_map(uint32_t sequence, void *exp_ptr, int mode)
         exp_param_prx->data()->aecExpInfo.HdrExp[2].exp_sensor_params.isp_digital_gain = 1;
         exp_param_prx->data()->aecExpInfo.HdrExp[2].exp_real_params.digital_gain = 1.0f;
         exp_param_prx->data()->aecExpInfo.HdrExp[2].exp_real_params.isp_dgain = 1.0f;
+        exp_param_prx->data()->aecExpInfo.HdrExp[2].exp_real_params.cis_total_gain =
+            (off_finfo.hdr_cis_total_gain[2] <= 1.0f) ? (float)off_finfo.hdr_gain_l
+                                                       : (float)off_finfo.hdr_cis_total_gain[2];
 
         exp_param_prx->data()->aecExpInfo.HdrExp[1].exp_sensor_params.analog_gain_code_global = (uint32_t)off_finfo.hdr_gain_m;
         exp_param_prx->data()->aecExpInfo.HdrExp[1].exp_sensor_params.coarse_integration_time = (uint32_t)off_finfo.hdr_exp_m;
@@ -1643,6 +1678,9 @@ SensorHw::set_effecting_exp_map(uint32_t sequence, void *exp_ptr, int mode)
         exp_param_prx->data()->aecExpInfo.HdrExp[1].exp_sensor_params.isp_digital_gain = 1;
         exp_param_prx->data()->aecExpInfo.HdrExp[1].exp_real_params.digital_gain = 1.0f;
         exp_param_prx->data()->aecExpInfo.HdrExp[1].exp_real_params.isp_dgain = 1.0f;
+        exp_param_prx->data()->aecExpInfo.HdrExp[1].exp_real_params.cis_total_gain =
+            (off_finfo.hdr_cis_total_gain[1] <= 1.0f) ? (float)off_finfo.hdr_gain_m
+                                                       : (float)off_finfo.hdr_cis_total_gain[1];
 
 
         exp_param_prx->data()->aecExpInfo.HdrExp[0].exp_sensor_params.analog_gain_code_global = (uint32_t)off_finfo.hdr_gain_s;
@@ -1653,6 +1691,9 @@ SensorHw::set_effecting_exp_map(uint32_t sequence, void *exp_ptr, int mode)
         exp_param_prx->data()->aecExpInfo.HdrExp[0].exp_sensor_params.isp_digital_gain = 1;
         exp_param_prx->data()->aecExpInfo.HdrExp[0].exp_real_params.digital_gain = 1.0f;
         exp_param_prx->data()->aecExpInfo.HdrExp[0].exp_real_params.isp_dgain = 1.0f;
+        exp_param_prx->data()->aecExpInfo.HdrExp[0].exp_real_params.cis_total_gain =
+            (off_finfo.hdr_cis_total_gain[0] <= 1.0f) ? (float)off_finfo.hdr_gain_s
+                                                       : (float)off_finfo.hdr_cis_total_gain[0];
 
         _effecting_exp_map[sequence] = exp_param_prx;
     } else {

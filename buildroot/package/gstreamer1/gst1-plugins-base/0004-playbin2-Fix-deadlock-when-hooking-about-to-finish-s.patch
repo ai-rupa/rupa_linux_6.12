@@ -1,4 +1,4 @@
-From 4350c6112f26188b6e6f5c460edc6c9a854b0587 Mon Sep 17 00:00:00 2001
+From 203f54e4a4c4870cf41b4c412eb8a71b29721079 Mon Sep 17 00:00:00 2001
 From: Jeffy Chen <jeffy.chen@rock-chips.com>
 Date: Fri, 26 Nov 2021 17:41:47 +0800
 Subject: [PATCH 04/21] playbin2: Fix deadlock when hooking about-to-finish
@@ -14,7 +14,7 @@ Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
  1 file changed, 21 insertions(+)
 
 diff --git a/gst/playback/gstplaybin2.c b/gst/playback/gstplaybin2.c
-index 1722b4c..5392ddf 100644
+index 161a73c..96d1eb9 100644
 --- a/gst/playback/gstplaybin2.c
 +++ b/gst/playback/gstplaybin2.c
 @@ -384,6 +384,11 @@ G_STMT_START {                                          \
@@ -70,7 +70,7 @@ index 1722b4c..5392ddf 100644
    group = get_group (playbin);
  
    for (i = 0; i < PLAYBIN_STREAM_LAST; i++) {
-@@ -3950,7 +3967,11 @@ drained_cb (GstElement * decodebin, GstSourceGroup * group)
+@@ -3952,7 +3969,11 @@ drained_cb (GstElement * decodebin, GstSourceGroup * group)
  
    /* now activate the next group. If the app did not set a uri, this will
     * fail and we can do EOS */

@@ -6,6 +6,8 @@ CVR_APP_DEPENDENCIES = rkfsmk camera-engine-rkaiq rkadk rockchip-rga lvgl
 
 CVR_APP_INSTALL_STAGING = YES
 
+CVR_APP_CONF_OPTS += -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+
 ifeq ($(BR2_PACKAGE_CVR_RV1103B), y)
 CVR_APP_CONF_OPTS += -DSOC_RV1103B=ON
 endif

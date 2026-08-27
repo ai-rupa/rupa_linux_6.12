@@ -215,7 +215,13 @@ static bool RKADK_RECORD_EnableAudio(RKADK_S32 s32CamId) {
   }
 
   switch (pstAudioCfg->codec_type) {
+#ifdef RKMUXER_MEDIA_SERVER
+  case RKADK_CODEC_TYPE_MP3: /* media-server flv support mp3 */
+    bEnable = true;
+    break;
+#else
   case RKADK_CODEC_TYPE_MP3:
+#endif
   case RKADK_CODEC_TYPE_MP2:
     if (pstRecCfg->file_type == RKADK_MUXER_TYPE_FLV)
       bEnable = false;
@@ -788,7 +794,7 @@ static int RKADK_RECORD_CreateVideoChn(RKADK_RECORD_ATTR_S *pstRecAttr, bool *pb
       RK_MPI_VENC_SetSceneMode(pstRecCfg->attribute[i].venc_chn, RKADK_ENCODE_SENSE_CVR);
 
 #if defined(RV1126B) || defined(RV1103B)
-    if (pstRecCfg->record_type == RKADK_REC_TYPE_NORMAL && pstRecCfg->attribute[i].enable_pskip) {
+    if ((pstRecCfg->record_type == RKADK_REC_TYPE_NORMAL || pstRecCfg->record_type == RKADK_REC_TYPE_SINGLE) && pstRecCfg->attribute[i].enable_pskip) {
       if (pstSensorCfg->framerate < pstRecCfg->attribute[i].framerate) {
         RKADK_U32 u32Num = 0, u32Interval = 0;
 
@@ -1256,8 +1262,8 @@ static int RKADK_RECORD_BindChn(RKADK_RECORD_ATTR_S *pstRecAttr, RKADK_MW_PTR pR
     return -1;
   }
 
-  if (pstRecCfg->record_type == RKADK_REC_TYPE_NORMAL &&
-      RKADK_RECORD_EnableAudio(pstRecAttr->s32CamID)) {
+  if ((pstRecCfg->record_type == RKADK_REC_TYPE_NORMAL || pstRecCfg->record_type == RKADK_REC_TYPE_SINGLE)
+      && RKADK_RECORD_EnableAudio(pstRecAttr->s32CamID)) {
     RKADK_RECORD_SetAudioChn(pstRecAttr->s32CamID, &stSrcChn, &stDestChn);
 
     // Get aenc data
@@ -1397,8 +1403,8 @@ static int RKADK_RECORD_UnBindChn(RKADK_U32 u32CamId,
     return -1;
   }
 
-  if (pstRecorder->enRecType == RKADK_REC_TYPE_NORMAL &&
-      RKADK_RECORD_EnableAudio(u32CamId)) {
+  if ((pstRecorder->enRecType == RKADK_REC_TYPE_NORMAL || pstRecorder->enRecType == RKADK_REC_TYPE_SINGLE)
+      && RKADK_RECORD_EnableAudio(u32CamId)) {
     RKADK_RECORD_SetAudioChn(u32CamId, &stSrcChn, &stDestChn);
 
     // Stop get aenc data
@@ -1598,7 +1604,7 @@ static RKADK_S32 RKADK_RECORD_SetMuxerAttr(RKADK_U32 u32CamId, bool *pbUseVpss,
     pstMuxerAttr->astStreamAttr[i].s32VencChn = pstRecCfg->attribute[i].venc_chn;
     pstMuxerAttr->astStreamAttr[i].bUseVpss = pbUseVpss[i];
     pstMuxerAttr->astStreamAttr[i].enType = pstRecCfg->file_type;
-    if (pstRecCfg->record_type != RKADK_REC_TYPE_NORMAL) {
+    if ((pstRecCfg->record_type == RKADK_REC_TYPE_LAPSE || pstRecCfg->record_type == RKADK_REC_TYPE_AOV_LAPSE)) {
       pstMuxerAttr->astStreamAttr[i].u32TimeLenSec = pstRecCfg->record_time_cfg[i].lapse_interval;
       pstMuxerAttr->astStreamAttr[i].u32TrackCnt = 1; // only video track
     } else {
@@ -1645,7 +1651,7 @@ static RKADK_S32 RKADK_RECORD_SetMuxerAttr(RKADK_U32 u32CamId, bool *pbUseVpss,
     aHTrackSrcHandle->unTrackSourceAttr.stVideoInfo.u32ThumbWidth = ptsThumbCfg->thumb_width;
     aHTrackSrcHandle->unTrackSourceAttr.stVideoInfo.u32ThumbHeight = ptsThumbCfg->thumb_height;
 
-    if (pstRecCfg->record_type != RKADK_REC_TYPE_NORMAL || !bEnableAudio)
+    if ((pstRecCfg->record_type == RKADK_REC_TYPE_LAPSE || pstRecCfg->record_type == RKADK_REC_TYPE_AOV_LAPSE) || !bEnableAudio)
       continue;
 
     // audio track
@@ -2005,7 +2011,13 @@ static RKADK_S32 RKADK_RECORD_ResetAudio(RKADK_PARAM_REC_CFG_S *pstRecCfg,
     return 0;
   }
 
-  if (pstRecCfg->record_type != RKADK_REC_TYPE_NORMAL && pstRecorder->enRecType != RKADK_REC_TYPE_NORMAL) {
+  // No audio reset needed when old/new types share the same audio
+  // requirement: both lapse (no audio) or both normal/single (with audio).
+  bool bNewIsLapse = (pstRecCfg->record_type == RKADK_REC_TYPE_LAPSE ||
+                      pstRecCfg->record_type == RKADK_REC_TYPE_AOV_LAPSE);
+  bool bOldIsLapse = (pstRecorder->enRecType == RKADK_REC_TYPE_LAPSE ||
+                      pstRecorder->enRecType == RKADK_REC_TYPE_AOV_LAPSE);
+  if (bNewIsLapse == bOldIsLapse) {
     RKADK_LOGI("Record type[%d] changed type[%d], no need to reset the audio",
                 pstRecorder->enRecType, pstRecCfg->record_type);
     return 0;
@@ -2014,7 +2026,7 @@ static RKADK_S32 RKADK_RECORD_ResetAudio(RKADK_PARAM_REC_CFG_S *pstRecCfg,
   RKADK_LOGI("Record reset audio state [%d %d] start...",
               pstRecorder->u32CamId, pstRecCfg->record_type);
 
-  if (pstRecCfg->record_type != RKADK_REC_TYPE_NORMAL &&
+  if ((pstRecCfg->record_type == RKADK_REC_TYPE_LAPSE || pstRecCfg->record_type == RKADK_REC_TYPE_AOV_LAPSE) &&
       RKADK_RECORD_EnableAudio(pstRecorder->u32CamId)) {
     RKADK_RECORD_SetAudioChn(pstRecorder->u32CamId, &stSrcChn, &stDestChn);
 
@@ -2031,8 +2043,8 @@ static RKADK_S32 RKADK_RECORD_ResetAudio(RKADK_PARAM_REC_CFG_S *pstRecCfg,
     }
 
     RKADK_RECORD_DestoryAudioChn(pstRecorder->u32CamId);
-  } else if (pstRecCfg->record_type == RKADK_REC_TYPE_NORMAL &&
-             RKADK_RECORD_EnableAudio(pstRecorder->u32CamId)){
+  } else if ((pstRecCfg->record_type == RKADK_REC_TYPE_NORMAL || pstRecCfg->record_type == RKADK_REC_TYPE_SINGLE)
+            && RKADK_RECORD_EnableAudio(pstRecorder->u32CamId)){
     if (RKADK_RECORD_CreateAudioChn(pstRecorder->u32CamId)) {
       RKADK_LOGE("RKADK_RECORD_CreateAudioChn failed");
       return -1;
@@ -2093,7 +2105,7 @@ RKADK_S32 RKADK_RECORD_Create(RKADK_RECORD_ATTR_S *pstRecAttr,
     return -1;
 
   bEnableAudio = RKADK_RECORD_EnableAudio(pstRecAttr->s32CamID);
-  if (pstRecCfg->record_type == RKADK_REC_TYPE_NORMAL && bEnableAudio) {
+  if ((pstRecCfg->record_type == RKADK_REC_TYPE_NORMAL || pstRecCfg->record_type == RKADK_REC_TYPE_SINGLE) && bEnableAudio) {
     if (RKADK_RECORD_CreateAudioChn(pstRecAttr->s32CamID)) {
       RKADK_RECORD_DestoryVideoChn(pstRecAttr->s32CamID, bUseVpss, NULL, pstRecAttr->stPipAttr);
       return -1;
@@ -2140,7 +2152,7 @@ failed:
   RKADK_LOGE("Create Record[%d, %d] failed", pstRecAttr->s32CamID, pstRecCfg->record_type);
   RKADK_RECORD_DestoryVideoChn(pstRecAttr->s32CamID, bUseVpss, NULL, pstRecAttr->stPipAttr);
 
-  if (pstRecCfg->record_type == RKADK_REC_TYPE_NORMAL && bEnableAudio)
+  if ((pstRecCfg->record_type == RKADK_REC_TYPE_NORMAL || pstRecCfg->record_type == RKADK_REC_TYPE_SINGLE) && bEnableAudio)
     RKADK_RECORD_DestoryAudioChn(pstRecAttr->s32CamID);
 
   return -1;
@@ -2186,7 +2198,7 @@ RKADK_S32 RKADK_RECORD_Destroy(RKADK_MW_PTR pRecorder) {
     return ret;
   }
 
-  if (pstRecorder->enRecType == RKADK_REC_TYPE_NORMAL &&
+  if ((pstRecorder->enRecType == RKADK_REC_TYPE_NORMAL || pstRecorder->enRecType == RKADK_REC_TYPE_SINGLE) &&
       RKADK_RECORD_EnableAudio(u32CamId)) {
     ret = RKADK_RECORD_DestoryAudioChn(u32CamId);
     if (ret) {

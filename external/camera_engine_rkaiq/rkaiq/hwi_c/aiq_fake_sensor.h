@@ -47,11 +47,13 @@ struct AiqFakeSensorHw_s {
     XCamReturn (*prepare)(AiqSensorHw_t* pBaseSns, rk_aiq_raw_prop_t* prop);
     XCamReturn (*register_rawdata_callback)(AiqFakeSensorHw_t* pFakeSns, void (*callback)(void*));
     XCamReturn (*set_fake_sensor_format)(AiqFakeSensorHw_t* pFakeSns, int width, int height, uint32_t fmt_core);
+
+    bool mIsVicapVirtualSensor;
 };
 
 void AiqFakeSensorHw_init(AiqFakeSensorHw_t* pFakeSnsHw, const char* name, int cid);
 void AiqFakeSensorHw_deinit(AiqFakeSensorHw_t* pFakeSnsHw);
-void AiqFakeSensorHw_deinit(AiqFakeSensorHw_t* pFakeSnsHw);
+rk_aiq_format_t v4l2_format_to_rk_format(uint32_t media_format);
 
 RKAIQ_END_DECLARE
 

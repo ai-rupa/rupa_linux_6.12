@@ -1,7 +1,7 @@
-From edcae052fe6a9eca3f9b0bbf4ef32b930df44c6f Mon Sep 17 00:00:00 2001
+From 113b47bc1e24db1256b67a2de2d3a2a4ba16471f Mon Sep 17 00:00:00 2001
 From: Jeffy Chen <jeffy.chen@rock-chips.com>
 Date: Fri, 10 Jul 2020 14:46:35 +0800
-Subject: [PATCH 4/5] Makefile.am: Set printpluginsdir to
+Subject: [PATCH 4/6] Makefile.am: Set printpluginsdir to
  /usr/share/hplip/prnt/plugins
 
 Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
@@ -23,5 +23,5 @@ index 7034ccf..3fd18cc 100644
  
  dist_filter_DATA = hpcups hpps dat2drv
 -- 
-2.20.1
+2.39.5
 

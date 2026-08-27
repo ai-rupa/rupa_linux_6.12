@@ -232,7 +232,7 @@ void update_camera_ip(struct uvc_device *dev) {
   if (NULL == fp_output) {
     LOG_ERROR("failed to open uvc xu ip file %s\n", cmd);
   } else {
-    ip[num + 1] = "\0";
+    ip[num + 1] = '\0';
     fwrite(ip, num + 1, 1, fp_output);
     fclose(fp_output);
   }
@@ -774,6 +774,9 @@ static int uvc_video_set_format(struct uvc_device *dev) {
 
   if (dev->fcc == V4L2_PIX_FMT_NV12)
     fmt.fmt.pix.sizeimage = dev->width * dev->height * 1.5;
+
+  if (dev->fcc == V4L2_PIX_FMT_BGR24)
+    fmt.fmt.pix.sizeimage = dev->width * dev->height * 3;
 
   ret = ioctl(dev->uvc_fd, VIDIOC_S_FMT, &fmt);
   if (ret < 0) {
@@ -1325,6 +1328,9 @@ static int uvc_video_reqbufs_userptr(struct uvc_device *dev, int nbufs) {
   case V4L2_PIX_FMT_NV12:
     payload_size = dev->width * dev->height * 1.5;
     break;
+  case V4L2_PIX_FMT_BGR24:
+    payload_size = dev->width * dev->height * 3;
+    break;
   case V4L2_PIX_FMT_MJPEG:
   case V4L2_PIX_FMT_H264:
   case V4L2_PIX_FMT_HEVC:
@@ -1389,9 +1395,6 @@ static int uvc_handle_streamon_event(struct uvc_device *dev) {
   dev->first_buffer_queued = 1;
   dev->is_streaming = 1;
 
-  set_uvc_control_start(dev->video_id, dev->width, dev->height, dev->fps,
-                        dev->fcc, dev->eptz_flag);
-
   uvc_control_streamon(dev);
 
   return 0;
@@ -1447,9 +1450,12 @@ static void uvc_fill_streaming_control(struct uvc_device *dev,
   case V4L2_PIX_FMT_NV12:
     dev->imgsize = ctrl->dwMaxVideoFrameSize = frame->width * frame->height * 1.5;
     break;
+  case V4L2_PIX_FMT_BGR24:
+    dev->imgsize = ctrl->dwMaxVideoFrameSize = frame->width * frame->height * 3;
+    break;
   case V4L2_PIX_FMT_MJPEG:
     dev->imgsize = ctrl->dwMaxVideoFrameSize = frame->width * frame->height;
-  break;
+    break;
   case V4L2_PIX_FMT_H264:
   case V4L2_PIX_FMT_HEVC:
 #ifdef RK_UVC_ENABLE_FASTBOOT
@@ -1470,13 +1476,17 @@ static void uvc_fill_streaming_control(struct uvc_device *dev,
    */
   if (!dev->bulk) {
     ctrl->dwMaxPayloadTransferSize =
-        dev->fc->streaming.ep
-            .wMaxPacketSize; /*get_uvc_streaming_maxpacket();/*(dev->maxpkt) *
-(dev->mult + 1) * (dev->burst + 1);*/
+        dev->fc->streaming.ep.wMaxPacketSize * dev->fc->streaming.ep.bMaxBurst;
     LOG_INFO("+++++++++dwMaxPayloadTransferSize:%d\n",
              ctrl->dwMaxPayloadTransferSize);
   } else {
-    ctrl->dwMaxPayloadTransferSize = ctrl->dwMaxVideoFrameSize;
+    if (dev->speed >= USB_SPEED_SUPER)
+      ctrl->dwMaxPayloadTransferSize = ctrl->dwMaxVideoFrameSize;
+    else
+      ctrl->dwMaxPayloadTransferSize =
+          dev->fc->streaming.ep.streaming_bulk_hs_maxpayload;
+    LOG_INFO("+++++ dwMaxPayloadTransferSize (Bulk): %d speed %d\n",
+             ctrl->dwMaxPayloadTransferSize, dev->speed);
   }
 
   ctrl->bmFramingInfo = 3;
@@ -3556,6 +3566,9 @@ static int uvc_events_process_data(struct uvc_device *dev,
     case V4L2_PIX_FMT_NV12:
       fmt.fmt.pix.sizeimage = (fmt.fmt.pix.width * fmt.fmt.pix.height * 1.5);
       break;
+    case V4L2_PIX_FMT_BGR24:
+      fmt.fmt.pix.sizeimage = (fmt.fmt.pix.width * fmt.fmt.pix.height * 3);
+      break;
     case V4L2_PIX_FMT_MJPEG:
       fmt.fmt.pix.sizeimage = (fmt.fmt.pix.width * fmt.fmt.pix.height);
     break;
@@ -3598,6 +3611,7 @@ static void uvc_events_process(struct uvc_device *dev) {
   struct v4l2_event v4l2_event;
   struct uvc_event *uvc_event = (void *)&v4l2_event.u.data;
   struct uvc_request_data resp;
+  enum usb_device_speed speed;
   int ret = 0;
 
   ret = ioctl(dev->uvc_fd, VIDIOC_DQEVENT, &v4l2_event);
@@ -3621,6 +3635,23 @@ static void uvc_events_process(struct uvc_device *dev) {
 
   case UVC_EVENT_SETUP:
     LOG_DEBUG("uvc_events_process:UVC_EVENT_SETUP \n");
+    speed = get_usb_speed_from_sysfs(dev->fc->udc);
+    if (speed != USB_SPEED_UNKNOWN && speed != dev->speed) {
+      dev->speed = speed;
+      if (dev->bulk) {
+        if (dev->speed >= USB_SPEED_SUPER) {
+          dev->probe.dwMaxPayloadTransferSize =
+              dev->probe.dwMaxVideoFrameSize;
+          dev->commit.dwMaxPayloadTransferSize =
+              dev->commit.dwMaxVideoFrameSize;
+        } else {
+          dev->probe.dwMaxPayloadTransferSize =
+              dev->fc->streaming.ep.streaming_bulk_hs_maxpayload;
+          dev->commit.dwMaxPayloadTransferSize =
+              dev->fc->streaming.ep.streaming_bulk_hs_maxpayload;
+        }
+      }
+    }
     if (dev->suspend) {
       dev->suspend = 0;
       set_uvc_control_suspend(0);
@@ -3638,8 +3669,8 @@ static void uvc_events_process(struct uvc_device *dev) {
 
   case UVC_EVENT_STREAMON:
     LOG_INFO("uvc_events_process:UVC_EVENT_STREAMON dev->io=%d dev->bulk:%d, "
-             "video_id:%d\n",
-             dev->io, dev->bulk, dev->video_id);
+             "video_id:%d speed:%d\n",
+             dev->io, dev->bulk, dev->video_id, dev->speed);
 #ifdef ENABLE_BUFFER_TIME_DEBUG
     struct timeval buffer_time;
     gettimeofday(&buffer_time, NULL);
@@ -3670,7 +3701,6 @@ static void uvc_events_process(struct uvc_device *dev) {
   case UVC_EVENT_STREAMOFF:
     LOG_INFO("uvc_events_process:UVC_EVENT_STREAMOFF enter\n");
     uvc_control_streamoff(dev->video_id);
-    set_uvc_control_stop(dev->video_id);
     /* ... and now UVC streaming.. */
     if (dev->is_streaming) {
       uvc_video_stream(dev, 0);
@@ -3705,33 +3735,9 @@ static void uvc_events_process(struct uvc_device *dev) {
 
 static void uvc_events_init(struct uvc_device *dev) {
   struct v4l2_event_subscription sub;
-  unsigned int payload_size;
-
-  switch (dev->fcc) {
-  case V4L2_PIX_FMT_YUYV:
-  case V4L2_PIX_FMT_UYVY:
-    payload_size = dev->width * dev->height * 2;
-    break;
-  case V4L2_PIX_FMT_NV12:
-    payload_size = dev->width * dev->height * 1.5;
-    break;
-  case V4L2_PIX_FMT_MJPEG:
-  case V4L2_PIX_FMT_H264:
-  case V4L2_PIX_FMT_HEVC:
-    payload_size = dev->imgsize;
-    break;
-  default:
-    return;
-  }
 
   uvc_fill_streaming_control(dev, &dev->probe, 1, 1, 0);
   uvc_fill_streaming_control(dev, &dev->commit, 1, 1, 0);
-
-  if (dev->bulk) {
-    /* FIXME Crude hack, must be negotiated with the driver. */
-    dev->probe.dwMaxPayloadTransferSize = dev->commit.dwMaxPayloadTransferSize =
-        payload_size;
-  }
 
   memset(&sub, 0, sizeof sub);
   sub.type = UVC_EVENT_SETUP;
@@ -3788,7 +3794,7 @@ int uvc_gadget_main(struct uvc_function_config *fc) {
   char *mjpeg_image = NULL;
   fd_set fdsv, fdsu;
   int ret, nfds;
-  int bulk_mode = 0;
+  int bulk_mode = fc->streaming.ep.bBulk ;
   int dummy_data_gen_mode = 1;
   /* Frame format/resolution related params. */
   int default_format = 1;
@@ -3796,7 +3802,7 @@ int uvc_gadget_main(struct uvc_function_config *fc) {
   /* USB speed related params */
   int mult = 0;
   int burst = 0;
-  enum usb_device_speed speed = USB_SPEED_HIGH; /* High-Speed  1109 is usb 2.0*/
+  enum usb_device_speed speed = get_usb_speed_from_sysfs(fc->udc);
 #ifdef UVC_IO_METHOD_MMAP
   enum io_method uvc_io_method = IO_METHOD_MMAP;
 #elif UVC_IO_METHOD_USERPTR
@@ -3934,8 +3940,6 @@ int uvc_gadget_main(struct uvc_function_config *fc) {
   }
   uvc_control_streamoff(id);
   uvc_control_delete(id);
-
-  set_uvc_control_stop(id);
 
   uvc_close(udev);
   set_uvc_control_restart();

@@ -18,6 +18,7 @@
 #include "tools/common.config"
 #include "tools/test.config"
 #include "gui/weston.config"
+#include "ota/update_engine.config"
 BR2_PACKAGE_NPU_POWERCTRL_COMBINE=y
 BR2_PACKAGE_RKNPU_FW=y
 BR2_PACKAGE_RKNPU_PCIE=y

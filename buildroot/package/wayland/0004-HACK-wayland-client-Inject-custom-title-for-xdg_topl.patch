@@ -1,0 +1,91 @@
+From 50b6082a0d4205d24787d9dbd2ba1cf138cd8ad0 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Thu, 11 Dec 2025 17:49:45 +0800
+Subject: [PATCH 4/4] HACK: wayland-client: Inject custom title for
+ xdg_toplevel on configure event
+
+Add support for setting custom window titles for xdg_toplevel surfaces.
+
+The title is read from WAYLAND_INJECT_TITLE env.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ src/wayland-client.c | 48 ++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 48 insertions(+)
+
+diff --git a/src/wayland-client.c b/src/wayland-client.c
+index 414da89..78c7eca 100644
+--- a/src/wayland-client.c
++++ b/src/wayland-client.c
+@@ -53,6 +53,7 @@ enum wl_proxy_flag {
+ 	WL_PROXY_FLAG_ID_DELETED = (1 << 0),
+ 	WL_PROXY_FLAG_DESTROYED = (1 << 1),
+ 	WL_PROXY_FLAG_WRAPPER = (1 << 2),
++	WL_PROXY_FLAG_CUSTOM = (1 << 3),
+ };
+ 
+ struct wl_zombie {
+@@ -116,6 +117,48 @@ struct wl_display {
+ 
+ static int debug_client = 0;
+ 
++/**
++ * Check if proxy is an xdg_toplevel interface
++ */
++static inline bool
++wl_proxy_is_xdg_toplevel(struct wl_proxy *proxy)
++{
++	if (!proxy || !proxy->object.interface)
++		return false;
++	return !strcmp(proxy->object.interface->name, "xdg_toplevel");
++}
++
++/**
++ * Inject custom title to xdg_toplevel surface
++ */
++static void
++xdg_toplevel_inject_title(struct wl_proxy *proxy)
++{
++	union wl_argument args[1];
++
++	if (!wl_proxy_is_xdg_toplevel(proxy))
++		return;
++
++#define WL_PROXY_FLAG_TITLE_INJECTED WL_PROXY_FLAG_CUSTOM
++	if (proxy->flags & WL_PROXY_FLAG_TITLE_INJECTED)
++		return;
++
++	proxy->flags |= WL_PROXY_FLAG_TITLE_INJECTED;
++
++	args[0].s = getenv("WAYLAND_INJECT_TITLE");
++	if (!args[0].s)
++		return;
++
++	/* Based on xdg-shell-client-protocol.h */
++#define XDG_TOPLEVEL_SET_TITLE 2
++	wl_proxy_marshal_array(proxy, XDG_TOPLEVEL_SET_TITLE, args);
++
++	if (debug_client)
++		wl_log("[HACK]: %s#%d.inject_title(\"%s\")\n",
++		       proxy->object.interface->name, proxy->object.id,
++		       args[0].s);
++}
++
+ /**
+  * This helper function wakes up all threads that are
+  * waiting for display->reader_cond (i. e. when reading is done,
+@@ -1728,6 +1771,11 @@ dispatch_event(struct wl_display *display, struct wl_event_queue *queue)
+ 	} else if (proxy->object.implementation) {
+ 		wl_closure_invoke(closure, WL_CLOSURE_INVOKE_CLIENT,
+ 				  &proxy->object, opcode, proxy->user_data);
++
++		/* HACK: Inject custom title after xdg_toplevel configure event */
++		if (wl_proxy_is_xdg_toplevel(proxy) &&
++		    !strcmp(closure->message->name, "configure"))
++			xdg_toplevel_inject_title(proxy);
+ 	}
+ 
+ 	pthread_mutex_lock(&display->mutex);
+-- 
+2.39.5
+

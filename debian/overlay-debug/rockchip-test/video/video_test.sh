@@ -17,34 +17,40 @@ echo "video test:                                              1"
 echo "video test with FPS display:                             2"
 echo "video max FPS test without display:                      3"
 echo "multivideo test:                                         4"
-echo "video stresstest:                                        5"
+echo "video benchmark test:                                    5"
+echo "video stresstest:                                        6"
 echo "***********************************************************"
 
 read -t 30 VIDEO_CHOICE
 
 video_test()
 {
-	sh ${DIR_VIDEO}/test_gst_video.sh
+	bash ${DIR_VIDEO}/test_gst_video.sh
 }
 
 video_test_fps()
 {
-	sh ${DIR_VIDEO}/test_gst_video_fps.sh
+	bash ${DIR_VIDEO}/test_gst_video_fps.sh
 }
 
 video_test_maxfps()
 {
-	sh ${DIR_VIDEO}/test_gst_video_maxfps.sh
+	bash ${DIR_VIDEO}/test_gst_video_maxfps.sh
 }
 
 multivideo_test()
 {
-	sh ${DIR_VIDEO}/test_gst_multivideo.sh
+	bash ${DIR_VIDEO}/test_gst_multivideo.sh
+}
+
+video_benchmark_test()
+{
+	bash ${DIR_VIDEO}/test_gst_video_benchmark.sh
 }
 
 video_stresstest()
 {
-	sh ${DIR_VIDEO}/video_stresstest.sh
+	bash ${DIR_VIDEO}/video_stresstest.sh
 }
 
 case ${VIDEO_CHOICE} in
@@ -61,6 +67,9 @@ case ${VIDEO_CHOICE} in
 		multivideo_test
 		;;
 	5)
+		video_benchmark_test
+		;;
+	6)
 		video_stresstest
 		;;
 	*)

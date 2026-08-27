@@ -1,4 +1,4 @@
-From b3c30a78f593b19a5f3ccc06ba78376de9410795 Mon Sep 17 00:00:00 2001
+From 7980f598db5b0e522b1cec43c667c14f748fed01 Mon Sep 17 00:00:00 2001
 From: Jiajian Wu <jair.wu@rock-chips.com>
 Date: Mon, 5 Feb 2024 16:49:12 +0800
 Subject: [PATCH] src: core: linux: SDL_evdev: Double check multitouch device
@@ -9,10 +9,10 @@ Signed-off-by: Jiajian Wu <jair.wu@rock-chips.com>
  1 file changed, 21 insertions(+)
 
 diff --git a/src/core/linux/SDL_evdev.c b/src/core/linux/SDL_evdev.c
-index 208b3c1..d52c8c2 100644
+index de1b758..d3791a0 100644
 --- a/src/core/linux/SDL_evdev.c
 +++ b/src/core/linux/SDL_evdev.c
-@@ -553,6 +553,27 @@ SDL_EVDEV_init_touchscreen(SDL_evdevlist_item* item)
+@@ -678,6 +678,27 @@ static int SDL_EVDEV_init_touchscreen(SDL_evdevlist_item *item, int udev_class)
      item->touchscreen_data->max_y = abs_info.maximum;
      item->touchscreen_data->range_y = abs_info.maximum - abs_info.minimum;
  
@@ -41,5 +41,5 @@ index 208b3c1..d52c8c2 100644
      if (ret < 0) {
          SDL_free(item->touchscreen_data->name);
 -- 
-2.25.1
+2.39.5
 

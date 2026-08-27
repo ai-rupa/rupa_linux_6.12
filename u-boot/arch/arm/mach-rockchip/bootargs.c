@@ -180,8 +180,8 @@ static void bootargs_add_fwver(bool verbose)
 	strcat(list2, "-");
 #endif
 	/* optional */
-	if (strcmp(PLAIN_VERSION, "2017.09")) {
-		strncat(list2, p + strlen("2017.09-g"), 10);
+	if (strcmp(PLAIN_VERSION, "v5")) {
+		strncat(list2, p + strlen("v5-g"), 10);
 		strcat(list2, "-");
 	}
 	strcat(list2, U_BOOT_DMI_DATE);
@@ -338,8 +338,9 @@ const char *board_fdt_chosen_bootargs(void *fdt)
 
 	bootargs_add_dtb_dtbo(fdt, verbose);
 	bootargs_add_partition(verbose);
-	bootargs_add_android(verbose);
 	bootargs_add_fwver(verbose);
+	/* WARNING: Must be the last one to handle all "androidboot.xxx" property */
+	bootargs_add_android(verbose);
 
 	/*
 	 * Initrd fixup: remove unused "initrd=0x...,0x...",

@@ -1,4 +1,4 @@
-From de693908ef4454046c25573b83cd3f377d37d33f Mon Sep 17 00:00:00 2001
+From 60bdc85f33489031eedf7319cad5e9de3f557798 Mon Sep 17 00:00:00 2001
 From: Jeffy Chen <jeffy.chen@rock-chips.com>
 Date: Mon, 29 Nov 2021 14:49:25 +0800
 Subject: [PATCH 2/4] HACK: gstpad: Add 1 sec timeout for activation
@@ -15,7 +15,7 @@ Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
  1 file changed, 22 insertions(+)
 
 diff --git a/gst/gstpad.c b/gst/gstpad.c
-index dafc3d8..a508e84 100644
+index 13fba11..df4a7f9 100644
 --- a/gst/gstpad.c
 +++ b/gst/gstpad.c
 @@ -981,6 +981,18 @@ gst_pad_mode_get_name (GstPadMode mode)

@@ -1,0 +1,66 @@
+From b5fc04a35403d6194206fa651fd509d2bdec1d3b Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Tue, 7 Apr 2026 17:07:32 +0800
+Subject: [PATCH 38/98] compositor: Delay heads-changed signal when output is
+ destroying
+
+Delay emitting heads-changed signal until the destroying output
+completes its destruction.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ libweston/compositor.c | 29 +++++++++++++++++++++++++++++
+ 1 file changed, 29 insertions(+)
+
+diff --git a/libweston/compositor.c b/libweston/compositor.c
+index 582a7bee..cf046516 100644
+--- a/libweston/compositor.c
++++ b/libweston/compositor.c
+@@ -6553,15 +6553,44 @@ weston_output_emit_heads_changed(struct weston_output *output)
+ 		       output);
+ }
+ 
++static int
++weston_compositor_heads_changed_timer_handler(void *data)
++{
++	struct weston_compositor *compositor = data;
++	weston_compositor_flush_heads_changed(compositor);
++	return 0;
++}
++
+ /** Idle task for emitting heads_changed_signal */
+ static void
+ weston_compositor_call_heads_changed(void *data)
+ {
+ 	struct weston_compositor *compositor = data;
++	struct weston_output *output;
+ 	struct weston_head *head;
+ 
+ 	compositor->heads_changed_source = NULL;
+ 
++	/* Check if any output is being destroyed, delay signal if so */
++	wl_list_for_each(output, &compositor->output_list, link) {
++		struct wl_event_loop *loop;
++		int delay_nsec;
++
++		if (!output->destroying)
++			continue;
++
++		weston_log("Delaying heads changed signal...\n");
++
++		delay_nsec = millihz_to_nsec(output->current_mode->refresh);
++		loop = wl_display_get_event_loop(compositor->wl_display);
++		compositor->heads_changed_source = wl_event_loop_add_timer(loop,
++				weston_compositor_heads_changed_timer_handler,
++				compositor);
++		wl_event_source_timer_update(compositor->heads_changed_source,
++					     delay_nsec / 1000000);
++		return;
++	}
++
+ 	wl_signal_emit(&compositor->heads_changed_signal, compositor);
+ 
+ 	wl_list_for_each(head, &compositor->head_list, compositor_link) {
+-- 
+2.39.5
+

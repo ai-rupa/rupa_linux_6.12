@@ -1,6 +1,10 @@
+[简体中文](README_CN.md) | [English](README.md)
+
 # RKLLM3 HTTP Server
 
 rkllm3-server是基于RKNPU3实现的一套基本的LLM Server。
+
+本项目基于 [llama.cpp](https://github.com/ggml-org/llama.cpp)。
 
 **功能:**
  * 基于RKNPU3的LLM推理
@@ -15,15 +19,18 @@ rkllm3-server是基于RKNPU3实现的一套基本的LLM Server。
 | `-a, --alias STRING` | 设置模型别名（供REST API使用） |
 | `-c, --ctx-size N` | 提示词上下文大小（默认：4096，0 = 从模型加载） |
 | `-n, --predict, --n-predict N` | 要预测的token数量（默认：-1，-1 = 上下文大小） |
-| `-m, --model FNAME` | RKNN LLM 模型路径 |
-| `--weight FNAME` | RKNN LLM 权重路径（可不设置） |
+| `-m, --model FNAME` | LLM模型路径 |
+| `--weight FNAME` | LLM权重路径（可不设置） |
 | `--model2 FNAME` | 多模态模型时的vision模型路径|
 | `--weight2 FNAME` | 多模态模型时的vision权重路径（可不设置） |
 | `--model3 FNAME` | 多模态模型时的audio模型路径|
 | `--weight3 FNAME` | 多模态模型时的audio权重路径（可不设置） |
 | `--vocab FNAME` | 词汇表路径 |
 | `--embed FNAME` | embed的bin文件路径 |
+| `--embed-ple FNAME` | gemma4模型的per_layer_inputs embed的bin文件路径 |
+| `--rope-tensor FNAME` | gemma4模型的rope cache的safetensors文件路径 |
 | `--mel-filter FNAME` | mel filters路径（用于audio模型） |
+| `--lora-weight FNAME` | LLM lora权重路径 |
 | `--img-start STRING` | 多模态模型的图像输入前缀 |
 | `--img-end STRING` | 多模态模型的图像输入后缀 |
 | `--img-content STRING` | 多模态模型的图像输入的占位符 |
@@ -34,6 +41,10 @@ rkllm3-server是基于RKNPU3实现的一套基本的LLM Server。
 | `--img-height N` | 多模态模型的输入图像的高（部分裁减过的模型需要设置, 如qwen3_vl）|
 | `--chat-template-file JINJA_TEMPLATE_FILE` | 设置自定义Jinja聊天模板（默认：使用模型元数据中的模板）|
 | `--embedding` | 是否是词嵌入模型 |
+| `--reasoning-format FORMAT` | 控制是否允许在响应中包含思考标签，以及如何返回该标签，格式可为：<br/>- none：思考内容保留在`message.content`中<br/>- deepseek：将思考内容放入`message.reasoning_content`<br/>（默认：none） |
+| `--reasoning [on\|off\|auto]` | 在对话中使用reasoning/thinking ('on', 'off', 或 'auto', 默认: 'auto' (从模板中获取)) |
+| `--record-path STRING` | 设置保存用户请求的存放目录（默认为空, 不保存） |
+| `--n-session` | session个数, 用于多session的场景 (默认为1) |
 
 **采样参数**
 
@@ -65,6 +76,8 @@ rkllm3-server是基于RKNPU3实现的一套基本的LLM Server。
 # LLM模型
 ./rkllm3-server -m qwen2.5-3b.rknn --vocab qwen2.5-3b.tokenizer.gguf --embed qwen2.5-3b.embed.bin --host 0.0.0.0 --port 8080 -c 768 --n_predict 512  --repeat-penalty 1.1 --presence-penalty 1.0 --frequency-penalty 1.0 --top-k 1 --top-p 0.8 --temp 0.8
 
+./rkllm3-server -m gemma-4.rknn --vocab gemma-4.tokenizer.gguf --embed gemma-4.embed.bin --embed-ple gemma-4_per_layer_inputs.embed.bin --rope-tensor gemma-4.safetensors --host 0.0.0.0 --port 8080 -c -1 --n_predict 2048  --repeat-penalty 1.0 --presence-penalty 0 --frequency-penalty 0 --top-k 1 --top-p 0.8 --temp 0.8
+
 # 多模态模型 (LLM+VISION)
 ./rkllm3-server -m MiniCPM-3o-llm.rknn --model2 MiniCPM-3o-vision.rknn --vocab MiniCPM-3o-llm.tokenizer.gguf --embed MiniCPM-3o-llm.embed.bin --host 0.0.0.0 --port 8080 -c 768 --n_predict 512  --repeat-penalty 1.1 --presence-penalty 1.0 --frequency-penalty 1.0 --top-k 1 --top-p 0.8 --temp 0.8 --img-start "<image>" --img-end "</image>" --img-content "<unk>"
 
@@ -72,6 +85,10 @@ rkllm3-server是基于RKNPU3实现的一套基本的LLM Server。
 
 ./rkllm3-server -m Qwen3-VL-2B-llm.rknn --model2 Qwen3-VL-2B-vision.rknn --vocab Qwen3-VL-2B-llm.tokenizer.gguf --embed Qwen3-VL-2B-llm.embed.bin --host 0.0.0.0 --port 8080 -c 768 --n_predict 512  --repeat-penalty 1.1 --presence-penalty 1.0 --frequency-penalty 1.0 --top-k 1 --top-p 0.8 --temp 0.8 --img-start "<|vision_start|>" --img-end "<|vision_end|>" --img-content "<|image_pad|>" --img-width 384 --img-height 384
 
+./rkllm3-server -m Qwen3.5-4B.rknn --model2 Qwen3.5-4B-vision.rknn --vocab Qwen3.5-4B.tokenizer.gguf --embed Qwen3.5-4B.embed.bin --host 0.0.0.0 --port 8080 -c 0 --n_predict 2048 --repeat-penalty 1.0 --presence-penalty 1.5 --frequency-penalty 0 --top-k 1 --top-p 0.9 --temp 1.0 --img-start "<|vision_start|>" --img-end "<|vision_end|>" --img-content "<|image_pad|>" --img-width 384 --img-height 384
+
+# 多模态模型 (LLM+AUDIO)
+./rkllm3-server -m gemma-4.rknn --model3 gemma-4-audio.rknn --vocab gemma-4.tokenizer.gguf --embed gemma-4.embed.bin --embed-ple gemma-4_per_layer_inputs.embed.bin --rope-tensor gemma-4.safetensors --host 0.0.0.0 --port 8080 -c -1 --n_predict 2048  --repeat-penalty 1.0 --presence-penalty 0 --frequency-penalty 0 --top-k 1 --top-p 0.8 --temp 0.8 --audio-start "<|audio>" --audio-end "<audio|>" --audio-content "<|audio|>"
 
 # 多模态模型 (LLM+VISION+AUDIO)
 ./rkllm3-server -m Qwen2.5-Omni-3B-llm.rknn --model2 Qwen2.5-Omni-3B-vision.rknn --model3 Qwen2.5-Omni-3B-audio.rknn --vocab Qwen2.5-Omni-3B-llm.tokenizer.gguf --embed Qwen2.5-Omni-3B-llm.embed.bin --mel-filter mel_128_filters.txt --host 0.0.0.0 --port 8080 -c 768 --n_predict 512  --repeat-penalty 1.1 --presence-penalty 1.0 --frequency-penalty 1.0 --top-k 1 --top-p 0.8 --temp 0.8 --img-start "<|vision_bos|>" --img-end "<|vision_eos|>" --img-content "<|IMAGE|>" --audio-start "<|audio_bos|>" --audio-end "<|audio_eos|>" --audio-content "<|AUDIO|>"
@@ -101,6 +118,7 @@ rkllm3-server是基于RKNPU3实现的一套基本的LLM Server。
       "vocab": "Qwen2.5-0.5B-Instruct.tokenizer.gguf",
       "embed": "Qwen2.5-0.5B-Instruct.embed.bin",
       "mel-filter": "",
+      "lora-weight": "",
       "ctx-size": 1024,
       "predict": 512,
       "temp": 0.8,
@@ -118,7 +136,11 @@ rkllm3-server是基于RKNPU3实现的一套基本的LLM Server。
       "img-width": 0,
       "img-height": 0,
       "chat-template-file": "",
-      "embedding": false
+      "embedding": false,
+      "record-path": "",
+      "reasoning-format": "none",
+      "reasoning": "auto",
+      "n-session": 1,
     },
     "Qwen3-0.6B": {
       "alias": "Qwen3-0.6B",
@@ -131,6 +153,7 @@ rkllm3-server是基于RKNPU3实现的一套基本的LLM Server。
       "vocab": "Qwen3-0.6B.tokenizer.gguf",
       "embed": "Qwen3-0.6B.embed.bin",
       "mel-filter": "",
+      "lora-weight": "",
       "ctx-size": 1024,
       "predict": 512,
       "temp": 0.8,
@@ -148,7 +171,11 @@ rkllm3-server是基于RKNPU3实现的一套基本的LLM Server。
       "img-width": 0,
       "img-height": 0,
       "chat-template-file": "",
-      "embedding": false
+      "embedding": false,
+      "record-path": "",
+      "reasoning-format": "none",
+      "reasoning": "auto",
+      "n-session": 1,
     }
   }
 }
@@ -177,6 +204,7 @@ const char *json = R"({
       "vocab": "Qwen2.5-0.5B-Instruct.tokenizer.gguf",
       "embed": "Qwen2.5-0.5B-Instruct.embed.bin",
       "mel-filter": "",
+      "lora-weight": "",
       "ctx-size": 1024,
       "predict": 512,
       "temp": 0.8,
@@ -194,7 +222,11 @@ const char *json = R"({
       "img-width": 0,
       "img-height": 0,
       "chat-template-file": "",
-      "embedding": false
+      "embedding": false,
+      "record-path": "",
+      "reasoning-format": "none",
+      "reasoning": "auto",
+      "n-session": 1,
     }
   }
 })";
@@ -241,7 +273,7 @@ int main() {
     return 0;
 }
 ```
-const char *json字符串内的"model", "weight", "model2", "weight2", "model3", "weight3", "vocab", "embed", "mel-filter"即可以是文件路径, 也可以是文件的fd句柄 (解决Android系统下文件权限的问题), 如下:
+const char *json字符串内的"model", "weight", "model2", "weight2", "model3", "weight3", "vocab", "embed", "mel-filter", "lora-weight"即可以是文件路径, 也可以是文件的fd句柄 (解决Android系统下文件权限的问题), 如下:
 ```c
 const char *json = R"({
   "host": "127.0.0.1",
@@ -259,6 +291,7 @@ const char *json = R"({
       "vocab": "5",
       "embed": "6",
       "mel-filter": "",
+      "lora-weight": "",
        ...
     }
   }
@@ -288,6 +321,52 @@ curl --request POST \
 - HTTP 状态码 200
   - Body: `{"status": "ok" }`
   - 说明: 该模型已成功加载，并且服务器已准备就绪
+
+### GET `/lora-adapters`：获取所有LoRA适配器列表
+
+此端点返回已加载的LoRA适配器列表。您可以在启动服务器时通过 `--lora-weight` 参数添加适配器，例如：`--lora-weight Qwen2.5-3B-Instruct.lora_weight`
+
+默认情况下，所有适配器的缩放比例（scale）将设置为0。
+
+请注意，此适配器中的scale会被每个用户请求中的 `lora` 字段值覆盖。
+
+如果某个适配器已被禁用，其scale将被设置为0。
+
+**请求格式**
+```json
+{
+    "model": "Qwen2.5-3B-Instruct"
+}
+```
+
+**响应格式**
+
+```json
+[
+  {"name": "lora0_pattern0", "scale": 0.0},
+  {"name": "lora1_pattern0", "scale": 0.0}
+]
+```
+
+### POST `/lora-adapters`：设置LoRA适配器列表
+
+此端点用于设置LoRA适配器的scale。请注意，该scale会被每个请求中的 `lora` 字段值覆盖。
+
+若要禁用某个适配器，可以将其从下方列表中移除，或者将其scale设置为0。
+
+**请求格式**
+
+要获取适配器的 `name`，请使用 GET `/lora-adapters`
+
+```json
+{
+    "model": "Qwen2.5-3B-Instruct",
+    "lora": [
+        {"name": "lora0_pattern0", "scale": 0.2},
+        {"name": "lora1_pattern0", "scale": 0.8}
+    ]
+}
+```
 
 ## OpenAI兼容的API端点
 
@@ -332,7 +411,6 @@ curl --request POST \
 
 详见 [OpenAI Chat Completions API documentation](https://platform.openai.com/docs/api-reference/chat)。 
 
-`response_format` 参数支持普通的JSON输出（例如: `{"type": "json_object"}`）和带格式约束的JSON（例如: `{"type": "json_object", "schema": {"type": "string", "minLength": 10, "maxLength": 100}}` 或 `{"type": "json_schema", "schema": {"properties": { "name": { "title": "Name",  "type": "string" }, "date": { "title": "Date",  "type": "string" }, "participants": { "items": {"type: "string" }, "title": "Participants",  "type": "string" } } } }`）
 
 *示例:*
 
@@ -426,6 +504,19 @@ completion = client.chat.completions.create(
     extra_body={
         "n_predict": 256,
         "chat_template_kwargs": { "enable_thinking": False }     # Thinking类模型(如Qwen3)可以通过此方式关闭thinking输出
+        "id_slot": 0,           # 当--n-session参数大于1时, 可以通过此参数来切换不同的session
+
+        # save_kvcache_path 和 load_kvcache_path 不能同时使用
+        "save_kvcache_path": "/data/kvcache/1.kv",       # 保存kvcache到文件中
+        "load_kvcache_path": "/data/kvcache/1.kv",       # 加载kvcache文件
+
+        # 采样参数
+        "top_k": 40,
+        "top_p": 0.9,
+        "temperature": 0.8,
+        "repeat_penalty": 1.1,
+        "frequency_penalty": 1.0,
+        "presence_penalty": 1.0,
     }
 )
 
@@ -440,6 +531,33 @@ for chunk in completion:
 print('')
 
 ```
+注: 上述代码里的chunk.choices[0].finish_reason为结束原因，"stop"为正常结束，"length"为达到max_tokens上限被截断，"tool_calls"为触发了工具调用。
+
+`extra_body`支持的选项（非OpenAI兼容）：
+
+- `n_predict`：当前请求要预测的token数量
+
+- `chat_template_kwargs`：当前请求的对话模板参数，如`{ "enable_thinking": False }`用于控制thinking输出
+
+- `id_slot`：指定当前slot的id (当--n-session参数大于1时, 可以通过此参数来切换不同的session, 该值需小于--n-session, 默认为0)
+
+- `save_kvcache_path`：保存kvcache到文件中 (与load_kvcache_path不能同时使用)
+
+- `load_kvcache_path`：加载kvcache文件 (与save_kvcache_path不能同时使用)
+
+- `top_k`：top-k采样
+
+- `top_p`：top-p采样
+
+- `temperature`：温度采样
+
+- `repeat_penalty`：惩罚重复token序列
+
+- `frequency_penalty`：重复alpha频率惩罚
+
+- `presence_penalty`：重复alpha存在惩罚
+
+- `lora`：用于设定LoRA适配器列表。列表中的每个对象必须包含`name`和`scale`字段。例如：`[{"name": "lora0_pattern0", "scale": 0.5}, {"name": "lora1_pattern0", "scale": 0.6}]`。如果某个LoRA适配器未在列表中指定，其scale将默认为`0.0`。
 
 ### POST `/v1/embeddings`: OpenAI兼容的词嵌入API
 

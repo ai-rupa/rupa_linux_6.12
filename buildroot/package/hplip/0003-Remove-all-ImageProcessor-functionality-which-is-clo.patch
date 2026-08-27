@@ -1,7 +1,7 @@
-From 056fb547491008b52d74c29e40136e85cde08847 Mon Sep 17 00:00:00 2001
+From 85c157f1cc2a77ccd79d2bc6c77a6db7d3e3ff0d Mon Sep 17 00:00:00 2001
 From: Didier Raboud <odyx@debian.org>
 Date: Tue, 21 Aug 2018 18:18:10 +0200
-Subject: [PATCH 3/5] Remove all ImageProcessor functionality, which is
+Subject: [PATCH 3/6] Remove all ImageProcessor functionality, which is
  closed-source
 
 ---
@@ -140,5 +140,5 @@ index e973831..eff57b2 100644
      unlink(hpPreProcessedRasterFile);
      return ret_status;
 -- 
-2.20.1
+2.39.5
 

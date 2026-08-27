@@ -882,21 +882,48 @@ void rockchip_connector_update_vfp_for_vrr(struct drm_crtc *crtc, struct drm_dis
 }
 EXPORT_SYMBOL(rockchip_connector_update_vfp_for_vrr);
 
-void rockchip_drm_register_sub_dev(struct rockchip_drm_sub_dev *sub_dev)
+/* Used for HDMI_GAMING_VRR mode, notify the HDMI controller to enable gaming-VRR */
+void rockchip_connector_vrr_enable(struct drm_crtc *crtc, struct drm_crtc_state *new_crtc_state)
+{
+	struct rockchip_drm_sub_dev *sub_dev;
+
+	mutex_lock(&rockchip_drm_sub_dev_lock);
+	list_for_each_entry(sub_dev, &rockchip_drm_sub_dev_list, list) {
+		if (sub_dev->connector && sub_dev->connector->state->crtc == crtc) {
+			if (sub_dev->vrr_enable)
+				sub_dev->vrr_enable(sub_dev, new_crtc_state);
+		}
+	}
+	mutex_unlock(&rockchip_drm_sub_dev_lock);
+}
+EXPORT_SYMBOL(rockchip_connector_vrr_enable);
+
+static void rockchip_drm_register_sub_dev(struct rockchip_drm_sub_dev *sub_dev)
 {
 	mutex_lock(&rockchip_drm_sub_dev_lock);
 	list_add_tail(&sub_dev->list, &rockchip_drm_sub_dev_list);
 	mutex_unlock(&rockchip_drm_sub_dev_lock);
 }
-EXPORT_SYMBOL(rockchip_drm_register_sub_dev);
 
-void rockchip_drm_unregister_sub_dev(struct rockchip_drm_sub_dev *sub_dev)
+static void rockchip_drm_unregister_sub_dev(struct rockchip_drm_sub_dev *sub_dev)
 {
 	mutex_lock(&rockchip_drm_sub_dev_lock);
 	list_del(&sub_dev->list);
 	mutex_unlock(&rockchip_drm_sub_dev_lock);
 }
-EXPORT_SYMBOL(rockchip_drm_unregister_sub_dev);
+
+static void devm_rockchip_drm_sub_dev_release(void *data)
+{
+	rockchip_drm_unregister_sub_dev(data);
+}
+
+int devm_rockchip_drm_register_sub_dev(struct device *dev,
+					struct rockchip_drm_sub_dev *sub_dev)
+{
+	rockchip_drm_register_sub_dev(sub_dev);
+	return devm_add_action_or_reset(dev, devm_rockchip_drm_sub_dev_release, sub_dev);
+}
+EXPORT_SYMBOL(devm_rockchip_drm_register_sub_dev);
 
 struct rockchip_drm_sub_dev *rockchip_drm_get_sub_dev(struct device_node *node)
 {
@@ -2270,25 +2297,33 @@ static int rockchip_gem_pool_init(struct drm_device *drm)
 	struct resource res;
 	int ret;
 
+	/*
+	 * secure-memory-region is optional
+	 */
 	node = of_parse_phandle(np, "secure-memory-region", 0);
 	if (!node)
-		return -ENXIO;
+		return 0;
 
 	ret = of_address_to_resource(node, 0, &res);
+	of_node_put(node);
 	if (ret)
 		return ret;
 	start = res.start;
 	size = resource_size(&res);
 	if (!size)
-		return -ENOMEM;
+		return -EINVAL;
 
 	private->secure_buffer_pool = gen_pool_create(PAGE_SHIFT, -1);
 	if (!private->secure_buffer_pool)
 		return -ENOMEM;
 
-	gen_pool_add(private->secure_buffer_pool, start, size, -1);
+	ret = gen_pool_add(private->secure_buffer_pool, start, size, -1);
+	if (ret) {
+		gen_pool_destroy(private->secure_buffer_pool);
+		private->secure_buffer_pool = NULL;
+	}
 
-	return 0;
+	return ret;
 }
 
 static void rockchip_gem_pool_destroy(struct drm_device *drm)
@@ -2299,6 +2334,7 @@ static void rockchip_gem_pool_destroy(struct drm_device *drm)
 		return;
 
 	gen_pool_destroy(private->secure_buffer_pool);
+	private->secure_buffer_pool = NULL;
 }
 
 static void rockchip_drm_sysfs_dev_release(struct device *dev)
@@ -2789,7 +2825,7 @@ static int rockchip_drm_bind(struct device *dev)
 	/* Try to bind all sub drivers. */
 	ret = component_bind_all(dev, drm_dev);
 	if (ret)
-		goto err_mode_config_cleanup;
+		goto err_free;
 
 	rockchip_attach_connector_property(drm_dev);
 	ret = drm_vblank_init(drm_dev, drm_dev->mode_config.num_crtc);
@@ -2812,16 +2848,22 @@ static int rockchip_drm_bind(struct device *dev)
 
 	ret = rockchip_drm_init_iommu(drm_dev);
 	if (ret)
-		goto err_unbind_all;
+		goto err_kms_helper_poll_fini;
 
-	rockchip_gem_pool_init(drm_dev);
+	ret = rockchip_gem_pool_init(drm_dev);
+	if (ret) {
+		DRM_DEV_ERROR(dev, "Failed to init gem pool\n");
+		goto err_drm_init_iommu;
+	}
+
+	/* reserved memory is optional */
 	ret = of_reserved_mem_device_init(drm_dev->dev);
 	if (ret)
 		DRM_DEBUG_KMS("No reserved memory region assign to drm\n");
 
 	ret = drm_dev_register(drm_dev, 0);
 	if (ret)
-		goto err_kms_helper_poll_fini;
+		goto err_reserved_mem_device;
 
 	drm_for_each_encoder(encoder, drm_dev)
 		rockchip_drm_fix_encoder_possible_clones(encoder);
@@ -2844,17 +2886,16 @@ err_drm_fbdev_fini:
 	rockchip_drm_fbdev_fini(drm_dev);
 err_drm_dev_unregister:
 	drm_dev_unregister(drm_dev);
-err_kms_helper_poll_fini:
+err_reserved_mem_device:
+	of_reserved_mem_device_release(dev);
 	rockchip_gem_pool_destroy(drm_dev);
-	drm_kms_helper_poll_fini(drm_dev);
+err_drm_init_iommu:
 	rockchip_iommu_cleanup(drm_dev);
+err_kms_helper_poll_fini:
+	drm_kms_helper_poll_fini(drm_dev);
 err_unbind_all:
 	component_unbind_all(dev, drm_dev);
-err_mode_config_cleanup:
-	drm_mode_config_cleanup(drm_dev);
 err_free:
-	drm_dev->dev_private = NULL;
-	dev_set_drvdata(dev, NULL);
 	drm_dev_put(drm_dev);
 	return ret;
 }
@@ -2873,11 +2914,8 @@ static void rockchip_drm_unbind(struct device *dev)
 
 	drm_atomic_helper_shutdown(drm_dev);
 	component_unbind_all(dev, drm_dev);
-	drm_mode_config_cleanup(drm_dev);
 	rockchip_iommu_cleanup(drm_dev);
 
-	drm_dev->dev_private = NULL;
-	dev_set_drvdata(dev, NULL);
 	drm_dev_put(drm_dev);
 }
 
@@ -3300,6 +3338,8 @@ static int rockchip_drm_platform_probe(struct platform_device *pdev)
 	ret = dma_coerce_mask_and_coherent(dev, DMA_BIT_MASK(64));
 	if (ret)
 		goto err;
+
+	dma_set_max_seg_size(dev, UINT_MAX);
 
 	ret = component_master_add_with_match(dev, &rockchip_drm_ops, match);
 	if (ret < 0)

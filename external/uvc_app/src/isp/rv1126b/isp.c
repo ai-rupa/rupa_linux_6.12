@@ -1745,3 +1745,7 @@ int rk_isp_asd_get_face_win(int cam_id, FaceInfo *face_info) {
   }
   return ret;
 }
+
+bool rk_isp_need_raw_pipe_ctrl(int cam_id) {
+  return rk_aiq_uapi2_judgeNeedRawPipeCtrl(rkipc_aiq_get_ctx(cam_id));
+}

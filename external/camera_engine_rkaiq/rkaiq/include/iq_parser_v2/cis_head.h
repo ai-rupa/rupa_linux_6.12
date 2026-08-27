@@ -189,6 +189,19 @@ typedef struct {
     calibdb_cis_cmps_out_sta_t sta;
 } calibdb_cis_cmps_out_t;
 
+typedef struct {
+    /* M4_GENERIC_DESC(
+    M4_ALIAS(setWbGnInSensor_en),
+    M4_TYPE(bool),
+    M4_DEFAULT(0),
+    M4_HIDE_EX(0),
+    M4_RO(0),
+    M4_ORDER(1),
+    M4_NOTES(The enable setting wb gain to sensor when hdr mode is buildIn.\n
+    Freq of use: low))  */
+    bool setWbGnInSensor_en;
+} calibdb_cis_wb_t;
+
 /**
  * CIS configuration main structure
  *
@@ -208,6 +221,8 @@ typedef struct {
     calibdb_cis_hdr_t cis_hdr;
     calibdb_cis_qbc_rmsc_t cis_qbcRmsc;
     calibdb_cis_cmps_out_t cis_cmpsOut;
+    // M4_STRUCT_DESC("cis_wb", "normal_ui_style")
+    calibdb_cis_wb_t cis_wb;
 } calibdb_cis_para_t;
 
 #endif  // __CALIBDBV2_CIS_HEADER_H__

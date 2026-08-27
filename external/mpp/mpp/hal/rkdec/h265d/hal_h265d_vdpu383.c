@@ -31,15 +31,13 @@
 
 #define PPS_SIZE                        (112 * 64)//(96x64)
 
-#define CABAC_TAB_ALIGEND_SIZE          (MPP_ALIGN(27456, SZ_4K))
 #define SPSPPS_ALIGNED_SIZE             (MPP_ALIGN(176, SZ_4K))
 #define RPS_ALIGEND_SIZE                (MPP_ALIGN(400 * 8, SZ_4K))
 #define SCALIST_ALIGNED_SIZE            (MPP_ALIGN(81 * 1360, SZ_4K))
 #define INFO_BUFFER_SIZE                (SPSPPS_ALIGNED_SIZE + RPS_ALIGEND_SIZE + SCALIST_ALIGNED_SIZE)
-#define ALL_BUFFER_SIZE(cnt)            (CABAC_TAB_ALIGEND_SIZE + INFO_BUFFER_SIZE *cnt)
+#define ALL_BUFFER_SIZE(cnt)            (INFO_BUFFER_SIZE *cnt)
 
-#define CABAC_TAB_OFFSET                (0)
-#define SPSPPS_OFFSET(pos)              (CABAC_TAB_OFFSET + CABAC_TAB_ALIGEND_SIZE + (INFO_BUFFER_SIZE * pos))
+#define SPSPPS_OFFSET(pos)              (INFO_BUFFER_SIZE * pos)
 #define RPS_OFFSET(pos)                 (SPSPPS_OFFSET(pos) + SPSPPS_ALIGNED_SIZE)
 #define SCALIST_OFFSET(pos)             (RPS_OFFSET(pos) + RPS_ALIGEND_SIZE)
 
@@ -87,7 +85,6 @@ static MPP_RET hal_h265d_vdpu383_init(void *hal, MppHalCfg *cfg)
         }
 
         reg_ctx->bufs_fd = mpp_buffer_get_fd(reg_ctx->bufs);
-        reg_ctx->offset_cabac = CABAC_TAB_OFFSET;
         for (i = 0; i < max_cnt; i++) {
             reg_ctx->g_buf[i].hw_regs = mpp_calloc_size(void, sizeof(Vdpu383RegSet));
             reg_ctx->offset_spspps[i] = SPSPPS_OFFSET(i);
@@ -105,12 +102,6 @@ static MPP_RET hal_h265d_vdpu383_init(void *hal, MppHalCfg *cfg)
         reg_ctx->sclst_offset = reg_ctx->offset_sclst[0];
     }
 
-    ret = mpp_buffer_write(reg_ctx->bufs, 0, (void*)cabac_table, sizeof(cabac_table));
-    if (ret) {
-        mpp_err("h265d write cabac_table data failed\n");
-        return ret;
-    }
-
     if (cfg->hal_fbc_adj_cfg) {
         cfg->hal_fbc_adj_cfg->func = vdpu_afbc_align_calc;
         cfg->hal_fbc_adj_cfg->expand = 16;
@@ -118,6 +109,10 @@ static MPP_RET hal_h265d_vdpu383_init(void *hal, MppHalCfg *cfg)
 
     vdpu38x_rcb_calc_init((Vdpu38xRcbCtx **)&reg_ctx->rcb_ctx);
     hal_dbg_init(&reg_ctx->dbg_ctx, "hal_h265d");
+    if (reg_ctx->fast_mode && reg_ctx->dbg_ctx) {
+        mpp_log("fast mode enabled, hal_dbg will be disabled");
+        hal_dbg_deinit(&reg_ctx->dbg_ctx);
+    }
 
     return MPP_OK;
 }
@@ -698,8 +693,6 @@ static MPP_RET hal_h265d_vdpu383_wait(void *hal, HalTaskInfo *task)
         hw_regs = ( Vdpu383RegSet *)reg_ctx->hw_regs;
     }
 
-    hal_dbg_finish(reg_ctx->dbg_ctx);
-
     if (task->dec.flags.parse_err ||
         (task->dec.flags.ref_err && !cfg->cfg->base.disable_error)) {
         h265h_dbg(H265H_DBG_TASK_ERR, "%s found task error\n", __FUNCTION__);
@@ -768,6 +761,8 @@ ERR_PROC:
     if (reg_ctx->fast_mode) {
         reg_ctx->g_buf[index].use_flag = 0;
     }
+
+    hal_dbg_finish(reg_ctx->dbg_ctx);
 
     return ret;
 }

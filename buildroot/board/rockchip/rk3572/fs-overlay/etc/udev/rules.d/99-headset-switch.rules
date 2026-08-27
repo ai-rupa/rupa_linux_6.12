@@ -1,5 +1,4 @@
-# headset plugged and extcon includes HEADPHONE=1
-SUBSYSTEM=="extcon", ATTR{name}=="rk730-es7210-sound", ACTION=="change", ENV{STATE}=="*HEADPHONE=1*", RUN+="/usr/bin/alsaucm -c rk730-es7210 set _verb HiFi set _enadev Headphones"
-
-# headset unplugged and extcon includes HEADPHONE=0
-SUBSYSTEM=="extcon", ATTR{name}=="rk730-es7210-sound", ACTION=="change", ENV{STATE}=="*HEADPHONE=0*", RUN+="/usr/bin/alsaucm -c rk730-es7210 set _verb HiFi set _enadev Speaker"
+# Board-agnostic headset path switch.
+# Fire on any codec extcon HEADPHONE state change; rk-audio-switch derives
+# the actual sound card at runtime and reads the state itself.
+SUBSYSTEM=="extcon", ACTION=="change", ENV{STATE}=="*HEADPHONE=*", RUN+="/usr/bin/rk-audio-switch"

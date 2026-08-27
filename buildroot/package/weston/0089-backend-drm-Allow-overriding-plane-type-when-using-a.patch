@@ -1,0 +1,101 @@
+From b3c72e34949e8054e1fcf4e7abb9f271309207dc Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Mon, 7 Mar 2022 17:20:59 +0800
+Subject: [PATCH 89/98] backend-drm: Allow overriding plane type when using
+ atomic
+
+Allow overriding DRM plane types via environment variables in atomic
+mode. The environment variable DRM_PLANE_TYPE_<plane_id>can be set to
+primary, overlay, or cursor.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ libweston/backend-drm/drm-internal.h |  8 +++++++
+ libweston/backend-drm/drm.c          |  6 ++---
+ libweston/backend-drm/kms.c          | 34 ++++++++++++++++++++++++++++
+ 3 files changed, 44 insertions(+), 4 deletions(-)
+
+diff --git a/libweston/backend-drm/drm-internal.h b/libweston/backend-drm/drm-internal.h
+index a1a30cd0..4f3c1c9b 100644
+--- a/libweston/backend-drm/drm-internal.h
++++ b/libweston/backend-drm/drm-internal.h
+@@ -888,6 +888,14 @@ drm_plane_populate_formats(struct drm_plane *plane, const drmModePlane *kplane,
+ void
+ drm_property_info_free(struct drm_property_info *info, int num_props);
+ 
++/**
++ * Get plane type, possibly overridden by environment variable in atomic mode.
++ * The environment variable DRM_PLANE_TYPE_<plane_id> can be set to
++ * "primary", "overlay", or "cursor".
++ */
++enum wdrm_plane_type
++drm_plane_get_type(struct drm_plane *plane, drmModeObjectProperties *props);
++
+ extern struct drm_property_enum_info plane_type_enums[];
+ extern const struct drm_property_info plane_props[];
+ extern struct drm_property_enum_info dpms_state_enums[];
+diff --git a/libweston/backend-drm/drm.c b/libweston/backend-drm/drm.c
+index d2687152..8e88eff5 100644
+--- a/libweston/backend-drm/drm.c
++++ b/libweston/backend-drm/drm.c
+@@ -1463,10 +1463,8 @@ drm_plane_create(struct drm_device *device, const drmModePlane *kplane)
+ 
+ 	drm_property_info_populate(device, plane_props, plane->props,
+ 				   WDRM_PLANE__COUNT, props);
+-	plane->type =
+-		drm_property_get_value(&plane->props[WDRM_PLANE_TYPE],
+-				       props,
+-				       WDRM_PLANE_TYPE__COUNT);
++
++	plane->type = drm_plane_get_type(plane, props);
+ 
+ 	plane->can_scale =
+ 		drm_property_has_feature(&plane->props[WDRM_PLANE_FEATURE],
+diff --git a/libweston/backend-drm/kms.c b/libweston/backend-drm/kms.c
+index 5317eaae..e773ee30 100644
+--- a/libweston/backend-drm/kms.c
++++ b/libweston/backend-drm/kms.c
+@@ -646,6 +646,40 @@ drm_property_info_free(struct drm_property_info *info, int num_props)
+ 	memset(info, 0, sizeof(*info) * num_props);
+ }
+ 
++/* In atomic mode, allow environment variable to override plane type.
++ * This is useful for debugging or working around incorrect kernel reports.
++ */
++enum wdrm_plane_type
++drm_plane_get_type(struct drm_plane *plane, drmModeObjectProperties *props)
++{
++	struct drm_device *device = plane->device;
++	enum wdrm_plane_type type;
++	const char *env;
++	char buf[256];
++
++	type = drm_property_get_value(&plane->props[WDRM_PLANE_TYPE],
++				      props,
++				      WDRM_PLANE_TYPE__COUNT);
++
++	/* Only allow override in atomic mode to maintain consistency */
++	if (!device->atomic_modeset)
++		return type;
++
++	snprintf(buf, sizeof(buf), "DRM_PLANE_TYPE_%d", plane->plane_id);
++	env = getenv(buf);
++	if (!env)
++		return type;
++
++	if (!strcmp(env, "primary"))
++		return WDRM_PLANE_TYPE_PRIMARY;
++	else if (!strcmp(env, "overlay"))
++		return WDRM_PLANE_TYPE_OVERLAY;
++	else if (!strcmp(env, "cursor"))
++		return WDRM_PLANE_TYPE_CURSOR;
++
++	return type;
++}
++
+ /**
+  * Populates the plane's formats array, using either the IN_FORMATS blob
+  * property (if available), or the plane's format list if not.
+-- 
+2.39.5
+

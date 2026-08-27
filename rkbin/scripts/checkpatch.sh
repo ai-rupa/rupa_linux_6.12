@@ -98,6 +98,14 @@ function check_doc()
 		exit 1
 	fi
 
+	# check added release note section count
+	SECTION_SUM=`sed -n '/^+## /p' ${DIFF_DOC_ALL} | wc -l`
+	if [ "${SECTION_SUM}" -gt 1 ]; then
+		echo "ERROR: ${DOC}: There are more than one file changed section:"
+		sed -n '/^+## /p' ${DIFF_DOC_ALL} | sed 's/^+//'
+		exit 1
+	fi
+
 	# check title
 	if grep -Eq '### WARN|### WARNING|### Warning|### warn|### warning' ${DIFF_DOC_ALL} ; then
 		echo "ERROR: ${DOC}: Please use '### Warn'"
@@ -114,8 +122,39 @@ function check_doc()
 		exit 1
 	fi
 
+	# check added body format in new "### New" section
+	NEW_BODY_NO_INDEX=`awk '
+		BEGIN { in_new=0 }
+		/^\+### New$/ {
+			in_new=1
+			next
+		}
+		in_new && /^\+## / {
+			in_new=0
+		}
+		in_new && /^\+### / {
+			in_new=0
+		}
+		in_new && /^\+------$/ {
+			in_new=0
+		}
+		in_new && /^\+[[:space:]]*$/ {
+			next
+		}
+		in_new && /^\+/ {
+			if ($0 !~ /^\+[0-9]+\.[[:blank:]]/) {
+				print substr($0, 2)
+			}
+		}
+	' ${DIFF_DOC_ALL}`
+	if [ -n "${NEW_BODY_NO_INDEX}" ]; then
+		echo "ERROR: ${DOC}: Please add index prefix like '1. Add ...' for each added line in '### New':"
+		echo "${NEW_BODY_NO_INDEX}"
+		exit 1
+	fi
+
 	# check year/month
-	if [ "${ARG_COMMIT}" != "" ]; then
+	if [ "${ARG_COMMIT}" != "" -a "${ARG_COMMIT}" != "" ]; then
 		if [ "${HOST_YEAR}" != "${YEAR}" ]; then
 			echo "ERROR: ${DOC}: '${DATE}' is wrong, the year should be ${HOST_YEAR}"
 			exit 1
@@ -356,6 +395,83 @@ function pack_loader_image()
 	done
 }
 
+function check_trust_ini_extra_files()
+{
+	local FILE=$1
+	local ITEM
+	local EXTRA_FILE
+
+	for ITEM in `sed -n '/^\(MCU\|MCU[0-9]\+\|LOAD[0-9]\+\|INIT[0-9]\+\)=/p' ${FILE} | tr -d '\r'`
+	do
+		EXTRA_FILE=$(echo ${ITEM} | cut -d= -f2 | cut -d, -f1)
+		# Ignore files:
+		if [ "${EXTRA_FILE}" == "bin/rv11/rtthread.bin" ]; then
+			continue
+		fi
+		# Verify
+		if [ ! -e "${EXTRA_FILE}" ]; then
+			echo "ERROR: ${FILE}: missing file ${EXTRA_FILE}"
+			exit 1
+		fi
+	done
+}
+
+function extract_ini_bin_refs()
+{
+	local FILE=$1
+
+	sed -n 's/^[^=]\+=\(bin\/[^,[:space:]\r]*\).*$/\1/p' ${FILE} \
+		| tr -d '\r' \
+		| sort -u
+}
+
+function check_ini_unused_bin_files()
+{
+	local FILE
+	local OLD_REF
+	local TMP_OLD_INI="scripts/.checkpatch_old_ini.tmp"
+	local TMP_OLD_REFS="scripts/.checkpatch_old_refs.tmp"
+	local TARGET_COMMIT
+	local PARENT_COMMIT
+
+	TARGET_COMMIT=${ARG_COMMIT:-HEAD}
+	PARENT_COMMIT=$(git rev-parse ${TARGET_COMMIT}^ 2>/dev/null) || return
+
+	if ! git log ${TARGET_COMMIT} -1 --name-only --format='' | grep -Eq '\.ini$'; then
+		return
+	fi
+
+	echo "Checking unused file refs ..."
+	for FILE in $(git log ${TARGET_COMMIT} -1 --name-only --format='' | sed -n '/\.ini$/p'); do
+		if ! git diff-tree --no-commit-id --name-status -r ${TARGET_COMMIT} | grep -Eq "^[MD][[:space:]]+${FILE}$"; then
+			continue
+		fi
+
+		if ! git show ${PARENT_COMMIT}:${FILE} > ${TMP_OLD_INI} 2>/dev/null; then
+			continue
+		fi
+
+		extract_ini_bin_refs ${TMP_OLD_INI} > ${TMP_OLD_REFS}
+		while read OLD_REF; do
+			if [ -z "${OLD_REF}" ]; then
+				continue
+			fi
+
+			if grep -R -q -F "${OLD_REF}" --include='*.ini' RKBOOT RKTRUST; then
+				continue
+			fi
+
+			if [ -e "${OLD_REF}" ]; then
+				echo "ERROR: Please delete ${OLD_REF}, which is no longer referenced by any ini"
+				rm -f ${TMP_OLD_INI} ${TMP_OLD_REFS}
+				exit 1
+			fi
+		done < ${TMP_OLD_REFS}
+	done
+
+	rm -f ${TMP_OLD_INI} ${TMP_OLD_REFS}
+}
+
 function pack_trust_image()
 {
 	# Pack 32-bit trust
@@ -370,6 +486,7 @@ function pack_trust_image()
 		fi
 
 		echo "Pack trust: ${FILE}"
+		check_trust_ini_extra_files ${FILE}
 		# Parse orignal path
 		TOS=`sed -n "/TOS=/s/TOS=//p" ${FILE}|tr -d '\r'`
 		TOS_TA=`sed -n "/TOSTA=/s/TOSTA=//p" ${FILE}|tr -d '\r'`
@@ -400,6 +517,7 @@ function pack_trust_image()
 		fi
 
 		echo "Pack trust: ${FILE}"
+		check_trust_ini_extra_files ${FILE}
 		./tools/trust_merger ${FILE}
 		rm -f trust*.img
 		echo
@@ -581,6 +699,7 @@ function finish()
 
 check_commit_message
 check_mode
+check_ini_unused_bin_files
 check_version
 check_docs
 check_dirty

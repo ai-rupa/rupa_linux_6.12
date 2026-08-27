@@ -1182,8 +1182,12 @@ gst_mpp_dec_handle_frame (GstVideoDecoder * decoder, GstVideoCodecFrame * frame)
   else if (G_UNLIKELY (ret != GST_FLOW_OK))
     goto drop;
 
-  /* NOTE: Sub-class takes over the MPP packet when success */
-  mpkt = NULL;
+  /* MPP owns packet lifecycle if buffer is attached */
+  if (!mpp_packet_get_buffer (mpkt)) {
+    mpp_packet_deinit (&mpkt);
+    mpkt = NULL;
+  }
+
   gst_buffer_unmap (frame->input_buffer, &mapinfo);
 
   /* No need to keep input arround */

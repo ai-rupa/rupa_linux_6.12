@@ -1,4 +1,4 @@
-From 5f5c6b445467a5e481abb69ca4f4ca1e6ef4cf82 Mon Sep 17 00:00:00 2001
+From 3381332a54cc8a8e305d032277b4dd21648de3b1 Mon Sep 17 00:00:00 2001
 From: Jeffy Chen <jeffy.chen@rock-chips.com>
 Date: Wed, 12 Jan 2022 11:42:19 +0800
 Subject: [PATCH 4/5] HACK: Bypass auth APIs by default
@@ -20,10 +20,10 @@ Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
  1 file changed, 22 insertions(+), 1 deletion(-)
 
 diff --git a/xf86drm.c b/xf86drm.c
-index 743cb6b..f8c25ff 100644
+index b1654a0..b68d28d 100644
 --- a/xf86drm.c
 +++ b/xf86drm.c
-@@ -1495,6 +1495,9 @@ drm_public char *drmGetBusid(int fd)
+@@ -1501,6 +1501,9 @@ drm_public char *drmGetBusid(int fd)
  {
      drm_unique_t u;
  
@@ -33,7 +33,7 @@ index 743cb6b..f8c25ff 100644
      memclear(u);
  
      if (drmIoctl(fd, DRM_IOCTL_GET_UNIQUE, &u))
-@@ -1526,6 +1529,9 @@ drm_public int drmSetBusid(int fd, const char *busid)
+@@ -1532,6 +1535,9 @@ drm_public int drmSetBusid(int fd, const char *busid)
  {
      drm_unique_t u;
  
@@ -43,7 +43,7 @@ index 743cb6b..f8c25ff 100644
      memclear(u);
      u.unique     = (char *)busid;
      u.unique_len = strlen(busid);
-@@ -1540,6 +1546,9 @@ drm_public int drmGetMagic(int fd, drm_magic_t * magic)
+@@ -1546,6 +1552,9 @@ drm_public int drmGetMagic(int fd, drm_magic_t * magic)
  {
      drm_auth_t auth;
  
@@ -53,7 +53,7 @@ index 743cb6b..f8c25ff 100644
      memclear(auth);
  
      *magic = 0;
-@@ -1553,6 +1562,9 @@ drm_public int drmAuthMagic(int fd, drm_magic_t magic)
+@@ -1559,6 +1568,9 @@ drm_public int drmAuthMagic(int fd, drm_magic_t magic)
  {
      drm_auth_t auth;
  
@@ -63,7 +63,7 @@ index 743cb6b..f8c25ff 100644
      memclear(auth);
      auth.magic = magic;
      if (drmIoctl(fd, DRM_IOCTL_AUTH_MAGIC, &auth))
-@@ -3051,6 +3063,9 @@ drm_public int drmSetInterfaceVersion(int fd, drmSetVersion *version)
+@@ -3057,6 +3069,9 @@ drm_public int drmSetInterfaceVersion(int fd, drmSetVersion *version)
      int retcode = 0;
      drm_set_version_t sv;
  
@@ -73,7 +73,7 @@ index 743cb6b..f8c25ff 100644
      memclear(sv);
      sv.drm_di_major = version->drm_di_major;
      sv.drm_di_minor = version->drm_di_minor;
-@@ -3249,11 +3264,17 @@ drm_public void drmCloseOnce(int fd)
+@@ -3255,11 +3270,17 @@ drm_public void drmCloseOnce(int fd)
  
  drm_public int drmSetMaster(int fd)
  {
@@ -93,5 +93,5 @@ index 743cb6b..f8c25ff 100644
  }
  
 -- 
-2.20.1
+2.39.5
 

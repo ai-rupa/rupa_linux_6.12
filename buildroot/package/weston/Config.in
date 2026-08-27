@@ -157,11 +157,6 @@ config BR2_PACKAGE_WESTON_SHELL_DESKTOP
 	bool "desktop shell"
 	default y
 
-config BR2_PACKAGE_WESTON_SHELL_FULLSCREEN
-	bool "fullscreen shell"
-	default y
-	select BR2_PACKAGE_WESTON_HAS_SHELL
-
 config BR2_PACKAGE_WESTON_SHELL_IVI
 	bool "ivi shell"
 	default y
@@ -171,10 +166,6 @@ config BR2_PACKAGE_WESTON_SHELL_KIOSK
 	bool "kiosk shell"
 	default y
 	select BR2_PACKAGE_WESTON_HAS_SHELL
-
-config BR2_PACKAGE_WESTON_SCREENSHARE
-	bool "screenshare"
-	default y
 
 config BR2_PACKAGE_WESTON_SIMPLE_CLIENTS
 	bool "simple clients"

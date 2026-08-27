@@ -6,8 +6,8 @@
 #ifndef VEPU511A_COMMON_H
 #define VEPU511A_COMMON_H
 
-#include "rk_venc_cmd.h"
-#include "mpp_device.h"
+#include "vepu5xx_common.h"
+#include "vepu51x_common.h"
 
 #define VEPU511A_CTL_OFFSET           (0 * sizeof(RK_U32))       /* 0x00000000 reg0    - 0x00000120 reg72 */
 #define VEPU511A_FRAME_OFFSET         (156 * sizeof(RK_U32))     /* 0x00000270 reg156  - 0x00000538 reg334 */
@@ -23,26 +23,34 @@
 #define VEPU511A_MAX_ROI_NUM          8
 #define VEPU511A_SLICE_FIFO_LEN       8
 
-typedef enum qbias_ofst_e {
-    IFRAME_THD0 = 0,
-    IFRAME_THD1,
-    IFRAME_THD2,
-    IFRAME_BIAS0,
-    IFRAME_BIAS1,
-    IFRAME_BIAS2,
-    IFRAME_BIAS3,
-    PFRAME_THD0,
-    PFRAME_THD1,
-    PFRAME_THD2,
-    PFRAME_IBLK_BIAS0,
-    PFRAME_IBLK_BIAS1,
-    PFRAME_IBLK_BIAS2,
-    PFRAME_IBLK_BIAS3,
-    PFRAME_PBLK_BIAS0,
-    PFRAME_PBLK_BIAS1,
-    PFRAME_PBLK_BIAS2,
-    PFRAME_PBLK_BIAS3
-} QbiasOfst;
+#define vepu511a_get_dbg_regs(dev, regs, ret_acc) do {   \
+    MppDevRegRdCfg _rd_cfg; \
+    VEPU_REG_RD(dev, regs, reg_ctl,   VEPU511A_CTL_OFFSET,     ret_acc); \
+    VEPU_REG_RD(dev, regs, reg_frm,   VEPU511A_FRAME_OFFSET,   ret_acc); \
+    VEPU_REG_RD(dev, regs, reg_rc_roi,VEPU511A_RC_ROI_OFFSET,  ret_acc); \
+    VEPU_REG_RD(dev, regs, reg_param, VEPU511A_PARAM_OFFSET,   ret_acc); \
+    VEPU_REG_RD(dev, regs, reg_sqi,   VEPU511A_SQI_OFFSET,     ret_acc); \
+    VEPU_REG_RD(dev, regs, reg_scl,   VEPU511A_SCL_OFFSET,     ret_acc); \
+} while (0)
+
+#define vepu511a_dump_sw_regs(dbg_ctx, regs) do { \
+    vepu_sw_regs(dbg_ctx, (regs)->reg_ctl, VEPU511A_CTL_OFFSET, "w+"); \
+    vepu_sw_regs(dbg_ctx, (regs)->reg_frm, VEPU511A_FRAME_OFFSET, "a+"); \
+    vepu_sw_regs(dbg_ctx, (regs)->reg_rc_roi, VEPU511A_RC_ROI_OFFSET, "a+"); \
+    vepu_sw_regs(dbg_ctx, (regs)->reg_param, VEPU511A_PARAM_OFFSET, "a+"); \
+    vepu_sw_regs(dbg_ctx, (regs)->reg_sqi, VEPU511A_SQI_OFFSET, "a+"); \
+    vepu_sw_regs(dbg_ctx, (regs)->reg_scl, VEPU511A_SCL_OFFSET, "a+"); \
+} while (0)
+
+#define vepu511a_dump_hw_regs(dbg_ctx, regs, st_reg) do { \
+    vepu_hw_regs(dbg_ctx, (regs)->reg_ctl, VEPU511A_CTL_OFFSET, "w+"); \
+    vepu_hw_regs(dbg_ctx, (regs)->reg_frm, VEPU511A_FRAME_OFFSET, "a+"); \
+    vepu_hw_regs(dbg_ctx, (regs)->reg_rc_roi, VEPU511A_RC_ROI_OFFSET, "a+"); \
+    vepu_hw_regs(dbg_ctx, (regs)->reg_param, VEPU511A_PARAM_OFFSET, "a+"); \
+    vepu_hw_regs(dbg_ctx, (regs)->reg_sqi, VEPU511A_SQI_OFFSET, "a+"); \
+    vepu_hw_regs(dbg_ctx, (regs)->reg_scl, VEPU511A_SCL_OFFSET, "a+"); \
+    vepu_hw_regs(dbg_ctx, st_reg, VEPU511A_STATUS_OFFSET, "a+"); \
+} while (0)
 
 typedef struct Vepu511aOnline_t {
     /* 0x00000270 reg156 */
@@ -1429,6 +1437,88 @@ typedef struct Vepu511aRcRoi_t {
         RK_U32 delta7_thre_mad_fme_ratio_inter    : 4;
     } cudecis_thd12;
 } Vepu511aRcRoi;
+
+/* Shared wgt registers: reg1497 (0x1764) ~ reg1651 (0x19cc) */
+typedef struct Vepu511aWgtCommon_t {
+    /* 0x00001764 reg1497 */
+    struct {
+        RK_U32 cime_mvd_th0    : 9;
+        RK_U32 reserved        : 1;
+        RK_U32 cime_mvd_th1    : 9;
+        RK_U32 reserved1       : 1;
+        RK_U32 cime_mvd_th2    : 9;
+        RK_U32 reserved2       : 3;
+    } cime_mvd_th_comb;
+
+    /* 0x00001768 reg1498 */
+    struct {
+        RK_U32 cime_madp_th       : 12;
+        RK_U32 ratio_consi_cfg    : 4;
+        RK_U32 ratio_bmv_dist     : 4;
+        RK_U32 reserved           : 12;
+    } cime_madp_th_comb;
+
+    /* 0x0000176c reg1499 */
+    struct {
+        RK_U32 cime_multi0    : 8;
+        RK_U32 cime_multi1    : 8;
+        RK_U32 cime_multi2    : 8;
+        RK_U32 cime_multi3    : 8;
+    } cime_multi_comb;
+
+    /* 0x00001770 reg1500 */
+    struct {
+        RK_U32 rime_mvd_th0    : 3;
+        RK_U32 reserved        : 1;
+        RK_U32 rime_mvd_th1    : 3;
+        RK_U32 reserved1       : 9;
+        RK_U32 fme_madp_th     : 12;
+        RK_U32 reserved2       : 4;
+    } rime_mvd_th_comb;
+
+    /* 0x00001774 reg1501 */
+    struct {
+        RK_U32 rime_madp_th0    : 12;
+        RK_U32 reserved         : 4;
+        RK_U32 rime_madp_th1    : 12;
+        RK_U32 reserved1        : 4;
+    } rime_madp_th_comb;
+
+    /* 0x00001778 reg1502 */
+    struct {
+        RK_U32 rime_multi0    : 10;
+        RK_U32 rime_multi1    : 10;
+        RK_U32 rime_multi2    : 10;
+        RK_U32 reserved       : 2;
+    } rime_multi_comb;
+
+    /* 0x0000177c reg1503 */
+    struct {
+        RK_U32 cmv_th0     : 8;
+        RK_U32 cmv_th1     : 8;
+        RK_U32 cmv_th2     : 8;
+        RK_U32 reserved    : 8;
+    } cmv_st_th_comb;
+
+    /* 0x1780 - 0x17fc */
+    RK_U32 reserved1504_1535[32];
+
+    /* 0x00001800 reg1536 - 0x000018cc reg1587 */
+    RK_U32 pprd_lamb_satd_0_51[52];
+
+    /* 0x000018d0 reg1588 */
+    struct {
+        RK_U32 lambda_luma_offset      : 5;
+        RK_U32 lambda_chroma_offset    : 5;
+        RK_U32 reserved                : 22;
+    } prmd_intra_lamb_ofst;
+
+    /* 0x18d4 - 0x18fc */
+    RK_U32 reserved1589_1599[11];
+
+    /* 0x00001900 reg1600 - 0x000019cc reg1651 */
+    RK_U32 rdo_wgta_qp_grpa_0_51[52];
+} Vepu511aWgtCommon;
 
 /* class: sli */
 /* 0x00002E20 reg2951 - 0x00002E40 reg2959 */

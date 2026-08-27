@@ -1,0 +1,27 @@
+From ff9c321cd57e115bd2010818a0f4567245f94f0e Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Wed, 24 Jun 2026 11:29:07 +0800
+Subject: [PATCH 17/17] networking/inetd: Fix compile error with
+ ENABLE_FEATURE_INETD_RPC
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ networking/inetd.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/networking/inetd.c b/networking/inetd.c
+index 6220a08..75b1b2e 100644
+--- a/networking/inetd.c
++++ b/networking/inetd.c
+@@ -1043,7 +1043,7 @@ static void reread_config_file(int sig UNUSED_PARAM)
+ 			portno = bb_strtou(sep->se_service, NULL, 10);
+ #if ENABLE_FEATURE_INETD_RPC
+ 			if (is_rpc_service(sep)) {
+-				sep->se_rpcprog = n;
++				sep->se_rpcprog = portno;
+ 				if (errno) { /* se_service is not numeric */
+ 					struct rpcent *rp = getrpcbyname(sep->se_service);
+ 					if (rp == NULL) {
+-- 
+2.39.5
+

@@ -1,0 +1,47 @@
+From 378ace1f185164a37fbd57f147bac5350f66404c Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Wed, 29 Apr 2026 18:07:47 +0800
+Subject: [PATCH 98/98] compositor: Silence noisy repaint timer and timestamp
+ warnings
+
+Ignore EAGAIN in timer reads and suppress abnormal presentation time warnings
+to reduce log spam.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ libweston/compositor.c | 11 ++---------
+ 1 file changed, 2 insertions(+), 9 deletions(-)
+
+diff --git a/libweston/compositor.c b/libweston/compositor.c
+index c8764993..41fac6f0 100644
+--- a/libweston/compositor.c
++++ b/libweston/compositor.c
+@@ -4385,7 +4385,7 @@ output_repaint_timer_handler(int fd, uint32_t mask, void *data)
+ 
+ 	do {
+ 		size = read(compositor->repaint_timer_fd, &e, sizeof e);
+-	} while (size < 0 && errno == EINTR);
++	} while (size < 0 && (errno == EINTR || errno == EAGAIN));
+ 
+ 	if (size < 0)
+ 		weston_log("repaint timer read failed: %s\n", strerror(errno));
+@@ -4624,15 +4624,8 @@ weston_output_finish_frame(struct weston_output *output,
+ 	timespec_add_nsec(&output->next_present, stamp, refresh_nsec);
+ 	msec_rel = timespec_sub_to_msec(&output->next_present, &now);
+ 
+-	if (msec_rel < -1000 || msec_rel > 1000) {
+-		weston_log_paced(&output->repaint_delay_pacer,
+-				 5, 60 * 60 * 1000,
+-				 "Warning: time until next presentation for output "
+-				 "[%s] is abnormal: %lld msec\n",
+-				 output->name, (long long) msec_rel);
+-
++	if (msec_rel < -1000 || msec_rel > 1000)
+ 		output->next_present = now;
+-	}
+ 
+ 	/* We're just starting the repaint loop, but we're too close to the
+ 	 * next possible presentation time to allow a full repaint-window
+-- 
+2.39.5
+

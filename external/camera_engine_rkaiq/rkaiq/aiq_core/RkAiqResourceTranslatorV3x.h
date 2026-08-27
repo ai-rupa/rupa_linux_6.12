@@ -55,6 +55,8 @@ public:
     RkAiqResourceTranslatorV3x& SetBottomRightIspRect(RkAiqResourceTranslatorV3x::Rectangle& right_isp_rect);
     bool IsMultiIspMode() const;
     RkAiqIspUniteMode GetIspUniteMode();
+    RkAiqResourceTranslatorV3x& SetIspUniteInfo(const RkAiqIspUniteInfo_t& unite_info);
+    const RkAiqIspUniteInfo_t& GetIspUniteInfo() const;
     RkAiqResourceTranslatorV3x::Rectangle GetPicInfo();
     RkAiqResourceTranslatorV3x::Rectangle GetLeftIspRect();
     RkAiqResourceTranslatorV3x::Rectangle GetRightIspRect();
@@ -97,6 +99,7 @@ private:
     Rectangle bottom_left_isp_rect_;
     Rectangle bottom_right_isp_rect_;
     RkAiqIspUniteMode mIspUniteMode;
+    RkAiqIspUniteInfo_t mIspUniteInfo;
 };
 
 }

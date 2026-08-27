@@ -373,6 +373,13 @@ typedef struct Aec_Sensor_dcg_ratio_s {
     uint32_t div_coeff;
 } Aec_Sensor_dcg_ratio_t;
 
+typedef struct Aec_Sensor_exp_offset_s {
+    bool valid;
+    uint32_t integer[3];
+    uint32_t decimal[3];
+    uint32_t div_coeff[3];
+} Aec_Sensor_exp_offset_t;
+
 typedef struct Aec_AeRange_s {
     float                   Min;
     float                   Max;
@@ -510,6 +517,9 @@ typedef struct AecConfig_s {
     Aec_Sensor_nr_switch_t        nr_switch;
     Aec_Sensor_dcg_ratio_t        dcg_ratio;
     Aec_Sensor_dcg_ratio_t        spd_ratio;
+    Aec_Sensor_dcg_ratio_t        lcg_lofic_ratio;
+    Aec_Sensor_dcg_ratio_t        lofic_vs_ratio;
+    Aec_Sensor_exp_offset_t       exp_offset;
 
     /*continue to use some old params to keep the same with AecConfig_t*/
     AecDampingMode_t              DampingMode;              /**< damping mode */

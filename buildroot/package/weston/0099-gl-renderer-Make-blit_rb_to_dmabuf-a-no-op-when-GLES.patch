@@ -1,0 +1,38 @@
+From 074503e47575aca8bb5f1602b58eed7eeed78205 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Mon, 1 Jun 2026 09:12:21 +0800
+Subject: [PATCH 99/99] gl-renderer: Make blit_rb_to_dmabuf a no-op when GLES3
+ is unavailable.
+
+For old Mali GPUs (e.g. Utgard).
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ libweston/renderer-gl/gl-renderer.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/libweston/renderer-gl/gl-renderer.c b/libweston/renderer-gl/gl-renderer.c
+index 24c03005..ac71bdc2 100644
+--- a/libweston/renderer-gl/gl-renderer.c
++++ b/libweston/renderer-gl/gl-renderer.c
+@@ -1503,6 +1503,9 @@ static bool
+ blit_rb_to_dmabuf(struct gl_renderbuffer *rb, EGLImageKHR image,
+ 		  const struct weston_geometry *rect, bool invert_y)
+ {
++#ifndef HAVE_GLES3
++		return false;
++#else
+ 	struct gl_renderer *gr = get_renderer(rb->output->compositor);
+ 	GLuint fbo_dst, rb_dst;
+ 	int32_t src_x0, src_y0, src_x1, src_y1;
+@@ -1541,6 +1544,7 @@ blit_rb_to_dmabuf(struct gl_renderbuffer *rb, EGLImageKHR image,
+ 	gl_fbo_fini(&fbo_dst, &rb_dst);
+ 
+ 	return true;
++#endif
+ }
+ 
+ static void
+-- 
+2.39.5
+

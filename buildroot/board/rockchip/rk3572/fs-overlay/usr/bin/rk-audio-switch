@@ -1,0 +1,96 @@
+#!/bin/sh
+# Board-agnostic RK3572 audio bring-up / headset path switch.
+# Derives the codec sound card from the kernel-registered extcon device
+# (named "<card-name>-sound"). No board/codec name is hardcoded;
+# "rk730" is only a detection prefix for the fallback card scan.
+#
+# Usage:
+#   rk-audio-switch            # switch headphone/speaker path (udev / hotplug)
+#   rk-audio-switch --render   # also (re)render the default ALSA card (boot)
+#
+# Test hooks (overridable for host-side tests):
+EXTCON_ROOT="${EXTCON_ROOT:-/sys/class/extcon}"
+ASOUND_CARDS="${ASOUND_CARDS:-/proc/asound/cards}"
+ASOUND_CONF="${ASOUND_CONF:-/etc/asound.conf}"
+ASOUND_TEMPLATE="${ASOUND_TEMPLATE:-/usr/share/rk-audio/asound.conf.in}"
+ALSAUCM="${ALSAUCM:-/usr/bin/alsaucm}"
+CODEC_PREFIX="${CODEC_PREFIX:-rk730}"
+
+log() { logger -t rk-audio "$*" 2>/dev/null || echo "rk-audio: $*" >&2; }
+
+# Echo "<extcon_dir>|<card_name>" for the headset-capable codec extcon.
+find_extcon() {
+    for d in "$EXTCON_ROOT"/extcon*; do
+        [ -d "$d" ] || continue
+        n=$(cat "$d/name" 2>/dev/null) || continue
+        case "$n" in
+            *-sound)
+                if grep -q "HEADPHONE" "$d/state" 2>/dev/null; then
+                    printf '%s|%s\n' "$d" "${n%-sound}"
+                    return 0
+                fi ;;
+        esac
+    done
+    return 1
+}
+
+# Fallback: first ALSA card id starting with CODEC_PREFIX (asound id form).
+find_card_id_fallback() {
+    awk -F'[][]' -v p="$CODEC_PREFIX" \
+        '/^[ ]*[0-9]+ \[/ { id=$2; gsub(/ /,"",id); if (index(id, p) == 1) { print id; exit } }' \
+        "$ASOUND_CARDS" 2>/dev/null
+}
+
+card_id_from_name() { printf '%s' "$1" | tr -cd 'a-zA-Z0-9'; }
+
+render_asound() {
+    card_id="$1"
+    if [ -z "$card_id" ]; then
+        log "no codec card detected, leaving $ASOUND_CONF untouched"
+        return 0
+    fi
+    if [ ! -r "$ASOUND_TEMPLATE" ]; then
+        log "missing template $ASOUND_TEMPLATE"
+        return 1
+    fi
+    tmp=$(mktemp "$ASOUND_CONF.XXXXXX") || { log "mktemp failed for $ASOUND_CONF"; return 1; }
+    if sed "s/@CARD@/$card_id/g" "$ASOUND_TEMPLATE" > "$tmp"; then
+        mv -f "$tmp" "$ASOUND_CONF"
+        log "rendered $ASOUND_CONF card=$card_id"
+    else
+        rm -f "$tmp"
+        log "failed to render $ASOUND_CONF card=$card_id"
+        return 1
+    fi
+}
+
+do_switch() {
+    extcon_dir="$1"; card_name="$2"
+    if grep -q "HEADPHONE=1" "$extcon_dir/state" 2>/dev/null; then
+        dev=Headphones
+    else
+        dev=Speaker
+    fi
+    if "$ALSAUCM" -c "$card_name" set _verb HiFi set _enadev "$dev"; then
+        log "card=$card_name path=$dev"
+    else
+        log "alsaucm failed card=$card_name path=$dev"
+    fi
+}
+
+main() {
+    render=0
+    [ "$1" = "--render" ] && render=1
+
+    if info=$(find_extcon); then
+        extcon_dir=${info%|*}
+        card_name=${info#*|}
+        [ "$render" -eq 1 ] && render_asound "$(card_id_from_name "$card_name")"
+        do_switch "$extcon_dir" "$card_name"
+    else
+        log "no headset extcon found"
+        [ "$render" -eq 1 ] && render_asound "$(find_card_id_fallback)"
+    fi
+}
+
+main "$@"

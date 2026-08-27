@@ -199,7 +199,7 @@ static const capture_fmt_t csirx_fmts[] = {
 static const capture_fmt_t* findFmt(const uint32_t pixelformat) {
     const capture_fmt_t* fmt;
 
-    for (uint32_t i = 0; i < sizeof(csirx_fmts); i++) {
+    for (uint32_t i = 0; i < sizeof(csirx_fmts) / sizeof(csirx_fmts[0]); i++) {
         fmt = &csirx_fmts[i];
         if (fmt->fourcc == pixelformat) return fmt;
     }
@@ -1116,7 +1116,7 @@ XCamReturn DumpRkRaw2_dumpIspReg(aiq_DumpRkRaw_t* pDpRkRaw, uint32_t base_addr,
         return XCAM_RETURN_ERROR_FILE;
     }
 
-    uint8_t* mmap_base = (uint8_t*)mmap64(NULL, length, PROT_READ, MAP_SHARED, fd, base_addr);
+    uint8_t* mmap_base = (uint8_t*)mmap(NULL, length, PROT_READ, MAP_SHARED, fd, base_addr);
     if (mmap_base == (void*)(-1)) {
         LOGE_CAMHW_SUBM(CAPTURERAW_SUBM, "mmap() failed: %s\n", strerror(errno));
         return XCAM_RETURN_ERROR_MEM;

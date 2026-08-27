@@ -1,32 +1,30 @@
 #!/bin/bash
+# video/test_gst_video_maxfps.sh - Video max FPS test without display
 
-URI=/oem/SampleVideo_1280x720_5mb.mp4
+DIR_VIDEO="$(cd "$(dirname "$0")" && pwd)"
+source "${DIR_VIDEO}/../common/common.sh"
 
+URI="${1:-/oem/SampleVideo_1280x720_5mb.mp4}"
 export mpp_syslog_perror=1
 
-if [ "$1" != "" ]; then
-    URI=$1
-    if [ "${URI:0:1}" != "/" ]; then
-        URI=$(readlink -f $URI)
-    fi
-fi
+resolve_uri "$URI"
+URI="$RESOLVED_URI"
 
-if [ "${URI:0:1}" == "/" ]; then
-    URI=file://$URI
-fi
+TEST_ID=$(test_begin "video" "maxfps" "Video max FPS test (fakesink)")
+log_info "video" "Testing max FPS: $URI"
 
-# Hardware detection logic
-if ls /dev/mali* >/dev/null 2>&1; then
-    VIDEO_SINK_NAME="waylandsink"
-    VIDEO_SINK_ARGS="fullscreen=true"
-else
-    VIDEO_SINK_NAME="kmssink"
-    VIDEO_SINK_ARGS=""
-fi
-
-GST_DEBUG=fps*:7 gst-launch-1.0 uridecodebin uri=$URI ! fpsdisplaysink \
-    video-sink="$VIDEO_SINK_NAME" \
-    $VIDEO_SINK_ARGS \
+set +e
+GST_DEBUG=fps*:7 gst-launch-1.0 uridecodebin uri="$URI" ! fpsdisplaysink \
+    video-sink="fakesink" \
     text-overlay=false \
     signal-fps-measurements=true \
     sync=false
+EXIT_CODE=$?
+set -e
+
+if [[ $EXIT_CODE -eq 0 ]]; then
+    test_end "$TEST_ID" "PASS"
+else
+    test_end "$TEST_ID" "FAIL" "gst-launch-1.0 exited with code $EXIT_CODE"
+    exit 1
+fi

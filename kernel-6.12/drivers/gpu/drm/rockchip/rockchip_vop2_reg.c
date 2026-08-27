@@ -43,7 +43,7 @@ static const uint32_t formats_for_cluster[] = {
 	DRM_FORMAT_BGR565,
 	DRM_FORMAT_YUV420_8BIT, /* yuv420_8bit non-Linear mode only */
 	DRM_FORMAT_YUV420_10BIT, /* yuv420_10bit non-Linear mode only */
-	DRM_FORMAT_YUYV, /* yuv422_8bit non-Linear mode only*/
+	DRM_FORMAT_YUYV, /* yuv422_8bit non-Linear mode only */
 	DRM_FORMAT_Y210, /* yuv422_10bit non-Linear mode only */
 };
 
@@ -71,7 +71,7 @@ static const uint32_t formats_for_rk3528_cluster[] = {
 	DRM_FORMAT_NV30, /* yuv444_10bit linear mode, 2 plane, no padding */
 	DRM_FORMAT_YUV420_8BIT, /* yuv420_8bit non-Linear mode only */
 	DRM_FORMAT_YUV420_10BIT, /* yuv420_10bit non-Linear mode only */
-	DRM_FORMAT_YUYV, /* yuv422_8bit non-Linear mode only*/
+	DRM_FORMAT_YUYV, /* yuv422_8bit non-Linear mode only */
 	DRM_FORMAT_Y210, /* yuv422_10bit non-Linear mode only */
 };
 
@@ -99,7 +99,7 @@ static const uint32_t formats_for_rk3576_cluster[] = {
 	DRM_FORMAT_NV30, /* yuv444_10bit linear mode, 2 plane, no padding */
 	DRM_FORMAT_YUV420_8BIT, /* yuv420_8bit non-Linear mode only */
 	DRM_FORMAT_YUV420_10BIT, /* yuv420_10bit non-Linear mode only */
-	DRM_FORMAT_YUYV, /* yuv422_8bit non-Linear mode only*/
+	DRM_FORMAT_YUYV, /* yuv422_8bit non-Linear mode only */
 	DRM_FORMAT_Y210, /* yuv422_10bit non-Linear mode only */
 	DRM_FORMAT_VUY888,	/* yuv444 non-Linear mode only */
 	DRM_FORMAT_VUY101010,	/* yuv444_10bit non-Linear mode only */
@@ -1087,7 +1087,7 @@ static const struct dsc_error_info dsc_ecw[] = {
 	{0x0070ffff, "picture height error"},
 	{0x0080ffff, "picture width error"},
 	{0x0090ffff, "number of slices error"},
-	{0x00c0ffff, "slice height Error "},
+	{0x00c0ffff, "slice height error"},
 	{0x00d0ffff, "slice width error"},
 	{0x00e0ffff, "second line BPG offset error"},
 	{0x00f0ffff, "non second line BPG offset error"},
@@ -1261,7 +1261,7 @@ static const struct vop2_video_port_regs rk3528_vop_vp0_regs = {
 	.dclk_div2 = VOP_REG(RK3568_VP0_DUAL_CHANNEL_CTRL, 0x1, 4),
 	.dclk_div2_phase_lock = VOP_REG(RK3568_VP0_DUAL_CHANNEL_CTRL, 0x1, 5),
 	.p2i_en = VOP_REG(RK3568_VP0_DSP_CTRL, 0x1, 5),
-	.dsp_filed_pol = VOP_REG(RK3568_VP0_DSP_CTRL, 0x1, 6),
+	.dsp_field_pol = VOP_REG(RK3568_VP0_DSP_CTRL, 0x1, 6),
 	.dsp_interlace = VOP_REG(RK3568_VP0_DSP_CTRL, 0x1, 7),
 	.dsp_data_swap = VOP_REG(RK3568_VP0_DSP_CTRL, 0x1f, 8),
 	.dsp_x_mir_en = VOP_REG(RK3568_VP0_DSP_CTRL, 0x1, 13),
@@ -1339,7 +1339,7 @@ static const struct vop2_video_port_regs rk3528_vop_vp1_regs = {
 	.out_mode = VOP_REG(RK3568_VP1_DSP_CTRL, 0xf, 0),
 	.core_dclk_div = VOP_REG(RK3568_VP1_DSP_CTRL, 0x1, 4),
 	.p2i_en = VOP_REG(RK3568_VP1_DSP_CTRL, 0x1, 5),
-	.dsp_filed_pol = VOP_REG(RK3568_VP1_DSP_CTRL, 0x1, 6),
+	.dsp_field_pol = VOP_REG(RK3568_VP1_DSP_CTRL, 0x1, 6),
 	.dsp_interlace = VOP_REG(RK3568_VP1_DSP_CTRL, 0x1, 7),
 	.dsp_data_swap = VOP_REG(RK3568_VP1_DSP_CTRL, 0x1f, 8),
 	.dsp_x_mir_en = VOP_REG(RK3568_VP1_DSP_CTRL, 0x1, 13),
@@ -1503,6 +1503,7 @@ static const struct vop2_video_port_data rk3528_vop_video_ports[] = {
 	 .layer_mix_dly = 6,
 	 .hdr_mix_dly = 2,
 	 .win_dly = 8,
+	 .reg_done_bit = 4,
 	 .intr = &rk3568_vp0_intr,
 	 .regs = &rk3528_vop_vp0_regs,
 	 .ovl_regs = &rk3528_vop_vp0_ovl_regs,
@@ -1518,6 +1519,7 @@ static const struct vop2_video_port_data rk3528_vop_video_ports[] = {
 	 .layer_mix_dly = 2,
 	 .hdr_mix_dly = 0,
 	 .win_dly = 8,
+	 .reg_done_bit = 5,
 	 .intr = &rk3568_vp1_intr,
 	 .regs = &rk3528_vop_vp1_regs,
 	 .ovl_regs = &rk3528_vop_vp1_ovl_regs,
@@ -1534,7 +1536,7 @@ static const struct vop2_video_port_regs rk3538_vop_vp0_regs = {
 	.core_dclk_div = VOP_REG(RK3568_VP0_CLK_CTRL, 0x1, 0),
 	.dclk_div2 = VOP_REG(RK3568_VP0_CLK_CTRL, 0x1, 2),
 	.p2i_en = VOP_REG(RK3568_VP0_DSP_CTRL, 0x1, 5),
-	.dsp_filed_pol = VOP_REG(RK3568_VP0_DSP_CTRL, 0x1, 6),
+	.dsp_field_pol = VOP_REG(RK3568_VP0_DSP_CTRL, 0x1, 6),
 	.dsp_interlace = VOP_REG(RK3568_VP0_DSP_CTRL, 0x1, 7),
 	.dsp_data_swap = VOP_REG(RK3568_VP0_DSP_CTRL, 0x1f, 8),
 	.dsp_x_mir_en = VOP_REG(RK3568_VP0_DSP_CTRL, 0x1, 13),
@@ -1647,7 +1649,7 @@ static const struct vop2_video_port_regs rk3538_vop_vp0_regs = {
 
 /*
  * RK3538 VP0 has 8 lines post linebuffer, If the number of post line buffers in a
- * full state is less 4, the urgency signal will be set to 1, If the number of post
+ * full state is less than 4, the urgency signal will be set to 1, If the number of post
  * line buffers in a full state is over 6, the urgency signal will be set to 0.
  */
 static const struct vop_urgency rk3538_vp0_urgency = {
@@ -1677,6 +1679,7 @@ static const struct vop2_video_port_data rk3538_vop_video_ports[] = {
 	 .cgc_dly = 18,
 	 .pixel_rate = 1,
 	 .hdr_cgc_layer_num = 2,
+	 .reg_done_bit = 4,
 	 .intr = &rk3572_vp0_intr,
 	 .urgency = &rk3538_vp0_urgency,
 	 .regs = &rk3538_vop_vp0_regs,
@@ -1692,7 +1695,7 @@ static const struct vop2_video_port_regs rk3562_vop_vp0_regs = {
 	.out_mode = VOP_REG(RK3568_VP0_DSP_CTRL, 0xf, 0),
 	.core_dclk_div = VOP_REG(RK3568_VP0_DSP_CTRL, 0x1, 4),
 	.p2i_en = VOP_REG(RK3568_VP0_DSP_CTRL, 0x1, 5),
-	.dsp_filed_pol = VOP_REG(RK3568_VP0_DSP_CTRL, 0x1, 6),
+	.dsp_field_pol = VOP_REG(RK3568_VP0_DSP_CTRL, 0x1, 6),
 	.dsp_interlace = VOP_REG(RK3568_VP0_DSP_CTRL, 0x1, 7),
 	.dsp_data_swap = VOP_REG(RK3568_VP0_DSP_CTRL, 0x1f, 8),
 	.dsp_x_mir_en = VOP_REG(RK3568_VP0_DSP_CTRL, 0x1, 13),
@@ -1769,6 +1772,7 @@ static const struct vop2_video_port_data rk3562_vop_video_ports[] = {
 	 .max_output = { 2048, 4096 },
 	 .win_dly = 6,
 	 .layer_mix_dly = 8,
+	 .reg_done_bit = 4,
 	 .intr = &rk3568_vp0_intr,
 	 .regs = &rk3562_vop_vp0_regs,
 	 .ovl_regs = &rk3528_vop_vp0_ovl_regs,
@@ -1787,7 +1791,7 @@ static const struct vop2_video_port_regs rk3568_vop_vp0_regs = {
 	.dclk_div2 = VOP_REG(RK3568_VP0_DUAL_CHANNEL_CTRL, 0x1, 4),
 	.dclk_div2_phase_lock = VOP_REG(RK3568_VP0_DUAL_CHANNEL_CTRL, 0x1, 5),
 	.p2i_en = VOP_REG(RK3568_VP0_DSP_CTRL, 0x1, 5),
-	.dsp_filed_pol = VOP_REG(RK3568_VP0_DSP_CTRL, 0x1, 6),
+	.dsp_field_pol = VOP_REG(RK3568_VP0_DSP_CTRL, 0x1, 6),
 	.dsp_interlace = VOP_REG(RK3568_VP0_DSP_CTRL, 0x1, 7),
 	.dsp_data_swap = VOP_REG(RK3568_VP0_DSP_CTRL, 0x1f, 8),
 	.dsp_x_mir_en = VOP_REG(RK3568_VP0_DSP_CTRL, 0x1, 13),
@@ -1876,7 +1880,7 @@ static const struct vop2_video_port_regs rk3568_vop_vp1_regs = {
 	.dclk_div2 = VOP_REG(RK3568_VP1_DUAL_CHANNEL_CTRL, 0x1, 4),
 	.dclk_div2_phase_lock = VOP_REG(RK3568_VP1_DUAL_CHANNEL_CTRL, 0x1, 5),
 	.p2i_en = VOP_REG(RK3568_VP1_DSP_CTRL, 0x1, 5),
-	.dsp_filed_pol = VOP_REG(RK3568_VP1_DSP_CTRL, 0x1, 6),
+	.dsp_field_pol = VOP_REG(RK3568_VP1_DSP_CTRL, 0x1, 6),
 	.dsp_interlace = VOP_REG(RK3568_VP1_DSP_CTRL, 0x1, 7),
 	.dsp_data_swap = VOP_REG(RK3568_VP1_DSP_CTRL, 0x1f, 8),
 	.dsp_x_mir_en = VOP_REG(RK3568_VP1_DSP_CTRL, 0x1, 13),
@@ -1932,7 +1936,7 @@ static const struct vop2_video_port_regs rk3568_vop_vp2_regs = {
 	.dclk_div2 = VOP_REG(RK3568_VP2_DUAL_CHANNEL_CTRL, 0x1, 4),
 	.dclk_div2_phase_lock = VOP_REG(RK3568_VP2_DUAL_CHANNEL_CTRL, 0x1, 5),
 	.p2i_en = VOP_REG(RK3568_VP2_DSP_CTRL, 0x1, 5),
-	.dsp_filed_pol = VOP_REG(RK3568_VP2_DSP_CTRL, 0x1, 6),
+	.dsp_field_pol = VOP_REG(RK3568_VP2_DSP_CTRL, 0x1, 6),
 	.dsp_interlace = VOP_REG(RK3568_VP2_DSP_CTRL, 0x1, 7),
 	.dsp_data_swap = VOP_REG(RK3568_VP2_DSP_CTRL, 0x1f, 8),
 	.dsp_x_mir_en = VOP_REG(RK3568_VP2_DSP_CTRL, 0x1, 13),
@@ -1987,6 +1991,7 @@ static const struct vop2_video_port_data rk3568_vop_video_ports[] = {
 	 .dclk_max = 600000000,
 	 .max_output = { 4096, 4096 },
 	 .pre_scan_max_dly = { 69, 53, 53, 42 },
+	 .reg_done_bit = 4,
 	 .intr = &rk3568_vp0_intr,
 	 .hdr_table = &rk3568_vop_hdr_table,
 	 .regs = &rk3568_vop_vp0_regs,
@@ -1999,6 +2004,7 @@ static const struct vop2_video_port_data rk3568_vop_video_ports[] = {
 	 .dclk_max = 200000000,
 	 .max_output = { 2048, 2048 },
 	 .pre_scan_max_dly = { 40, 40, 40, 40 },
+	 .reg_done_bit = 5,
 	 .intr = &rk3568_vp1_intr,
 	 .regs = &rk3568_vop_vp1_regs,
 	},
@@ -2010,6 +2016,7 @@ static const struct vop2_video_port_data rk3568_vop_video_ports[] = {
 	 .dclk_max = 150000000,
 	 .max_output = { 1920, 1920 },
 	 .pre_scan_max_dly = { 40, 40, 40, 40 },
+	 .reg_done_bit = 6,
 	 .intr = &rk3568_vp2_intr,
 	 .regs = &rk3568_vop_vp2_regs,
 	},
@@ -2025,7 +2032,7 @@ static const struct vop2_video_port_regs rk3572_vop_vp0_regs = {
 	.core_dclk_div = VOP_REG(RK3568_VP0_CLK_CTRL, 0x1, 0),
 	.dclk_div2 = VOP_REG(RK3568_VP0_CLK_CTRL, 0x1, 2),
 	.p2i_en = VOP_REG(RK3568_VP0_DSP_CTRL, 0x1, 5),
-	.dsp_filed_pol = VOP_REG(RK3568_VP0_DSP_CTRL, 0x1, 6),
+	.dsp_field_pol = VOP_REG(RK3568_VP0_DSP_CTRL, 0x1, 6),
 	.dsp_interlace = VOP_REG(RK3568_VP0_DSP_CTRL, 0x1, 7),
 	.dsp_data_swap = VOP_REG(RK3568_VP0_DSP_CTRL, 0x1f, 8),
 	.dsp_x_mir_en = VOP_REG(RK3568_VP0_DSP_CTRL, 0x1, 13),
@@ -2167,7 +2174,7 @@ static const struct vop2_video_port_regs rk3572_vop_vp1_regs = {
 	.core_dclk_div = VOP_REG(RK3568_VP1_CLK_CTRL, 0x1, 0),
 	.dclk_div2 = VOP_REG(RK3568_VP1_CLK_CTRL, 0x1, 2),
 	.p2i_en = VOP_REG(RK3568_VP1_DSP_CTRL, 0x1, 5),
-	.dsp_filed_pol = VOP_REG(RK3568_VP1_DSP_CTRL, 0x1, 6),
+	.dsp_field_pol = VOP_REG(RK3568_VP1_DSP_CTRL, 0x1, 6),
 	.dsp_interlace = VOP_REG(RK3568_VP1_DSP_CTRL, 0x1, 7),
 	.dsp_data_swap = VOP_REG(RK3568_VP1_DSP_CTRL, 0x1f, 8),
 	.dsp_x_mir_en = VOP_REG(RK3568_VP1_DSP_CTRL, 0x1, 13),
@@ -2258,7 +2265,7 @@ static const struct vop2_video_port_regs rk3572_vop_vp1_regs = {
 };
 
 /*
- * RK3572 VP0 has 6 lines post linebuffer, when full post line buffer is less 2,
+ * RK3572 VP0 has 6 lines post linebuffer, when full post line buffer is less than 2,
  * the urgency signal will be set to 1, when full post line buffer is over 4, the
  * urgency signal will be set to 0.
  */
@@ -2290,6 +2297,7 @@ static const struct vop2_video_port_data rk3572_vop_video_ports[] = {
 	 .win_dly = 10,
 	 .cursor_dly = 13, /* win_dly[10] - cursor_win_dly[5] + 4 * mix_dly[2] */
 	 .pixel_rate = 1,
+	 .reg_done_bit = 4,
 	 .intr = &rk3572_vp0_intr,
 	 .urgency = &rk3572_vp0_urgency,
 	 .regs = &rk3572_vop_vp0_regs,
@@ -2315,6 +2323,7 @@ static const struct vop2_video_port_data rk3572_vop_video_ports[] = {
 	 .bcsh_r2y_csc_coe_offset = RK3572_VP1_BCSH_R2Y_COE00,
 	 .bcsh_y2r_csc_coe_offset = RK3572_VP1_BCSH_Y2R_COE00,
 	 .csc_coe_bits = 10,
+	 .reg_done_bit = 5,
 	 .intr = &rk3572_vp1_intr,
 	 .regs = &rk3572_vop_vp1_regs,
 	 .ovl_regs = &rk3572_vop_vp1_ovl_regs,
@@ -2329,7 +2338,7 @@ static const struct vop2_video_port_regs rk3576_vop_vp0_regs = {
 	.core_dclk_div = VOP_REG(RK3568_VP0_CLK_CTRL, 0x1, 0),
 	.dclk_div2 = VOP_REG(RK3568_VP0_CLK_CTRL, 0x1, 2),
 	.p2i_en = VOP_REG(RK3568_VP0_DSP_CTRL, 0x1, 5),
-	.dsp_filed_pol = VOP_REG(RK3568_VP0_DSP_CTRL, 0x1, 6),
+	.dsp_field_pol = VOP_REG(RK3568_VP0_DSP_CTRL, 0x1, 6),
 	.dsp_interlace = VOP_REG(RK3568_VP0_DSP_CTRL, 0x1, 7),
 	.dsp_data_swap = VOP_REG(RK3568_VP0_DSP_CTRL, 0x1f, 8),
 	.dsp_x_mir_en = VOP_REG(RK3568_VP0_DSP_CTRL, 0x1, 13),
@@ -2451,7 +2460,7 @@ static const struct vop2_video_port_regs rk3576_vop_vp1_regs = {
 	.core_dclk_div = VOP_REG(RK3568_VP1_CLK_CTRL, 0x1, 0),
 	.dclk_div2 = VOP_REG(RK3568_VP1_CLK_CTRL, 0x1, 2),
 	.p2i_en = VOP_REG(RK3568_VP1_DSP_CTRL, 0x1, 5),
-	.dsp_filed_pol = VOP_REG(RK3568_VP1_DSP_CTRL, 0x1, 6),
+	.dsp_field_pol = VOP_REG(RK3568_VP1_DSP_CTRL, 0x1, 6),
 	.dsp_interlace = VOP_REG(RK3568_VP1_DSP_CTRL, 0x1, 7),
 	.dsp_data_swap = VOP_REG(RK3568_VP1_DSP_CTRL, 0x1f, 8),
 	.dsp_x_mir_en = VOP_REG(RK3568_VP1_DSP_CTRL, 0x1, 13),
@@ -2544,7 +2553,7 @@ static const struct vop2_video_port_regs rk3576_vop_vp2_regs = {
 	.core_dclk_div = VOP_REG(RK3568_VP2_CLK_CTRL, 0x1, 0),
 	.dclk_div2 = VOP_REG(RK3568_VP2_CLK_CTRL, 0x1, 2),
 	.p2i_en = VOP_REG(RK3568_VP2_DSP_CTRL, 0x1, 5),
-	.dsp_filed_pol = VOP_REG(RK3568_VP2_DSP_CTRL, 0x1, 6),
+	.dsp_field_pol = VOP_REG(RK3568_VP2_DSP_CTRL, 0x1, 6),
 	.dsp_interlace = VOP_REG(RK3568_VP2_DSP_CTRL, 0x1, 7),
 	.dsp_data_swap = VOP_REG(RK3568_VP2_DSP_CTRL, 0x1f, 8),
 	.dsp_x_mir_en = VOP_REG(RK3568_VP2_DSP_CTRL, 0x1, 13),
@@ -2632,7 +2641,7 @@ static const struct vop3_ovl_regs rk3576_vop_vp0_ovl_regs = {
 };
 
 /*
- * RK3576 VP0 has 8 lines post linebuffer, when full post line buffer is less 4,
+ * RK3576 VP0 has 8 lines post linebuffer, when full post line buffer is less than 4,
  * the urgency signal will be set to 1, when full post line buffer is over 6, the
  * urgency signal will be set to 0.
  */
@@ -2661,6 +2670,7 @@ static const struct vop2_video_port_data rk3576_vop_video_ports[] = {
 	 .hdr_mix_dly = 2,
 	 .win_dly = 10,
 	 .pixel_rate = 2,
+	 .reg_done_bit = 4,
 	 .intr = &rk3568_vp0_intr,
 	 .urgency = &rk3576_vp0_urgency,
 	 .regs = &rk3576_vop_vp0_regs,
@@ -2681,6 +2691,7 @@ static const struct vop2_video_port_data rk3576_vop_video_ports[] = {
 	 .hdr_mix_dly = 0,
 	 .win_dly = 10,
 	 .pixel_rate = 1,
+	 .reg_done_bit = 5,
 	 .intr = &rk3568_vp1_intr,
 	 .regs = &rk3576_vop_vp1_regs,
 	 .ovl_regs = &rk3528_vop_vp1_ovl_regs,
@@ -2699,6 +2710,7 @@ static const struct vop2_video_port_data rk3576_vop_video_ports[] = {
 	 .hdr_mix_dly = 0,
 	 .win_dly = 10,
 	 .pixel_rate = 1,
+	 .reg_done_bit = 6,
 	 .intr = &rk3568_vp2_intr,
 	 .regs = &rk3576_vop_vp2_regs,
 	 .ovl_regs = &rk3576_vop_vp2_ovl_regs,
@@ -2713,7 +2725,7 @@ static const struct vop2_video_port_regs rk3588_vop_vp0_regs = {
 	.port_mux = VOP_REG(RK3568_OVL_PORT_SEL, 0xf, 0),
 	.out_mode = VOP_REG(RK3568_VP0_DSP_CTRL, 0xf, 0),
 	.p2i_en = VOP_REG(RK3568_VP0_DSP_CTRL, 0x1, 5),
-	.dsp_filed_pol = VOP_REG(RK3568_VP0_DSP_CTRL, 0x1, 6),
+	.dsp_field_pol = VOP_REG(RK3568_VP0_DSP_CTRL, 0x1, 6),
 	.dsp_interlace = VOP_REG(RK3568_VP0_DSP_CTRL, 0x1, 7),
 	.dsp_data_swap = VOP_REG(RK3568_VP0_DSP_CTRL, 0x1f, 8),
 	.dsp_x_mir_en = VOP_REG(RK3568_VP0_DSP_CTRL, 0x1, 13),
@@ -2810,7 +2822,7 @@ static const struct vop2_video_port_regs rk3588_vop_vp0_regs = {
 /*
  * VP1 can splice with VP0 to output hdisplay > 4096,
  * VP1 has a another HDR10 controller, but share the
- * same eotf curve with VP1.
+ * same eotf curve with VP0.
  */
 static const struct vop2_video_port_regs rk3588_vop_vp1_regs = {
 	.cfg_done = VOP_REG_MASK(RK3568_REG_CFG_DONE, 0x1, 1),
@@ -2820,7 +2832,7 @@ static const struct vop2_video_port_regs rk3588_vop_vp1_regs = {
 	.port_mux = VOP_REG(RK3568_OVL_PORT_SEL, 0xf, 4),
 	.out_mode = VOP_REG(RK3568_VP1_DSP_CTRL, 0xf, 0),
 	.p2i_en = VOP_REG(RK3568_VP1_DSP_CTRL, 0x1, 5),
-	.dsp_filed_pol = VOP_REG(RK3568_VP1_DSP_CTRL, 0x1, 6),
+	.dsp_field_pol = VOP_REG(RK3568_VP1_DSP_CTRL, 0x1, 6),
 	.dsp_interlace = VOP_REG(RK3568_VP1_DSP_CTRL, 0x1, 7),
 	.dsp_data_swap = VOP_REG(RK3568_VP1_DSP_CTRL, 0x1f, 8),
 	.dsp_x_mir_en = VOP_REG(RK3568_VP1_DSP_CTRL, 0x1, 13),
@@ -2914,7 +2926,7 @@ static const struct vop2_video_port_regs rk3588_vop_vp2_regs = {
 	.port_mux = VOP_REG(RK3568_OVL_PORT_SEL, 0xf, 8),
 	.out_mode = VOP_REG(RK3568_VP2_DSP_CTRL, 0xf, 0),
 	.p2i_en = VOP_REG(RK3568_VP2_DSP_CTRL, 0x1, 5),
-	.dsp_filed_pol = VOP_REG(RK3568_VP2_DSP_CTRL, 0x1, 6),
+	.dsp_field_pol = VOP_REG(RK3568_VP2_DSP_CTRL, 0x1, 6),
 	.dsp_interlace = VOP_REG(RK3568_VP2_DSP_CTRL, 0x1, 7),
 	.dsp_data_swap = VOP_REG(RK3568_VP2_DSP_CTRL, 0x1f, 8),
 	.dsp_x_mir_en = VOP_REG(RK3568_VP2_DSP_CTRL, 0x1, 13),
@@ -2979,7 +2991,7 @@ static const struct vop2_video_port_regs rk3588_vop_vp3_regs = {
 	.dsp_background = VOP_REG(RK3588_VP3_DSP_BG, 0xffffffff, 0),
 	.out_mode = VOP_REG(RK3588_VP3_DSP_CTRL, 0xf, 0),
 	.p2i_en = VOP_REG(RK3588_VP3_DSP_CTRL, 0x1, 5),
-	.dsp_filed_pol = VOP_REG(RK3588_VP3_DSP_CTRL, 0x1, 6),
+	.dsp_field_pol = VOP_REG(RK3588_VP3_DSP_CTRL, 0x1, 6),
 	.dsp_interlace = VOP_REG(RK3588_VP3_DSP_CTRL, 0x1, 7),
 	.dsp_data_swap = VOP_REG(RK3588_VP3_DSP_CTRL, 0x1f, 8),
 	.dsp_x_mir_en = VOP_REG(RK3588_VP3_DSP_CTRL, 0x1, 13),
@@ -3046,6 +3058,7 @@ static const struct vop2_video_port_data rk3588_vop_video_ports[] = {
 	 .max_output = { 7680, 4320 },
 	 /* hdr2sdr sdr2hdr hdr2hdr sdr2sdr */
 	 .pre_scan_max_dly = { 76, 65, 65, 54 },
+	 .reg_done_bit = 4,
 	 .intr = &rk3568_vp0_intr,
 	 .hdr_table = &rk3568_vop_hdr_table,
 	 .regs = &rk3588_vop_vp0_regs,
@@ -3060,6 +3073,7 @@ static const struct vop2_video_port_data rk3588_vop_video_ports[] = {
 	 .dclk_max = 600000000,
 	 .max_output = { 4096, 2304 },
 	 .pre_scan_max_dly = { 76, 65, 65, 54 },
+	 .reg_done_bit = 5,
 	 .intr = &rk3568_vp1_intr,
 	 /* vp1 share the same hdr curve with vp0 */
 	 .hdr_table = &rk3568_vop_hdr_table,
@@ -3076,6 +3090,7 @@ static const struct vop2_video_port_data rk3588_vop_video_ports[] = {
 	 .dclk_max = 600000000,
 	 .max_output = { 4096, 2304 },
 	 .pre_scan_max_dly = { 52, 52, 52, 52 },
+	 .reg_done_bit = 6,
 	 .intr = &rk3568_vp2_intr,
 	 .regs = &rk3588_vop_vp2_regs,
 	},
@@ -3087,13 +3102,14 @@ static const struct vop2_video_port_data rk3588_vop_video_ports[] = {
 	 .dclk_max = 200000000,
 	 .max_output = { 2048, 1536 },
 	 .pre_scan_max_dly = { 52, 52, 52, 52 },
+	 .reg_done_bit = 7,
 	 .intr = &rk3588_vp3_intr,
 	 .regs = &rk3588_vop_vp3_regs,
 	},
 };
 
 /*
- * HDMI/eDP infterface pixclk and dclk are independent of each other.
+ * HDMI/eDP interface pixclk and dclk are independent of each other.
  * MIPI and DP interface pixclk and dclk are the same in itself.
  */
 static const struct vop2_connector_if_data rk3588_conn_if_data[] = {
@@ -3159,7 +3175,6 @@ static const struct vop2_connector_if_data rk3588_conn_if_data[] = {
 	 .if_div_yuv420_shift = 2,
 	 .bus_div_shift = 1,
 	 .pixel_clk_div_shift = 1,
-
 	},
 
 	{
@@ -3172,7 +3187,6 @@ static const struct vop2_connector_if_data rk3588_conn_if_data[] = {
 	 .if_div_yuv420_shift = 2,
 	 .bus_div_shift = 1,
 	 .pixel_clk_div_shift = 1,
-
 	},
 
 	{
@@ -3211,7 +3225,6 @@ static const struct vop2_connector_if_data rk3588_conn_if_data[] = {
 	 .pixel_clk_div_shift = 0,
 	},
 };
-
 
 const struct vop2_layer_regs rk3568_vop_layer0_regs = {
 	.layer_sel = VOP_REG(RK3568_OVL_LAYER_SEL, 0x7, 0)
@@ -5857,12 +5870,12 @@ const struct vop2_power_domain_regs rk3588_dsc_4k_pd_regs = {
 
 /*
  * There are 7 internal power domains on rk3588 vop,
- * Cluster0/1/2/3 each have on pd, and PD_CLUSTER0 as parent,
+ * Cluster0/1/2/3 each have one pd, and PD_CLUSTER0 as parent,
  * that means PD_CLUSTER0 should turn on first before
  * PD_CLUSTER1/2/3 turn on.
  *
  * Esmart1/2/3 share one pd PD_ESMART, and Esmart0 has no PD
- * DSC_8K/DSC_4K each have on pd.
+ * DSC_8K/DSC_4K each have one pd.
  */
 static const struct vop2_power_domain_data rk3588_vop_pd_data[] = {
 	{
@@ -5956,7 +5969,7 @@ const struct vop2_power_domain_regs rk3588_mem_pg_wb_regs = {
 /*
  * All power gates will power on when PD_VOP is turn on.
  * Corresponding mem_pwr_ack_bypass bit should be enabled
- * if power gate powe down before PD_VOP.
+ * if power gate power down before PD_VOP.
  * power gates take effect immediately, this means there
  * is no synchronization between vop frame scanout, so
  * we can only enable a power gate before we enable
@@ -7092,10 +7105,10 @@ static const struct vop_dump_regs rk3588_dump_regs[] = {
 	 BIT(ROCKCHIP_VOP2_ESMART0)  | BIT(ROCKCHIP_VOP2_ESMART1)  | \
 	 BIT(ROCKCHIP_VOP2_SMART0)   | BIT(ROCKCHIP_VOP2_SMART1))
 #define RK3572_PLANE_MASK_BASE \
-		(BIT(ROCKCHIP_VOP2_CLUSTER0) | BIT(ROCKCHIP_VOP2_CLUSTER1) | \
-		 BIT(ROCKCHIP_VOP2_ESMART0)  | BIT(ROCKCHIP_VOP2_ESMART1)  | \
-		 BIT(ROCKCHIP_VOP2_MSMART0)  | BIT(ROCKCHIP_VOP2_MSMART1)  | \
-		 BIT(ROCKCHIP_VOP2_CURSOR0)  | BIT(ROCKCHIP_VOP2_CURSOR1))
+	(BIT(ROCKCHIP_VOP2_CLUSTER0) | BIT(ROCKCHIP_VOP2_CLUSTER1) | \
+	 BIT(ROCKCHIP_VOP2_ESMART0)  | BIT(ROCKCHIP_VOP2_ESMART1)  | \
+	 BIT(ROCKCHIP_VOP2_MSMART0)  | BIT(ROCKCHIP_VOP2_MSMART1)  | \
+	 BIT(ROCKCHIP_VOP2_CURSOR0)  | BIT(ROCKCHIP_VOP2_CURSOR1))
 
 #define RK3576_PLANE_MASK_BASE \
 	(BIT(ROCKCHIP_VOP2_CLUSTER0) | BIT(ROCKCHIP_VOP2_CLUSTER1) | \
@@ -7303,6 +7316,51 @@ static const char * const rk3576_crc_sources[] = {
 	"encoder",
 };
 
+static const struct vop2_scale_engine rk3528_scale_engine[VOP3_ESMART_LB_MODE_MAX][VOP2_MAX_MULTI_AREA_WIN] = {
+	/* VOP3_ESMART_8K_MODE */
+	{
+		{ ROCKCHIP_VOP2_ESMART0, 0 },
+		{},
+		{},
+		{},
+	},
+	/* VOP3_ESMART_4K_4K_MODE */
+	{
+		{ ROCKCHIP_VOP2_ESMART0, 0 },
+		{ ROCKCHIP_VOP2_ESMART2, 1 },
+		{},
+		{},
+	},
+	/* VOP3_ESMART_4K_2K_2K_MODE */
+	{
+		{ ROCKCHIP_VOP2_ESMART0, 0 },
+		{ ROCKCHIP_VOP2_ESMART2, 1 },
+		{ ROCKCHIP_VOP2_ESMART3, 2 },
+		{},
+	},
+	/* VOP3_ESMART_2K_2K_2K_2K_MODE */
+	{
+		{ ROCKCHIP_VOP2_ESMART0, 0 },
+		{ ROCKCHIP_VOP2_ESMART1, 1 },
+		{ ROCKCHIP_VOP2_ESMART2, 2 },
+		{ ROCKCHIP_VOP2_ESMART3, 3 },
+	},
+	/* VOP3_ESMART_4K_4K_4K_MODE */
+	{
+		{ ROCKCHIP_VOP2_ESMART0, 0 },
+		{ ROCKCHIP_VOP2_ESMART1, 1 },
+		{ ROCKCHIP_VOP2_ESMART2, 2 },
+		{},
+	},
+	/* VOP3_ESMART_4K_4K_2K_2K_MODE */
+	{
+		{ ROCKCHIP_VOP2_ESMART0, 0 },
+		{ ROCKCHIP_VOP2_ESMART1, 1 },
+		{ ROCKCHIP_VOP2_ESMART2, 2 },
+		{ ROCKCHIP_VOP2_ESMART3, 3 },
+	},
+};
+
 static const struct vop2_data rk3528_vop = {
 	.version = VOP_VERSION_RK3528,
 	.nr_vps = 2,
@@ -7320,6 +7378,7 @@ static const struct vop2_data rk3528_vop = {
 	.dump_regs = rk3528_dump_regs,
 	.dump_regs_size = ARRAY_SIZE(rk3528_dump_regs),
 	.plane_mask_base = RK3528_PLANE_MASK_BASE,
+	.scale_engine = rk3528_scale_engine[0],
 };
 
 static const char * const rk3538_crc_sources[] = {
@@ -7374,6 +7433,7 @@ static const struct vop2_data rk3562_vop = {
 	.dump_regs = rk3562_dump_regs,
 	.dump_regs_size = ARRAY_SIZE(rk3562_dump_regs),
 	.plane_mask_base = RK3562_PLANE_MASK_BASE,
+	.scale_engine = rk3528_scale_engine[0],
 };
 
 static const struct vop2_data rk3568_vop = {
@@ -7445,6 +7505,7 @@ static const struct vop2_data rk3576_vop = {
 	.plane_mask_base = RK3576_PLANE_MASK_BASE,
 	.crc_sources = rk3576_crc_sources,
 	.crc_sources_num = ARRAY_SIZE(rk3576_crc_sources),
+	.scale_engine = rk3528_scale_engine[0],
 };
 
 static const struct vop2_data rk3588_vop = {

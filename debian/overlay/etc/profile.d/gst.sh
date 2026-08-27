@@ -28,7 +28,14 @@ export GST_VIDEO_DECODER_QOS=0
 # export GST_MPP_VIDEODEC_DEFAULT_FORMAT=NV12
 
 # Try to use ARM AFBC to get better performance, but not work for all sinks.
-# export GST_MPP_VIDEODEC_DEFAULT_ARM_AFBC=1
+# The patched mutter composites AFBC NV12 via GL, which halves compositor
+# texture-read bandwidth and fixes 8K AV1 frame drops. Only enabled on SoCs
+# verified to handle AFBC end-to-end; extend the case below as needed.
+case "$(tr -d '\0' < /proc/device-tree/compatible 2>/dev/null)" in
+	*rk3572*)
+		export GST_MPP_VIDEODEC_DEFAULT_ARM_AFBC=1
+		;;
+esac
 
 # Uncomment this to ignore aspect ratio in kmssink
 # export KMSSINK_IGNORE_ASPECT=1

@@ -5,12 +5,6 @@ cd "$TARGET_DIR"
 message "Installing full-busybox..."
 RK_ROOTFS_PREFER_PREBUILT_TOOLS=y ensure_tools bin/busybox
 
-# Login root on serial console
-if [ -r etc/inittab ]; then
-	sed -i 's~\(respawn:.*\)/bin/start_getty.*~\1/bin/login -p root~' \
-		etc/inittab
-fi
-
 # Drop Poky warnings in motd
 if [ -r etc/motd ]; then
 	sed -i '/^WARNING: Poky/,+2d' etc/motd

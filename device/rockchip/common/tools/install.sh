@@ -28,4 +28,9 @@ fi
 
 message "Installing prebuilt tools..."
 
+if [ -z "$RK_ROOTFS_PREFER_PREBUILT_TOOLS" ]; then
+	# Keep the original tools
+	RK_RSYNC="$RK_RSYNC --ignore-existing"
+fi
+
 $RK_RSYNC --exclude=adbd --exclude=README "$OVERLAY_DIR/$TOOL_ARCH/" "$DEST_DIR/"

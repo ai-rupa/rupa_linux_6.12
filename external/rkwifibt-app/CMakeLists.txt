@@ -1,9 +1,9 @@
-cmake_minimum_required(VERSION 2.8.0 FATAL_ERROR) 
+cmake_minimum_required(VERSION 3.5)
 project(rkwifibt)
 
 message("build rkwifibt app ...")
 
-set(TEST_FILES 
+set(TEST_FILES
 	test/main.c
 	test/bt_test.c
 	test/rk_ble_app.c

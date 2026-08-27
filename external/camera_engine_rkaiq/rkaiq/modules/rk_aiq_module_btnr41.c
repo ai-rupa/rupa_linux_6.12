@@ -611,8 +611,8 @@ void rk_aiq_btnr41_params_cvt(void* attr, isp_params_t* isp_params, common_cvt_i
     }
 
     // REG: BAY3D_TRANS1
-    // mode scale只有0�?两种选择，对应log域的小数精度�?    // 0对应8bit小数�?bit整数�?4bit整数导致最大线性输入数据位宽为20bit->transData_maxlimit�?�?0次方-1
-    // 1对应9bit小数�?bit整数�?3bit整数限制最大线性输入数据位宽为15bit->transData_maxlimit�?�?5次方-1
+    // mode scale只有0�?两种选择，对应log域的小数精度�?    // 0对应8bit小数�?bit整数�?4bit整数导致最大线性输入数据位宽为20bit->transData_maxlimit�?�?0次方-1
+    // 1对应9bit小数�?bit整数�?3bit整数限制最大线性输入数据位宽为15bit->transData_maxlimit�?�?5次方-1
     if(pCfg->transf_bypass_en == 1) {
         pCfg->transf_data_max_limit = ((1 << 12) - 1);
     } else {
@@ -837,20 +837,19 @@ void rk_aiq_btnr41_params_cvt(void* attr, isp_params_t* isp_params, common_cvt_i
     tmpf = pmdDyn->frmFusion.hw_btnrT_loFusion_maxLimit;
 #if 1
     // if iso change, then ob_offset change, the tnr is disable to void the redish image
-    static int pre_ob = 0;
     if(cvtinfo->isFirstFrame) {
-        pre_ob = cvtinfo->blc_res.obcPostTnr.sw_blcT_autoOB_offset;
+        pBtnrInfo->pre_ob = cvtinfo->blc_res.obcPostTnr.sw_blcT_autoOB_offset;
     }
     if(psta->sw_fusionIso.sw_btnrT_fusionIso_mode == btnr_limitAdj_mode) {
-        int delta_ob = ABS(cvtinfo->blc_res.obcPostTnr.sw_blcT_autoOB_offset - pre_ob);
+        int delta_ob = ABS(cvtinfo->blc_res.obcPostTnr.sw_blcT_autoOB_offset - pBtnrInfo->pre_ob);
         if(delta_ob >= psta->sw_fusionIso.sw_btnrT_limitAdj_deltaOB) {
             tmpf = 1;
         }
         if(delta_ob > 0) {
-            LOGD_ANR("iso:%d pre_ob:%d cur_ob:%d delta_ob:%d\n", cvtinfo->frameIso[0], pre_ob, cvtinfo->blc_res.obcPostTnr.sw_blcT_autoOB_offset, delta_ob);
+            LOGD_ANR("iso:%d pre_ob:%d cur_ob:%d delta_ob:%d\n", cvtinfo->frameIso[0], pBtnrInfo->pre_ob, cvtinfo->blc_res.obcPostTnr.sw_blcT_autoOB_offset, delta_ob);
         }
     }
-    pre_ob = cvtinfo->blc_res.obcPostTnr.sw_blcT_autoOB_offset;
+    pBtnrInfo->pre_ob = cvtinfo->blc_res.obcPostTnr.sw_blcT_autoOB_offset;
 #endif
     tmp = tmpf > 4095 ? 4095 : (tmpf == 0 ? 0 : (int)((1.0 - 1.0 / tmpf) * (1 << FIXTNRWWW)));
     pCfg->lo_wgt_clip_max_limit = CLIP(tmp, 0, 0x3fff);

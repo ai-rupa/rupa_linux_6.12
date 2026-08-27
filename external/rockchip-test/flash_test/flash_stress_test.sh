@@ -1,185 +1,98 @@
 #!/bin/bash
-#/******************************************************************/
-#/*  Copyright (C)  ROCK-CHIPS . All Rights Reserved.       */
-#/*******************************************************************
-#File    :   flash_stress_test.sh
-#Desc    :   flash write and read stress test tools
-#Author  :   ZYF
-#Date    :   2020-07-16
-#Notes   :    
-# Revision Data       Author                                Note.
-# 1.00     2017/05/05 Zhaoyifeng                            1.First version
-# 1.10     2020/06/28 Dingqiang Lin(jon.lin@rock-chips.com) 1.Simplify test_log 2.Add more introduction
-# 1.20     2020/07/16 Hans Yang                             1.use /dev/urandom to generate test data
-#Introduction.
-#********************************************************************/
-# usage£º
-# sudo flash_stress_test.sh dirnum testcount
-# example  £º
-# 	count for script command:
-#		SLC Nand 128MB, 100K P/E cycles, normaly we test 5K P/E ¡ª¡ª 128MB * 5000
-#       src file size 5MB, totle test data 128MB * 5000, testcount = 128MB * 5000 / 5MB * 5(dirnum) = 20600
-#   command:
-#		sudo flash_stress_test.sh 5 20000
-#	available space need:
-#		src file size: 5MB
-#		des file size: 5MB * dirnum = 25MB
-#       log file size: 189B(log item size) * 20000 = 3691KB
-#			    total: about 34MB
-#   result analyze:
-#		success:
-#			1. shell progress stop;
-#			2. print "-------copy and check success------------"
-#		fail:
-#			1. shell progress stop;
-#			2. any printing with "error" tag
-#
-#********************************************************************/
+# flash_test/flash_stress_test.sh - Flash write/read stress test
+# Usage: flash_stress_test.sh [dirnum] [looptime]
+
+DIR_FLASH="$(cd "$(dirname "$0")" && pwd)"
+source "${DIR_FLASH}/../common/common.sh"
 
 test_dir=/userdata/rockchip-test/flash_test
 source_dir=$test_dir/src_test_data
 dest_dir=$test_dir/des_test_data
 md5_dir=$test_dir/md5_data
 
-usage()
-{
-echo "Usage: flash_stress_test.sh [dirnum] [looptime]"
-echo "flash_stress_test.sh 5 20000"
-}
+test_max_dir="${1:-5}"
+test_max_count="${2:-200}"
 
-test_max_count=200
-test_max_dir=5
-if [ $1 -ne 0 ] ;then
-    test_max_dir=$1
-fi
+log_info "flash" "Flash stress test: dirs=$test_max_dir, loops=$test_max_count"
 
-if [ $2 -ne 0 ] ;then
-    test_max_count=$2
-fi
-
-echo "Test Max dir Num = ${test_max_dir}"
-echo "Test Max count = ${test_max_count}"
+TEST_ID=$(test_begin "flash" "stress" "Flash stress: $test_max_dir dirs, $test_max_count loops")
 
 count=0
 dir_loop=0
-rm -rf  $test_dir/test_log.txt
-mkdir -p $dest_dir
-mkdir -p $md5_dir
-mkdir -p $source_dir
+rm -rf "$test_dir/test_log.txt"
+mkdir -p "$dest_dir" "$md5_dir" "$source_dir"
 
-#generate 5MB random file 
-rm -rf  $source_dir/*
-file_path=$source_dir
-file_size=(512 1024 3456 512 1024 3456)  
-file_radio=(5 5 5 5 5 5)  
-  
-function random()  
-{  
-    min=$1  
-    max=$2  
-    num=`date +%s`  
-    ((value=$num%($max-$min)+$min+1))  
-    echo $value  
-}  
-  
-file_size_count=${#file_size[*]}  
-file_radio_count=${#file_radio[*]}  
-  
-if [ $file_size_count=$file_radio_count  ]   
-then   
-    for ((i=0;i <$file_size_count;i++))  
-    do  
-        for  ((n=0;n <${file_radio[$i]};n++))  
-        do  
-            if [ $i==0 ]  
-            then  
-                rand=$(random 0 ${file_size[$i]})  
-            else  
-                rand=$(random ${file_size[$i-1]} ${file_size[$i]})  
-            fi  
-            dd if=/dev/urandom of=$file_path/test.$i.$rand.bin bs=$rand count=1024
-        done  
-        echo ===========  
-    done  
-fi  
+# Generate random test files
+rm -rf "$source_dir"/*
+file_size=(512 1024 3456 512 1024 3456)
+file_radio=(5 5 5 5 5 5)
+file_size_count=${#file_size[*]}
 
-cd $source_dir
-
-#find ./ -type f -print0 | xargs -0 md5sum | sort > $md5_dir/source.md5
-md5sum ./* > $md5_dir/source.md5
-cd /
-while [ $count -lt $test_max_count ]; do
-	echo $count
-	echo $count >> $test_dir/test_log.txt
-    dir_loop=0
-    while [ $dir_loop -lt $test_max_dir ]; do
-	echo "$count test $source_dir to $dest_dir/${dir_loop}"
-    	rm -rf  $dest_dir/$dir_loop
-    	if [ $? == 0 ]; then
-    		echo "$count clean $dest_dir/${dir_loop} success"
-		echo "$count clean ${dir_loop}" >> $test_dir/test_log.txt
-    	else
-    		echo "$count clean $dest_dir/${dir_loop} error"
-    		echo "$count clean $dest_dir/${dir_loop} error" >> $test_dir/test_log.txt
-    		exit 0
-    	fi
-    	#sync
-    	#sleep 1
-    	#start copy data
-    	echo "$count $dir_loop start copy data"
-    	cp  -rf   $source_dir $dest_dir/$dir_loop
-    	if [ $? == 0 ]; then
-    		echo "$count cp  $source_dir to $dest_dir/${dir_loop} success"
-		echo "$count cp ${dir_loop}" >> $test_dir/test_log.txt
-    	else
-    		echo "$count cp  $source_dir to $dest_dir/${dir_loop} error"
-    		echo "$count cp  $source_dir to $dest_dir/${dir_loop} error" >> $test_dir/test_log.txt
-    	fi
-    	#sync
-    	#sleep 1
-    	dir_loop=$(($dir_loop+1))
+for ((i = 0; i < file_size_count; i++)); do
+    for ((n = 0; n < ${file_radio[$i]}; n++)); do
+        if [[ $i -eq 0 ]]; then
+            rand=$((RANDOM % file_size[$i] + 1))
+        else
+            rand=$((RANDOM % (file_size[$i] - file_size[$i-1]) + file_size[$i-1] + 1))
+        fi
+        dd if=/dev/urandom of="$source_dir/test.$i.$rand.bin" bs=$rand count=1024 2>/dev/null
     done
-    dir_loop=0
-    sync && echo 3 > /proc/sys/vm/drop_caches
-    sleep 5
-    sync
-    echo 3 > /proc/sys/vm/drop_caches
-    sleep 5
-    while [ $dir_loop -lt $test_max_dir ]; do
-	#calc dir md5
-    	echo "$count calc $dest_dir/${dir_loop} md5 start"
-    	echo "$count calc $dest_dir/${dir_loop} md5 start" >> $test_dir/test_log.txt
-    	cd $dest_dir/${dir_loop}
-    	#find ./ -type f -print0 | xargs -0 md5sum | sort > $md5_dir/dest${dir_loop}.md5
-    	md5sum ./* > $md5_dir/dest${dir_loop}.md5
-    	cd /
-    	#cmp with src md5
-    	diff $md5_dir/source.md5 $md5_dir/dest${dir_loop}.md5
-    	if [ $? == 0 ]; then
-    		echo "$count check source to $dest_dir/${dir_loop} success"
-		echo "$count check ${dir_loop}" >> $test_dir/test_log.txt
-    		rm  $md5_dir/dest${dir_loop}.md5
-			rm -rf  $dest_dir/$dir_loop
-    	else
-    		echo "$count check source to $dest_dir/${dir_loop} error"
-    		echo "$count check source to $dest_dir/${dir_loop} error" >> $test_dir/test_log.txt
-    		exit 0
-    	fi
-    	dir_loop=$(($dir_loop+1))
-    done
-	count=$(($count+1))
-        #if test fail, we can save file for debug
-	#rm -rf  $test_dir/$dest_dir/*
-	echo -----------------------------------------
-	echo "-------========You can see the result at and $test_dir/test_log.txt file=======------------"
-	echo -----------------------------------------  >> $test_dir/test_log.txt
 done
 
-	echo "-------copy and check success------------"
-	echo "-------copy and check success------------"  >> $test_dir/test_log.txt
-	echo "-------========You can see the result at and $test_dir/test_log.txt file=======------------"
+cd "$source_dir"
+md5sum ./* > "$md5_dir/source.md5"
+cd /
 
+set +e
+while [[ $count -lt $test_max_count ]]; do
+    log_info "flash" "Loop $count/$test_max_count"
+    echo "$count" >> "$test_dir/test_log.txt"
+    dir_loop=0
 
+    while [[ $dir_loop -lt $test_max_dir ]]; do
+        rm -rf "$dest_dir/$dir_loop"
+        if [[ $? -ne 0 ]]; then
+            log_error "flash" "Failed to clean $dest_dir/$dir_loop"
+            test_end "$TEST_ID" "FAIL" "Clean failed at loop $count dir $dir_loop"
+            exit 1
+        fi
 
+        cp -rf "$source_dir" "$dest_dir/$dir_loop"
+        if [[ $? -ne 0 ]]; then
+            log_error "flash" "Copy failed: $source_dir to $dest_dir/$dir_loop"
+            test_end "$TEST_ID" "FAIL" "Copy failed at loop $count dir $dir_loop"
+            exit 1
+        fi
+        dir_loop=$((dir_loop + 1))
+    done
 
+    dir_loop=0
+    sync && echo 3 > /proc/sys/vm/drop_caches 2>/dev/null
+    sleep 5
+    sync
 
+    while [[ $dir_loop -lt $test_max_dir ]]; do
+        cd "$dest_dir/$dir_loop"
+        md5sum ./* > "$md5_dir/dest${dir_loop}.md5"
+        cd /
+
+        if diff "$md5_dir/source.md5" "$md5_dir/dest${dir_loop}.md5" >/dev/null 2>&1; then
+            log_debug "flash" "Check loop $count dir $dir_loop: OK"
+            rm -f "$md5_dir/dest${dir_loop}.md5"
+            rm -rf "$dest_dir/$dir_loop"
+        else
+            log_error "flash" "MD5 mismatch at loop $count dir $dir_loop"
+            test_end "$TEST_ID" "FAIL" "MD5 mismatch at loop $count dir $dir_loop"
+            exit 1
+        fi
+        dir_loop=$((dir_loop + 1))
+    done
+
+    count=$((count + 1))
+    echo "-----------------------------------------" >> "$test_dir/test_log.txt"
+done
+set -e
+
+log_info "flash" "Flash stress test completed successfully"
+test_end "$TEST_ID" "PASS" "Completed $test_max_count loops with $test_max_dir dirs"
+echo "-------copy and check success------------" >> "$test_dir/test_log.txt"

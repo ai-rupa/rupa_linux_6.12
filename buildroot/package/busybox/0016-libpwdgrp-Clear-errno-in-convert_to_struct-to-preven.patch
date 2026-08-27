@@ -1,4 +1,4 @@
-From 6a714c95a081b4e8084300282fcae48675ff2637 Mon Sep 17 00:00:00 2001
+From 8c6e2954f567b4e4afacc33ff4f299540cc605f7 Mon Sep 17 00:00:00 2001
 From: Jeffy Chen <jeffy.chen@rock-chips.com>
 Date: Mon, 16 Mar 2026 18:32:54 +0800
 Subject: [PATCH 16/16] libpwdgrp: Clear errno in convert_to_struct to prevent

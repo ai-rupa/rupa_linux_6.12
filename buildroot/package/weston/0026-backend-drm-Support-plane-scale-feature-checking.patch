@@ -1,0 +1,145 @@
+From 348fda896ac5422794a4b923741d82e19fd030ef Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Fri, 27 Mar 2026 16:24:25 +0800
+Subject: [PATCH 26/98] backend-drm: Support plane scale feature checking
+
+This is a custom plane property used in the Rockchip BSP kernel.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ libweston/backend-drm/drm-internal.h  |  6 +++++
+ libweston/backend-drm/drm-kms-enums.h |  9 +++++++
+ libweston/backend-drm/drm.c           |  5 ++++
+ libweston/backend-drm/kms.c           | 39 +++++++++++++++++++++++++++
+ 4 files changed, 59 insertions(+)
+
+diff --git a/libweston/backend-drm/drm-internal.h b/libweston/backend-drm/drm-internal.h
+index 47e761c8..28299ce7 100644
+--- a/libweston/backend-drm/drm-internal.h
++++ b/libweston/backend-drm/drm-internal.h
+@@ -486,6 +486,8 @@ struct drm_plane {
+ 	struct wl_list link;
+ 
+ 	struct weston_drm_format_array formats;
++
++	bool can_scale;
+ };
+ 
+ struct drm_plane_handle {
+@@ -865,6 +867,10 @@ drm_property_get_value(struct drm_property_info *info,
+ uint64_t *
+ drm_property_get_range_values(struct drm_property_info *info,
+ 			      const drmModeObjectProperties *props);
++bool
++drm_property_has_feature(struct drm_property_info *infos,
++			 const drmModeObjectProperties *props,
++			 enum wdrm_plane_feature feature);
+ int
+ drm_plane_populate_formats(struct drm_plane *plane, const drmModePlane *kplane,
+ 			   const drmModeObjectProperties *props,
+diff --git a/libweston/backend-drm/drm-kms-enums.h b/libweston/backend-drm/drm-kms-enums.h
+index ad9a1114..84b5cba8 100644
+--- a/libweston/backend-drm/drm-kms-enums.h
++++ b/libweston/backend-drm/drm-kms-enums.h
+@@ -58,9 +58,18 @@ enum wdrm_plane_property {
+ 	WDRM_PLANE_ALPHA,
+ 	WDRM_PLANE_COLOR_ENCODING,
+ 	WDRM_PLANE_COLOR_RANGE,
++	WDRM_PLANE_FEATURE,
+ 	WDRM_PLANE__COUNT
+ };
+ 
++/**
++ * Possible values for the WDRM_PLANE_FEATURE property.
++ */
++enum wdrm_plane_feature {
++	WDRM_PLANE_FEATURE_SCALE = 0,
++	WDRM_PLANE_FEATURE__COUNT
++};
++
+ /**
+  * Possible values for the WDRM_PLANE_TYPE property.
+  */
+diff --git a/libweston/backend-drm/drm.c b/libweston/backend-drm/drm.c
+index 9c273b62..c7fa793d 100644
+--- a/libweston/backend-drm/drm.c
++++ b/libweston/backend-drm/drm.c
+@@ -1460,6 +1460,11 @@ drm_plane_create(struct drm_device *device, const drmModePlane *kplane)
+ 				       props,
+ 				       WDRM_PLANE_TYPE__COUNT);
+ 
++	plane->can_scale =
++		drm_property_has_feature(&plane->props[WDRM_PLANE_FEATURE],
++					 props,
++					 WDRM_PLANE_FEATURE_SCALE);
++
+ 	zpos_range_values =
+ 		drm_property_get_range_values(&plane->props[WDRM_PLANE_ZPOS],
+ 					      props);
+diff --git a/libweston/backend-drm/kms.c b/libweston/backend-drm/kms.c
+index 073f797d..65adb239 100644
+--- a/libweston/backend-drm/kms.c
++++ b/libweston/backend-drm/kms.c
+@@ -100,6 +100,12 @@ struct drm_property_enum_info plane_color_range_enums[] = {
+ 	},
+ };
+ 
++struct drm_property_enum_info plane_feature_enums[] = {
++	[WDRM_PLANE_FEATURE_SCALE] = {
++		.name = "scale",
++	},
++};
++
+ const struct drm_property_info plane_props[] = {
+ 	[WDRM_PLANE_TYPE] = {
+ 		.name = "type",
+@@ -136,6 +142,11 @@ const struct drm_property_info plane_props[] = {
+ 		.enum_values = plane_color_range_enums,
+ 		.num_enum_values = WDRM_PLANE_COLOR_RANGE__COUNT,
+ 	},
++	[WDRM_PLANE_FEATURE] = {
++		.name = "FEATURE",
++		.enum_values = plane_feature_enums,
++		.num_enum_values = WDRM_PLANE_FEATURE__COUNT,
++	},
+ };
+ 
+ struct drm_property_enum_info dpms_state_enums[] = {
+@@ -363,6 +374,34 @@ drm_property_get_range_values(struct drm_property_info *info,
+ 	return NULL;
+ }
+ 
++/**
++ * Check if a DRM plane property (of type bitmask) has a specific feature enabled.
++ * Returns true if the property exists and the corresponding feature bit is set.
++ */
++bool
++drm_property_has_feature(struct drm_property_info *info,
++			 const drmModeObjectProperties *props,
++			 enum wdrm_plane_feature feature)
++{
++	unsigned int i;
++
++	if (info->prop_id == 0 ||
++	    feature >= info->num_enum_values ||
++	    !info->enum_values[feature].valid)
++		return false;
++
++	for (i = 0; i < props->count_props; i++) {
++		if (props->props[i] != info->prop_id)
++			continue;
++
++		if (props->prop_values[i] &
++		    (1LL << info->enum_values[feature].value))
++			return true;
++	}
++
++	return false;
++}
++
+ /* We use the fact that 0 is not a valid rotation here - if we return 0,
+  * the plane doesn't support the rotation requested. Otherwise the correct
+  * value to achieve the requested rotation on this plane is returned.
+-- 
+2.39.5
+

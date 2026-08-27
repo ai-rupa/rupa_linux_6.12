@@ -298,6 +298,10 @@ MPP_RET hal_avs2d_vdpu384b_init(void *hal, MppHalCfg *cfg)
 
     vdpu38x_rcb_calc_init((Vdpu38xRcbCtx **)&reg_ctx->rcb_ctx);
     hal_dbg_init(&p_hal->dbg_ctx, "hal_avs2d");
+    if (p_hal->fast_mode && p_hal->dbg_ctx) {
+        mpp_log("fast mode enabled, hal_dbg will be disabled");
+        hal_dbg_deinit(&p_hal->dbg_ctx);
+    }
 
 __RETURN:
     AVS2D_HAL_TRACE("Out. ret %d", ret);
@@ -515,8 +519,6 @@ MPP_RET hal_avs2d_vdpu384b_wait(void *hal, HalTaskInfo *task)
     reg_ctx = (Avs2dRkvRegCtx *)p_hal->reg_ctx;
     regs = p_hal->fast_mode ? reg_ctx->reg_buf[task->dec.reg_index].regs : reg_ctx->regs;
 
-    hal_dbg_finish(p_hal->dbg_ctx);
-
     if ((task->dec.flags.parse_err || task->dec.flags.ref_err) &&
         !p_hal->cfg->cfg->base.disable_error) {
         AVS2D_HAL_DBG(AVS2D_HAL_DBG_ERROR, "found task error.\n");
@@ -569,7 +571,9 @@ MPP_RET hal_avs2d_vdpu384b_wait(void *hal, HalTaskInfo *task)
         reg_ctx->reg_buf[task->dec.reg_index].valid = 0;
 
 __RETURN:
+    hal_dbg_finish(p_hal->dbg_ctx);
     AVS2D_HAL_TRACE("Out. ret %d", ret);
+
     return ret;
 }
 

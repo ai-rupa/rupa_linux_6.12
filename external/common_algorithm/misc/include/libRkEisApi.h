@@ -214,7 +214,7 @@ typedef struct _RK_EIS_buffer_tag
     rockchip_ImageDataEx buffer;            /**< image buffer */
 	long long timestamp;                    /**< image timestamp */
 	RK_EIS_metadata metadata;               /**< image meta data */
-	int buffer_idx;                         /**< output buffer index */
+	int buffer_idx;                         /**< image buffer index */
 	void* user_data;                        /**< user data about this object */
 } RK_EIS_buffer;
 
@@ -270,6 +270,7 @@ typedef struct _RK_EIS_initParams_tag
 	int delay_num;      /**< delay frame number.Range [0,30] */
 	int ois_mode;       /**< device OIS type, @enum RK_EIS_ois_mode_t */
 	int dvs_mode;		/**< dvs algorithm type */
+	int imu_mode;		/**< imu data injection type */
 	int horizon_mode;	/**< horizon dvs algorithm type */
 	int use_async;      /**< 1: perform processing asynchronously, 0: sync processing */
 	double view_angle;  /**< input image HORIZONTAL view angle */

@@ -25,4 +25,7 @@ typedef struct AiqIspParamsSplitter_s AiqIspParamsSplitter_t;
 XCamReturn Isp35SplitIspParams(AiqIspParamsSplitter_t* pSplit, void* orig_isp_params,
                                void* isp_params);
 
+XCamReturn Isp35SplitIspParamsMulti(AiqIspParamsSplitter_t* pSplit, void* orig_isp_params,
+                               void* isp_params);
+
 #endif

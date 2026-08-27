@@ -64,6 +64,7 @@ static const char* j2s_invalid_target_names[] = {
     "cis_hdr",
     "cis_qbcRmsc",
     "cis_cmpsOut",
+    "cis_wb",
     NULL /* Array terminator */
     // clang-format on
 };

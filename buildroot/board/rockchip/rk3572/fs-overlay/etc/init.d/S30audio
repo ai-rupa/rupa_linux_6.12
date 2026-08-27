@@ -1,0 +1,27 @@
+#!/bin/sh
+# Board-agnostic audio bring-up: render the default ALSA card and set the
+# initial headphone/speaker path. Card detection lives in rk-audio-switch.
+
+HELPER=/usr/bin/rk-audio-switch
+
+case "$1" in
+    start)
+        # Codec is built into the kernel and normally registers before init;
+        # this short bounded wait only matters if it probes as a late module.
+        i=0
+        while [ "$i" -lt 20 ]; do
+            grep -q "rk730" /proc/asound/cards 2>/dev/null && break
+            i=$((i + 1))
+            sleep 0.1
+        done
+        "$HELPER" --render
+        ;;
+    stop)
+        ;;
+    *)
+        echo "Usage: $0 {start|stop}"
+        exit 1
+        ;;
+esac
+
+exit 0

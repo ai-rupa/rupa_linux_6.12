@@ -35,6 +35,7 @@ build_buildroot()
 
 		if [ "$RK_ROOTFS_TYPE" == "ubi" ]; then
 			# Force to using dynamic to faster bootup.
+			mkdir -p ${RK_OUTDIR}/security
 			sed -e "s;BR2_ROOTFS_UBI_PATH;${IMAGE_DIR}/security_system.img;" \
 			    -e "s;UBI_VOL_TYPE;dynamic;" \
 			    ${RK_SDK_DIR}/buildroot/fs/ubi/ubinize.cfg > \
