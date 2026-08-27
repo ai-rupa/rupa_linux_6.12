@@ -117,7 +117,7 @@ static int rk_ispfec_findFecEntry(char* videoName) {
     return found;
 }
 
-int rk_ispfec_api_vb_init(int fd) {
+int rk_ispfec_api_vb_init(void) {
     int ret      = -1;
     char dev[32] = {0};
     ret          = rk_ispfec_findFecEntry(dev);
@@ -144,6 +144,11 @@ int rk_ispfec_api_vb_alloc(int fd, uint32_t size, struct rkfec_buffer* buf) {
     int ret                 = 0;
     struct rkfec_buf buffer = {0};
 
+    buf->handle    = 0;
+    buf->dmabuf_fd = -1;
+    buf->size      = 0;
+    buf->map       = NULL;
+
     buffer.size = size;
     ret         = ioctl(rkfec_fd, RKFEC_CMD_BUF_ALLOC, &buffer);
     if (ret < 0) {
@@ -153,9 +158,17 @@ int rk_ispfec_api_vb_alloc(int fd, uint32_t size, struct rkfec_buffer* buf) {
 
     buf->dmabuf_fd = buffer.buf_fd;
     buf->size      = buffer.size;
-    buf->map       = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, buffer.buf_fd, 0);
+    buf->map       = mmap(NULL, buffer.size, PROT_READ | PROT_WRITE, MAP_SHARED, buffer.buf_fd, 0);
     if (buf->map == MAP_FAILED) {
         rkfec_err("Mmap failed");
+        ret = ioctl(rkfec_fd, RKFEC_CMD_BUF_DEL, &buf->dmabuf_fd);
+        if (ret < 0) {
+            rkfec_err("ioctl return failed on fd(%d), cmd:0x%.8x", rkfec_fd, RKFEC_CMD_BUF_DEL);
+        }
+        close(buf->dmabuf_fd);
+        buf->dmabuf_fd = -1;
+        buf->size      = 0;
+        buf->map       = NULL;
         return -1;
     }
 
@@ -163,26 +176,37 @@ int rk_ispfec_api_vb_alloc(int fd, uint32_t size, struct rkfec_buffer* buf) {
 }
 
 int rk_ispfec_api_vb_free(int fd, struct rkfec_buffer* buf) {
-    if (buf == NULL || buf->map == NULL) {
+    int ret     = 0;
+    int dma_fd  = -1;
+    int err_ret = 0;
+
+    if (buf == NULL || buf->dmabuf_fd < 0 || buf->map == NULL || buf->map == MAP_FAILED ||
+        buf->size == 0) {
         return -1;
     }
 
-    int ret = 0;
+    dma_fd = buf->dmabuf_fd;
 
-    ret = ioctl(rkfec_fd, RKFEC_CMD_BUF_DEL, buf);
-    if (ret < 0) {
-        rkfec_err("ioctl return failed on fd(%d), cmd:0x%.8x", rkfec_fd, RKFEC_CMD_BUF_DEL);
-        return ret;
-    }
-
-    if (munmap(buf->map, buf->size) == -1) {
+    if (munmap(buf->map, buf->size) == -1 && err_ret == 0) {
         rkfec_err("Munmap failed");
-        return -1;
+        err_ret = -1;
     }
 
+    ret = ioctl(rkfec_fd, RKFEC_CMD_BUF_DEL, &dma_fd);
+    if (ret < 0 && err_ret == 0) {
+        rkfec_err("ioctl return failed on fd(%d), cmd:0x%.8x", rkfec_fd, RKFEC_CMD_BUF_DEL);
+        err_ret = ret;
+    }
+
+    if (close(dma_fd) < 0 && err_ret == 0) {
+        rkfec_err("close dma fd(%d) failed %s", dma_fd, strerror(errno));
+        err_ret = -1;
+    }
+
+    buf->handle    = 0;
     buf->map       = NULL;
     buf->size      = 0;
     buf->dmabuf_fd = -1;
 
-    return 0;
+    return err_ret;
 }

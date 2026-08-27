@@ -1,0 +1,237 @@
+From e50298be5d7a00e3d34716a8e504c0a9c289cd05 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Fri, 23 Sep 2022 17:24:12 +0800
+Subject: [PATCH 88/98] HACK: Honour cursor-size config
+
+Add support for cursor-size configuration, scale cursor surface and hotspot.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ frontend/main.c                       |  2 +
+ include/libweston/libweston.h         |  5 +++
+ libweston/backend-drm/drm.c           |  5 +++
+ libweston/backend-drm/state-propose.c | 61 +++++++++++++++++++++------
+ libweston/input.c                     | 34 +++++++++++++++
+ 5 files changed, 93 insertions(+), 14 deletions(-)
+
+diff --git a/frontend/main.c b/frontend/main.c
+index e05fb4c6..cf041a6a 100644
+--- a/frontend/main.c
++++ b/frontend/main.c
+@@ -5712,6 +5712,8 @@ wet_main(int argc, char *argv[], const struct weston_testsuite_data *test_data)
+ 	section = weston_config_get_section(config, "shell", NULL, NULL);
+ 	weston_config_section_get_bool(section, "hide-cursor",
+ 				       &wet.compositor->hide_cursor, false);
++	weston_config_section_get_int(section, "cursor-size",
++				      &wet.compositor->cursor_size, 0);
+ 
+ 	if (argc > 1 && strcmp(argv[1], "--") == 0) {
+ 		/* remove the '--' entry and move up the rest */
+diff --git a/include/libweston/libweston.h b/include/libweston/libweston.h
+index 123d5abd..1b11aa5c 100644
+--- a/include/libweston/libweston.h
++++ b/include/libweston/libweston.h
+@@ -796,6 +796,9 @@ struct weston_pointer {
+ 	struct wl_listener output_destroy_listener;
+ 
+ 	struct wl_list timestamps_list;
++
++	/* Scale factor for the pointer cursor. */
++	float scale;
+ };
+ 
+ /** libinput style calibration matrix
+@@ -1611,6 +1614,8 @@ struct weston_compositor {
+ 	bool lazy_output_ready;
+ 
+ 	bool hide_cursor;
++
++	int cursor_size;
+ };
+ 
+ struct weston_solid_buffer_values {
+diff --git a/libweston/backend-drm/drm.c b/libweston/backend-drm/drm.c
+index d435469f..d2687152 100644
+--- a/libweston/backend-drm/drm.c
++++ b/libweston/backend-drm/drm.c
+@@ -4803,6 +4803,11 @@ drm_backend_create(struct weston_compositor *compositor,
+ 	if (!device->cursors_are_broken)
+ 		compositor->capabilities |= WESTON_CAP_CURSOR_PLANE;
+ 
++	if (compositor->cursor_size) {
++		device->cursor_width = compositor->cursor_size;
++		device->cursor_height = compositor->cursor_size;
++	}
++
+ 	b->udev_monitor = udev_monitor_new_from_netlink(b->udev, "udev");
+ 	if (b->udev_monitor == NULL) {
+ 		weston_log("failed to initialize udev monitor\n");
+diff --git a/libweston/backend-drm/state-propose.c b/libweston/backend-drm/state-propose.c
+index 80a547ec..bb72f4c1 100644
+--- a/libweston/backend-drm/state-propose.c
++++ b/libweston/backend-drm/state-propose.c
+@@ -234,6 +234,7 @@ drm_output_prepare_cursor_paint_node(struct drm_output_state *output_state,
+ 	struct drm_output *output = output_state->output;
+ 	struct drm_device *device = output->device;
+ 	struct drm_backend *b = device->backend;
++	struct weston_compositor *compositor = b->compositor;
+ 	struct drm_plane_handle *handle = output->cursor_handle;
+ 	struct drm_plane *plane;
+ 	struct drm_plane_state *plane_state;
+@@ -262,17 +263,55 @@ drm_output_prepare_cursor_paint_node(struct drm_output_state *output_state,
+ 	plane_state->handle = handle;
+ 	drm_plane_state_coords_for_paint_node(plane_state, pnode, zpos);
+ 
++	/* Apply cursor size scaling */
++	if (compositor->cursor_size) {
++		float scale =
++			(float)compositor->cursor_size / pnode->surface->width;
++		plane_state->dest_w *= scale;
++		plane_state->dest_h *= scale;
++	}
++
++	/* Rockchip hw constraint: cursor min size 4x4 */
++	if ((plane_state->src_w >> 16) < 4 ||
++	    (plane_state->src_h >> 16) < 4) {
++		drm_debug(b, "\t\t\t\t[%s] not assigning paint node %s to %s plane "
++			  "(cursor too small)\n",
++			  p_name, pnode->internal_name, p_name);
++		goto err;
++	}
++
++	/* Check crop/scaling support for non-atomic modeset */
+ 	if (plane_state->src_x != 0 || plane_state->src_y != 0 ||
+ 	    plane_state->src_w > (unsigned) device->cursor_width << 16 ||
+ 	    plane_state->src_h > (unsigned) device->cursor_height << 16 ||
+ 	    plane_state->src_w != plane_state->dest_w << 16 ||
+ 	    plane_state->src_h != plane_state->dest_h << 16) {
+-		drm_debug(b, "\t\t\t\t[%s] not assigning paint node %s to %s plane "
+-			     "(positioning requires cropping or scaling)\n",
+-			     p_name, pnode->internal_name, p_name);
+-		goto err;
++		if (!device->atomic_modeset)
++			goto err_crop_scale;
++
++		/* Rockchip hw constraint: max 8x scaling */
++		if (!plane->can_scale ||
++		    plane_state->dest_w > 8 * (plane_state->src_w >> 16) ||
++		    plane_state->dest_w * 8 < (plane_state->src_w >> 16) ||
++		    plane_state->dest_h > 8 * (plane_state->src_h >> 16) ||
++		    plane_state->dest_h * 8 < (plane_state->src_h >> 16))
++			goto err_crop_scale;
++
++		goto out;
+ 	}
+ 
++	/* The cursor API is somewhat special: in cursor_bo_update(), we upload
++	 * a buffer which is always cursor_width x cursor_height, even if the
++	 * surface we want to promote is actually smaller than this. Manually
++	 * mangle the plane state to deal with this. */
++	plane_state->src_w = device->cursor_width << 16;
++	plane_state->src_h = device->cursor_height << 16;
++	plane_state->src_w -= plane_state->src_x;
++	plane_state->src_h -= plane_state->src_y;
++	plane_state->dest_w = plane_state->src_w >> 16;
++	plane_state->dest_h = plane_state->src_h >> 16;
++
++out:
+ 	plane_state->paint_node = pnode;
+ 	/* We always test with cursor fb 0. There are two potential fbs, and
+ 	 * they are identically allocated for cursor use specifically, so if
+@@ -283,20 +322,14 @@ drm_output_prepare_cursor_paint_node(struct drm_output_state *output_state,
+ 	 */
+ 	plane_state->fb = drm_fb_ref(output->gbm_cursor_fb[0]);
+ 
+-	/* The cursor API is somewhat special: in cursor_bo_update(), we upload
+-	 * a buffer which is always cursor_width x cursor_height, even if the
+-	 * surface we want to promote is actually smaller than this. Manually
+-	 * mangle the plane state to deal with this. */
+-	plane_state->src_w = device->cursor_width << 16;
+-	plane_state->src_h = device->cursor_height << 16;
+-	plane_state->dest_w = device->cursor_width;
+-	plane_state->dest_h = device->cursor_height;
+-
+ 	drm_debug(b, "\t\t\t\t[%s] provisionally assigned paint node %s to cursor\n",
+ 		  p_name, pnode->internal_name);
+ 
+ 	return plane_state;
+-
++err_crop_scale:
++	drm_debug(b, "\t\t\t\t[%s] not assigning paint node %s to %s plane "
++		  "(positioning requires cropping or scaling)\n",
++		  p_name, pnode->internal_name, p_name);
+ err:
+ 	drm_plane_state_put_back(plane_state);
+ 	return NULL;
+diff --git a/libweston/input.c b/libweston/input.c
+index b618b0f2..1a7605cf 100644
+--- a/libweston/input.c
++++ b/libweston/input.c
+@@ -573,6 +573,9 @@ weston_pointer_move_to_preclamped(struct weston_pointer *pointer,
+ 		struct weston_coord_surface hotspot_inv;
+ 
+ 		hotspot_inv = weston_coord_surface_invert(pointer->hotspot);
++		/* Scale hotspot with cursor factor */
++		hotspot_inv.c.x *= pointer->scale;
++		hotspot_inv.c.y *= pointer->scale;
+ 		weston_view_set_position_with_offset(pointer->sprite,
+ 						     pos, hotspot_inv);
+ 	}
+@@ -3545,6 +3548,30 @@ notify_tablet_tool_frame(struct weston_tablet_tool *tool,
+ }
+ 
+ 
++/* Scale cursor surface and matrix per config size */
++static void
++pointer_cursor_scale(struct weston_pointer *pointer,
++		     struct weston_surface *surface)
++{
++	struct weston_compositor *compositor = surface->compositor;
++	float scale;
++
++	/* Skip scaling if invalid size */
++	if (!compositor->cursor_size || !surface->width)
++		return;
++
++	scale = (float)compositor->cursor_size / surface->width;
++	pointer->scale = scale;
++	surface->width *= scale;
++	surface->height *= scale;
++
++	/* Scale surface and transform matrix */
++	weston_matrix_scale(&surface->surface_to_buffer_matrix,
++			    1 / scale, 1 / scale, 1);
++	weston_matrix_invert(&surface->buffer_to_surface_matrix,
++			     &surface->surface_to_buffer_matrix);
++}
++
+ static void
+ pointer_cursor_surface_committed(struct weston_surface *es,
+ 				 struct weston_coord_surface new_origin)
+@@ -3557,9 +3584,14 @@ pointer_cursor_surface_committed(struct weston_surface *es,
+ 
+ 	assert(es == pointer->sprite->surface);
+ 
++	pointer_cursor_scale(pointer, es);
++
+ 	pointer->hotspot = weston_coord_surface_sub(pointer->hotspot,
+ 						    new_origin);
+ 	hotspot_inv = weston_coord_surface_invert(pointer->hotspot);
++	/* Scale inverted hotspot for correct position */
++	hotspot_inv.c.x *= pointer->scale;
++	hotspot_inv.c.y *= pointer->scale;
+ 	weston_view_set_position_with_offset(pointer->sprite,
+ 					     pointer->pos, hotspot_inv);
+ 
+@@ -4245,6 +4277,8 @@ weston_seat_init_pointer(struct weston_seat *seat)
+ 
+ 	seat_send_updated_caps(seat);
+ 
++	pointer->scale = 1.0;
++
+ 	return 0;
+ }
+ 
+-- 
+2.39.5
+

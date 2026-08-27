@@ -69,11 +69,11 @@ typedef struct CcmContext_s {
 
     float fScale;
     bool damp_converged;
+    ccm_matrix_t ccm_satIntp;
     ccm_matrix_t undamped_matrix;
     ccm_matrix_t damped_matrix;
 
     bool is_calib_update;
-    bool isReCal_;
 } CcmContext_t;
 
 XCamReturn Accm_prepare(RkAiqAlgoCom* params);

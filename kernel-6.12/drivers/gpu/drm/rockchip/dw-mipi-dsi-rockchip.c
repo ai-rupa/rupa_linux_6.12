@@ -1176,7 +1176,7 @@ static int dw_mipi_dsi_rockchip_bind(struct device *dev,
 	if (dsi->sub_dev.connector) {
 		dsi->sub_dev.of_node = dev->of_node;
 		dsi->sub_dev.loader_protect = dw_mipi_dsi_rockchip_encoder_loader_protect;
-		rockchip_drm_register_sub_dev(&dsi->sub_dev);
+		devm_rockchip_drm_register_sub_dev(dev, &dsi->sub_dev);
 	}
 
 	return 0;
@@ -1190,9 +1190,6 @@ static void dw_mipi_dsi_rockchip_unbind(struct device *dev,
 
 	if (dsi->is_slave)
 		return;
-
-	if (dsi->sub_dev.connector)
-		rockchip_drm_unregister_sub_dev(&dsi->sub_dev);
 
 	dw_mipi_dsi_unbind(dsi->dmd);
 
@@ -1622,7 +1619,7 @@ static int dw_mipi_dsi_rockchip_probe(struct platform_device *pdev)
 	dsi->pdata.host_ops = &dw_mipi_dsi_rockchip_host_ops;
 	dsi->pdata.priv_data = dsi;
 
-	if (dsi->cdata->soc_type == RK3568 || dsi->cdata->soc_type == RK3572)
+	if (dsi->cdata->soc_type == RK3568)
 		dsi->pdata.stream_standby = dw_mipi_dsi_rockchip_stream_standby;
 
 	platform_set_drvdata(pdev, dsi);

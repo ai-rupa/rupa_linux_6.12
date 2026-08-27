@@ -7,6 +7,7 @@
 #include <rk_aiq_user_api2_camgroup.h>
 #include <rk_aiq_user_api2_imgproc.h>
 #include <rk_aiq_user_api2_sysctl.h>
+#include <rk_aiq_user_api2_ae.h>
 
 #include <sys/mman.h>
 #include <sys/types.h>
@@ -228,12 +229,12 @@ int rk_isp_set_frame_rate(int cam_id, int value) {
 	char entry[128] = {'\0'};
 	LOG_INFO("start %d\n", value);
 
-	ae_api_expSwAttr_t expSwAttr;
+	Uapi_ExpSwAttrV2_t expSwAttr;
 	ret = rk_aiq_user_api2_ae_getExpSwAttr(rkipc_aiq_get_ctx(cam_id), &expSwAttr);
 	if (ret != 0)
 		LOG_ERROR("%s : Cam %d get framerate failed %#X!\n", __func__, cam_id, ret);
-	expSwAttr.commCtrl.frmRate.sw_aeT_frmRate_mode = ae_frmRate_fix_mode;
-	expSwAttr.commCtrl.frmRate.sw_aeT_frmRate_val = value;
+	expSwAttr.stAuto.stFrmRate.isFpsFix = true;
+	expSwAttr.stAuto.stFrmRate.FpsValue = value;
 	ret = rk_aiq_user_api2_ae_setExpSwAttr(rkipc_aiq_get_ctx(cam_id), expSwAttr);
 	if (ret != 0)
 		LOG_ERROR("%s : Cam %d set framerate %d failed %#X!\n", __func__, cam_id, value, ret);
@@ -251,12 +252,12 @@ int rk_isp_set_frame_rate_without_ini(int cam_id, int value) {
 	int ret;
 	LOG_INFO("start %d\n", value);
 
-	ae_api_expSwAttr_t expSwAttr;
+	Uapi_ExpSwAttrV2_t expSwAttr;
 	ret = rk_aiq_user_api2_ae_getExpSwAttr(rkipc_aiq_get_ctx(cam_id), &expSwAttr);
 	if (ret != 0)
 		LOG_ERROR("%s : Cam %d get framerate failed %#X!\n", __func__, cam_id, ret);
-	expSwAttr.commCtrl.frmRate.sw_aeT_frmRate_mode = ae_frmRate_auto_mode;
-	expSwAttr.commCtrl.frmRate.sw_aeT_frmRate_val = value;
+	expSwAttr.stAuto.stFrmRate.isFpsFix = false;
+	expSwAttr.stAuto.stFrmRate.FpsValue = value;
 	ret = rk_aiq_user_api2_ae_setExpSwAttr(rkipc_aiq_get_ctx(cam_id), expSwAttr);
 	if (ret != 0)
 		LOG_ERROR("%s : Cam %d set framerate %d failed %#X!\n", __func__, cam_id, value, ret);
@@ -1973,4 +1974,9 @@ int rk_isp_asd_set_face_win(int cam_id, FaceInfo *face_info)
 	/* 1106: uses first box only; extend ASD logic here if needed */
 	(void)face_info;
 	return 0;
+}
+
+bool rk_isp_need_raw_pipe_ctrl(int cam_id) {
+	(void)cam_id;
+	return false;
 }

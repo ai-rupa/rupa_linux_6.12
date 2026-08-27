@@ -33,6 +33,7 @@ SUBDIRS =
 if ENABLE_USERLIB
 SUBDIRS += \
 	dc_user \
+	ecat_loopback_jitter \
 	user
 endif
 
@@ -60,6 +61,7 @@ endif
 DIST_SUBDIRS = \
 	dc_rtai \
 	dc_user \
+	ecat_loopback_jitter \
 	mini \
 	rtai \
 	rtai_rtdm \

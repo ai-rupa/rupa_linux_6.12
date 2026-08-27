@@ -354,6 +354,7 @@ typedef struct tagRKADK_PARAM_DISP_CFG_S {
   RKADK_U32 height;
   RKADK_U32 frame_rate;
   RKADK_U32 rotation;
+  bool enable_vpss;
   RKADK_U32 vpss_grp;
   RKADK_U32 vpss_chn;
   char img_type[RKADK_PIX_FMT_LEN]; /* specify PIXEL_FORMAT_E: NV12/RGB888... */

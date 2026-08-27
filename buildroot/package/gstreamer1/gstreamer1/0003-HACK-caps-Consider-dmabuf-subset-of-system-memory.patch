@@ -1,4 +1,4 @@
-From a6e8d9b1a6edaef8e2dda99b889539b100752b94 Mon Sep 17 00:00:00 2001
+From 883f5a8a02814181daa05719cf55f9ea065c7944 Mon Sep 17 00:00:00 2001
 From: Jeffy Chen <jeffy.chen@rock-chips.com>
 Date: Tue, 19 Jul 2022 18:19:48 +0800
 Subject: [PATCH 3/4] HACK: caps: Consider dmabuf subset of system memory
@@ -11,7 +11,7 @@ Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
  1 file changed, 87 insertions(+)
 
 diff --git a/gst/gstcaps.c b/gst/gstcaps.c
-index a398862..2d9af55 100644
+index 92abf41..88ac160 100644
 --- a/gst/gstcaps.c
 +++ b/gst/gstcaps.c
 @@ -126,6 +126,23 @@ typedef struct _GstCapsImpl
@@ -38,7 +38,7 @@ index a398862..2d9af55 100644
  static void gst_caps_transform_to_string (const GValue * src_value,
      GValue * dest_value);
  static gboolean gst_caps_from_string_inplace (GstCaps * caps,
-@@ -1694,6 +1711,8 @@ gst_caps_is_subset (const GstCaps * subset, const GstCaps * superset)
+@@ -1690,6 +1707,8 @@ gst_caps_is_subset (const GstCaps * subset, const GstCaps * superset)
      if (!f1)
        f1 = GST_CAPS_FEATURES_MEMORY_SYSTEM_MEMORY;
  
@@ -47,7 +47,7 @@ index a398862..2d9af55 100644
      for (j = GST_CAPS_LEN (superset) - 1; j >= 0; j--) {
        s2 = gst_caps_get_structure_unchecked (superset, j);
        f2 = gst_caps_get_features_unchecked (superset, j);
-@@ -1708,6 +1727,11 @@ gst_caps_is_subset (const GstCaps * subset, const GstCaps * superset)
+@@ -1704,6 +1723,11 @@ gst_caps_is_subset (const GstCaps * subset, const GstCaps * superset)
        }
      }
  
@@ -59,7 +59,7 @@ index a398862..2d9af55 100644
      /* If we found no superset for this subset structure
       * we return FALSE immediately */
      if (j == -1) {
-@@ -1950,10 +1974,26 @@ gst_caps_can_intersect (const GstCaps * caps1, const GstCaps * caps2)
+@@ -1946,10 +1970,26 @@ gst_caps_can_intersect (const GstCaps * caps1, const GstCaps * caps2)
        features2 = gst_caps_get_features_unchecked (caps2, k);
        if (!features2)
          features2 = GST_CAPS_FEATURES_MEMORY_SYSTEM_MEMORY;
@@ -86,7 +86,7 @@ index a398862..2d9af55 100644
        /* move down left */
        k++;
        if (G_UNLIKELY (j == 0))
-@@ -1976,6 +2016,7 @@ gst_caps_intersect_zig_zag (GstCaps * caps1, GstCaps * caps2)
+@@ -1972,6 +2012,7 @@ gst_caps_intersect_zig_zag (GstCaps * caps1, GstCaps * caps2)
    GstCapsFeatures *features2;
    GstCaps *dest;
    GstStructure *istruct;
@@ -94,7 +94,7 @@ index a398862..2d9af55 100644
  
    dest = gst_caps_new_empty ();
    /* run zigzag on top line then right line, this preserves the caps order
-@@ -1996,6 +2037,8 @@ gst_caps_intersect_zig_zag (GstCaps * caps1, GstCaps * caps2)
+@@ -1992,6 +2033,8 @@ gst_caps_intersect_zig_zag (GstCaps * caps1, GstCaps * caps2)
     */
    len1 = GST_CAPS_LEN (caps1);
    len2 = GST_CAPS_LEN (caps2);
@@ -103,7 +103,7 @@ index a398862..2d9af55 100644
    for (i = 0; i < len1 + len2 - 1; i++) {
      /* caps1 index goes from 0 to GST_CAPS_LEN (caps1)-1 */
      j = MIN (i, len1 - 1);
-@@ -2013,6 +2056,15 @@ gst_caps_intersect_zig_zag (GstCaps * caps1, GstCaps * caps2)
+@@ -2009,6 +2052,15 @@ gst_caps_intersect_zig_zag (GstCaps * caps1, GstCaps * caps2)
        features2 = gst_caps_get_features_unchecked (caps2, k);
        if (!features2)
          features2 = GST_CAPS_FEATURES_MEMORY_SYSTEM_MEMORY;
@@ -119,7 +119,7 @@ index a398862..2d9af55 100644
        if (gst_caps_features_is_equal (features1, features2)) {
          istruct = gst_structure_intersect (struct1, struct2);
          if (istruct) {
-@@ -2026,6 +2078,10 @@ gst_caps_intersect_zig_zag (GstCaps * caps1, GstCaps * caps2)
+@@ -2022,6 +2074,10 @@ gst_caps_intersect_zig_zag (GstCaps * caps1, GstCaps * caps2)
                  gst_caps_features_copy_conditional (features1));
          }
        }
@@ -130,7 +130,7 @@ index a398862..2d9af55 100644
        /* move down left */
        k++;
        if (G_UNLIKELY (j == 0))
-@@ -2033,6 +2089,13 @@ gst_caps_intersect_zig_zag (GstCaps * caps1, GstCaps * caps2)
+@@ -2029,6 +2085,13 @@ gst_caps_intersect_zig_zag (GstCaps * caps1, GstCaps * caps2)
        j--;
      }
    }
@@ -144,7 +144,7 @@ index a398862..2d9af55 100644
    return dest;
  }
  
-@@ -2060,20 +2123,34 @@ gst_caps_intersect_first (GstCaps * caps1, GstCaps * caps2)
+@@ -2056,20 +2119,34 @@ gst_caps_intersect_first (GstCaps * caps1, GstCaps * caps2)
    GstCapsFeatures *features2;
    GstCaps *dest;
    GstStructure *istruct;
@@ -179,7 +179,7 @@ index a398862..2d9af55 100644
        if (gst_caps_features_is_equal (features1, features2)) {
          istruct = gst_structure_intersect (struct1, struct2);
          if (istruct) {
-@@ -2087,7 +2164,17 @@ gst_caps_intersect_first (GstCaps * caps1, GstCaps * caps2)
+@@ -2083,7 +2160,17 @@ gst_caps_intersect_first (GstCaps * caps1, GstCaps * caps2)
                  gst_caps_features_copy_conditional (features1));
          }
        }

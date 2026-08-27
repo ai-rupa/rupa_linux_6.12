@@ -60,6 +60,17 @@ DECLARE_GLOBAL_DATA_PTR;
 #define GPIO1B_IOMUX_SEL_0		0x28
 #define GPIO1B_IOMUX_SEL_1		0x2c
 #define GPIO1C_IOMUX_SEL_0		0x30
+#define GPIO1A_DS_0			0x140
+#define GPIO1A_DS_1			0x144
+#define GPIO1A_DS_2			0x148
+#define GPIO1A_DS_3			0x14c
+#define GPIO1B_DS_0			0x150
+#define GPIO1B_DS_1			0x154
+#define GPIO1B_DS_2			0x158
+#define GPIO1B_DS_3			0x15c
+#define GPIO1C_DS_0			0x160
+#define GPIO1_IDDQ			0x910
+#define GPIO1_VD_3V3			BIT(15)
 
 #define GPIO2_IOC_BASE			0xFD1E0000
 #define GPIO2A_IOMUX_SEL_0		0x40
@@ -157,7 +168,46 @@ static void tsadc_trigger(void)
 
 static void tsadc_adjust_bias_current(void)
 {
+	struct udevice *dev;
+	int8_t offset_otp = 0;
+	uint8_t bias_otp = 0;
+	int16_t offset = 0;
+	int ret = 0;
 	u32 i, bias, value = 0, width = 0;
+
+	ret = uclass_get_device_by_driver(UCLASS_MISC,
+					  DM_DRIVER_GET(rockchip_otp), &dev);
+	if (ret) {
+		printf("failed to get otp device for tsadc\n");
+	} else {
+		ret = misc_read(dev, 0x34, &bias_otp, 1);
+		if (ret < 0)
+			printf("failed to get otp tsadc bias\n");
+		ret = misc_read(dev, 0x35, (uint8_t *)&offset_otp, 1);
+		if (ret < 0)
+			printf("failed to get otp tsadc offset\n");
+
+		if (offset_otp) {
+			offset = (int16_t)offset_otp * 10;
+			offset = 0x963f - offset;
+			writel((uint32_t)offset | 0xffff0000,
+			       PHPL_GRF_BASE + TSADC_CON4);
+			tsadc_trigger();
+		}
+		printf("tsadc otp bias=0x%x offset=0x%x, grf offset=0x%x\n",
+		       bias_otp, (uint8_t)offset_otp, (uint16_t)offset);
+
+		if (bias_otp) {
+			if (bias_otp > TSADC_MAX_BIAS)
+				bias_otp = TSADC_MAX_BIAS;
+			if (bias_otp < TSADC_MIN_BIAS)
+				bias_otp = TSADC_MIN_BIAS;
+			writel((TSADC_MAX_BIAS << 16) | bias_otp,
+			       PHPL_GRF_BASE + TSADC_CON6);
+			tsadc_trigger();
+			return;
+		}
+	}
 
 	for (i = 0; i < TSADC_EOC_TIMEOUT; i++) {
 		value = readl(PHPL_GRF_BASE + TSADC_ST0);
@@ -245,6 +295,36 @@ int arch_cpu_init(void)
 
 	/* dbg_core_en and dbg_m_en */
 	writel(0x000C000C, PMU_SGRF_BASE + PMU_SGRF_SOC_CON0);
+
+	/* Set NandC io strength */
+	if (readl(GPIO1_IOC_BASE + GPIO1A_IOMUX_SEL_0) == 0x2222) {
+		writel(0x3f3f1d1d, GPIO1_IOC_BASE + GPIO1A_DS_0);
+		writel(0x3f3f1d1d, GPIO1_IOC_BASE + GPIO1A_DS_1);
+		writel(0x3f3f1d1d, GPIO1_IOC_BASE + GPIO1A_DS_2);
+		writel(0x3f3f1d1d, GPIO1_IOC_BASE + GPIO1A_DS_3);
+		writel(0x003f001d, GPIO1_IOC_BASE + GPIO1B_DS_0);
+		writel(0x003f001d, GPIO1_IOC_BASE + GPIO1B_DS_1);
+		writel(0x3f3f1d1d, GPIO1_IOC_BASE + GPIO1B_DS_2);
+		writel(0x3f3f1d1d, GPIO1_IOC_BASE + GPIO1B_DS_3);
+	}
+	/* Set FSPI io strength */
+	if (readl(GPIO1_IOC_BASE + GPIO1B_IOMUX_SEL_1) == 0x1111) {
+		if (readl(GPIO1_IOC_BASE + GPIO1_IDDQ) & GPIO1_VD_3V3) {
+			writel(0x3f001e00, GPIO1_IOC_BASE + GPIO1B_DS_1);
+			writel(0x3f3f1e1e, GPIO1_IOC_BASE + GPIO1B_DS_2);
+			writel(0x3f3f1e1e, GPIO1_IOC_BASE + GPIO1B_DS_3);
+			writel(0x003f001e, GPIO1_IOC_BASE + GPIO1C_DS_0);
+		} else {
+			writel(0x3f001c00, GPIO1_IOC_BASE + GPIO1B_DS_1);
+			writel(0x3f3f1c1c, GPIO1_IOC_BASE + GPIO1B_DS_2);
+			writel(0x3f3f1c1c, GPIO1_IOC_BASE + GPIO1B_DS_3);
+			writel(0x003f001c, GPIO1_IOC_BASE + GPIO1C_DS_0);
+		}
+#ifdef CONFIG_ROCKCHIP_SFC_OCTAL_SETTING
+		writel(0x3f3f1c1c, GPIO1_IOC_BASE + GPIO1A_DS_2);
+		writel(0x3f3f1c1c, GPIO1_IOC_BASE + GPIO1A_DS_3);
+#endif
+	}
 
 #elif defined(CONFIG_SUPPORT_USBPLUG)
 	board_set_iomux(UCLASS_MMC, 0, 0);

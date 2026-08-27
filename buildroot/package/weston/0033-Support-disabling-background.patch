@@ -1,0 +1,107 @@
+From 5f7007c27016c47d382c7ce1fb307d6b97b92102 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Thu, 8 Aug 2024 08:51:02 +0800
+Subject: [PATCH 33/98] Support disabling background
+
+Set env WESTON_NO_BACKGROUND=1 to disable it.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ clients/desktop-shell.c   | 10 ++++++++++
+ desktop-shell/shell.c     |  3 ++-
+ kiosk-shell/kiosk-shell.c |  2 +-
+ libweston/compositor.c    |  9 ---------
+ 4 files changed, 13 insertions(+), 11 deletions(-)
+
+diff --git a/clients/desktop-shell.c b/clients/desktop-shell.c
+index 64fb4388..564e60dd 100644
+--- a/clients/desktop-shell.c
++++ b/clients/desktop-shell.c
+@@ -139,6 +139,8 @@ struct output {
+ 	struct background *background;
+ 
+ 	struct desktop *desktop;
++
++	bool inited;
+ };
+ 
+ struct panel_launcher {
+@@ -1418,6 +1420,11 @@ output_init(struct output *output, struct desktop *desktop)
+ {
+ 	struct wl_surface *surface;
+ 
++	if (output->inited)
++		return;
++
++	output->inited = true;
++
+ 	if (desktop->want_panel) {
+ 		output->panel = panel_create(desktop, output);
+ 		surface = window_get_wl_surface(output->panel->window);
+@@ -1425,6 +1432,9 @@ output_init(struct output *output, struct desktop *desktop)
+ 					       output->output, surface);
+ 	}
+ 
++	if (getenv("WESTON_NO_BACKGROUND"))
++		return;
++
+ 	output->background = background_create(desktop, output);
+ 	surface = window_get_wl_surface(output->background->window);
+ 	weston_desktop_shell_set_background(desktop->shell,
+diff --git a/desktop-shell/shell.c b/desktop-shell/shell.c
+index 09628b4f..717d80d1 100644
+--- a/desktop-shell/shell.c
++++ b/desktop-shell/shell.c
+@@ -2649,7 +2649,6 @@ background_committed(struct weston_surface *es,
+ 				 sh_output->output->pos);
+ 	weston_view_move_to_layer(sh_output->background_view,
+ 				  &shell->background_layer.view_list);
+-	weston_output_set_ready(sh_output->output);
+ 
+ 	es->wait_for_resizing = false;
+ }
+@@ -4536,6 +4535,8 @@ create_shell_output(struct desktop_shell *shell,
+ 	if (!shell->disallow_output_changed_move && wl_list_length(&shell->output_list) == 1)
+ 		shell_for_each_layer(shell,
+ 				     shell_output_changed_move_layer, NULL);
++
++	weston_output_set_ready(output);
+ }
+ 
+ static void
+diff --git a/kiosk-shell/kiosk-shell.c b/kiosk-shell/kiosk-shell.c
+index 176c78fd..3794c361 100644
+--- a/kiosk-shell/kiosk-shell.c
++++ b/kiosk-shell/kiosk-shell.c
+@@ -706,7 +706,7 @@ kiosk_shell_output_recreate_background(struct kiosk_shell_output *shoutput)
+ 	if (shoutput->curtain)
+ 		weston_shell_utils_curtain_destroy(shoutput->curtain);
+ 
+-	if (!output)
++	if (!output || getenv("WESTON_NO_BACKGROUND"))
+ 		return;
+ 
+ 	if (shell->config)
+diff --git a/libweston/compositor.c b/libweston/compositor.c
+index 96deb01f..e0fd974b 100644
+--- a/libweston/compositor.c
++++ b/libweston/compositor.c
+@@ -3834,15 +3834,6 @@ weston_output_repaint(struct weston_output *output)
+ 	if (output->paint_node_list_needs_rebuild)
+ 		weston_output_build_z_order_list(ec, output);
+ 
+-	/* If the scene graph is empty, we could end up passing a buffer
+-	 * we've never drawn into to a hardware plane later. If that hardware
+-	 * plane uses compression, the results can be very messy.
+-	 *
+-	 * Ensure we have scene graph contents here.
+-	 */
+-	assert(!wl_list_empty(&output->paint_node_z_order_list) &&
+-	       "empty scene graph at repaint");
+-
+ 	wl_list_for_each(pnode, &output->paint_node_z_order_list,
+ 			 z_order_link) {
+ 		assert(pnode->view->output_mask & (1u << pnode->output->id));
+-- 
+2.39.5
+

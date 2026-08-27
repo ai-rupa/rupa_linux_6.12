@@ -34,6 +34,7 @@ struct rk_aiq_vbuf_info {
     float exp_time;
     float exp_gain;
     float exp_ispdgain;
+    float cis_total_gain;
     uint32_t exp_time_reg;
     uint32_t exp_gain_reg;
     uint32_t data_fd;
@@ -76,6 +77,7 @@ typedef struct rk_aiq_tx_info_s {
 #define ISP_TX_BUF_NUM 4
 #define VIPCAP_TX_BUF_NUM      4
 #define AIRMS_VIPCAP_TX_BUF_NUM      3
+#define AIRMS_VIPCAP_TX_CAPTURE_BUF_NUM 1
 #define VIPCAP_TX_BUF_NUM_1608 6  // For mount 3 sensor, is mount 4 sensor, is 7
 
 typedef struct {
@@ -110,6 +112,8 @@ typedef struct {
     char linked_vicap[MAX_ISP_LINKED_VICAP_CNT][DEV_PATH_LEN];
     char linked_vicap_sd_path[DEV_PATH_LEN];
     char pdaf_path[DEV_PATH_LEN];
+    // enum vicap_output_path from rkcif-config.h, determined by driver DTS
+    int vicap_isp_link_path;
 } rk_aiq_isp_t;
 
 typedef struct {
@@ -217,6 +221,13 @@ typedef struct {
     char pdaf_vdev[DEV_PATH_LEN];
 } rk_sensor_pdaf_info_t;
 
+/**
+ * rk_sensor_full_info_t - aggregates metadata for a single image sensor.
+ * @vicap_output_path: value sourced from enum vicap_output_path in 'rkcif-config.h'.
+ *
+ * Provides the complete hardware topology, media links, module accessories,
+ * and ISP/CIF binding information required to configure the capture pipeline.
+ */
 typedef struct rk_sensor_full_info_s {
     /* sensor entity name format:
      * m01_b_ov13850 1-0010, where 'm01' means module index number
@@ -252,9 +263,10 @@ typedef struct rk_sensor_full_info_s {
     bool linked_to_serdes;
     bool dvp_itf;
     bool split;
+    bool isPreviewCaptureMode;
     char sensor_name_before_split[DEV_PATH_LEN];
     struct rkmodule_inf mod_info;
-    int connect_id;
+    int vicap_output_path;
 } rk_sensor_full_info_t;
 
 typedef struct AiqHwEvt_s {

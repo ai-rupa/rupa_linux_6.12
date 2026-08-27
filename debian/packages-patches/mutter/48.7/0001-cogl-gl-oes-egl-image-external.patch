@@ -1,0 +1,237 @@
+From ccc179fdeed4d495ca89af848b108427b3cd76c6 Mon Sep 17 00:00:00 2001
+From: Weiye Chen <weiye.chen@rock-chips.com>
+Date: Sat, 16 May 2026 08:50:30 +0000
+Subject: [PATCH 1/3] cogl: GL_OES_EGL_image_external support for Mali G310
+
+- cogl-driver-gles2.c: detect GL_OES_EGL_image_external/_essl3 extensions,
+  set COGL_FEATURE_ID_TEXTURE_EGL_IMAGE_EXTERNAL
+- cogl-pipeline-fragend-glsl.c: emit samplerExternalOES for external OES
+  textures; skip sampler declarations that would conflict in GLSL link
+- cogl-pipeline-vertend-glsl.c: skip sampler declarations in vertex shader
+
+Change-Id: I9e5c722b203e81c0f1a2b3c4d5e6f7a8b9c0d1e2
+Signed-off-by: Weiye Chen <weiye.chen@rock-chips.com>
+---
+ .../driver/gl/cogl-pipeline-fragend-glsl.c    | 61 ++++++++++++++++---
+ .../driver/gl/cogl-pipeline-vertend-glsl.c    | 40 ++++++------
+ cogl/cogl/driver/gl/gles2/cogl-driver-gles2.c |  8 +++
+ 3 files changed, 78 insertions(+), 31 deletions(-)
+
+diff --git a/cogl/cogl/driver/gl/cogl-pipeline-fragend-glsl.c b/cogl/cogl/driver/gl/cogl-pipeline-fragend-glsl.c
+index 949f723..859348b 100644
+--- a/cogl/cogl/driver/gl/cogl-pipeline-fragend-glsl.c
++++ b/cogl/cogl/driver/gl/cogl-pipeline-fragend-glsl.c
+@@ -38,6 +38,10 @@
+
+ #include "cogl/cogl-context-private.h"
+ #include "cogl/cogl-pipeline-private.h"
++#include "cogl/cogl-texture-2d-private.h"
++#ifndef GL_TEXTURE_EXTERNAL_OES
++#define GL_TEXTURE_EXTERNAL_OES 0x8D65
++#endif
+ #include "cogl/cogl-pipeline-layer-private.h"
+ #include "cogl/cogl-blend-string.h"
+ #include "cogl/cogl-snippet-private.h"
+@@ -247,15 +251,48 @@ has_replace_hook (CoglPipelineLayer *layer,
+   return FALSE;
+ }
+
++
++/* Return TRUE if the layer's texture uses GL_TEXTURE_EXTERNAL_OES target
++ * AND the context supports GL_OES_EGL_image_external.
++ * Used to select samplerExternalOES vs sampler2D throughout shader gen. */
++static gboolean
++layer_texture_is_external_oes (CoglContext         *ctx,
++                               CoglPipelineLayer   *layer)
++{
++  CoglTexture *tex;
++  CoglTexture2D *tex2d;
++
++  if (!cogl_context_has_feature (ctx, COGL_FEATURE_ID_TEXTURE_EGL_IMAGE_EXTERNAL))
++    return FALSE;
++
++  tex = _cogl_pipeline_layer_get_texture_real (layer);
++  if (tex && COGL_IS_TEXTURE_2D (tex))
++    {
++      tex2d = COGL_TEXTURE_2D (tex);
++      return tex2d->gl_target == GL_TEXTURE_EXTERNAL_OES;
++    }
++  return FALSE;
++}
++
++/* User data passed to add_layer_declaration_cb carrying both state and context. */
++typedef struct {
++  CoglPipelineFragendShaderState *shader_state;
++  CoglContext                    *ctx;
++} LayerDeclarationData;
++
+ static gboolean
+ add_layer_declaration_cb (CoglPipelineLayer *layer,
+                           void *user_data)
+ {
+-  CoglPipelineFragendShaderState *shader_state = user_data;
++  LayerDeclarationData *data = user_data;
++  CoglPipelineFragendShaderState *shader_state = data->shader_state;
++  const char *sampler_type =
++    layer_texture_is_external_oes (data->ctx, layer)
++    ? "samplerExternalOES" : "sampler2D";
+
+   g_string_append_printf (shader_state->header,
+-                          "uniform sampler2D cogl_sampler%i;\n",
+-                          layer->index);
++                          "uniform %s cogl_sampler%i;\n",
++                          sampler_type, layer->index);
+
+   return TRUE;
+ }
+@@ -266,10 +303,11 @@ add_layer_declarations (CoglPipeline *pipeline,
+ {
+   /* We always emit sampler uniforms in case there will be custom
+    * layer snippets that want to sample arbitrary layers. */
++  LayerDeclarationData data = { shader_state, pipeline->context };
+
+   _cogl_pipeline_foreach_layer_internal (pipeline,
+                                          add_layer_declaration_cb,
+-                                         shader_state);
++                                         &data);
+ }
+
+ static void
+@@ -457,11 +495,13 @@ ensure_texture_lookup_generated (CoglPipelineFragendShaderState *shader_state,
+     {
+       g_string_append_printf (shader_state->header,
+                               "vec4\n"
+-                              "cogl_real_texture_lookup%i (sampler2D tex,\n"
++                              "cogl_real_texture_lookup%i (%s tex,\n"
+                               "                            vec4 coords)\n"
+                               "{\n"
+                               "  return ",
+-                              layer->index);
++                              layer->index,
++                              layer_texture_is_external_oes (pipeline->context, layer)
++                              ? "samplerExternalOES" : "sampler2D");
+
+       if (G_UNLIKELY (COGL_DEBUG_ENABLED (COGL_DEBUG_DISABLE_TEXTURING)))
+         g_string_append (shader_state->header,
+@@ -487,7 +527,9 @@ ensure_texture_lookup_generated (CoglPipelineFragendShaderState *shader_state,
+   snippet_data.return_variable = "cogl_texel";
+   snippet_data.arguments = "cogl_sampler, cogl_tex_coord";
+   snippet_data.argument_declarations =
+-    g_strdup ("sampler2D cogl_sampler, vec4 cogl_tex_coord");
++    g_strdup (layer_texture_is_external_oes (pipeline->context, layer)
++              ? "samplerExternalOES cogl_sampler, vec4 cogl_tex_coord"
++              : "sampler2D cogl_sampler, vec4 cogl_tex_coord");
+   snippet_data.source_buf = shader_state->header;
+
+   _cogl_pipeline_snippet_generate_code (&snippet_data);
+@@ -1049,6 +1091,9 @@ _cogl_pipeline_fragend_glsl_end (CoglPipeline *pipeline,
+
+       GE_RET( shader, ctx, glCreateShader (GL_FRAGMENT_SHADER) );
+
++      /* Note: _cogl_glsl_shader_set_source_with_boilerplate already adds
++       * "#extension GL_OES_EGL_image_external : require" when the feature
++       * is enabled -- no need to add it again here. */
+       lengths[0] = shader_state->header->len;
+       source_strings[0] = shader_state->header->str;
+       lengths[1] = shader_state->source->len;
+@@ -1057,7 +1102,7 @@ _cogl_pipeline_fragend_glsl_end (CoglPipeline *pipeline,
+       _cogl_glsl_shader_set_source_with_boilerplate (ctx,
+                                                      shader, GL_FRAGMENT_SHADER,
+                                                      pipeline,
+-                                                     2, /* count */
++                                                     2,
+                                                      source_strings, lengths);
+
+       GE( ctx, glCompileShader (shader) );
+diff --git a/cogl/cogl/driver/gl/cogl-pipeline-vertend-glsl.c b/cogl/cogl/driver/gl/cogl-pipeline-vertend-glsl.c
+index 736679d..95d7656 100644
+--- a/cogl/cogl/driver/gl/cogl-pipeline-vertend-glsl.c
++++ b/cogl/cogl/driver/gl/cogl-pipeline-vertend-glsl.c
+@@ -234,10 +234,15 @@ _cogl_glsl_shader_set_source_with_boilerplate (CoglContext *ctx,
+
+   if (cogl_context_has_feature (ctx, COGL_FEATURE_ID_TEXTURE_EGL_IMAGE_EXTERNAL))
+     {
+-      static const char image_external_extension[] =
++      /* GLES 3.x requires essl3 variant; older versions use the standard. */
++      static const char image_external_essl3[] =
++        "#extension GL_OES_EGL_image_external_essl3 : require\n";
++      static const char image_external_ext[] =
+         "#extension GL_OES_EGL_image_external : require\n";
+-      strings[count] = image_external_extension;
+-      lengths[count++] = sizeof (image_external_extension) - 1;
++      if (is_glsl140_syntax (ctx))
++        { strings[count] = image_external_essl3; lengths[count++] = sizeof (image_external_essl3) - 1; }
++      else
++        { strings[count] = image_external_ext; lengths[count++] = sizeof (image_external_ext) - 1; }
+     }
+
+   if (shader_gl_type == GL_VERTEX_SHADER)
+@@ -333,7 +338,6 @@ _cogl_glsl_shader_set_source_with_boilerplate (CoglContext *ctx,
+                  buf->str);
+       g_string_free (buf, TRUE);
+     }
+-
+   GE( ctx, glShaderSource (shader_gl_handle, count,
+                            (const char **) strings, lengths) );
+ }
+@@ -367,29 +371,19 @@ get_layer_vertex_snippets (CoglPipelineLayer *layer)
+   return &layer->big_state->vertex_snippets;
+ }
+
+-static gboolean
+-add_layer_declaration_cb (CoglPipelineLayer *layer,
+-                          void *user_data)
+-{
+-  CoglPipelineVertendShaderState *shader_state = user_data;
+-
+-  g_string_append_printf (shader_state->header,
+-                          "uniform sampler2D cogl_sampler%i;\n",
+-                          layer->index);
+-
+-  return TRUE;
+-}
+-
+ static void
+ add_layer_declarations (CoglPipeline *pipeline,
+                         CoglPipelineVertendShaderState *shader_state)
+ {
+-  /* We always emit sampler uniforms in case there will be custom
+-   * layer snippets that want to sample arbitrary layers. */
+-
+-  _cogl_pipeline_foreach_layer_internal (pipeline,
+-                                         add_layer_declaration_cb,
+-                                         shader_state);
++  /* Sampler uniforms are intentionally NOT declared in the vertex shader.
++   * Vertex shaders in mutter never sample textures, so no declaration is
++   * needed.  More importantly, declaring "uniform sampler2D cogl_samplerN"
++   * here causes a GLSL program link error when the fragment shader uses
++   * "uniform samplerExternalOES cogl_samplerN" for external OES textures
++   * (e.g. NV12 on Mali G310): the types would conflict.  Weston's
++   * gl-renderer uses the same pattern — samplers are fragment-only. */
++  (void) pipeline;
++  (void) shader_state;
+ }
+
+ static void
+diff --git a/cogl/cogl/driver/gl/gles2/cogl-driver-gles2.c b/cogl/cogl/driver/gl/gles2/cogl-driver-gles2.c
+index 7228cdb..82b0268 100644
+--- a/cogl/cogl/driver/gl/gles2/cogl-driver-gles2.c
++++ b/cogl/cogl/driver/gl/gles2/cogl-driver-gles2.c
+@@ -790,6 +790,14 @@ cogl_driver_gles2_update_features (CoglDriver   *driver,
+     COGL_FLAGS_SET (private_features,
+                     COGL_PRIVATE_FEATURE_TEXTURE_2D_FROM_EGL_IMAGE, TRUE);
+
++  /* GL_OES_EGL_image_external allows sampling a GL_TEXTURE_EXTERNAL_OES
++   * texture bound to an EGLImage — needed for NV12 full-buffer import on
++   * Mali G310 where per-plane GR88 import is not supported. */
++  if (_cogl_check_extension ("GL_OES_EGL_image_external", gl_extensions) ||
++      _cogl_check_extension ("GL_OES_EGL_image_external_essl3", gl_extensions))
++    COGL_FLAGS_SET (context->features,
++                    COGL_FEATURE_ID_TEXTURE_EGL_IMAGE_EXTERNAL, TRUE);
++
+   if (_cogl_check_extension ("GL_OES_packed_depth_stencil", gl_extensions))
+     COGL_FLAGS_SET (private_features,
+                     COGL_PRIVATE_FEATURE_OES_PACKED_DEPTH_STENCIL, TRUE);
+--
+2.47.3
+

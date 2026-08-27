@@ -177,18 +177,34 @@ int embed_callback(void *userdata, int32_t *tokens, uint64_t num_tokens, void *e
   return 0;
 }
 
-rknn3_context init_context_and_model(const char *model_path, const char *weight_path, uint32_t core_mask)
+int init_context_and_model(rknn3_context *p_ctx, const char *model_path, const char *weight_path, uint32_t core_mask, const char *key_path, const char *device_id)
 {
   int ret = 0;
   rknn3_config config;
   rknn3_context ctx = 0;
 
-  // init context
-  ret = rknn3_init(&ctx, nullptr);
+  // init context with device_id
+  rknn3_init_extend init_extend = {0};
+  init_extend.device_id = (char*)device_id;
+  ret = rknn3_init(&ctx, &init_extend);
   if (ret < 0)
   {
     printf("rknn3_init fail! ret=%d\n", ret);
     return -1;
+  }
+
+  // Set decryption key for encrypted model (if provided)
+  if (key_path != nullptr && strlen(key_path) > 0)
+  {
+    printf("Setting decrypt key from: %s\n", key_path);
+    ret = rknn3_set_decrypt_key_from_path(ctx, key_path);
+    if (ret != RKNN3_SUCCESS)
+    {
+      printf("rknn3_set_decrypt_key_from_path failed! ret=%d\n", ret);
+      rknn3_destroy(ctx);
+      return -1;
+    }
+    printf("rknn3_set_decrypt_key_from_path success\n");
   }
 
   // load model
@@ -213,7 +229,8 @@ rknn3_context init_context_and_model(const char *model_path, const char *weight_
     return -1;
   }
 
-  return ctx;
+  *p_ctx = ctx;
+  return 0;
 }
 
 int get_tokenizer_and_embedding(const char *tokenizer_path, VocabInfo *vocab_info, Tokenizer **tokenizer,
@@ -259,10 +276,13 @@ int get_tokenizer_and_embedding(const char *tokenizer_path, VocabInfo *vocab_inf
 
 int main(int argc, char **argv)
 {
-  if (argc != 8)
+  // Support optional key_path for encrypted models
+  // Usage: %s <rknn_path> <weight_path> <tokenizer.gguf> <embedding.bin> <max_context_len> <max_new_tokens> <core_mask> [key_path]
+  if (argc < 8 || argc > 9)
   {
-    LOGW("Usage: %s <rknn_path> <weight_path> <tokenizer.gguf> <embedding.bin> <max_context_len> <max_new_tokens> <core_mask>\n ", argv[0]);
+    LOGW("Usage: %s <rknn_path> <weight_path> <tokenizer.gguf> <embedding.bin> <max_context_len> <max_new_tokens> <core_mask> [key_path]\n ", argv[0]);
     LOGW("Such as: %s Qwen2.5-0.5B.rknn Qwen2.5-0.5B.weight Qwen2.5-0.5B.tokenizer.gguf Qwen2.5-0.5B.embed.bin 1024 256 0xff\n", argv[0]);
+    LOGW("For encrypted model: %s Qwen2.5-0.5B.rknn Qwen2.5-0.5B.weight Qwen2.5-0.5B.tokenizer.gguf Qwen2.5-0.5B.embed.bin 1024 256 0xff ./key.env\n", argv[0]);
 
     return -1;
   }
@@ -275,6 +295,8 @@ int main(int argc, char **argv)
   int32_t max_context_len = atoi(argv[5]);
   int32_t max_new_tokens = atoi(argv[6]);
   uint32_t core_mask = strtoul(argv[7], nullptr, 16);
+  const char *key_path = (argc > 8) ? argv[8] : nullptr;
+  bool use_decrypt_key = (key_path != nullptr && strlen(key_path) > 0);
 
   rknn3_devices devs;
   rknn3_context ctx = 0;
@@ -313,21 +335,38 @@ int main(int argc, char **argv)
 
   printf("*******************************NEW TEST**********************************\n");
 
-  // find devices
+  // Query available devices
+  const char *device_id = nullptr;
   memset(&devs, 0, sizeof(devs));
   ret = rknn3_find_devices(&devs);
-  if (ret != RKNN3_SUCCESS || devs.n_devices == 0)
+  if (ret != RKNN3_SUCCESS) {
+    printf("rknn3_find_devices failed! ret=%d\n", ret);
+    goto exit;
+  }
+  if (devs.n_devices == 0) {
+    printf("No RK182X devices found\n");
+    goto exit;
+  }
+  printf("Found %d RK182X device(s)\n", devs.n_devices);
+  for (int i = 0; i < devs.n_devices; i++) {
+    printf("  Device %d: transfer_type=%s, id=%s\n", i, devs.devices[i].type, devs.devices[i].id);
+  }
+
+  // Use the first device
+  device_id = devs.devices[0].id;
+  printf("Using device id=%s\n", device_id);
+
+  // init context and model
+  ret = init_context_and_model(&ctx, model_path, weight_path, core_mask, key_path, device_id);
+  if (ret < 0)
   {
-    printf("rknn3_find_devices failed, ret = %d\n", ret);
+    printf("rknn3_session_init_model fail! ret = %d\n", ret);
     goto exit;
   }
 
-  // init context and model
-  ctx = init_context_and_model(model_path, weight_path, core_mask);
-  if (ctx < 0)
+  if (use_decrypt_key)
   {
-    printf("rknn3_session_init_model fail! ctx = %lu\n", ctx);
-    goto exit;
+    printf("Model loaded with decryption key\n");
   }
 
   // get tokenizer and embedding

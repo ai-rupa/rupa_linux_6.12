@@ -27,7 +27,7 @@ done
 if [ -z ${TARGET_SOC} ];then
   echo "$0 -t <target> -a <arch> [-b <build_type>]"
   echo ""
-  echo "    -t : target (rk3588/rk3576)"
+  echo "    -t : target (rk3588/rk3576/rk3572)"
   echo "    -a : arch (aarch64)"
   echo "    -b : build_type(Debug/Release)"
   echo "such as: $0 -t rk3588 -a aarch64 -b Release"
@@ -38,7 +38,7 @@ fi
 if [[ -z ${GCC_COMPILER} ]];then
   echo "Please set GCC_COMPILER for $TARGET_SOC"
   echo "such as export GCC_COMPILER=~/opt/gcc-arm-10.3-2021.07-x86_64-aarch64-none-linux-gnu/bin/aarch64-none-linux-gnu"
-  exit
+  exit 1
 fi
 echo "$GCC_COMPILER"
 export CC=${GCC_COMPILER}-gcc
@@ -50,7 +50,7 @@ else
     echo "${CC} is not available"
     echo "Please set GCC_COMPILER for $TARGET_SOC"
     echo "such as export GCC_COMPILER=~/opt/gcc-arm-10.3-2021.07-x86_64-aarch64-none-linux-gnu/bin/aarch64-none-linux-gnu"
-    exit
+    exit 1
 fi
 
 # Debug / Release
@@ -66,9 +66,12 @@ case ${TARGET_SOC} in
     rk3576)
         TARGET_SOC="RK3576"
         ;;
+    rk3572)
+        TARGET_SOC="RK3572"
+        ;;
     *)
         echo "Invalid target: ${TARGET_SOC}"
-        echo "Valid target: rk3588 / rk3576"
+        echo "Valid target: rk3588 / rk3576 / rk3572"
         exit -1
         ;;
 esac

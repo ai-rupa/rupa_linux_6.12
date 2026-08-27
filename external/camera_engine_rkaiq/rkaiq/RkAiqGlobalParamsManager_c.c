@@ -1804,29 +1804,6 @@ static bool checkAlgoParams(GlobalParamsManager_t* pMan, rk_aiq_global_params_wr
 
     }
 
-    if (param->type == RESULT_TYPE_BLC_PARAM) {
-        blc_api_attrib_t attr;
-        if (AiqManager_getWorkingMode(pMan->rkAiqManager) != RK_AIQ_WORKING_MODE_NORMAL) {
-            if (param->opMode == RK_AIQ_OP_MODE_AUTO) {
-                memcpy(&attr.stAuto, param->aut_param_ptr, param->aut_param_size);
-                for (int i = 0; i < BLC_ISO_STEP_MAX; i++) {
-                    if (attr.stAuto.dyn[i].obcPostTnr.sw_blcT_obcPostTnr_en) {
-                        LOGE("obcPostTnr is only available in ISP linear mode. Please turn off by blc.dyn.obcPostTnr.sw_blcT_obcPostTnr_en!");
-                        socket_client_setNote(pMan->_socket, IPC_RET_UAPI_ERROR, "obcPostTnr is only available in ISP linear mode. Please turn off by blc.dyn.obcPostTnr.obcPostTnr_en\n");
-                        return false;
-                    }
-                }
-            }
-            else {
-                memcpy(&attr.stMan, param->man_param_ptr, param->man_param_size);
-                if (attr.stMan.dyn.obcPostTnr.sw_blcT_obcPostTnr_en) {
-                    LOGE("obcPostTnr is only available in ISP linear mode. Please turn off by blc.dyn.obcPostTnr.sw_blcT_obcPostTnr_en!");
-                    socket_client_setNote(pMan->_socket, IPC_RET_UAPI_ERROR, "obcPostTnr is only available in ISP linear mode. Please turn off by blc.dyn.obcPostTnr.obcPostTnr_en\n");
-                    return false;
-                }
-            }
-        }
-    }
 #ifdef RKAIQ_HAVE_HSV
     if (param->type == RESULT_TYPE_HSV_PARAM) {
         hsv_api_attrib_t attr;

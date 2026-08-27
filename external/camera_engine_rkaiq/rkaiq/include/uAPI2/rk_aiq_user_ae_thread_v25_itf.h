@@ -55,6 +55,7 @@ typedef struct rk_aiq_ae_algo_config_s {
     float        LinePeriodsPerField; //get from sensor
     float        PixelClockFreqMHZ; //get from sensor
     float        PixelPeriodsPerLine; //get from sensor
+    rk_aiq_sensor_exp_offset_t stExpOffset; //get from sensor or IQ
 
 } rk_aiq_ae_algo_config_t;
 

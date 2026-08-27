@@ -201,6 +201,18 @@ RESTART:
                             tg.frame_timestamp / 1000 / 1000, tg.times);
 
             if (ret == XCAM_RETURN_NO_ERROR) {
+                if (pRawStrProcUnit->_camHw) {
+                    AiqCamHwBase_t* _ch = pRawStrProcUnit->_camHw;
+                    aiqMutex_lock(&_ch->_capture_trigger_mutex);
+                    if (_ch->mCaptureTs.t2 != _ch->mCaptureTs.wr) {
+                        struct timespec _trig_ts;
+                        clock_gettime(CLOCK_MONOTONIC, &_trig_ts);
+                        _ch->mCaptureTs.queue[_ch->mCaptureTs.t2 % CAPTURE_TS_QSIZE].t2 =
+                            XCAM_TIMESPEC_2_USEC(_trig_ts);
+                        _ch->mCaptureTs.t2++;
+                    }
+                    aiqMutex_unlock(&_ch->_capture_trigger_mutex);
+                }
                 pRawStrProcUnit->_isp_core_dev->_v4l_base.io_control(
                     &pRawStrProcUnit->_isp_core_dev->_v4l_base, RKISP_CMD_TRIGGER_READ_BACK, &tg);
 #if RKAIQ_HAVE_DUMPSYS
@@ -293,12 +305,13 @@ XCamReturn RawStreamProcUnit_poll_buffer_ready(void* ctx, AiqHwEvt_t* evt, int d
                         dev_index, AiqV4l2Buffer_getV4lBufIndex(rx_buf),
                         AiqV4l2Buffer_getExpbufFd(rx_buf), AiqV4l2Buffer_getSequence(rx_buf));
     }
-    if (pRawStrProcUnit->_PollCallback)
-        pRawStrProcUnit->_PollCallback->poll_buffer_ready(pRawStrProcUnit->_PollCallback->_pCtx,
-                                                          evt, dev_index);
 
     AiqV4l2Buffer_unref(rx_buf);
     aiqMutex_unlock(&pRawStrProcUnit->_buf_mutex);
+
+    if (pRawStrProcUnit->_PollCallback)
+        pRawStrProcUnit->_PollCallback->poll_buffer_ready(pRawStrProcUnit->_PollCallback->_pCtx,
+                                                          evt, dev_index);
 
     return XCAM_RETURN_NO_ERROR;
 }
@@ -671,6 +684,15 @@ XCamReturn AiqRawStreamProcUnit_set_rx_format(AiqRawStreamProcUnit_t* pRawStrPro
             int mem_mode = CSI_MEM_WORD_BIG_ALIGN;
             int ret1 = pRawStrProcUnit->_dev[i]->io_control(
                        pRawStrProcUnit->_dev[i], RKISP_CMD_SET_CSI_MEMORY_MODE, &mem_mode);
+            if (ret1) {
+                LOGE_CAMHW_SUBM(ISP20HW_SUBM, "device(%s) set memory mode %d failed!",
+                                AiqV4l2Device_getDevName(pRawStrProcUnit->_dev[i]), mem_mode);
+            } else {
+                LOGD_CAMHW_SUBM(ISP20HW_SUBM,
+                                "set the memory mode of isp(%s) rx to memory mode %d !",
+                                AiqV4l2Device_getDevName(pRawStrProcUnit->_dev[i]), mem_mode);
+            }
+
 #if RKAIQ_HAVE_AIRMS
             AiqAiRmsStreamProcUnit_getBytesPerline(pRawStrProcUnit->_camHw->mAiRmsProcUnit, sns_sd_fmt->format.width, &bytes_perline);
 #endif
@@ -788,7 +810,8 @@ XCamReturn AiqRawStreamProcUnit_set_csi_mem_word_align_mode(AiqRawStreamProcUnit
             LOGE_CAMHW_SUBM(ISP20HW_SUBM, "set CSI_MEM_WORD_BIG_ALIGN failed !\n");
             ret = XCAM_RETURN_ERROR_IOCTL;
         } else {
-            LOGD_CAMHW_SUBM(ISP20HW_SUBM, "set the memory mode of isp rx to big align");
+            LOGD_CAMHW_SUBM(ISP20HW_SUBM, "set the memory mode of isp(%s) rx to memory mode %d !",
+                            AiqV4l2Device_getDevName(pRawStrProcUnit->_dev[i]), mode);
 #if RKAIQ_HAVE_DUMPSYS
             pRawStrProcUnit->data_mode = mem_mode;
 #endif

@@ -18,10 +18,11 @@
 #ifndef RK_AIQ_USER_API2_SYSCTL_H
 #define RK_AIQ_USER_API2_SYSCTL_H
 
-#include "common/rk_aiq.h"
-#include "algos/rk_aiq_algo_des.h"
-#include "common/rk_aiq_offline_raw.h"
 #include "algos/anr/rkpostisp.h"
+#include "algos/rk_aiq_algo_des.h"
+#include "common/rk_aiq.h"
+#include "common/rk_aiq_offline_raw.h"
+#include "uAPI2/rk_aiq_user_api2_extproc.h"
 #include "uAPI2/rk_aiq_user_api_common.h"
 // #include "rk_aiq_user_api_sysctl.h"
 #include "common/rkisp2-config.h"
@@ -691,6 +692,19 @@ XCamReturn rk_aiq_uapi2_setAiBnrBufCnt(const rk_aiq_sys_ctx_t* ctx,
  * \return return mode(true or false), default is false
  */
 bool rk_aiq_uapi2_judgeNeedRawPipeCtrl(const rk_aiq_sys_ctx_t* ctx);
+
+/*!
+ * \brief trigger capture operation
+ * Trigger a capture sequence for still image or burst capture.
+ * In preview-capture mode, this switches from preview (SCL channels)
+ * to capture (FULL channels) for high-quality image acquisition.
+ *
+ * \param[in] ctx             context returned by \ref rk_aiq_uapi2_sysctl_init
+ * \param[in] trigger         capture trigger configuration containing frame count
+ * \return return XCAM_RETURN_NO_ERROR if success
+ */
+XCamReturn rk_aiq_uapi2_sysctl_triggerCapture(rk_aiq_sys_ctx_t* ctx,
+                                              const rk_aiq_capture_trigger_t* trigger);
 
 RKAIQ_END_DECLARE
 

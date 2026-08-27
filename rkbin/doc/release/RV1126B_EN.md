@@ -1,5 +1,17 @@
 # rv1126b Release Note
 
+## rv1126b_usbplug_v1.03.bin
+
+| Date       | File                       | Build commit | Severity  |
+| ---------- | :------------------------- | ------------ | --------- |
+| 2026-06-17 | rv1126b_usbplug_v1.03.bin  | df65f0e1b4   | important |
+
+### New
+
+1. Add new spiflash support.
+
+------
+
 ## rv1126b_bl32_v1.06.bin
 
 | Date       | File                   | Build Commit | Severity  |

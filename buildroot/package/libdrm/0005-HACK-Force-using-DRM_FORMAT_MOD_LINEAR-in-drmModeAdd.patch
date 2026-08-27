@@ -1,4 +1,4 @@
-From fe1349e1fdb8088e0b365253b258f3ad9772499e Mon Sep 17 00:00:00 2001
+From 68a778865d957109e0a2812399c7b6b48e340cbd Mon Sep 17 00:00:00 2001
 From: Jeffy Chen <jeffy.chen@rock-chips.com>
 Date: Wed, 15 Jan 2025 11:56:59 +0800
 Subject: [PATCH 5/5] HACK: Force using DRM_FORMAT_MOD_LINEAR in
@@ -42,5 +42,5 @@ index a4873a0..f48ff29 100644
  	if ((ret = DRM_IOCTL(fd, DRM_IOCTL_MODE_ADDFB2, &f)))
  		return ret;
 -- 
-2.20.1
+2.39.5
 

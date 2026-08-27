@@ -59,6 +59,7 @@ public:
     }
     XCamReturn reset_hardware();
     XCamReturn set_csi_mem_word_big_align(uint32_t width, uint32_t height, uint32_t sns_v4l_pix_fmt, int8_t sns_bpp);
+    XCamReturn set_csi_mem_word_align_mode(int mode);
     XCamReturn setVicapStreamMode(int mode, uint32_t *frameId, bool isSingleMode);
 
     enum {
@@ -81,7 +82,7 @@ protected:
     bool check_skip_frame(int32_t buf_seq);
     int mCamPhyId{-1};
     bool _is_1608_stream;
-    bool _is_split;
+    bool _is_split{false};
 protected:
     SmartPtr<V4l2Device> _dev[3];
     SmartPtr<V4l2Device> _dev_bakup[3];

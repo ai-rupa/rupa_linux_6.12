@@ -23,6 +23,7 @@
 #include <pthread.h>
 #include <signal.h>
 #ifndef HAVE_C_COMPILER
+#include <sys/time.h>
 #include <sys/poll.h>
 #else
 #include "rk_osal.h"
@@ -1045,7 +1046,6 @@ void* sendDataThread(void * ptr) {
     RK_S32 s32MilliSec = -1;
     RK_S32 bufferLen = 1024;
     RK_S32 frameSize = 0;
-    RK_S32 frames = 0;
     AUDIO_FRAME_S sendFrame;
     RK_U8  *srcData = RK_NULL;
     RK_U8 *tmpData = RK_NULL;
@@ -1726,7 +1726,6 @@ void* commandThread(void * ptr) {
 
 void* vqeThread(void * ptr) {
     TEST_AI_CTX_S *params = reinterpret_cast<TEST_AI_CTX_S *>(ptr);
-    AI_VQE_CONFIG_S stAiVqeConfig, stAiVqeConfig2;
     AI_VQE_MOD_ENABLE_S stAiVqeModEnable;
     RK_S32 result;
     int count = 0;

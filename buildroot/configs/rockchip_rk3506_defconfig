@@ -6,6 +6,7 @@
 #include "multimedia/audio.config"
 #include "gui/lvgl/lvgl_rkadk.config"
 #include "gui/lvgl/rk_demo.config"
+#include "ota/update_engine.config"
 BR2_ARM_INSTRUCTIONS_THUMB2=y
 # BR2_PACKAGE_CHRONY is reset to default
 # BR2_PACKAGE_DNSMASQ is reset to default
@@ -31,7 +32,4 @@ BR2_TARGET_ROOTFS_UBI_SQUASHFS=y
 # BR2_TARGET_ROOTFS_UBI_SQUASHFS_STATIC is not set
 BR2_TARGET_ROOTFS_UBI_SUBSIZE=2048
 BR2_TIME_BITS_64=y
-BR2_PACKAGE_RECOVERY=y
 BR2_PACKAGE_RECOVERY_NO_UI=y
-BR2_PACKAGE_RECOVERY_USE_UPDATEENGINE=y
-BR2_PACKAGE_RECOVERY_UPDATEENGINEBIN=y

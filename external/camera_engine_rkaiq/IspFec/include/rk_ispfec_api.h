@@ -35,7 +35,7 @@ extern "C" {
 #endif
 
 #define FEC_VERSION_ENCODE(a, b, c) (((a) << 16) + ((b) << 8) + ((c) > 255 ? 255 : (c)))
-#define RK_ISP_FEC_API_VERSION      FEC_VERSION_ENCODE(4, 1, 0)
+#define RK_ISP_FEC_API_VERSION      FEC_VERSION_ENCODE(4, 1, 2)
 
 #define RK_ISP_FEC_API_VERSION_MAJOR(v) (((v) >> 16) & 0xff)
 #define RK_ISP_FEC_API_VERSION_MINOR(v) (((v) >> 8) & 0xff)

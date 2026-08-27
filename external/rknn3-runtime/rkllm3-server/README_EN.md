@@ -440,6 +440,8 @@ print('')
 
 ```
 
+Note: The chunk.choices[0].finish_reason in the above code indicates the completion reason: "stop" for normal completion, "length" for truncation due to reaching the max_tokens limit, and "tool_calls" for triggering tool calls.
+
 ### POST `/v1/embeddings`: OpenAI-compatible embeddings API
 
 See [OpenAI Embeddings API documentation](https://platform.openai.com/docs/api-reference/embeddings).

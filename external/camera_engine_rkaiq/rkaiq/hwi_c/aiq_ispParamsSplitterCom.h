@@ -100,7 +100,18 @@ int AiqIspParamsSplitter_SplitAlscXtable(const unsigned short* in_array, int in_
 int AiqIspParamsSplitter_LscGradUpdate(unsigned short xgrad_tbl[], unsigned short ygrad_tbl[],
                                        unsigned short x_sect_tbl[], unsigned short y_sect_tbl[],
                                        int x_sect_size, int y_sect_size);
+int AiqIspParamsSplitter_uniformSplitAlscXtable(int w, int off, int in_size, unsigned short* size_tbl, unsigned short* pos_tbl);
 
+int AiqIspParamsSplitter_getAlscAlignCoef(const unsigned short* in_array,
+                                        unsigned short* new_array,
+                                        unsigned short* left_endpt,
+                                        float* coef, int len);
+
+int AiqIspParamsSplitter_AlscMatrixInterp(unsigned short ori_matrix[],
+                                         unsigned short pre_idx[],
+                                         unsigned short dst_matrix[],
+                                         float coef[],
+                                         int cols, int rows, int axis);
 XCamReturn AiqIspParamsSplitter_SplitRawAeLiteParamsVertical(
     AiqIspParamsSplitter_t* pSplit, struct isp2x_rawaelite_meas_cfg* ori,
     struct isp2x_rawaelite_meas_cfg* left, struct isp2x_rawaelite_meas_cfg* right);
@@ -119,5 +130,63 @@ XCamReturn AiqIspParamsSplitter_SplitRawHistBigParamsVertical(AiqIspParamsSplitt
                                                               struct isp2x_rawhistbig_cfg* ori,
                                                               struct isp2x_rawhistbig_cfg* left,
                                                               struct isp2x_rawhistbig_cfg* right);
+
+
+void
+AiqIspParamsSplitter_SplitAecWeightForThree(u8* ori_weight, u8* left_weight,
+                                            u8* middle_weight, u8* right_weight,
+                                            WinSplitMode mode, u8 wnd_num);
+
+void SplitAecWinForThree(struct isp2x_window* ori_win,
+                        struct isp2x_window* left_win,
+                        struct isp2x_window* middle_win,
+                        struct isp2x_window* right_win, u8 wnd_num,
+                        Splitter_Rectangle_t left_isp_rect_,
+                        Splitter_Rectangle_t middle_isp_rect_,
+                        Splitter_Rectangle_t right_isp_rect_,
+                        WinSplitMode* mode);
+
+void
+AiqIspParamsSplitter_SplitAecWeightForThreeV(u8* ori_weight, u8* left_weight,
+                                             u8* middle_weight, u8* right_weight,
+                                             WinSplitMode mode, u8 wnd_num);
+
+void SplitAecWinForThreeV(struct isp2x_window* ori_win,
+                          struct isp2x_window* left_win,
+                          struct isp2x_window* middle_win,
+                          struct isp2x_window* right_win, u8 wnd_num,
+                          Splitter_Rectangle_t left_isp_rect_,
+                          Splitter_Rectangle_t middle_isp_rect_,
+                          Splitter_Rectangle_t right_isp_rect_,
+                          WinSplitMode* mode);
+
+void AiqIspParamsSplitter_SplitAwbWinThree(
+    struct isp2x_window* ori_win, struct isp2x_window* left_win,
+    struct isp2x_window* middle_win, struct isp2x_window* right_win,
+    u8 ds_awb, u8 wnd_num,
+    Splitter_Rectangle_t left_isp_rect_,
+    Splitter_Rectangle_t middle_isp_rect_,
+    Splitter_Rectangle_t right_isp_rect_,
+    WinSplitMode* mode);
+
+void AiqIspParamsSplitter_SplitAwbMultiWinThree(
+    struct isp2x_window* ori_win, struct isp2x_window* left_win, struct isp2x_window* middle_win, struct isp2x_window* right_win,
+    struct isp2x_window* main_left_win, struct isp2x_window* main_middle_win, struct isp2x_window* main_right_win,
+    Splitter_Rectangle_t left_isp_rect_, Splitter_Rectangle_t middle_isp_rect_, Splitter_Rectangle_t right_isp_rect_, WinSplitMode* mode);
+
+void AiqIspParamsSplitter_SplitAwbWinThreeV(
+    struct isp2x_window* ori_win, struct isp2x_window* left_win,
+    struct isp2x_window* middle_win, struct isp2x_window* right_win,
+    u8 ds_awb, u8 wnd_num,
+    Splitter_Rectangle_t left_isp_rect_,
+    Splitter_Rectangle_t middle_isp_rect_,
+    Splitter_Rectangle_t right_isp_rect_,
+    WinSplitMode* mode);
+
+void AiqIspParamsSplitter_SplitAwbMultiWinThreeV(
+    struct isp2x_window* ori_win, struct isp2x_window* left_win, struct isp2x_window* middle_win, struct isp2x_window* right_win,
+    struct isp2x_window* main_left_win, struct isp2x_window* main_middle_win, struct isp2x_window* main_right_win,
+    Splitter_Rectangle_t left_isp_rect_, Splitter_Rectangle_t middle_isp_rect_, Splitter_Rectangle_t right_isp_rect_, WinSplitMode* mode);
+
 
 #endif  // __AIQ_ISP_PARAMS_SPLITTER_COM_H__

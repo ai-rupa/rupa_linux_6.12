@@ -46,27 +46,30 @@ void rk_aiq_gain20_params_cvt(void* attr, isp_params_t* isp_params, common_cvt_i
     RKAiqAecExpInfo_t* curExp = cvtinfo->ae_exp;
     stExpInfo.hdr_mode = cvtinfo->frameNum - 1;
     if (cvtinfo->frameNum == 1) {
-        if(curExp->LinearExp.exp_real_params.analog_gain < 1.0) {
-            stExpInfo.arAGain[0] = 1.0;
-            LOGW_ANR("leanr mode again is wrong, use 1.0 instead\n");
-        } else {
-            stExpInfo.arAGain[0] = curExp->LinearExp.exp_real_params.analog_gain;
+        if (curExp) {
+            if (curExp->LinearExp.exp_real_params.analog_gain < 1.0) {
+                stExpInfo.arAGain[0] = 1.0;
+                LOGW_ANR("leanr mode again is wrong, use 1.0 instead\n");
+            } else {
+                stExpInfo.arAGain[0] = curExp->LinearExp.exp_real_params.analog_gain;
+            }
+            if (curExp->LinearExp.exp_real_params.digital_gain < 1.0) {
+                stExpInfo.arDGain[0] = 1.0;
+                LOGW_ANR("leanr mode dgain is wrong, use 1.0 instead\n");
+            } else {
+                stExpInfo.arDGain[0] = curExp->LinearExp.exp_real_params.digital_gain;
+            }
+            if (curExp->LinearExp.exp_real_params.isp_dgain < 1.0) {
+                stExpInfo.isp_dgain[0] = 1.0;
+                LOGW_ANR("leanr mode isp_dgain is wrong, use 1.0 instead\n");
+            } else {
+                stExpInfo.isp_dgain[0] = curExp->LinearExp.exp_real_params.isp_dgain;
+            }
+            // stExpInfo.arAGain[0] = 64.0;
+            stExpInfo.arTime[0] = curExp->LinearExp.exp_real_params.integration_time;
+            stExpInfo.arIso[0] =
+                stExpInfo.arAGain[0] * stExpInfo.arDGain[0] * 50 * stExpInfo.isp_dgain[0];
         }
-        if(curExp->LinearExp.exp_real_params.digital_gain < 1.0) {
-            stExpInfo.arDGain[0] = 1.0;
-            LOGW_ANR("leanr mode dgain is wrong, use 1.0 instead\n");
-        } else {
-            stExpInfo.arDGain[0] = curExp->LinearExp.exp_real_params.digital_gain;
-        }
-        if(curExp->LinearExp.exp_real_params.isp_dgain < 1.0) {
-            stExpInfo.isp_dgain[0] = 1.0;
-            LOGW_ANR("leanr mode isp_dgain is wrong, use 1.0 instead\n");
-        } else {
-            stExpInfo.isp_dgain[0] = curExp->LinearExp.exp_real_params.isp_dgain;
-        }
-        // stExpInfo.arAGain[0] = 64.0;
-        stExpInfo.arTime[0] = curExp->LinearExp.exp_real_params.integration_time;
-        stExpInfo.arIso[0] = stExpInfo.arAGain[0] * stExpInfo.arDGain[0] * 50 * stExpInfo.isp_dgain[0];
     }
     else {
         for(int i = 0; i < 3; i++) {

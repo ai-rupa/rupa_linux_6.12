@@ -27,8 +27,10 @@
 #endif
 #include "uAPI2/rk_aiq_user_api2_sysctl.h"
 #include "uAPI2/rk_aiq_user_api2_debug.h"
+#include "uAPI2/rk_aiq_user_api2_extproc.h"
 #include "sample_image_process.h"
 #include "rkisp_demo.h"
+#include "sample/sample_extproc.h"
 #include <termios.h>
 
 #include "uAPI2/rk_aiq_user_api2_ae.h"
@@ -64,7 +66,7 @@
 #define DEFAULT_CAPTURE_RAW_PATH "/tmp/capture_image"
 #endif
 #define CAPTURE_CNT_FILENAME ".capture_cnt"
-// #define ENABLE_UAPI_TEST
+#define ENABLE_UAPI_TEST
 #define IQFILE_PATH_MAX_LEN 256
 // #define CUSTOM_AE_DEMO_TEST
 // #define CUSTOM_GROUP_AE_DEMO_TEST
@@ -177,6 +179,40 @@ static u16 lsc_table1[]={
     5120, 5120, 5120, 5120, 5120, 5120, 5120, 5120, 5120, 5120, 5120, 5120, 5120, 5120, 5120, 5120, 5120,
     5120, 5120, 5120, 5120, 5120, 5120, 5120, 5120, 5120, 5120, 5120, 5120, 5120, 5120, 5120, 5120, 5120,
     5120, 5120, 5120, 5120, 5120, 5120, 5120, 5120, 5120, 5120, 5120, 5120, 5120, 5120, 5120, 5120, 5120};
+
+static u16 gainmap_table[]={
+    506, 507, 506, 507, 507, 507, 508, 510, 513, 514, 513, 514, 516, 512, 508, 509,
+    507, 506, 505, 506, 504, 507, 509, 510, 513, 515, 514, 515, 518, 514, 510, 508,
+    509, 506, 503, 502, 504, 507, 508, 511, 512, 514, 515, 517, 518, 517, 513, 508,
+    510, 503, 502, 503, 505, 506, 505, 510, 513, 517, 519, 518, 517, 517, 514, 507,
+    513, 505, 502, 503, 506, 505, 506, 509, 515, 519, 521, 521, 519, 519, 518, 510,
+    513, 504, 502, 502, 504, 505, 505, 509, 514, 518, 522, 520, 520, 520, 518, 513,
+    510, 505, 501, 504, 505, 503, 506, 509, 514, 518, 521, 521, 519, 520, 520, 512,
+    512, 505, 504, 503, 505, 506, 507, 510, 515, 518, 521, 520, 521, 519, 518, 510,
+    512, 507, 505, 502, 504, 506, 508, 512, 514, 517, 518, 519, 520, 520, 517, 508,
+    516, 508, 506, 505, 505, 507, 509, 512, 513, 516, 516, 518, 520, 520, 516, 508,
+    512, 508, 508, 506, 505, 507, 509, 510, 512, 514, 516, 518, 517, 516, 512, 506,
+    509, 507, 508, 508, 506, 506, 509, 510, 513, 514, 513, 514, 513, 512, 510, 507,
+    517, 516, 513, 516, 516, 516, 513, 513, 510, 512, 510, 509, 510, 512, 515, 518,
+    512, 517, 515, 520, 519, 516, 514, 513, 510, 510, 507, 508, 508, 509, 513, 519,
+    514, 517, 518, 521, 520, 518, 515, 514, 511, 509, 508, 506, 506, 506, 510, 515,
+    513, 516, 522, 520, 518, 517, 518, 513, 510, 506, 504, 505, 504, 504, 506, 513,
+    513, 518, 521, 521, 520, 518, 516, 514, 509, 506, 503, 503, 504, 505, 507, 510,
+    513, 516, 521, 519, 519, 519, 518, 514, 509, 504, 501, 501, 504, 504, 505, 510,
+    513, 518, 522, 522, 518, 519, 517, 514, 510, 505, 502, 502, 504, 504, 506, 512,
+    512, 518, 522, 521, 519, 517, 517, 513, 510, 505, 502, 504, 503, 502, 505, 513,
+    512, 516, 522, 521, 519, 515, 515, 512, 509, 506, 505, 504, 503, 503, 506, 512,
+    512, 515, 518, 518, 519, 516, 514, 512, 510, 507, 505, 505, 503, 506, 510, 515,
+    512, 515, 515, 517, 518, 516, 514, 513, 509, 509, 507, 506, 506, 507, 512, 517,
+    514, 516, 515, 515, 514, 514, 514, 513, 510, 509, 508, 509, 507, 508, 513, 516};
+
+static u16 dccmap_table[]={
+    59, 50, 46, 47, 47, 47, 49, 62,
+    54, 49, 45, 49, 51, 46, 48, 61,
+    53, 46, 45, 55, 56, 49, 46, 61,
+    54, 46, 45, 55, 56, 49, 46, 60,
+    56, 48, 46, 49, 50, 47, 48, 55,
+    62, 51, 47, 47, 47, 47, 49, 55};
 
 #endif
 
@@ -1982,22 +2018,6 @@ static void init_device(demo_context_t *ctx)
     if (-1 == xioctl(ctx->fd, VIDIOC_S_FMT, &fmt))
         errno_exit(ctx, "VIDIOC_S_FMT");
 
-    struct v4l2_selection in_selection;
-    memset(&in_selection, 0, sizeof(in_selection));
-
-    in_selection.target = V4L2_SEL_TGT_CROP;
-
-    if (xioctl(ctx->fd, VIDIOC_G_SELECTION, &in_selection) == 0) {
-        in_selection.r.width = ctx->width;
-        in_selection.r.height = ctx->height;
-        in_selection.r.left = 0;
-        in_selection.r.top = 0;
-        if (-1 == xioctl(ctx->fd, VIDIOC_S_SELECTION, &in_selection)) {
-            errno_exit(ctx, "VIDIOC_S_SELECTION");
-        }
-        // printf("set selection: %dx%d\n", ctx->width, ctx->height);
-    }
-
     init_mmap(false, ctx);
 }
 
@@ -2118,11 +2138,13 @@ static void parse_args(int argc, char **argv, demo_context_t *ctx)
             {"aov-continue",   required_argument, 0, '7' },
             {"set-scene",   required_argument, 0, '8' },
             {"switch-scene-loop", required_argument, 0, '9' },
-            {0,          0,                 0,  0  }
+            {"test-case",  required_argument, 0, 'T' },
+            {"extproc-bay3d-iir", no_argument,       0, 'K' },
+            {0,                   0,                 0,  0  }
         };
 
         //c = getopt_long(argc, argv, "w:h:f:i:d:o:c:ps",
-        c = getopt_long(argc, argv, "w:h:f:i:g:j:y:d:o:c:n:k:a:t:1:2:v::3456:7:8:9:mpserl",
+        c = getopt_long(argc, argv, "w:h:f:i:g:j:y:d:o:c:n:k:a:t:1:2:v::3456:7:8:9:mpserlT:K",
                         long_options, &option_index);
         if (c == -1)
             break;
@@ -2299,6 +2321,14 @@ static void parse_args(int argc, char **argv, demo_context_t *ctx)
                 ctx->ctl_type = TEST_CTL_TYPE_REPEAT_SWITCHSCENE_PREPARE_START_STOP;
             }
             break;
+        case 'T':
+            ctx->testCamId = atoi(optarg);
+            if (ctx->testCamId < 1 || ctx->testCamId > 5) {
+                ERR("--test-case: invalid camera id %d, must be 1-5\n", ctx->testCamId);
+                exit(-1);
+            }
+            DBG("Enable test case mode on camera %d\n", ctx->testCamId);
+            break;
         case '?':
         case 'p':
             ERR("Usage: %s to capture rkisp1 frames\n"
@@ -2319,6 +2349,7 @@ static void parse_args(int argc, char **argv, demo_context_t *ctx)
                 "         --silent,                          optional, subpress debug log\n"
                 "         --pponeframe,                      optional, pp oneframe readback mode\n"
                 "         --hdr <val>,                       optional, hdr mode, val 2 means hdrx2, 3 means hdrx3 \n"
+                "         --test-case <cam_id>,               optional, enable test case mode on specified camera (cam_id: 1-5, default 1)\n"
                 "         --sync-to-raw,                     optional, write yuv files in sync with raw\n"
                 "         --limit,                           optional, yuv limit range\n"
                 "         --ctl <val>,                       optional, sysctl procedure test \n"
@@ -2336,10 +2367,14 @@ static void parse_args(int argc, char **argv, demo_context_t *ctx)
                 "         --switch-scene-loop                optional, main_scene=<val>,sub_scene=<val>,main_scene1=<val>,sub_scene1=<val>"
                 "                                            main_scene and sub_scene is the name of scene in iq file\n"
                 "                                            loop switch between scene and scene1 every --count frames\n"
-                "         --sensor,  default os04a10,        optional, optional, sensor names\n",
+                "         --sensor,  default os04a10,        optional, optional, sensor names\n"
+                "         --extproc-bay3d-iir,               optional, enable bay3d iir external processing\n",
                 argv[0]);
             exit(-1);
 
+        case 'K':
+            ctx->extproc_bay3d_iir = true;
+            break;
         default:
             ERR("?? getopt returned character code 0%o ??\n", c);
         }
@@ -2925,6 +2960,7 @@ static void rkisp_routine(demo_context_t *ctx)
 
     if (ctx->rkaiq) {
         XCamReturn ret = XCAM_RETURN_NO_ERROR;
+
         if (strlen(ctx->main_scene[0]) > 0 && strlen(ctx->sub_scene[0]) > 0) {
             DBG("%s: set scene %s, %s\n", get_sensor_name(ctx), ctx->main_scene[0],
                 ctx->sub_scene[0]);
@@ -2932,7 +2968,14 @@ static void rkisp_routine(demo_context_t *ctx)
                                                ctx->sub_scene[0]);
         } else {
             if (work_mode == RK_AIQ_WORKING_MODE_NORMAL) {
-                ret = rk_aiq_uapi2_sysctl_preInit_scene(sns_entity_name, "normal", "day");
+                char sub_scene[32] = {'\0'};
+
+                if (strstr(sns_entity_name, VICAP_VIRTUAL_SENSOR_SUFFIX) != NULL)
+                    strcpy(sub_scene, "capture");
+                else
+                    strcpy(sub_scene, "day");
+
+                ret = rk_aiq_uapi2_sysctl_preInit_scene(sns_entity_name, "normal", sub_scene);
             } else {
                 ret = rk_aiq_uapi2_sysctl_preInit_scene(sns_entity_name, "hdr", "day");
             }
@@ -3165,18 +3208,39 @@ static void rkisp_routine(demo_context_t *ctx)
             memcpy(otp_info.otp_lsc.lsc_gb, lsc_gb_table0, sizeof(lsc_gb_table0));
             memcpy(otp_info.otp_lsc.lsc_b, lsc_b_table0, sizeof(lsc_b_table0));
 
+            otp_info.otp_af.flag = true;
+            otp_info.otp_af.dir_cnt = 1;
+            otp_info.otp_af.af_otp[0].vcm_start = 458;
+            otp_info.otp_af.af_otp[0].vcm_end = 854;
+            otp_info.otp_af.af_otp[0].vcm_dir = AF_OTP_DIR_HORIZONTAL;
+
+            otp_info.otp_pdaf.flag = true;
+            otp_info.otp_pdaf.gainmap_width = 16;
+            otp_info.otp_pdaf.gainmap_height = 24;
+            otp_info.otp_pdaf.dccmap_width = 8;
+            otp_info.otp_pdaf.dccmap_height = 6;
+            otp_info.otp_pdaf.dcc_mode = 1;
+            otp_info.otp_pdaf.dcc_dir = 0;
+            otp_info.otp_pdaf.pd_offset = 16455;
+            memcpy(otp_info.otp_pdaf.gainmap, gainmap_table, sizeof(gainmap_table));
+            memcpy(otp_info.otp_pdaf.dccmap, dccmap_table, sizeof(dccmap_table));
+
             if (rk_aiq_uapi2_sysctl_setUserOtpInfo(ctx->aiq_ctx, otp_info) != 0) {
                 ERR("Failed to set User Otp\n");
             } else {
                 printf("set User Otp: flag = %d, value = [%d, %d, %d, %d], golden = [%d, %d, %d, %d];\
-                        lsc flag: %d, r[0]= %d, gr[0] = %d, gb[0] = %d, b[0] = %d\n",
+                        lsc flag: %d, r[0]= %d, gr[0] = %d, gb[0] = %d, b[0] = %d,\n\
+                        af flag: %d, vcm_start= %d, vcm_end = %d,\n\
+                        pdaf flag: %d, gainmap_width= %d, gainmap_height = %d, dccmap_width= %d, dccmap_height = %d\n",
                     otp_info.otp_awb.flag, otp_info.otp_awb.r_value, otp_info.otp_awb.b_value,
                     otp_info.otp_awb.gr_value, otp_info.otp_awb.gb_value,
                     otp_info.otp_awb.golden_r_value, otp_info.otp_awb.golden_b_value,
                     otp_info.otp_awb.golden_gr_value, otp_info.otp_awb.golden_gb_value,
                     otp_info.otp_lsc.flag, otp_info.otp_lsc.lsc_r[0],
                     otp_info.otp_lsc.lsc_gr[0], otp_info.otp_lsc.lsc_gb[0],
-                    otp_info.otp_lsc.lsc_b[0]);
+                    otp_info.otp_lsc.lsc_b[0],
+                    otp_info.otp_af.flag, otp_info.otp_af.af_otp[0].vcm_start, otp_info.otp_af.af_otp[0].vcm_end,
+                    otp_info.otp_pdaf.flag, otp_info.otp_pdaf.gainmap_width, otp_info.otp_pdaf.gainmap_height, otp_info.otp_pdaf.dccmap_width, otp_info.otp_pdaf.dccmap_height);
             }
 #endif
 #ifdef COLOR_CONSISTENCY_TEST
@@ -3197,9 +3261,10 @@ static void rkisp_routine(demo_context_t *ctx)
             aColor_sw_info.awbGain[1] = slave2Main.camM.wbgain.bgain / slave2Main.camM.wbgain.gbgain;
             ret = rk_aiq_uapi2_setAcolorSwInfo(ctx->aiq_ctx, aColor_sw_info); //ctx->aiq_ctx is slave camera
 #endif
+            if (ctx->extproc_bay3d_iir) sample_extproc_bay3dnr_init(ctx->aiq_ctx);
+
             // rk_aiq_uapi2_sysctl_initAiisp(ctx->aiq_ctx, NULL, NULL);
             XCamReturn ret = rk_aiq_uapi2_sysctl_prepare(ctx->aiq_ctx, ctx->width, ctx->height, work_mode);
-
             if (ret != XCAM_RETURN_NO_ERROR)
                 ERR("%s:rk_aiq_uapi2_sysctl_prepare failed: %d\n", get_sensor_name(ctx), ret);
             else {
@@ -3645,6 +3710,8 @@ int main(int argc, char **argv)
         .aovContinueRunCnt = 0,
         .main_scene = {{0}, {0}},
         .sub_scene = {{0}, {0}},
+        .testCamId = -1,
+        .extproc_bay3d_iir = false,
     };
     demo_context_t second_ctx;
     demo_context_t third_ctx;
@@ -3690,6 +3757,7 @@ int main(int argc, char **argv)
         pthread_t sec_tid;
         second_ctx = main_ctx;
         second_ctx.dev_using = 2;
+        second_ctx.num_peers = 0;
         g_second_ctx = &second_ctx;
         pthread_create(&sec_tid, NULL, others_thread, &second_ctx);
     }
@@ -3698,6 +3766,7 @@ int main(int argc, char **argv)
         pthread_t thr_tid;
         third_ctx = main_ctx;
         third_ctx.dev_using = 3;
+        third_ctx.num_peers = 0;
         g_third_ctx = &third_ctx;
         pthread_create(&thr_tid, NULL, others_thread, &third_ctx);
     }
@@ -3706,6 +3775,7 @@ int main(int argc, char **argv)
         pthread_t fou_tid;
         fourth_ctx = main_ctx;
         fourth_ctx.dev_using = 4;
+        fourth_ctx.num_peers = 0;
         g_fourth_ctx = &fourth_ctx;
         pthread_create(&fou_tid, NULL, others_thread, &fourth_ctx);
     }
@@ -3714,13 +3784,44 @@ int main(int argc, char **argv)
         pthread_t fif_tid;
         fifth_ctx = main_ctx;
         fifth_ctx.dev_using = 5;
+        fifth_ctx.num_peers = 0;
         g_fifth_ctx = &fifth_ctx;
         pthread_create(&fif_tid, NULL, others_thread, &fifth_ctx);
     }
 
+    /* Build full peer lists: each ctx gets all other active ctxs as peers */
+    {
+        demo_context_t *all_ctxs[5] = { &main_ctx, NULL, NULL, NULL, NULL };
+        int total = 1;
+        if (g_second_ctx) all_ctxs[total++] = g_second_ctx;
+        if (g_third_ctx)  all_ctxs[total++] = g_third_ctx;
+        if (g_fourth_ctx) all_ctxs[total++] = g_fourth_ctx;
+        if (g_fifth_ctx)  all_ctxs[total++] = g_fifth_ctx;
+
+        for (int i = 0; i < total; i++) {
+            all_ctxs[i]->num_peers = 0;
+            for (int j = 0; j < total; j++) {
+                if (i != j)
+                    all_ctxs[i]->peer_ctx[all_ctxs[i]->num_peers++] = all_ctxs[j];
+            }
+        }
+    }
+
 #ifdef ENABLE_UAPI_TEST
-    pthread_t tid;
-    pthread_create(&tid, NULL, test_thread, &main_ctx);
+    if (main_ctx.testCamId >= 1 && main_ctx.testCamId <= 5) {
+        pthread_t tid;
+        demo_context_t *test_ctx = &main_ctx;
+        switch (main_ctx.testCamId) {
+        case 2: if (strlen(main_ctx.dev_name2)) test_ctx = &second_ctx; break;
+        case 3: if (strlen(main_ctx.dev_name3)) test_ctx = &third_ctx;  break;
+        case 4: if (strlen(main_ctx.dev_name4)) test_ctx = &fourth_ctx; break;
+        case 5: if (strlen(main_ctx.dev_name5)) test_ctx = &fifth_ctx;  break;
+        default: break; /* camera 1 or unspecified -> main_ctx */
+        }
+        printf("Starting test thread on camera %d (%s)\n",
+               test_ctx->dev_using, test_ctx->dev_name);
+        pthread_create(&tid, NULL, test_thread, test_ctx);
+    }
 #endif
 
     if (main_ctx.isOrp) {

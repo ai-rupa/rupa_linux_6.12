@@ -118,6 +118,8 @@
 
 #define ROCKCHIP_DSC_PPS_SIZE_BYTE	88
 
+#define VOP2_MAX_MULTI_AREA_WIN		4
+
 enum bcsh_out_mode {
 	BCSH_OUT_MODE_BLACK,
 	BCSH_OUT_MODE_BLUE,
@@ -157,6 +159,7 @@ enum vop3_esmart_lb_mode {
 	VOP3_ESMART_2K_2K_2K_2K_MODE,
 	VOP3_ESMART_4K_4K_4K_MODE,
 	VOP3_ESMART_4K_4K_2K_2K_MODE,
+	VOP3_ESMART_LB_MODE_MAX,
 };
 
 /**
@@ -791,7 +794,7 @@ enum rk_pq_csc_swap_type {
 };
 
 struct post_csc_convert_mode {
-	enum drm_color_encoding intput_color_encoding;
+	enum drm_color_encoding input_color_encoding;
 	enum drm_color_encoding output_color_encoding;
 	bool is_input_yuv;
 	bool is_output_yuv;
@@ -1033,7 +1036,7 @@ struct vop2_video_port_regs {
 	struct vop_reg out_mode;
 	struct vop_reg standby;
 	struct vop_reg dsp_interlace;
-	struct vop_reg dsp_filed_pol;
+	struct vop_reg dsp_field_pol;
 	struct vop_reg dsp_data_swap;
 	struct vop_reg dsp_x_mir_en;
 	struct vop_reg post_dsp_out_r2y;
@@ -1502,6 +1505,7 @@ struct vop2_video_port_data {
 	const u8 cursor_dly;
 	const u8 hdr_cgc_layer_num;
 	const uint8_t csc_coe_bits;
+	const uint8_t reg_done_bit;
 	const uint32_t bcsh_r2y_csc_coe_offset;
 	const uint32_t bcsh_y2r_csc_coe_offset;
 	const struct vop_intr *intr;
@@ -1704,8 +1708,8 @@ struct vop2_ctrl {
 	struct vop_reg dp2_pin_pol;
 
 	/* This will be reference by win_phy_id */
-	struct vop_reg win_vp_id[16];
-	struct vop_reg win_dly[16];
+	struct vop_reg win_vp_id[ROCKCHIP_MAX_LAYER];
+	struct vop_reg win_dly[ROCKCHIP_MAX_LAYER];
 
 	/* connector mux */
 	struct vop_reg rgb_mux;
@@ -1828,6 +1832,11 @@ struct vop2_esmart_lb_map {
 	u8 lb_map_value;
 };
 
+struct vop2_scale_engine {
+	u8 plane_phy_id;
+	u8 scale_engine_num;
+};
+
 /**
  * VOP2 data structe
  *
@@ -1877,6 +1886,7 @@ struct vop2_data {
 	uint32_t dump_regs_size;
 	const struct vop2_vp_plane_mask *plane_mask;
 	uint32_t plane_mask_base;
+	const struct vop2_scale_engine *scale_engine;
 
 	unsigned int win_size;
 };
@@ -2079,11 +2089,23 @@ enum vop_fbc_compress_mode {
 
 static inline uint16_t scl_cal_scale(int src, int dst, int shift)
 {
+	/*
+	 * A workaround to avoid zero div.
+	 */
+	if (dst < 2)
+		dst = 2;
+
 	return ((src * 2 - 3) << (shift - 1)) / (dst - 1);
 }
 
 static inline uint16_t scl_cal_scale2(int src, int dst)
 {
+	/*
+	 * A workaround to avoid zero div.
+	 */
+	if (dst < 2)
+		dst = 2;
+
 	return ((src - 1) << 12) / (dst - 1);
 }
 

@@ -1,0 +1,60 @@
+From c6666deaf18bbafe80b4ccb1028e6f90237a2859 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Fri, 2 Apr 2021 01:50:22 +0800
+Subject: [PATCH 56/98] desktop-shell: Resize views when panel changes work
+ area
+
+Update shell surface sizes when panel position or size changes affect
+the work area, ensuring applications properly fit the new available space.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ desktop-shell/shell.c | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/desktop-shell/shell.c b/desktop-shell/shell.c
+index 985dd920..de6ae48d 100644
+--- a/desktop-shell/shell.c
++++ b/desktop-shell/shell.c
+@@ -50,6 +50,8 @@
+ #define DEFAULT_NUM_WORKSPACES 1
+ #define DEFAULT_WORKSPACE_CHANGE_ANIMATION_LENGTH 200
+ 
++static void
++handle_output_resized_shsurfs(struct desktop_shell *shell);
+ 
+ static struct desktop_shell *
+ shell_surface_get_shell(struct shell_surface *shsurf);
+@@ -2750,6 +2752,7 @@ panel_committed(struct weston_surface *es,
+ 	struct weston_output *output;
+ 	struct weston_coord_global pos;
+ 	struct desktop_shell *shell;
++	pixman_rectangle32_t old_area, new_area;
+ 
+ 	/* The output was destroyed before the panel was committed */
+ 	if (!sh_output)
+@@ -2762,6 +2765,8 @@ panel_committed(struct weston_surface *es,
+ 	if (!weston_surface_has_content(es))
+ 		return;
+ 
++	get_output_work_area(shell, sh_output, &old_area);
++
+ 	switch (shell->panel_position) {
+ 	case WESTON_DESKTOP_SHELL_PANEL_POSITION_TOP:
+ 	case WESTON_DESKTOP_SHELL_PANEL_POSITION_LEFT:
+@@ -2793,6 +2798,12 @@ panel_committed(struct weston_surface *es,
+ 	pos = weston_coord_global_add(output->pos, sh_output->panel_offset);
+ 	weston_view_set_position(sh_output->panel_view, pos);
+ 
++	get_output_work_area(shell, sh_output, &new_area);
++	if (old_area.x != new_area.x || old_area.y != new_area.y ||
++	    old_area.width != new_area.width ||
++	    old_area.height != new_area.height)
++		handle_output_resized_shsurfs(shell);
++
+ 	es->wait_for_resizing = false;
+ }
+ 
+-- 
+2.39.5
+

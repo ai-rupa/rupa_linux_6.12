@@ -59,10 +59,17 @@
  *
  * v4.1.0
  * - add 360 degree rotation mode
+ * v4.1.1
+ * - add dma-buf sync for mesh update
+ *
+ * v4.1.2
+ * - fix videobuf mmap/unmap and dma-buf cleanup leak
+ *
+ * ==================== RK ISP FEC VERSION HISTORY ====================
  *
  */
 
-#define RK_ISP_FEC_RELEASE_DATE "2026-02-09"
+#define RK_ISP_FEC_RELEASE_DATE "2026-04-27"
 #define RK_ISP_FEC_VERSION      RK_ISP_FEC_API_VERSION
 
 #endif

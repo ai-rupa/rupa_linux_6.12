@@ -105,6 +105,7 @@ public:
     virtual ~RkAiqAnalyzerCb() {};
     virtual void rkAiqCalcDone(SmartPtr<RkAiqFullParamsProxy> &results) = 0;
     virtual void rkAiqCalcExpDone(SmartPtr<RkAiqExpParamsProxy> &results) = 0;
+    virtual void rkAiqSetVcpSclInfo(bool en, int ratio) = 0;
     virtual void rkAiqCalcFailed(const char* msg) = 0;
 private:
     XCAM_DEAD_COPY (RkAiqAnalyzerCb);
@@ -474,6 +475,7 @@ public:
     XCamReturn updateCalibDbBrutal(CamCalibDbV2Context_t* aiqCalib);
     void setDelayCnts(int8_t delayCnts);
     void setVicapScaleFlag(bool mode);
+    void setVcpSclInfoCb(bool en, int ratio);
     void setTbInfo(RkAiqTbInfo_t& info) {
         mTbInfo = info;
     }
@@ -497,6 +499,7 @@ public:
     }
 
     XCamReturn setTranslaterIspUniteMode(RkAiqIspUniteMode mode);
+    XCamReturn setTranslaterIspUniteInfo(RkAiqIspUniteInfo_t* info);
 
 protected:
     // in analyzer thread

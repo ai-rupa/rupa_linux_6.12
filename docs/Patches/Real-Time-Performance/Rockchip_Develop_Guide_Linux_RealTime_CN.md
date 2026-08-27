@@ -1,9 +1,9 @@
 # Rockchip Linux RealTime Develop Guide
 文档标识：RK-KF-YF-A26
 
-发布版本：V1.4.0
+发布版本：V1.5.0
 
-日期：2025-12-20
+日期：2026-06-20
 
 文件密级：□绝密   □秘密   □内部资料   ■公开
 
@@ -19,7 +19,7 @@
 
 本文档可能提及的其他所有注册商标或商标，由其各自拥有者所有。
 
-**版权所有© 2025 瑞芯微电子股份有限公司**
+**版权所有© 2026 瑞芯微电子股份有限公司**
 
 超越合理使用范畴，非经本公司书面许可，任何单位和个人不得擅自摘抄、复制本文档内容的部分或全部，并不得以任何形式传播。
 
@@ -55,27 +55,28 @@ Rockchip Electronics Co., Ltd.
 
 **产品版本**
 
-| 芯片名称 | 内核版本               |
-| -------- | ---------------------- |
-| RK3562   | Linux-5.10             |
-| RK3568   | Linux-4.19，Linux-5.10 |
-| RK3588   | Linux-5.10             |
-| RK3576   | Linux-6.1              |
-| RK3506   | Linux-6.1              |
-| RV1126B  | Linux-6.1              |
+| 芯片名称 | 内核版本   |
+| -------- | ---------- |
+| RK3562   | Linux-5.10 |
+| RK3568   | Linux-5.10 |
+| RK3588   | Linux-5.10 |
+| RK3576   | Linux-6.1  |
+| RK3506   | Linux-6.1  |
+| RV1126B  | Linux-6.1  |
+| RK3572   | Linux-6.12 |
 
  **修订记录**
 
-| **日期**   | **版本** | **作者**   | **修改说明**                               |
-| ---------- | :------- | :--------- | :----------------------------------------- |
-| 2023-11-20 | V0.0.1   | czz        | 初始版本                                   |
-| 2024-06-20 | V1.0.0   | LinJianhua | 更新到V1.0.0                               |
-| 2024-08-20 | V1.1.0   | LinJianhua | 增加 Linux-6.1.84 补丁                     |
-| 2024-12-20 | V1.2.0   | LinJianhua | 增加 Linux 5.10.226 和 6.1.99 补丁         |
-| 2025-06-20 | V1.3.0   | LinJianhua | 增加 Linux-6.1.118 补丁                    |
-| 2025-10-20 | V1.3.1   | LinJianhua | 添加内核打补丁方法                         |
-| 2025-12-20 | V1.4.0   | LinJianhua | 增加 Linux-6.1.141 补丁和RK3506 RT DDR说明 |
-| 2026-03-20 | V1.5.0   | LinJianhua | 增加 Linux-6.1.157 补丁                    |
+| **日期**   | **版本** | **作者**   | **修改说明**                                      |
+| ---------- | :------- | :--------- | :------------------------------------------------ |
+| 2023-11-20 | V0.0.1   | czz        | 初始版本                                          |
+| 2024-06-20 | V1.0.0   | LinJianhua | 更新到V1.0.0                                      |
+| 2024-08-20 | V1.1.0   | LinJianhua | 增加 Linux-6.1.84 补丁                            |
+| 2024-12-20 | V1.2.0   | LinJianhua | 增加 Linux 5.10.226 和 6.1.99 补丁                |
+| 2025-06-20 | V1.3.0   | LinJianhua | 增加 Linux-6.1.118 补丁                           |
+| 2025-10-20 | V1.3.1   | LinJianhua | 添加内核打补丁方法                                |
+| 2025-12-20 | V1.4.0   | LinJianhua | 增加 Linux-6.1.141 补丁和RK3506 RT DDR说明        |
+| 2026-06-20 | V1.5.0   | LinJianhua | 增加 Linux-6.1.162 补丁 和 Linux-6.12 Xenomai补丁 |
 
 ---
 
@@ -111,6 +112,8 @@ SUBLEVEL = 226
 $ cd $sdk/kernel/
 sdk/kernel$ git am ../docs/Patches/Real-Time-Performance/PREEMPT_RT/kernel-x.xx/x.xxx/000*
 ```
+
+> 备注： Preempt-RT 补丁已合入 Linux6.12 主线，所以 Linux6.12 SDK 无需手动打补丁
 
 ###   编译内核
 
@@ -161,12 +164,7 @@ Date:   Wed Jul 19 20:03:59 2023 +0800
 >
 > 1、Linux-6.1 的内核，Buildroot需要打上0001-xenomai-Support-3.2.4.patch，该补丁有分Buildroot-2021和Buildroot-2023版本，请根据所用Buildroot的版本选择对应的补丁。
 >
-> 2、Linux-6.1 SDK 2025年6月份后，Buildroot已集成XENOMAI-3.2.5，不需要额外补丁。
->
-> ```bash
-> ~/rockchip_multichip/buildroot$ ls package/xenomai/
-> 3.2.5  Config.in  xenomai.hash  xenomai.mk
-> ```
+> 2、Linux6.1 SDK 2025年6月份后，Buildroot 已集成 Xenomai 不需要额外补丁。
 
 ### 内核打上补丁
 
@@ -176,8 +174,6 @@ Date:   Wed Jul 19 20:03:59 2023 +0800
 $ cd $sdk/kernel/
 sdk/kernel$ git am ../docs/Patches/Real-Time-Performance/XENOMAI/kernel-x.xx/x.xxx/000*
 ```
-
-
 
 ###   Buildroot打开XENOMAI配置，并编译rootfs.img：
 
@@ -212,14 +208,14 @@ ARM64
 
 ```bash
 $ cd $sdk/kernel
-$ ../buildroot/output/rockchip_rk3588/build/xenomai-v3.2.2/scripts/prepare-kernel.sh --arch=arm64
+$ ../buildroot/output/rockchip_rk3588/build/xenomai-v3.x.x/scripts/prepare-kernel.sh --arch=arm64
 ```
 
 ARM
 
 ```bash
 $ cd $sdk/kernel
-$ ../buildroot/output/rockchip_rk3506/build/xenomai-v3.2.4/scripts/prepare-kernel.sh --arch=arm
+$ ../buildroot/output/rockchip_rk3506/build/xenomai-v3.x.x/scripts/prepare-kernel.sh --arch=arm
 ```
 
 ###   编译内核
@@ -244,13 +240,13 @@ $ make ARCH=arm64 rockchip_linux_defconfig rk3588_linux.config
 $ make ARCH=arm64 rk3588-evb1-lp4-v10-linux.img -j8
 ```
 
-Linux 4.19(以RK3568为例)：
+Linux 6.12(以RK3572为例)：
 
 ```bash
 $ cd $sdk/kernel
-$ export CROSS_COMPILE=../prebuilts/gcc/linux-x86/aarch64/gcc-arm-10.3-2021.07-x86_64-aarch64-none-linux-gnu/bin/aarch64-none-linux-gnu-
-$ make ARCH=arm64 rockchip_linux_defconfig
-$ make ARCH=arm64 rk3568-evb1-ddr4-v10-linux.img -j8
+export CROSS_COMPILE=../prebuilts/gcc/linux-x86/aarch64/arm-gnu-toolchain-13.3.rel1-x86_64-aarch64-none-linux-gnu/bin/aarch64-none-linux-gnu-
+make ARCH=arm64 rockchip_linux_defconfig rk3572.config
+make ARCH=arm64 rk3572-evb1-v10-linux.img -j4
 ```
 ### 烧录boot.img  rootfs.img
 
@@ -265,7 +261,7 @@ $ make ARCH=arm64 rk3568-evb1-ddr4-v10-linux.img -j8
 #### 使用cyclictest测试
 
 ```bash
- $ ./usr/demo/cyclictest -c 0 -m -n -t -p99 -D12h
+ $ /usr/demo/cyclictest -c 0 -m -t -a -p99 -D12h
 ```
 
 ## 注意事项
@@ -328,7 +324,7 @@ INFO:    BL31: Initializing runtime services
 INFO:    BL31: Initializing BL32
 ```
 
-### RK3568 提高实时性的做法
+### RK3568 提高实时性的方法
 
 #### 		cache 分片
 
@@ -395,7 +391,9 @@ taskset -c 3 cyclictest -c0 -m -t -p99  -D 12h
 > 注：`ps  -eo pid,psr,comm | grep cyclictest` 可以查看cyclitest是否绑定在cpu3。
 >
 
-### RK3506 需要使用RT版本的DDR BIN 实时性能更好
+### RK3506 提高实时性的方法
+
+1、使用RT版本的DDR BIN 实时性能更好
 
 RK3506G（内置DDR）：rkbin/bin/rk35/rk3506_ddr_750MHz_rt_v*.**.bin
 
@@ -445,35 +443,49 @@ index b1bb57b..e173679 100644
 +RK_UBOOT_INI="RK3506BMINIALL_RT.ini" //指定配置./build.sh 打包Loader时用带rt版本的ddr bin
 ```
 
+2、隔离 CPU2 核心，板级 dts 的 bootargs 添加 `isolcpus=2 nohz_full=2`
+
+```bash
+--- a/arch/arm/boot/dts/rk3506-evb1-v10.dtsi
++++ b/arch/arm/boot/dts/rk3506-evb1-v10.dtsi
+@@ -13,7 +13,7 @@ / {
+        compatible = "rockchip,rk3506-evb1-v10", "rockchip,rk3506";
+
+        chosen {
+-               bootargs = "earlycon=uart8250,mmio32,0xff0a0000 console=ttyFIQ0 ubi.mtd=5 ubi.block=0,rootfs root=/dev/ubiblock0_0 rootfstype=squashfs rootwait snd_aloop.index=7 snd_aloop.use_raw_jiffies=1 storagemedia=mtd androidboot.storagemedia=mtd androidboot.mode=normal";
++               bootargs = "earlycon=uart8250,mmio32,0xff0a0000 console=ttyFIQ0 isolcpus=2 nohz_full=2 ubi.mtd=5 ubi.block=0,rootfs root=/dev/ubiblock0_0 rootfstype=squashfs rootwait snd_aloop.index=7 snd_aloop.use_raw_jiffies=1 storagemedia=mtd androidboot.storagemedia=mtd androidboot.mode=normal";
+        };
+```
+
+### RK3572 提高实时性的方法
+
+1、需要使用 RT 版本的 DDR BIN（rk3572_ddr_lp4_2112MHz_lp5_2736MHz_rt_v*.**.bin）实时性能更好
+
+```bash
+sdk/device/rockchip$
+--- a/.chips/rk3572/rockchip_rk3572_evb1_v10_defconfig
++++ b/.chips/rk3572/rockchip_rk3572_evb1_v10_defconfig
+@@ -1,2 +1,4 @@
+ RK_UBOOT_SPL=y
+ RK_KERNEL_DTS_NAME="rk3572-evb1-v10-linux"
++RK_UBOOT_INI="RK3572MINIALL_RT.ini"
+```
+
+2、隔离 CPU4~5 核心，板级 dts 的 bootargs 添加 `isolcpus=4-5 nohz_full=4-5`
+
+```bash
+--- a/arch/arm64/boot/dts/rockchip/rk3572-linux.dtsi
++++ b/arch/arm64/boot/dts/rockchip/rk3572-linux.dtsi
+@@ -6,7 +6,7 @@
+
+ / {
+        chosen: chosen {
+-               bootargs = "earlycon=uart8250,mmio32,0x2c130000 console=ttyFIQ0 root=PARTUUID=614e0000-0000 rw rootwait rcupdate.rcu_expedited=1 rcu_nocbs=all";
++               bootargs = "earlycon=uart8250,mmio32,0x2c130000 console=ttyFIQ0 root=PARTUUID=614e0000-0000 rw rootwait rcupdate.rcu_expedited=1 rcu_nocbs=all isolcpus=4-5 nohz_full=4-5";
+    };
+```
+
 ## 内核对应提交点
-
-Linux-4.19
-
-PREEMPT_RT 补丁对应的提交点：
-
-```bash
-commit a46049b85fd7e5e9f58701fbc387e5b4d3793f98 (rk/develop-4.19, m/master)
-Author: Shunhua Lan <lsh@rock-chips.com>
-Date:   Mon Feb 6 16:45:53 2023 +0800
-
-media: i2c: lt6911uxc: create hdmirx_class devices
-
-Signed-off-by: Shunhua Lan <lsh@rock-chips.com>
-Change-Id: I61c840d812b88554aa154bfc7c1435e1345d287e
-```
-
-XENOMAI 补丁对应的提交点：
-
-```bash
-commit 09f54150e89f68cece4ba5af11a1fd07dfa35aa3 (rk/develop-4.19)
-Author: Zhihuan He <huan.he@rock-chips.com>
-Date:   Wed Aug 23 11:37:06 2023 +0800
-
-arm64: configs: rockchip_linux_defconfig: enable rockchip edac
-
-Signed-off-by: Zhihuan He <huan.he@rock-chips.com>
-Change-Id: Ie3c9b6150e792cb1bca395f630bf35da82168f2b
-```
 
 Linux-5.10.160
 
@@ -633,17 +645,23 @@ Date:   Tue Dec 16 21:01:29 2025 +0800
     Signed-off-by: Zorro Liu <lyx@rock-chips.com>
 ```
 
-Linux-6.1.157
+Linux-6.1.162
 
-```
-commit 62154b8e1b6bdd126f0d1cb5988c8b9dd192c1db
+```bash
+commit dab49058ccee9b3e92b3e7699f72fbf19582cd3f
 Author: Algea Cao <algea.cao@rock-chips.com>
-Date:   Tue Feb 10 11:20:31 2026 +0800
+Date:   Thu Jun 4 16:02:38 2026 +0800
 
-    drm/rockchip: Split rockchip DW-HDMI and DW-HDMI-QP
+    drm/rockchip: vop2: Fix rk3528/rk3576 display error after switching from SDR2HDR to HDR bypass mode
 
-    Change-Id: I9b4c3629aef591bf79c48eda8141b300feae7bf4
+    When forced HDR mode is enabled, the VOP performs SDR2HDR conversion
+    in the SDR UI interface. If an HDR video starts playing at this
+    scene, because vcstate->hdr_ext_data is never empty,
+    vop3_disable_dynamic_hdr() won't be called. As a result, SDR2HDR
+    conversion is not disabled in the HDR bypass scenario, causing
+    display anomalies.
+
+    Change-Id: I5b909cd992368aa9f55328fa6412db2ba3d3122f
     Signed-off-by: Algea Cao <algea.cao@rock-chips.com>
-
 ```
 

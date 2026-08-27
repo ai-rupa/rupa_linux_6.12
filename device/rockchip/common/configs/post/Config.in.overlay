@@ -76,10 +76,10 @@ config RK_ROOTFS_GENERATE_LOGS
 
 config RK_ROOTFS_PREBUILT_TOOLS
 	bool "prebuilt tools"
+	default y if !RK_ROOTFS_LIGHTWEIGHT
 
 config RK_ROOTFS_PREFER_PREBUILT_TOOLS
 	bool "prefer using prebuilt tools"
-	depends on !RK_ROOTFS_PREBUILT_TOOLS
 	default y if !RK_ROOTFS_LIGHTWEIGHT
 
 config RK_ROOTFS_EXTRA_OVERLAY_DIRS

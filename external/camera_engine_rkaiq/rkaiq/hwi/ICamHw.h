@@ -149,6 +149,8 @@ public:
     virtual void setRkAiqManager(RkAiqManager* rkAiqManager) = 0;
     virtual XCamReturn setUserOtpInfo(rk_aiq_user_otp_info_t otp_info) = 0;
     virtual RkAiqIspUniteMode getIspUniteMode() = 0;
+    virtual XCamReturn getIspUniteInfo(RkAiqIspUniteInfo_t& info) = 0;
+    virtual XCamReturn setCifSclStartFlag(int ratio, bool mode) = 0;
 private:
     XCAM_DEAD_COPY (ICamHw);
 };

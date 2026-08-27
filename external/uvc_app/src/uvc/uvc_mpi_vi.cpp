@@ -113,6 +113,7 @@ static MPI_VI_CTX_S uvc_get_vi_ctx(UVC_MPI_CFG *uvcCfg,
     case V4L2_PIX_FMT_YUYV:
     case V4L2_PIX_FMT_NV12:
     case V4L2_PIX_FMT_UYVY:
+    case V4L2_PIX_FMT_BGR24:
       viCtx.stChnAttr.enPixelFormat =
           uvcCfg->vi_cfg[chnType].format;
       break;
@@ -181,14 +182,6 @@ RK_S32 uvc_vi_config(UVC_MPI_CFG *uvcCfg, MpiViChannelType chnType) {
     }
   }
 
-#ifdef RV1126B
-  s32Ret = RK_MPI_VI_CtrlRawStream(uvcCfg->vi_cfg[chnType].dev_id,RK_FALSE);
-  if (s32Ret != RK_SUCCESS) {
-    LOG_ERROR("RK_MPI_VI_CtrlRawStream %x\n", s32Ret);
-    goto __FAILED;
-  }
-#endif
-
   if(uvcCfg->vi_cfg[chnType].dev_id != VI_MAX_PHY_PIPE_NUM) {
     // 0. get dev config status
     s32Ret = RK_MPI_VI_GetDevAttr(ctx.stChnCtx.devId, &ctx.stDevAttr);
@@ -210,7 +203,7 @@ RK_S32 uvc_vi_config(UVC_MPI_CFG *uvcCfg, MpiViChannelType chnType) {
         goto __FAILED;
       }
       // 1-3.bind dev/pipe
-      ctx.stBindPipe.u32Num = ctx.stChnCtx.pipeId;
+      ctx.stBindPipe.u32Num = 1;
       ctx.stBindPipe.PipeId[0] = ctx.stChnCtx.pipeId;
       s32Ret = RK_MPI_VI_SetDevBindPipe(ctx.stChnCtx.devId, &ctx.stBindPipe);
       if (s32Ret != RK_SUCCESS) {

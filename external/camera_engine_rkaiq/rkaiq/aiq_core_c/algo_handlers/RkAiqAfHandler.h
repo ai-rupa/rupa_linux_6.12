@@ -34,6 +34,9 @@ typedef struct AiqAlgoHandlerAf_s {
 
     AiqMutex_t mPdLibOutputMutex;
     AiqCond_t mPdLibOutputCond;
+
+    struct rkmodule_af_inf api_otp_af;
+    struct rkmodule_pdaf_inf api_otp_pdaf;
 } AiqAlgoHandlerAf_t;
 
 AiqAlgoHandler_t* AiqAlgoHandlerAf_constructor(RkAiqAlgoDesComm* des, AiqCore_t* aiqCore);
@@ -59,6 +62,7 @@ XCamReturn AiqAlgoHandlerAf_GetZoomRange(AiqAlgoHandlerAf_t* pAfHdl, rk_aiq_af_z
 XCamReturn AiqAlgoHandlerAf_setAeStable(AiqAlgoHandlerAf_t* pAfHdl, bool ae_stable);
 XCamReturn AiqAlgoHandlerAf_setPdafLibInput(AiqAlgoHandlerAf_t* pAfHdl, rk_aiq_pdlib_input* pdlib_in);
 XCamReturn AiqAlgoHandlerAf_getPdafLibOutput(AiqAlgoHandlerAf_t* pAfHdl, rk_aiq_pdlib_output* pdlib_output, int timeout_ms);
+XCamReturn AiqAlgoHandlerAf_setOtpAf(AiqAlgoHandlerAf_t* pAfHdl, struct rkmodule_af_inf *otp_af, struct rkmodule_pdaf_inf *otp_pdaf);
 
 #endif
 RKAIQ_END_DECLARE

@@ -190,7 +190,7 @@ DumpRkRaw::findFmt(const uint32_t pixelformat)
 {
     const capture_fmt_t *fmt;
 
-    for (uint32_t i = 0; i < sizeof(csirx_fmts); i++) {
+    for (uint32_t i = 0; i < sizeof(csirx_fmts) / sizeof(csirx_fmts[0]); i++) {
         fmt = &csirx_fmts[i];
         if (fmt->fourcc == pixelformat)
             return fmt;

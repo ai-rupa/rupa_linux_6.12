@@ -38,6 +38,13 @@
 #define AIRMS_MAX_WIDTH                  (4096)
 #define AIRMS_EXTEND_PIXEL               (16)
 
+typedef enum AirmsBayerPattern_e {
+    AIRMS_BAYER_RGGB = 0,
+    AIRMS_BAYER_BGGR = 1,
+    AIRMS_BAYER_GRBG = 2,
+    AIRMS_BAYER_GBRG = 3,
+} AirmsBayerPattern_t;
+
 typedef struct _AiRmsAiispBuf {
     bool dump_flg;
     bool in_used;
@@ -51,11 +58,29 @@ typedef struct _AiRmsAiispBuf {
 
 typedef struct AiqAiRmsStreamProcUnit_s AiqAiRmsStreamProcUnit_t;
 
+typedef struct _AirmsAwbGain {
+    uint16_t r;
+    uint16_t gr;
+    uint16_t gb;
+    uint16_t b;
+} AirmsAwbGain;
+
+typedef struct _AirmsBlc {
+    uint16_t r;
+    uint16_t gr;
+    uint16_t gb;
+    uint16_t b;
+} AirmsBlc;
+
 typedef struct _AirmsStreamParam {
     int hdlIdx;
     uint16_t* pSrc;
     AiRmsAiispBuf *aiispInBuf;
     AiqAiRmsStreamProcUnit_t* pProcUnit;
+    bool awb_gain_en;
+    AirmsBayerPattern_t bayer_pattern;
+    AirmsAwbGain awb_gain;
+    AirmsBlc blc;
 } AirmsStreamParam;
 
 typedef struct _AirmsMgeParam {
@@ -128,17 +153,34 @@ typedef struct AiqAiRmsStreamProcUnit_s {
     AiqCamHwBase_t* pCamHw;
     bool is_parthdl;
     threadpool mMgeThPool;
+
+    uint32_t inbuf_num;
+    uint32_t outbuf_num;
+
+    // for awb gain via cpu
+    bool cpu_awb_gain_en;
+    AirmsBayerPattern_t bayer_pattern;
+    bool awb_gain_valid;
+    AirmsAwbGain last_awb_gain;
+    AirmsBlc last_blc;
+    uint32_t cpu_awb_gain_frame_count;
+    int64_t cpu_awb_gain_total_us;
 } AiqAiRmsStreamProcUnit_t;
 
 XCamReturn AiqAiRmsStreamProcUnit_init(AiqCamHwBase_t* pCamHw, AiqAiRmsStreamProcUnit_t* pProcUnit, rk_aiq_aiisp_info_t* aiisp_info);
 XCamReturn AiqAiRmsStreamProcUnit_deinit(AiqAiRmsStreamProcUnit_t* pProcUnit);
 XCamReturn AiqAiRmsStreamProcUnit_prepare(AiqAiRmsStreamProcUnit_t* pProcUnit,
-                                          uint32_t isp_acq_width, uint32_t isp_acq_height, char *model_file);
+                                          uint32_t isp_acq_width, uint32_t isp_acq_height,
+                                          char* model_file, uint32_t inbuf_num,
+                                          uint32_t outbuf_num);
 void AiqAiRmsStreamProcUnit_start(AiqAiRmsStreamProcUnit_t* pProcUnit);
 void AiqAiRmsStreamProcUnit_stop(AiqAiRmsStreamProcUnit_t* pProcUnit);
 void AiqAiRmsStreamProcUnit_set_devices(AiqAiRmsStreamProcUnit_t* pProcUnit, AiqRawStreamProcUnit_t* proc);
 void AiqAiRmsStreamProcUnit_setVicapBuf(AiqAiRmsStreamProcUnit_t* pProcUnit, AiqV4l2Buffer_t *vicapbuf);
 int AiqAiRmsStreamProcUnit_dumpRaw(AiqAiRmsStreamProcUnit_t* pProcUnit, int dump_raw_num);
+void AiqAiRmsStreamProcUnit_setCpuAwbGainEn(AiqAiRmsStreamProcUnit_t* pProcUnit, bool en);
+void AiqAiRmsStreamProcUnit_setBayerPattern(AiqAiRmsStreamProcUnit_t* pProcUnit,
+                                            AirmsBayerPattern_t pattern);
 void AiqAiRmsStreamProcUnit_getBytesPerline(AiqAiRmsStreamProcUnit_t* pProcUnit, uint32_t width, uint32_t* bytes_perline);
 
 #endif  // _AIQ_AIRMS_STREAM_PROC_UNIT_H_

@@ -45,6 +45,11 @@
     'U', 'Y', 'V', 'Y', 0x00, 0x00, 0x10, 0x00, 0x80, 0x00, 0x00, 0xaa, 0x00,  \
         0x38, 0x9b, 0x71                                                       \
   }
+#define UVC_GUID_FORMAT_RGB                                                    \
+  {                                                                            \
+    0x7d, 0xeb, 0x36, 0xe4, 0x4f, 0x52, 0xce, 0x11, 0x9f, 0x53, 0x00, 0x20,    \
+        0xaf, 0x0b, 0xa7, 0x70                                                 \
+  }
 #define UVC_GUID_FORMAT_H264                                                   \
   {                                                                            \
     'H', '2', '6', '4', 0x00, 0x00, 0x10, 0x00, 0x80, 0x00, 0x00, 0xaa, 0x00,  \
@@ -81,6 +86,9 @@ static struct uvc_function_format_info uvc_formats[] = {
     },
     {
         .guid = UVC_GUID_FORMAT_UYVY, .fcc = V4L2_PIX_FMT_UYVY,
+    },
+    {
+        .guid = UVC_GUID_FORMAT_RGB, .fcc = V4L2_PIX_FMT_BGR24,
     },
 };
 
@@ -654,6 +662,12 @@ static int configfs_parse_uvc(const char *fpath,
                                    &fc->streaming.ep.bMaxBurst);
   ret = ret ?: attribute_read_uint(fpath, "streaming_maxpacket",
                                    &fc->streaming.ep.wMaxPacketSize);
+  ret = ret ?: attribute_read_uint(fpath, "streaming_bulk",
+                                    &fc->streaming.ep.bBulk);
+
+  if (attribute_read_uint(fpath, "streaming_bulk_hs_maxpayload",
+                        &fc->streaming.ep.streaming_bulk_hs_maxpayload) != 0)
+    fc->streaming.ep.streaming_bulk_hs_maxpayload = UVC_BULK_HS_MAXPAYLOAD_DEFAULT;
 
   return ret;
 }
@@ -701,4 +715,32 @@ done:
   free(fpath);
 
   return fc;
+}
+
+enum usb_device_speed get_usb_speed_from_sysfs(const char *udc)
+{
+    char path[256];
+    char buf[32] = {0};
+    FILE *fp;
+
+    if (!udc || udc[0] == '\0')
+        return USB_SPEED_UNKNOWN;
+
+    snprintf(path, sizeof(path), "/sys/class/udc/%s/current_speed", udc);
+    fp = fopen(path, "r");
+    if (!fp)
+        return USB_SPEED_UNKNOWN;
+    fgets(buf, sizeof(buf), fp);
+    fclose(fp);
+
+    if (strstr(buf, "super-speed-plus"))
+        return USB_SPEED_SUPER_PLUS;
+    if (strstr(buf, "super"))
+        return USB_SPEED_SUPER;
+    if (strstr(buf, "high"))
+        return USB_SPEED_HIGH;
+    if (strstr(buf, "full"))
+        return USB_SPEED_FULL;
+
+    return USB_SPEED_UNKNOWN;
 }

@@ -316,7 +316,9 @@ RkAiqManager::prepare(uint32_t width, uint32_t height, rk_aiq_working_mode_t mod
 
     RKAIQMNG_CHECK_RET(ret, "getSensorModeData error %d", ret);
     mRkAiqAnalyzer->notifyIspStreamMode(mCamHw->getIspStreamMode());
-    mRkAiqAnalyzer->setTranslaterIspUniteMode(mCamHw->getIspUniteMode());
+    RkAiqIspUniteInfo_t isp_unite_info;
+    mCamHw->getIspUniteInfo(isp_unite_info);
+    mRkAiqAnalyzer->setTranslaterIspUniteInfo(&isp_unite_info);
     ret = mRkAiqAnalyzer->prepare(&sensor_des, working_mode_hw);
     RKAIQMNG_CHECK_RET(ret, "analyzer prepare error %d", ret);
 
@@ -1062,6 +1064,16 @@ RkAiqManager::rkAiqCalcExpDone(SmartPtr<RkAiqExpParamsProxy> &results)
     ENTER_XCORE_FUNCTION();
 
     applyAnalyzerExpResult(results);
+
+    EXIT_XCORE_FUNCTION();
+}
+
+void
+RkAiqManager::rkAiqSetVcpSclInfo(bool en, int ratio)
+{
+    ENTER_XCORE_FUNCTION();
+
+    mCamHw->setCifSclStartFlag(ratio, en);
 
     EXIT_XCORE_FUNCTION();
 }

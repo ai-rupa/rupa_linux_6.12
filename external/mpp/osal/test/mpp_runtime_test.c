@@ -135,12 +135,13 @@ pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cond;
 rk_u32 condition = 0;
 
-void *wait_thread()
+void *wait_thread(void *data)
 {
-    int ret;
     struct timespec ts, ts_s, ts_e;
     char time_str[64];
     struct tm *tm_info;
+    int ret;
+    (void)data;
 
     pthread_mutex_lock(&mutex);
 

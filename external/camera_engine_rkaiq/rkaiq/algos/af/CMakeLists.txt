@@ -13,6 +13,7 @@ set(AF_SRC
     af_trigger.c
     af_utils.c
     rk_aiq_uapi_af_int.c
+    pdafLibType1.c
     )
 
 dec_algo(af rk_aiq_algo_af_itf.c ${AF_SRC})

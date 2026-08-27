@@ -25,6 +25,10 @@
 	wait-mode = <DMC_WAIT_MODE_EBC_VBANK>;
 };
 
+&gpu_opp_table {
+	rockchip,early-regulator-enable;
+};
+
 &i2c0 {
 	status = "okay";
 
@@ -113,7 +117,6 @@
 			};
 
 			vdd_npu_gpu_s0: DCDC_REG2 {
-				regulator-always-on;
 				regulator-boot-on;
 				regulator-init-microvolt = <750000>;
 				regulator-min-microvolt = <550000>;
@@ -363,6 +366,10 @@
 	};
 };
 
+&npu_opp_table {
+	rockchip,early-regulator-enable;
+};
+
 &pinctrl {
 	rk806_slp_pinctrl {
 		pmic_ctrl2: pmic-ctrl2 {
@@ -381,6 +388,15 @@
 	display_reserved: framebuffer@50900000 {
 		reg = <0x0 0x50900000 0x0 0x3800000>;
 	};
+};
+
+&rknpu {
+	rknpu-supply = <&vdd_npu_gpu_s0>;
+	status = "okay";
+};
+
+&rknpu_mmu {
+	status = "okay";
 };
 
 &rockchip_suspend {

@@ -1527,6 +1527,8 @@ XCamReturn rk_aiq_uapi2_setGammaCoef(const rk_aiq_sys_ctx_t* ctx, float GammaCoe
 
     gamma_api_attrib_t gammaAttr;
     memset(&gammaAttr, 0x0, sizeof(gamma_api_attrib_t));
+    ret = rk_aiq_user_api2_gamma_GetAttrib(ctx, &gammaAttr);
+    RKAIQ_IMGPROC_CHECK_RET(ret, "get gamma attr failed!\nsetGammaCoef failed!");
 
     gammaAttr.opMode                                    = RK_AIQ_OP_MODE_AUTO;
     gammaAttr.en         = true;

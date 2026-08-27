@@ -20,6 +20,7 @@
 #include "tools/test.config"
 #include "gpu/mesa3d.config"
 #include "gui/weston.config"
+#include "ota/update_engine.config"
 # BR2_PACKAGE_GST1_PLUGINS_GOOD_PLUGIN_PULSE is reset to default
 BR2_PACKAGE_LIBSNDFILE=y
 BR2_PACKAGE_LIBTOOL=y

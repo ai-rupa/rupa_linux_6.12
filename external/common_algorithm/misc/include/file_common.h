@@ -27,6 +27,7 @@ typedef enum _FILE_SCHED_POLICY {
 typedef struct _FILE_WRITE_THREAD_ARG {
 	FILE_SCHED_POLICY sched_policy;
 	int priority;                 /* SCHED_OTHER/SCHED_IDLE/SCHED_BATCH inoperative */
+	int sleep_time;               /* unit: us */
 } FILE_WRITE_THREAD_ARG;
 
 typedef struct _FILE_SDCARD_ARG {
@@ -43,5 +44,10 @@ typedef struct _FILE_CACHE_ARG {
 	FILE_WRITE_THREAD_ARG write_thread_arg;
 	FILE_SDCARD_ARG sdcard_arg;
 } FILE_CACHE_ARG;
+
+typedef struct _FILE_CACHE_STATUS {
+	int total_cache;          /* total cache size */
+	int used_cache;           /* used cache size */
+} FILE_CACHE_STATUS;
 
 #endif

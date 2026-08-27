@@ -571,6 +571,11 @@ record:
       RKADK_PARAM_SetCamParam(s32CamId, RKADK_PARAM_TYPE_RECORD_TYPE, &enRecType);
       RKADK_RECORD_Reset(&pRecorder);
       RKADK_RECORD_Start(pRecorder);
+    } else if (strstr(cmd, "SINGLE")) { //Single Record
+      enRecType = RKADK_REC_TYPE_SINGLE;
+      RKADK_PARAM_SetCamParam(s32CamId, RKADK_PARAM_TYPE_RECORD_TYPE, &enRecType);
+      RKADK_RECORD_Reset(&pRecorder);
+      RKADK_RECORD_Start(pRecorder);
     } else if (strstr(cmd, "720")) {
       type = RKADK_RES_720P;
       RKADK_PARAM_SetCamParam(s32CamId, RKADK_PARAM_TYPE_RES, &type);

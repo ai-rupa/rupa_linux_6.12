@@ -44,6 +44,8 @@ typedef struct _RkAiqAlgoContext {
     rk_aiq_ae_algo_config_t aeCfg; // ae config of AIQ framework
     rk_aiq_ae_info_t   aeInfo;
     rk_aiq_ae_result_t aeResult;
+    ae_rkExp_t cisRkExpLatest;
+    int rkAeStuckCnt;
 } RkAiqAlgoContext;
 
 /******************************************************************************
@@ -91,7 +93,8 @@ static XCamReturn aeReal2RegConv
     float SplitGain,
     unsigned int *regIntegrationTime,
     unsigned int *regGain,
-    int pDcgMode
+    int pDcgMode,
+    int frmidx
 ) {
     XCamReturn ret = XCAM_RETURN_NO_ERROR;
 
@@ -152,6 +155,23 @@ static XCamReturn aeReal2RegConv
         *regGain = (int)(20.0f * log10(ag) * 10.0f / 3.0f + 0.5f);
     }
 
+    float exp_offset = 0.0f;
+    if (pConfig->stExpOffset.valid == true) {
+        if (pConfig->isHdr) {
+            exp_offset = (float)pConfig->stExpOffset.integer[frmidx] + (float)pConfig->stExpOffset.decimal[frmidx] / (float)pConfig->stExpOffset.div_coeff[frmidx];
+        } else {
+            exp_offset = (float)pConfig->stExpOffset.integer[0] + (float)pConfig->stExpOffset.decimal[0] / (float)pConfig->stExpOffset.div_coeff[0];
+        }
+
+    } else {
+        if (pConfig->isHdr) {
+            exp_offset = pConfig->stSensorInfo.CISTimeSet.Hdr[pConfig->hdrFrmNum - 2].CISTimeOffsetUs.fCoeff[frmidx];
+        } else {
+            exp_offset = pConfig->stSensorInfo.CISTimeSet.Linear.CISTimeOffsetUs;
+        }
+    }
+    exp_offset /= 1000000.0f; //us to s
+
     //time convertion
     float timeC0 = pConfig->stSensorInfo.Time2Reg.fCoeff[0];
     float timeC1 = pConfig->stSensorInfo.Time2Reg.fCoeff[1];
@@ -163,7 +183,7 @@ static XCamReturn aeReal2RegConv
     float hts = pConfig->PixelPeriodsPerLine;
     float vts = pConfig->LinePeriodsPerField;
 
-    *regIntegrationTime = (int)(timeC0 * vts + timeC1 + timeC2 * ((SplitIntegrationTime * pclk * 1000000 / hts) + timeC3));
+    *regIntegrationTime = (int)(timeC0 * vts + timeC1 + timeC2 * (((SplitIntegrationTime - exp_offset) * pclk * 1000000 / hts) + timeC3));
 
     int Index = (*regIntegrationTime - CISTimeRegOdevity[1]) / (CISTimeRegOdevity[0]);
     *regIntegrationTime = CISTimeRegOdevity[0] * Index + CISTimeRegOdevity[1];
@@ -250,7 +270,7 @@ static XCamReturn initAeStatsCfg(rk_aiq_ae_algo_config_t* pConfig)
     pConfig->aeStatsCfg.entityGroup.entities.entity0.hist.hw_aeCfg_win_width = pConfig->rawWidth;
     pConfig->aeStatsCfg.entityGroup.entities.entity0.hist.hw_aeCfg_win_height = pConfig->rawHeight;
 
-    pConfig->aeStatsCfg.entityGroup.entities.entity0.hist.hw_aeCfg_pix_mode = aeStats_histPixY_mode;
+    pConfig->aeStatsCfg.entityGroup.entities.entity0.hist.hw_aeCfg_pix_mode = aeStats_histPixG_mode;
     pConfig->aeStatsCfg.entityGroup.entities.entity0.hist.hw_aeCfg_pixIn_shift = 0;
     pConfig->aeStatsCfg.entityGroup.entities.entity0.hist.hw_aeCfg_pixVal_thred = 0;
     pConfig->aeStatsCfg.entityGroup.entities.entity0.hist.hw_aeCfg_pixSkip_step = 0;
@@ -300,7 +320,7 @@ static XCamReturn initAeStatsCfg(rk_aiq_ae_algo_config_t* pConfig)
     pConfig->aeStatsCfg.entityGroup.entities.entity3.hist.hw_aeCfg_win_width = pConfig->rawWidth;
     pConfig->aeStatsCfg.entityGroup.entities.entity3.hist.hw_aeCfg_win_height = pConfig->rawHeight;
 
-    pConfig->aeStatsCfg.entityGroup.entities.entity3.hist.hw_aeCfg_pix_mode = aeStats_histPixY_mode;
+    pConfig->aeStatsCfg.entityGroup.entities.entity3.hist.hw_aeCfg_pix_mode = aeStats_histPixG_mode;
     pConfig->aeStatsCfg.entityGroup.entities.entity3.hist.hw_aeCfg_pixIn_shift = 0;
     pConfig->aeStatsCfg.entityGroup.entities.entity3.hist.hw_aeCfg_pixVal_thred = 0;
     pConfig->aeStatsCfg.entityGroup.entities.entity3.hist.hw_aeCfg_pixSkip_step = 0;
@@ -366,7 +386,7 @@ static void initAeResult(rk_aiq_ae_result_t* pAeResult, rk_aiq_ae_algo_config_t*
                            pAeResult->pfn_result.cisRkExp.hdr_exp[i].exp_real_params.analog_gain,
                            &pAeResult->pfn_result.cisRkExp.hdr_exp[i].exp_sensor_params.coarse_integration_time,
                            &pAeResult->pfn_result.cisRkExp.hdr_exp[i].exp_sensor_params.analog_gain_code_global,
-                           pAeResult->pfn_result.cisRkExp.hdr_exp[i].exp_real_params.dcg_mode);
+                           pAeResult->pfn_result.cisRkExp.hdr_exp[i].exp_real_params.dcg_mode, i);
 
         }
 
@@ -385,7 +405,7 @@ static void initAeResult(rk_aiq_ae_result_t* pAeResult, rk_aiq_ae_algo_config_t*
                        pAeResult->pfn_result.cisRkExp.linear_exp.exp_real_params.analog_gain,
                        &pAeResult->pfn_result.cisRkExp.linear_exp.exp_sensor_params.coarse_integration_time,
                        &pAeResult->pfn_result.cisRkExp.linear_exp.exp_sensor_params.analog_gain_code_global,
-                       pAeResult->pfn_result.cisRkExp.linear_exp.exp_real_params.dcg_mode);
+                       pAeResult->pfn_result.cisRkExp.linear_exp.exp_real_params.dcg_mode, 0);
 
     }
 
@@ -396,12 +416,16 @@ static void initAeResult(rk_aiq_ae_result_t* pAeResult, rk_aiq_ae_algo_config_t*
     pAeResult->pfn_result.statsCfg.hwEnt0.mainWin.hw_aeCfg_win_y = pConfig->aeStatsCfg.entityGroup.entities.entity0.mainWin.hw_aeCfg_win_y;
     pAeResult->pfn_result.statsCfg.hwEnt0.mainWin.hw_aeCfg_win_width = pConfig->aeStatsCfg.entityGroup.entities.entity0.mainWin.hw_aeCfg_win_width;
     pAeResult->pfn_result.statsCfg.hwEnt0.mainWin.hw_aeCfg_win_height = pConfig->aeStatsCfg.entityGroup.entities.entity0.mainWin.hw_aeCfg_win_height;
+    pAeResult->pfn_result.statsCfg.hwEnt0.hist.hw_aeCfg_pix_mode = pConfig->aeStatsCfg.entityGroup.entities.entity0.hist.hw_aeCfg_pix_mode;
+
     memcpy(pAeResult->pfn_result.statsCfg.hwEnt0.hist.hw_aeCfg_zone_wgt, pConfig->aeStatsCfg.entityGroup.entities.entity0.hist.hw_aeCfg_zone_wgt, AESTATS_ZONE_15x15_NUM * sizeof(uint8_t));
 
     pAeResult->pfn_result.statsCfg.hwEnt3.mainWin.hw_aeCfg_win_x = pConfig->aeStatsCfg.entityGroup.entities.entity3.mainWin.hw_aeCfg_win_x;
     pAeResult->pfn_result.statsCfg.hwEnt3.mainWin.hw_aeCfg_win_y = pConfig->aeStatsCfg.entityGroup.entities.entity3.mainWin.hw_aeCfg_win_y;
     pAeResult->pfn_result.statsCfg.hwEnt3.mainWin.hw_aeCfg_win_width = pConfig->aeStatsCfg.entityGroup.entities.entity3.mainWin.hw_aeCfg_win_width;
     pAeResult->pfn_result.statsCfg.hwEnt3.mainWin.hw_aeCfg_win_height = pConfig->aeStatsCfg.entityGroup.entities.entity3.mainWin.hw_aeCfg_win_height;
+    pAeResult->pfn_result.statsCfg.hwEnt3.hist.hw_aeCfg_pix_mode = pConfig->aeStatsCfg.entityGroup.entities.entity3.hist.hw_aeCfg_pix_mode;
+
     memcpy(pAeResult->pfn_result.statsCfg.hwEnt3.hist.hw_aeCfg_zone_wgt, pConfig->aeStatsCfg.entityGroup.entities.entity3.hist.hw_aeCfg_zone_wgt, AESTATS_ZONE_15x15_NUM * sizeof(uint8_t));
 
     pAeResult->pfn_result.statsCfg.pSwCoWkEnt03 = &pAeResult->pfn_result.statsCfg.hwEnt0;
@@ -447,21 +471,32 @@ void pfnAePreRes2AePreRes(RkAiqAlgoContext* algo_ctx, RKAiqAecExpInfo_t exp_para
 }
 
 static
-void pfnAeRes2AeRes(rk_aiq_ae_algo_config_t* pConfig, ae_pfnAe_results_t* pfnAeResult, RkAiqAlgoProcResAe* AeProcRes)
+void pfnAeRes2AeRes(RkAiqAlgoContext* algo_ctx, rk_aiq_ae_algo_config_t* pConfig, ae_pfnAe_results_t* pfnAeResult, RkAiqAlgoProcResAe* AeProcRes)
 {
+    bool isUpdateRkExp = true;
+    if (memcmp(&algo_ctx->cisRkExpLatest, &pfnAeResult->cisRkExp, sizeof(ae_rkExp_t)) == 0 &&
+        algo_ctx->rkAeStuckCnt < 5) {
+        AeProcRes->ae_proc_res_rk->exp_set_cnt = 0;
+        algo_ctx->rkAeStuckCnt++;
+        isUpdateRkExp = false;
+    } else {
+        AeProcRes->ae_proc_res_rk->exp_set_cnt = 1;
+        algo_ctx->cisRkExpLatest = pfnAeResult->cisRkExp;
+        algo_ctx->rkAeStuckCnt = 0;
+    }
 
     //AE new sensor exposure
     if(pConfig->isHdr) {
         //Hdr
 
-        if(pfnAeResult->isRkExpValid) {
+        if(pfnAeResult->isRkExpValid && isUpdateRkExp) {
             for(int i = 0; i < pConfig->hdrFrmNum; i++) {
 
                 aeReal2RegConv(pConfig, pfnAeResult->cisRkExp.hdr_exp[i].exp_real_params.integration_time,
                                pfnAeResult->cisRkExp.hdr_exp[i].exp_real_params.analog_gain,
                                &pfnAeResult->cisRkExp.hdr_exp[i].exp_sensor_params.coarse_integration_time,
                                &pfnAeResult->cisRkExp.hdr_exp[i].exp_sensor_params.analog_gain_code_global,
-                               pfnAeResult->cisRkExp.hdr_exp[i].exp_real_params.dcg_mode);
+                               pfnAeResult->cisRkExp.hdr_exp[i].exp_real_params.dcg_mode, i);
 
             }
             AeProcRes->exp_i2c_params->bValid = false;
@@ -476,12 +511,12 @@ void pfnAeRes2AeRes(rk_aiq_ae_algo_config_t* pConfig, ae_pfnAe_results_t* pfnAeR
 
     } else {
         //Linear
-        if(pfnAeResult->isRkExpValid) {
+        if(pfnAeResult->isRkExpValid && isUpdateRkExp) {
             aeReal2RegConv(pConfig, pfnAeResult->cisRkExp.linear_exp.exp_real_params.integration_time,
                            pfnAeResult->cisRkExp.linear_exp.exp_real_params.analog_gain,
                            &pfnAeResult->cisRkExp.linear_exp.exp_sensor_params.coarse_integration_time,
                            &pfnAeResult->cisRkExp.linear_exp.exp_sensor_params.analog_gain_code_global,
-                           pfnAeResult->cisRkExp.linear_exp.exp_real_params.dcg_mode);
+                           pfnAeResult->cisRkExp.linear_exp.exp_real_params.dcg_mode, 0);
             AeProcRes->exp_i2c_params->bValid = false;
             AeProcRes->exp_i2c_params->nNumRegs = 0;
         } else {
@@ -510,7 +545,6 @@ void pfnAeRes2AeRes(rk_aiq_ae_algo_config_t* pConfig, ae_pfnAe_results_t* pfnAeR
     AeProcRes->new_ae_exp->frame_length_lines = pfnAeResult->frmLengthLines;
     AeProcRes->new_ae_exp->Iris = pfnAeResult->iris;
 
-    AeProcRes->ae_proc_res_rk->exp_set_cnt = 1;
     AeProcRes->ae_proc_res_rk->exp_set_tbl[0] = *AeProcRes->new_ae_exp;
     AeProcRes->ae_proc_res_rk->LongFrmMode = pfnAeResult->isLongFrmMode;
     AeProcRes->ae_proc_res_rk->IsConverged = pfnAeResult->isConverged;
@@ -531,6 +565,7 @@ void pfnAeRes2AeRes(rk_aiq_ae_algo_config_t* pConfig, ae_pfnAe_results_t* pfnAeR
         AeProcRes->ae_stats_cfg->entityGroup.coWkEntity03.hist.hw_aeCfg_win_y = pfnAeResult->statsCfg.pSwCoWkEnt03->mainWin.hw_aeCfg_win_y;
         AeProcRes->ae_stats_cfg->entityGroup.coWkEntity03.hist.hw_aeCfg_win_width = pfnAeResult->statsCfg.pSwCoWkEnt03->mainWin.hw_aeCfg_win_width;
         AeProcRes->ae_stats_cfg->entityGroup.coWkEntity03.hist.hw_aeCfg_win_height = pfnAeResult->statsCfg.pSwCoWkEnt03->mainWin.hw_aeCfg_win_height;
+        AeProcRes->ae_stats_cfg->entityGroup.coWkEntity03.hist.hw_aeCfg_pix_mode = pfnAeResult->statsCfg.pSwCoWkEnt03->hist.hw_aeCfg_pix_mode;
 
         memcpy(AeProcRes->ae_stats_cfg->entityGroup.coWkEntity03.hist.hw_aeCfg_zone_wgt, \
                pfnAeResult->statsCfg.pSwCoWkEnt03->hist.hw_aeCfg_zone_wgt, AESTATS_ZONE_15x15_NUM * sizeof(uint8_t));
@@ -544,6 +579,7 @@ void pfnAeRes2AeRes(rk_aiq_ae_algo_config_t* pConfig, ae_pfnAe_results_t* pfnAeR
         AeProcRes->ae_stats_cfg->entityGroup.entities.entity0.hist.hw_aeCfg_win_y = pfnAeResult->statsCfg.hwEnt0.mainWin.hw_aeCfg_win_y;
         AeProcRes->ae_stats_cfg->entityGroup.entities.entity0.hist.hw_aeCfg_win_width = pfnAeResult->statsCfg.hwEnt0.mainWin.hw_aeCfg_win_width;
         AeProcRes->ae_stats_cfg->entityGroup.entities.entity0.hist.hw_aeCfg_win_height = pfnAeResult->statsCfg.hwEnt0.mainWin.hw_aeCfg_win_height;
+        AeProcRes->ae_stats_cfg->entityGroup.entities.entity0.hist.hw_aeCfg_pix_mode = pfnAeResult->statsCfg.hwEnt0.hist.hw_aeCfg_pix_mode;
 
         memcpy(AeProcRes->ae_stats_cfg->entityGroup.entities.entity0.hist.hw_aeCfg_zone_wgt, \
                pfnAeResult->statsCfg.hwEnt0.hist.hw_aeCfg_zone_wgt, AESTATS_ZONE_15x15_NUM * sizeof(uint8_t));
@@ -557,6 +593,7 @@ void pfnAeRes2AeRes(rk_aiq_ae_algo_config_t* pConfig, ae_pfnAe_results_t* pfnAeR
         AeProcRes->ae_stats_cfg->entityGroup.entities.entity3.hist.hw_aeCfg_win_y = pfnAeResult->statsCfg.hwEnt3.mainWin.hw_aeCfg_win_y;
         AeProcRes->ae_stats_cfg->entityGroup.entities.entity3.hist.hw_aeCfg_win_width = pfnAeResult->statsCfg.hwEnt3.mainWin.hw_aeCfg_win_width;
         AeProcRes->ae_stats_cfg->entityGroup.entities.entity3.hist.hw_aeCfg_win_height = pfnAeResult->statsCfg.hwEnt3.mainWin.hw_aeCfg_win_height;
+        AeProcRes->ae_stats_cfg->entityGroup.entities.entity3.hist.hw_aeCfg_pix_mode = pfnAeResult->statsCfg.hwEnt3.hist.hw_aeCfg_pix_mode;
 
         memcpy(AeProcRes->ae_stats_cfg->entityGroup.entities.entity3.hist.hw_aeCfg_zone_wgt, \
                pfnAeResult->statsCfg.hwEnt3.hist.hw_aeCfg_zone_wgt, AESTATS_ZONE_15x15_NUM * sizeof(uint8_t));
@@ -584,7 +621,7 @@ void pfnGrpAeRes2GrpAeRes(rk_aiq_ae_algo_config_t* pConfig, rk_aiq_singlecam_3a_
                                        pfnAeRes->cisRkExp.hdr_exp[j].exp_real_params.analog_gain,
                                        &pfnAeRes->cisRkExp.hdr_exp[j].exp_sensor_params.coarse_integration_time,
                                        &pfnAeRes->cisRkExp.hdr_exp[j].exp_sensor_params.analog_gain_code_global,
-                                       pfnAeRes->cisRkExp.hdr_exp[j].exp_real_params.dcg_mode);
+                                       pfnAeRes->cisRkExp.hdr_exp[j].exp_real_params.dcg_mode, i);
 
                         rk_aiq_singlecam_3a_result[i]->aec.exp_tbl[0].HdrExp[j] = pfnAeRes->cisRkExp.hdr_exp[j];
                         rk_aiq_singlecam_3a_result[i]->aec.exp_i2c_params->bValid = false;
@@ -595,7 +632,7 @@ void pfnGrpAeRes2GrpAeRes(rk_aiq_ae_algo_config_t* pConfig, rk_aiq_singlecam_3a_
                                    pfnAeRes->cisRkExp.linear_exp.exp_real_params.analog_gain,
                                    &pfnAeRes->cisRkExp.linear_exp.exp_sensor_params.coarse_integration_time,
                                    &pfnAeRes->cisRkExp.linear_exp.exp_sensor_params.analog_gain_code_global,
-                                   pfnAeRes->cisRkExp.linear_exp.exp_real_params.dcg_mode);
+                                   pfnAeRes->cisRkExp.linear_exp.exp_real_params.dcg_mode, 0);
 
                     rk_aiq_singlecam_3a_result[i]->aec.exp_tbl[0].LinearExp = pfnAeRes->cisRkExp.linear_exp;
                     rk_aiq_singlecam_3a_result[i]->aec.exp_i2c_params->bValid = false;
@@ -637,7 +674,7 @@ void pfnGrpAeRes2GrpAeRes(rk_aiq_ae_algo_config_t* pConfig, rk_aiq_singlecam_3a_
                                        pfnAeResult->cisRkExp.hdr_exp[j].exp_real_params.analog_gain,
                                        &pfnAeResult->cisRkExp.hdr_exp[j].exp_sensor_params.coarse_integration_time,
                                        &pfnAeResult->cisRkExp.hdr_exp[j].exp_sensor_params.analog_gain_code_global,
-                                       pfnAeResult->cisRkExp.hdr_exp[j].exp_real_params.dcg_mode);
+                                       pfnAeResult->cisRkExp.hdr_exp[j].exp_real_params.dcg_mode, i);
 
                         rk_aiq_singlecam_3a_result[i]->aec.exp_tbl[0].HdrExp[j] = pfnAeResult->cisRkExp.hdr_exp[j];
                         rk_aiq_singlecam_3a_result[i]->aec.exp_i2c_params->bValid = false;
@@ -648,7 +685,7 @@ void pfnGrpAeRes2GrpAeRes(rk_aiq_ae_algo_config_t* pConfig, rk_aiq_singlecam_3a_
                                    pfnAeResult->cisRkExp.linear_exp.exp_real_params.analog_gain,
                                    &pfnAeResult->cisRkExp.linear_exp.exp_sensor_params.coarse_integration_time,
                                    &pfnAeResult->cisRkExp.linear_exp.exp_sensor_params.analog_gain_code_global,
-                                   pfnAeResult->cisRkExp.linear_exp.exp_real_params.dcg_mode);
+                                   pfnAeResult->cisRkExp.linear_exp.exp_real_params.dcg_mode, 0);
 
                     rk_aiq_singlecam_3a_result[i]->aec.exp_tbl[0].LinearExp = pfnAeResult->cisRkExp.linear_exp;
                     rk_aiq_singlecam_3a_result[i]->aec.exp_i2c_params->bValid = false;
@@ -801,7 +838,6 @@ static XCamReturn AeDemoDestroyCtx(RkAiqAlgoContext *context)
     return XCAM_RETURN_NO_ERROR;
 }
 
-
 static XCamReturn AeDemoPrepare(RkAiqAlgoCom* params)
 {
     LOG1_AEC_SUBM(0xff, "%s ENTER", __func__);
@@ -842,6 +878,7 @@ static XCamReturn AeDemoPrepare(RkAiqAlgoCom* params)
             algo_ctx->aeCfg.PixelClockFreqMHZ = AeCfgParam->aec.PixelClockFreqMHZ;
             algo_ctx->aeCfg.PixelPeriodsPerLine = AeCfgParam->aec.PixelPeriodsPerLine;
             algo_ctx->aeCfg.stNRswitch = AeCfgParam->aec.nr_switch;
+            algo_ctx->aeCfg.stExpOffset = AeCfgParam->aec.exp_offset;
 
         } else {
 
@@ -857,6 +894,7 @@ static XCamReturn AeDemoPrepare(RkAiqAlgoCom* params)
             algo_ctx->aeCfg.PixelClockFreqMHZ = AeCfgParam->PixelClockFreqMHZ;
             algo_ctx->aeCfg.PixelPeriodsPerLine = AeCfgParam->PixelPeriodsPerLine;
             algo_ctx->aeCfg.stNRswitch = AeCfgParam->nr_switch;
+            algo_ctx->aeCfg.stExpOffset = AeCfgParam->exp_offset;
 
         }
 
@@ -971,8 +1009,9 @@ static XCamReturn AeDemoProcessing(const RkAiqAlgoCom* inparams, RkAiqAlgoResCom
         algo_ctx->aeInfo.pfn_info.LinePeriodsPerField = algo_ctx->aeCfg.LinePeriodsPerField;
         algo_ctx->aeInfo.pfn_info.PixelClockFreqMHZ = algo_ctx->aeCfg.PixelClockFreqMHZ;
         algo_ctx->aeInfo.pfn_info.PixelPeriodsPerLine = algo_ctx->aeCfg.PixelPeriodsPerLine;
+        algo_ctx->aeInfo.pfn_info.ExpOffset = algo_ctx->aeCfg.stExpOffset;
 
-        if(!inparams->u.proc.init) { // init=ture, stats=null
+        if(!inparams->u.proc.init) { // init=true, stats=null
 
             RKAiqAecStatsV25_t* xAecStats = AeProcParams->aecStatsV25Buf;
             if (!xAecStats) {
@@ -1019,7 +1058,7 @@ static XCamReturn AeDemoProcessing(const RkAiqAlgoCom* inparams, RkAiqAlgoResCom
         memcpy(AeProcResParams->ae_stats_cfg, &algo_ctx->aeCfg.aeStatsCfg, sizeof(aeStats_cfg_t));
 
         // copy custom result to rk result
-        pfnAeRes2AeRes(&algo_ctx->aeCfg, &algo_ctx->aeResult.pfn_result, AeProcResParams);
+        pfnAeRes2AeRes(algo_ctx, &algo_ctx->aeCfg, &algo_ctx->aeResult.pfn_result, AeProcResParams);
 
         if (algo_ctx->aeCfg.updateCalib) {
             algo_ctx->aeCfg.updateCalib = false;
@@ -1047,7 +1086,7 @@ static XCamReturn AeDemoGroupProcessing(const RkAiqAlgoCom* inparams, RkAiqAlgoR
             return ret;
         }
 
-        if(!inparams->u.proc.init) { // init=ture, stats=null
+        if(!inparams->u.proc.init) { // init=true, stats=null
 
             ae_pfnAe_info_t* pfnAe_info = &algo_ctx->aeInfo.pfn_info;
             ae_pfnAe_info_t* next_pfnAe_info = NULL;
@@ -1118,8 +1157,10 @@ static XCamReturn AeDemoGroupProcessing(const RkAiqAlgoCom* inparams, RkAiqAlgoR
         }
 
         // gen patrt of hw results from initAecHwConfig
-        for(int i = 0; i < AeProcResParams->arraySize; i++)
+        for(int i = 0; i < AeProcResParams->arraySize; i++) {
             memcpy(AeProcResParams->camgroupParmasArray[i]->aec._aeNewCfg, &algo_ctx->aeCfg.aeStatsCfg, sizeof(aeStats_cfg_t));
+            *(GET_UPDATE_PTR(AeProcResParams->camgroupParmasArray[i]->aec._aeNewCfg, AeProcParams->_offset_is_update)) = true;
+        }
         // copy custom result to rk result
         pfnGrpAeRes2GrpAeRes(&algo_ctx->aeCfg, AeProcResParams->camgroupParmasArray, &algo_ctx->aeResult.pfn_result);
     } else {

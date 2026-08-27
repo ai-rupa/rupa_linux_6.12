@@ -102,6 +102,7 @@ public:
 #endif
     }
     XCamReturn set_csi_mem_word_big_align(uint32_t width, uint32_t height, uint32_t sns_v4l_pix_fmt, int8_t sns_bpp);
+    XCamReturn set_csi_mem_word_align_mode(int mode);
 
 protected:
     XCAM_DEAD_COPY (RawStreamProcUnit);
@@ -121,7 +122,7 @@ protected:
     int _working_mode{0};
     int _mipi_dev_max{1};
     bool _is_multi_cam_conc;
-    bool _is_split;
+    bool _is_split{false};
     //
     Mutex _buf_mutex;
     std::map<uint32_t, int> _isp_hdr_fid2times_map;

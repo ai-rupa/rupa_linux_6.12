@@ -74,6 +74,7 @@ typedef struct AiqAnalyzerCb_s {
     void* pCtx;
     void (*rkAiqCalcDone)(void* pCtx, AiqFullParams_t* results);
     void (*rkAiqCalcExpDone)(void* pCtx, aiq_params_base_t* results);
+    void (*rkAiqCalcSetVcpSclInfo)(void* pCtx, bool en, int ratio);
     void (*rkAiqCalcFailed)(void* pCtx, const char* msg);
 } AiqAnalyzerCb_t;
 
@@ -118,6 +119,8 @@ typedef struct RkAiqAlgosComShared_s {
     uint8_t hdr_mode;
     int aibnr_fixIndex;
     rk_aiq_face_roi_t selfaceinfo;
+    bool af_converged;
+    float af_focuspos; // 0 near, 1 far
 } RkAiqAlgosComShared_t;
 
 // following vars shared among itself by algo handlers
@@ -320,6 +323,12 @@ typedef struct AiqCore_s {
 
     bool mIsAovMode;
     int  mDefaultDelayCnt;
+    bool mIsVicapVirtualSensor;
+
+    // initial linear exposure configured via AiqCore_setInitExp
+    ae_linInitExp_t mInitExp;
+    // whether mInitExp has been set
+    bool mHasInitExp;
 
 #if RKAIQ_HAVE_DUMPSYS
     int (*dump_algos)(void* self, st_string* result, int argc, void* argv[]);
@@ -370,6 +379,8 @@ void AiqCore_setCamGroupManager(AiqCore_t* pAiqCore, AiqCamGroupManager_t* cam_g
 #define AiqCore_getGlobalParamsManager(pAiqCore) \
         pAiqCore->mGlobalParamsManger
 
+XCamReturn AiqCore_runInitialAnalyze(AiqCore_t* pAiqCore);
+void AiqCore_setInitExp(AiqCore_t* pAiqCore, const ae_linInitExp_t* initExp);
 XCamReturn AiqCore_pushStats(AiqCore_t* pAiqCore, AiqHwEvt_t* evt);
 XCamReturn AiqCore_pushEvts(AiqCore_t* pAiqCore, AiqHwEvt_t* evts);
 XCamReturn AiqCore_addAlgo(AiqCore_t* pAiqCore, RkAiqAlgoDesComm* algo);
@@ -434,6 +445,8 @@ XCamReturn AiqCore_setMasterCamSyncList(uint32_t master_cam_id, const uint32_t* 
 XCamReturn AiqCore_updateCalibDbBrutal(AiqCore_t* pAiqCore, CamCalibDbV2Context_t* aiqCalib);
 XCamReturn AiqCore_updateCalib(AiqCore_t* pAiqCore, enum rk_aiq_core_analyze_type_e type);
 void AiqCore_setDelayCnts(AiqCore_t* pAiqCore, int8_t delayCnts);
+void AiqCore_setVicapVirtualSensor(AiqCore_t* pAiqCore, bool isVirtual);
+bool AiqCore_isVicapVirtualSensor(AiqCore_t* pAiqCore);
 void AiqCore_setVicapScaleFlag(AiqCore_t* pAiqCore, bool mode);
 void AiqCore_setTbInfo(AiqCore_t* pAiqCore, rk_aiq_tb_info_t* info);
 rk_aiq_tb_info_t* AiqCore_getTbInfo(AiqCore_t* pAiqCore);
@@ -444,7 +457,7 @@ XCamReturn AiqCore_setUserOtpInfo(AiqCore_t* pAiqCore, rk_aiq_user_otp_info_t ot
 bool AiqCore_isGroupAlgo(AiqCore_t* pAiqCore, int algoType);
 XCamReturn AiqCore_register3Aalgo(AiqCore_t* pAiqCore, void* algoDes, void* cbs);
 XCamReturn AiqCore_unregister3Aalgo(AiqCore_t* pAiqCore, int algoType);
-XCamReturn AiqCore_setTranslaterIspUniteMode(AiqCore_t* pAiqCore, RkAiqIspUniteMode mode);
+XCamReturn AiqCore_setTranslaterIspUniteInfo(AiqCore_t* pAiqCore, RkAiqIspUniteInfo_t *info);
 XCamReturn AiqCore_reinitForNewStatsDelay(AiqCore_t* pAiqCore, int delayCnt);
 
 void AiqCore_updateGlobalAwbResult(AiqCore_t* pAiqCore, uint32_t frame_id,

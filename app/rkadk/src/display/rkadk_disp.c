@@ -160,45 +160,47 @@ static RKADK_S32 RKADK_DISP_Enable(RKADK_U32 u32CamId, RKADK_PARAM_DISP_CFG_S *p
   RKADK_BUFINFO("create vi[%d] end", pstDispCfg->vi_attr.u32ViChn);
 
   // Create VPSS
-  memset(&stGrpAttr, 0, sizeof(VPSS_GRP_ATTR_S));
-  memset(&stChnAttr, 0, sizeof(VPSS_CHN_ATTR_S));
+  if (pstDispCfg->enable_vpss) {
+    memset(&stGrpAttr, 0, sizeof(VPSS_GRP_ATTR_S));
+    memset(&stChnAttr, 0, sizeof(VPSS_CHN_ATTR_S));
 
-  stGrpAttr.u32MaxW = pstSensorCfg->max_width;
-  stGrpAttr.u32MaxH = pstSensorCfg->max_height;
-  stGrpAttr.enPixelFormat = pstDispCfg->vi_attr.stChnAttr.enPixelFormat;
-  stGrpAttr.enCompressMode = COMPRESS_MODE_NONE;
-  stGrpAttr.stFrameRate.s32SrcFrameRate = -1;
-  stGrpAttr.stFrameRate.s32DstFrameRate = -1;
+    stGrpAttr.u32MaxW = pstSensorCfg->max_width;
+    stGrpAttr.u32MaxH = pstSensorCfg->max_height;
+    stGrpAttr.enPixelFormat = pstDispCfg->vi_attr.stChnAttr.enPixelFormat;
+    stGrpAttr.enCompressMode = COMPRESS_MODE_NONE;
+    stGrpAttr.stFrameRate.s32SrcFrameRate = -1;
+    stGrpAttr.stFrameRate.s32DstFrameRate = -1;
 
-  stChnAttr.enChnMode = VPSS_CHN_MODE_USER;
-  stChnAttr.enCompressMode = COMPRESS_MODE_NONE;
-  stChnAttr.enDynamicRange = DYNAMIC_RANGE_SDR8;
-  stChnAttr.enPixelFormat = pstDispCfg->vi_attr.stChnAttr.enPixelFormat;
-  stChnAttr.stFrameRate.s32SrcFrameRate = -1;
-  stChnAttr.stFrameRate.s32DstFrameRate = -1;
-  stChnAttr.u32Width = pstDispCfg->vi_attr.stChnAttr.stSize.u32Width;
-  stChnAttr.u32Height = pstDispCfg->vi_attr.stChnAttr.stSize.u32Height;
-  stChnAttr.u32FrameBufCnt = pstDispCfg->vi_attr.stChnAttr.stIspOpt.u32BufCount + 2;
-  if (!pstSensorCfg->used_isp) {
-    stChnAttr.bMirror = (RK_BOOL)pstSensorCfg->mirror;
-    stChnAttr.bFlip = (RK_BOOL)pstSensorCfg->flip;
-  }
+    stChnAttr.enChnMode = VPSS_CHN_MODE_USER;
+    stChnAttr.enCompressMode = COMPRESS_MODE_NONE;
+    stChnAttr.enDynamicRange = DYNAMIC_RANGE_SDR8;
+    stChnAttr.enPixelFormat = pstDispCfg->vi_attr.stChnAttr.enPixelFormat;
+    stChnAttr.stFrameRate.s32SrcFrameRate = -1;
+    stChnAttr.stFrameRate.s32DstFrameRate = -1;
+    stChnAttr.u32Width = pstDispCfg->vi_attr.stChnAttr.stSize.u32Width;
+    stChnAttr.u32Height = pstDispCfg->vi_attr.stChnAttr.stSize.u32Height;
+    stChnAttr.u32FrameBufCnt = pstDispCfg->vi_attr.stChnAttr.stIspOpt.u32BufCount + 2;
+    if (!pstSensorCfg->used_isp) {
+      stChnAttr.bMirror = (RK_BOOL)pstSensorCfg->mirror;
+      stChnAttr.bFlip = (RK_BOOL)pstSensorCfg->flip;
+    }
 
 #if defined(RV1106_1103) || defined(RV1103B)
-  //unbind mode
-  stChnAttr.u32Depth = 3;
+    //unbind mode
+    stChnAttr.u32Depth = 2;
 #else
-  stChnAttr.u32Depth = 0;
+    stChnAttr.u32Depth = 0;
 #endif
 
-  ret = RKADK_MPI_VPSS_Init(pstDispCfg->vpss_grp, pstDispCfg->vpss_chn,
-                            &stGrpAttr, &stChnAttr);
-  if (ret) {
-    RKADK_LOGE("RKADK_MPI_VPSS_Init vpss falied[%d]",ret);
-    return ret;
-  }
+    ret = RKADK_MPI_VPSS_Init(pstDispCfg->vpss_grp, pstDispCfg->vpss_chn,
+                              &stGrpAttr, &stChnAttr);
+    if (ret) {
+      RKADK_LOGE("RKADK_MPI_VPSS_Init vpss falied[%d]",ret);
+      return ret;
+    }
 
-  RKADK_BUFINFO("create vpss[%d, %d] end", pstDispCfg->vpss_grp, pstDispCfg->vpss_chn);
+    RKADK_BUFINFO("create vpss[%d, %d] end", pstDispCfg->vpss_grp, pstDispCfg->vpss_chn);
+  }
 
   // Create VO
   memset(&stVoChn, 0, sizeof(RKADK_DISP_VO_CHN_S));
@@ -243,7 +245,7 @@ static bool RKADK_DISP_CheckRect(RKADK_RECT_S stRect,
     return false;
   }
 
-  if (bVpss) {
+  if (bVpss && pstDispCfg->enable_vpss) {
     if (stRect.u32X + stRect.u32Width > pstDispCfg->vi_attr.stChnAttr.stSize.u32Width) {
       RKADK_LOGE("Vpss crop rect x: %d + width: %d > input width: %d",
                 stRect.u32X, stRect.u32Width,
@@ -262,13 +264,20 @@ static bool RKADK_DISP_CheckRect(RKADK_RECT_S stRect,
   return true;
 }
 
-static void *RKADK_DISP_GetVpssMb(void *arg) {
+static void *RKADK_DISP_SendVoFrame(void *arg) {
   int s32Ret;
   VIDEO_FRAME_INFO_S stVideoFrame;
+  RKADK_PARAM_SENSOR_CFG_S *pstSensorCfg;
 
   RKADK_DISP_HANDLE_S *pstDispHandle = (RKADK_DISP_HANDLE_S *)arg;
   if (!pstDispHandle) {
     RKADK_LOGE("Get VPSS MB thread invalid param");
+    return NULL;
+  }
+
+  pstSensorCfg = RKADK_PARAM_GetSensorCfg(pstDispHandle->u32CamId);
+  if (!pstSensorCfg) {
+    RKADK_LOGE("RKADK_PARAM_GetSensorCfg[%d] failed", pstDispHandle->u32CamId);
     return NULL;
   }
 
@@ -279,19 +288,32 @@ static void *RKADK_DISP_GetVpssMb(void *arg) {
   }
 
   while (pstDispHandle->bSendBuffer) {
-    s32Ret = RK_MPI_VPSS_GetChnFrame(pstDispCfg->vpss_grp, pstDispCfg->vpss_chn,
-                                      &stVideoFrame, 1000);
-    if (s32Ret == RK_SUCCESS) {
-      s32Ret = RK_MPI_VO_SendFrame(pstDispCfg->vo_layer, pstDispCfg->vo_chn, &stVideoFrame, -1);
-      if (s32Ret != RK_SUCCESS)
-        RKADK_LOGE("RK_MPI_VO_SendFrame failed[%x]", s32Ret);
+    if (pstDispCfg->enable_vpss) {
+      s32Ret = RK_MPI_VPSS_GetChnFrame(pstDispCfg->vpss_grp, pstDispCfg->vpss_chn, &stVideoFrame, 1000);
+      if (s32Ret == RK_SUCCESS) {
+        s32Ret = RK_MPI_VO_SendFrame(pstDispCfg->vo_layer, pstDispCfg->vo_chn, &stVideoFrame, -1);
+        if (s32Ret != RK_SUCCESS)
+          RKADK_LOGE("RK_MPI_VO_SendFrame failed[%x]", s32Ret);
 
-      s32Ret = RK_MPI_VPSS_ReleaseChnFrame(pstDispCfg->vpss_grp, pstDispCfg->vpss_chn, &stVideoFrame);
-      if (s32Ret != RK_SUCCESS)
-        RKADK_LOGE("RK_MPI_VPSS_ReleaseChnFrame failed[%x]", s32Ret);
+        s32Ret = RK_MPI_VPSS_ReleaseChnFrame(pstDispCfg->vpss_grp, pstDispCfg->vpss_chn, &stVideoFrame);
+        if (s32Ret != RK_SUCCESS)
+          RKADK_LOGE("RK_MPI_VPSS_ReleaseChnFrame failed[%x]", s32Ret);
+      } else {
+        RKADK_LOGE("RK_MPI_VPSS_GetChnFrame[%d, %d] timeout[%x]", pstDispCfg->vpss_grp, pstDispCfg->vpss_chn, s32Ret);
+      }
     } else {
-      RKADK_LOGE("RK_MPI_VPSS_GetChnFrame[%d, %d] timeout[%x]",
-                pstDispCfg->vpss_grp, pstDispCfg->vpss_chn, s32Ret);
+      s32Ret = RK_MPI_VI_GetChnFrame(pstSensorCfg->dev_id, pstDispCfg->vi_attr.u32ViChn, &stVideoFrame, 1000);
+      if (s32Ret == RK_SUCCESS) {
+        s32Ret = RK_MPI_VO_SendFrame(pstDispCfg->vo_layer, pstDispCfg->vo_chn, &stVideoFrame, -1);
+        if (s32Ret != RK_SUCCESS)
+          RKADK_LOGE("RK_MPI_VO_SendFrame failed[%x]", s32Ret);
+
+        s32Ret = RK_MPI_VI_ReleaseChnFrame(pstSensorCfg->dev_id, pstDispCfg->vi_attr.u32ViChn, &stVideoFrame);
+        if (s32Ret != RK_SUCCESS)
+          RKADK_LOGE("RK_MPI_VI_ReleaseChnFrame failed[%x]", s32Ret);
+      } else {
+        RKADK_LOGE("RK_MPI_VI_GetChnFrame[%d, %d] timeout[%x]", pstSensorCfg->dev_id, pstDispCfg->vi_attr.u32ViChn, s32Ret);
+      }
     }
   }
 
@@ -299,7 +321,7 @@ static void *RKADK_DISP_GetVpssMb(void *arg) {
   return NULL;
 }
 
-static void *RKADK_DISP_SendVoFrame(void *arg) {
+static void *RKADK_DISP_SendSubVoFrame(void *arg) {
   int s32Ret;
   VIDEO_FRAME_INFO_S stVideoFrame;
 
@@ -700,12 +722,12 @@ static RKADK_S32 RKADK_DISP_SubStreamInit(RKADK_DISP_HANDLE_S *pHandle) {
 #if defined(RV1106_1103) || defined(RV1103B)
       char name[RKADK_THREAD_NAME_LEN];
       pHandle->stSubStreamHandle[i].bSendBuffer = true;
-      ret = pthread_create(&pHandle->stSubStreamHandle[i].tid, NULL, RKADK_DISP_SendVoFrame, &pHandle->stSubStreamHandle[i]);
+      ret = pthread_create(&pHandle->stSubStreamHandle[i].tid, NULL, RKADK_DISP_SendSubVoFrame, &pHandle->stSubStreamHandle[i]);
       if (ret) {
         RKADK_LOGE("Create get vpss mb(%d) thread failed %d", stSrcVpssChn.s32ChnId, ret);
         goto failed;
       }
-      snprintf(name, sizeof(name), "GetVpssMb_%d_%d", stSrcVpssChn.s32DevId, stSrcVpssChn.s32ChnId);
+      snprintf(name, sizeof(name), "SendSubVoFrame_%d_%d", stSrcVpssChn.s32DevId, stSrcVpssChn.s32ChnId);
       pthread_setname_np(pHandle->stSubStreamHandle[i].tid, name);
       RKADK_LOGD("Create get vpss[%d, %d] mb thread  ok", stSrcVpssChn.s32DevId, stSrcVpssChn.s32ChnId);
 #else
@@ -787,12 +809,12 @@ static RKADK_S32 RKADK_DISP_SubStreamInit(RKADK_DISP_HANDLE_S *pHandle) {
 #else
         char name[RKADK_THREAD_NAME_LEN];
         pHandle->stSubStreamHandle[i].bSendBuffer = true;
-        ret = pthread_create(&pHandle->stSubStreamHandle[i].tid, NULL, RKADK_DISP_SendVoFrame, &pHandle->stSubStreamHandle[i]);
+        ret = pthread_create(&pHandle->stSubStreamHandle[i].tid, NULL, RKADK_DISP_SendSubVoFrame, &pHandle->stSubStreamHandle[i]);
         if (ret) {
           RKADK_LOGE("Create get vdec mb(%d) thread failed %d", pstSubStream->stVdecCfg.u32VdecChn, ret);
           goto failed;
         }
-        snprintf(name, sizeof(name), "GetVdecMb_%d", pstSubStream->stVdecCfg.u32VdecChn);
+        snprintf(name, sizeof(name), "SendSubVoFrame_%d", pstSubStream->stVdecCfg.u32VdecChn);
         pthread_setname_np(pHandle->stSubStreamHandle[i].tid, name);
         RKADK_LOGD("Create get vdec[%d] mb thread ok", pstSubStream->stVdecCfg.u32VdecChn);
 #endif
@@ -866,29 +888,40 @@ static RKADK_S32 DispInit(RKADK_DISP_HANDLE_S *pHandle) {
 #if defined(RV1106_1103) || defined(RV1103B)
   char name[RKADK_THREAD_NAME_LEN];
   pHandle->bSendBuffer = true;
-  ret = pthread_create(&pHandle->tid, NULL, RKADK_DISP_GetVpssMb, pHandle);
+  ret = pthread_create(&pHandle->tid, NULL, RKADK_DISP_SendVoFrame, pHandle);
   if (ret) {
     RKADK_LOGE("Create get vpss mb(%d) thread failed %d", stSrcVpssChn.s32ChnId, ret);
     goto failed;
   }
-  snprintf(name, sizeof(name), "GetVpssMb_%d_%d", stSrcVpssChn.s32DevId, stSrcVpssChn.s32ChnId);
+  snprintf(name, sizeof(name), "SendVoFrame_%d_%d", stSrcVpssChn.s32DevId, stSrcVpssChn.s32ChnId);
   pthread_setname_np(pHandle->tid, name);
 #else
-  // Bind VPSS to VO
-  ret = RKADK_MPI_SYS_Bind(&stSrcVpssChn, &stVoChn);
-  if (ret) {
-    RKADK_LOGE("Bind VPSS[%d, %d] to VO[%d] failed[%x]", stSrcVpssChn.s32DevId,
-                stSrcVpssChn.s32ChnId, stVoChn.s32ChnId, ret);
-    goto failed;
+  if (pstDispCfg->enable_vpss) {
+    // Bind VPSS to VO
+    ret = RKADK_MPI_SYS_Bind(&stSrcVpssChn, &stVoChn);
+    if (ret) {
+      RKADK_LOGE("Bind VPSS[%d, %d] to VO[%d] failed[%x]", stSrcVpssChn.s32DevId,
+                  stSrcVpssChn.s32ChnId, stVoChn.s32ChnId, ret);
+      goto failed;
+    }
   }
 #endif
 
-  // VI Bind VPSS
-  ret = RKADK_MPI_SYS_Bind(&stViChn, &stDstVpssChn);
-  if (ret) {
-    RKADK_LOGE("Bind VI[%d] to VPSS[%d] failed[%x]", stViChn.s32ChnId,
-                stDstVpssChn.s32DevId, ret);
-    goto failed;
+  if (pstDispCfg->enable_vpss) {
+    // VI Bind VPSS
+    ret = RKADK_MPI_SYS_Bind(&stViChn, &stDstVpssChn);
+    if (ret) {
+      RKADK_LOGE("Bind VI[%d] to VPSS[%d] failed[%x]", stViChn.s32ChnId,
+                  stDstVpssChn.s32DevId, ret);
+      goto failed;
+    }
+  } else {
+    // VI Bind VO
+    ret = RK_MPI_SYS_Bind(&stViChn, &stVoChn);
+    if (ret) {
+      RKADK_LOGE("Bind VI[%d] to VO[%d] failed[%x]", stViChn.s32ChnId, stVoChn.s32ChnId, ret);
+      goto failed;
+    }
   }
 
   RKADK_LOGI("Disp u32CamId[%d] Init End...", pHandle->u32CamId);
@@ -896,9 +929,12 @@ static RKADK_S32 DispInit(RKADK_DISP_HANDLE_S *pHandle) {
 
 failed:
   RKADK_LOGE("Disp u32CamId[%d] Init failed...", pHandle->u32CamId);
-  RKADK_MPI_SYS_UnBind(&stSrcVpssChn, &stVoChn);
-
-  RKADK_MPI_SYS_UnBind(&stViChn, &stDstVpssChn);
+  if (pstDispCfg->enable_vpss) {
+    RKADK_MPI_SYS_UnBind(&stSrcVpssChn, &stVoChn);
+    RKADK_MPI_SYS_UnBind(&stViChn, &stDstVpssChn);
+  } else {
+    RK_MPI_SYS_UnBind(&stViChn, &stVoChn);
+  }
 
   memset(&stDispVoChn, 0, sizeof(RKADK_DISP_VO_CHN_S));
   stDispVoChn.u32LayerId = pstDispCfg->vo_layer;
@@ -906,7 +942,8 @@ failed:
   stDispVoChn.u32ChnId = pstDispCfg->vo_chn;
   RKADK_DISP_DestroyVo(stDispVoChn);
 
-  RKADK_MPI_VPSS_DeInit(pstDispCfg->vpss_grp, pstDispCfg->vpss_chn);
+  if (pstDispCfg->enable_vpss)
+    RKADK_MPI_VPSS_DeInit(pstDispCfg->vpss_grp, pstDispCfg->vpss_chn);
 
   RKADK_MPI_VI_DeInit(pHandle->u32CamId, stViChn.s32ChnId);
   return ret;
@@ -948,21 +985,32 @@ static RKADK_S32 DispDeInit(RKADK_DISP_HANDLE_S *pHandle) {
     pHandle->tid = 0;
   }
 #else
-  // VPSS UnBind VO
-  ret = RKADK_MPI_SYS_UnBind(&stSrcVpssChn, &stVoChn);
-  if (ret) {
-    RKADK_LOGE("UnBind VPSS[%d, %d] to VO[%d] failed[%x]", stSrcVpssChn.s32DevId,
-              stSrcVpssChn.s32ChnId, stVoChn.s32ChnId, ret);
-    return ret;
+  if (pstDispCfg->enable_vpss) {
+    // VPSS UnBind VO
+    ret = RKADK_MPI_SYS_UnBind(&stSrcVpssChn, &stVoChn);
+    if (ret) {
+      RKADK_LOGE("UnBind VPSS[%d, %d] to VO[%d] failed[%x]", stSrcVpssChn.s32DevId,
+                stSrcVpssChn.s32ChnId, stVoChn.s32ChnId, ret);
+      return ret;
+    }
   }
 #endif
 
-  // VI UnBind VPSS
-  ret = RKADK_MPI_SYS_UnBind(&stViChn, &stDstVpssChn);
-  if (ret) {
-    RKADK_LOGE("UnBind VI[%d] to VPSS[%d] failed[%x]", stViChn.s32ChnId,
-                stDstVpssChn.s32DevId, ret);
-    return ret;
+  if (pstDispCfg->enable_vpss) {
+    // VI UnBind VPSS
+    ret = RKADK_MPI_SYS_UnBind(&stViChn, &stDstVpssChn);
+    if (ret) {
+      RKADK_LOGE("UnBind VI[%d] to VPSS[%d] failed[%x]", stViChn.s32ChnId,
+                  stDstVpssChn.s32DevId, ret);
+      return ret;
+    }
+  } else {
+    // VI UnBind VO
+    ret = RK_MPI_SYS_UnBind(&stViChn, &stVoChn);
+    if (ret) {
+      RKADK_LOGE("UnBind VI[%d] to VO[%d] failed[%x]", stViChn.s32ChnId, stVoChn.s32ChnId, ret);
+      return ret;
+    }
   }
 
   memset(&stDispVoChn, 0, sizeof(RKADK_DISP_VO_CHN_S));
@@ -975,10 +1023,12 @@ static RKADK_S32 DispDeInit(RKADK_DISP_HANDLE_S *pHandle) {
     return ret;
   }
 
-  ret = RKADK_MPI_VPSS_DeInit(pstDispCfg->vpss_grp, pstDispCfg->vpss_chn);
-  if (ret) {
-    RKADK_LOGE("DeInit VPSS[%d] failed[%x]", pstDispCfg->vpss_chn, ret);
-    return ret;
+  if (pstDispCfg->enable_vpss) {
+    ret = RKADK_MPI_VPSS_DeInit(pstDispCfg->vpss_grp, pstDispCfg->vpss_chn);
+    if (ret) {
+      RKADK_LOGE("DeInit VPSS[%d] failed[%x]", pstDispCfg->vpss_chn, ret);
+      return ret;
+    }
   }
 
   ret = RKADK_MPI_VI_DeInit(pHandle->u32CamId, stViChn.s32ChnId);
@@ -1413,10 +1463,12 @@ static RKADK_S32 DispSetAttr(RKADK_DISP_ATTR_S *pstAttr, RKADK_DISP_HANDLE_S *pH
     return -1;
   }
 
-  ret = DispResetVpssAttr(pstDispCfg->vpss_grp, pstDispCfg->vpss_chn, pstAttr->stVpssCropRect);
-  if (ret) {
-    RKADK_LOGE("DispResetVpssAttr[%d, %d] failed", pstDispCfg->vpss_grp, pstDispCfg->vpss_chn);
-    return -1;
+  if (pstDispCfg->enable_vpss) {
+    ret = DispResetVpssAttr(pstDispCfg->vpss_grp, pstDispCfg->vpss_chn, pstAttr->stVpssCropRect);
+    if (ret) {
+      RKADK_LOGE("DispResetVpssAttr[%d, %d] failed", pstDispCfg->vpss_grp, pstDispCfg->vpss_chn);
+      return -1;
+    }
   }
 
   ret = DispResetVoAttr(pstDispCfg->vo_layer, pstDispCfg->vo_chn, pstAttr->s32Priority, pstAttr->stVoRect);

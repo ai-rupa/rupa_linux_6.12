@@ -51,12 +51,12 @@ typedef struct AiqSensorHw_s AiqSensorHw_t;
 
 typedef struct AiqStatsTranslator_s AiqStatsTranslator_t;
 
-typedef struct Rectangle_s {
-    uint32_t x;
-    uint32_t y;
-    uint32_t w;
-    uint32_t h;
-} Rectangle_t;
+// typedef struct Rectangle_s {
+//     uint32_t x;
+//     uint32_t y;
+//     uint32_t w;
+//     uint32_t h;
+// } Rectangle_t;
 
 typedef struct aeAlgoStatsCfg_s {
     bool UpdateStats;      /* update stats every frame */
@@ -125,6 +125,7 @@ struct AiqStatsTranslator_s {
     Rectangle_t bottom_left_isp_rect_;
     Rectangle_t bottom_right_isp_rect_;
     RkAiqIspUniteMode mIspUniteMode;
+    RkAiqIspUniteInfo_t mIspUniteInfo;
     AiqCamHwBase_t* mCamHw;
     AiqLensHw_t* mFocusLensHw;
     AiqLensHw_t* mIrishw;
@@ -132,6 +133,7 @@ struct AiqStatsTranslator_s {
 
     void* _bottom_mge_af_stats;
     void* _bottom_mge_awb_stats;
+    void* _middle_mge_awb_stats;
 };
 
 XCamReturn AiqStatsTranslator_init(AiqStatsTranslator_t* pStatsTrans);

@@ -140,6 +140,48 @@ CamHwIsp20::CamHwIsp20()
 CamHwIsp20::~CamHwIsp20()
 {}
 
+XCamReturn
+CamHwIsp20::getIspUniteInfo(RkAiqIspUniteInfo_t& info) {
+    xcam_mem_clear(info);
+    info.mode  = RK_AIQ_ISP_UNITE_MODE_NORMAL;
+    info.h_num = 1;
+    info.v_num = 1;
+#if defined(RKAIQ_HAVE_MULTIISP)
+    if (mParamsSplitter.ptr()) {
+        info.mode = mIspUniteMode;
+        switch (mIspUniteMode) {
+        case RK_AIQ_ISP_UNITE_MODE_TWO_GRID:
+            info.h_num = 2;
+            info.v_num = 1;
+            break;
+        case RK_AIQ_ISP_UNITE_MODE_FOUR_GRID:
+            info.h_num = 2;
+            info.v_num = 2;
+            break;
+        case RK_AIQ_ISP_UNITE_MODE_3X3:
+            info.h_num = 3;
+            info.v_num = 3;
+            break;
+        default:
+            info.h_num = 1;
+            info.v_num = 1;
+            break;
+        }
+        auto copy_rect = [](Rectangle_t& dst, const IspParamsSplitter::Rectangle& src) {
+            dst.x = src.x;
+            dst.y = src.y;
+            dst.w = src.w;
+            dst.h = src.h;
+        };
+        copy_rect(info.isp_rect[0][0], mParamsSplitter->GetLeftIspRect());
+        copy_rect(info.isp_rect[0][1], mParamsSplitter->GetRightIspRect());
+        copy_rect(info.isp_rect[1][0], mParamsSplitter->GetBottomLeftIspRect());
+        copy_rect(info.isp_rect[1][1], mParamsSplitter->GetBottomRightIspRect());
+    }
+#endif
+    return XCAM_RETURN_NO_ERROR;
+}
+
 static XCamReturn get_isp_ver(rk_aiq_isp_hw_info_t *hw_info) {
     XCamReturn ret = XCAM_RETURN_NO_ERROR;
     struct v4l2_capability cap;
@@ -1966,17 +2008,15 @@ CamHwIsp20::init(const char* sns_ent_name)
             Isp20Params::mCommonCvtInfo.otp_lsc.flag = 0;
 
         if (minfo->af.flag) {
-            Isp20Params::mCommonCvtInfo.otp_af = &minfo->af;
-            showOtpAfData(Isp20Params::mCommonCvtInfo.otp_af);
+            Isp20Params::mCommonCvtInfo.otp_af = minfo->af;
         } else {
-            Isp20Params::mCommonCvtInfo.otp_af = nullptr;
+            Isp20Params::mCommonCvtInfo.otp_af.flag = 0;
         }
 
         if (minfo->pdaf.flag) {
-            Isp20Params::mCommonCvtInfo.otp_pdaf = &minfo->pdaf;
-            showOtpPdafData(Isp20Params::mCommonCvtInfo.otp_pdaf);
+            Isp20Params::mCommonCvtInfo.otp_pdaf = minfo->pdaf;
         } else {
-            Isp20Params::mCommonCvtInfo.otp_pdaf = nullptr;
+            Isp20Params::mCommonCvtInfo.otp_pdaf.flag = 0;
         }
     }
 
@@ -2089,18 +2129,28 @@ CamHwIsp20::setupPipelineFmtCif(struct v4l2_subdev_selection& sns_sd_sel,
     int8_t bpp = 0;
     pixFmt2Bpp(sns_v4l_pix_fmt, bpp);
 
-    if ((mIsMultiIspMode && !mNoReadBack) || _linked_to_multi_isp) {
-        ret = mRawCapUnit->set_csi_mem_word_big_align(sns_sd_sel.r.width, sns_sd_sel.r.height,
-                sns_v4l_pix_fmt, bpp);
+    bool multi_isp_align = false;
+    int tx_word_align_mode = CSI_LVDS_MEM_COMPACT;
+    int rx_word_align_mode = CSI_MEM_COMPACT;
+
+    multi_isp_align = (mIsMultiIspMode &&
+                       !!((((sns_sd_sel.r.width / 2) - RKMOUDLE_UNITE_EXTEND_PIXEL) * bpp / 8) & 0xf)) &&
+                      (mParamsSplitter.ptr() && mIspUniteMode != RK_AIQ_ISP_UNITE_MODE_NORMAL);
+    if (multi_isp_align) {
+        tx_word_align_mode = CSI_LVDS_MEM_WORD_HIGH_ALIGN;
+        rx_word_align_mode = CSI_MEM_WORD_BIG_ALIGN;
+    }
+
+    if (!mNoReadBack) {
+        ret = mRawCapUnit->set_csi_mem_word_align_mode(tx_word_align_mode);
         if (ret < 0) {
-            LOGE_CAMHW_SUBM(ISP20HW_SUBM, "tx set csi_mem_word_big_align failed!\n");
+            LOGE_CAMHW_SUBM(ISP20HW_SUBM, "tx set csi_mem_word_align_mode %d failed!\n", tx_word_align_mode);
             return ret;
         }
 
-        ret = mRawProcUnit->set_csi_mem_word_big_align(sns_sd_sel.r.width, sns_sd_sel.r.height,
-                sns_v4l_pix_fmt, bpp);
+        ret = mRawProcUnit->set_csi_mem_word_align_mode(rx_word_align_mode);
         if (ret < 0) {
-            LOGE_CAMHW_SUBM(ISP20HW_SUBM, "rx set csi_mem_word_big_align failed!\n");
+            LOGE_CAMHW_SUBM(ISP20HW_SUBM, "rx set csi_mem_word_align_mode %d failed!\n", rx_word_align_mode);
             return ret;
         }
     }
@@ -3186,36 +3236,97 @@ CamHwIsp20::prepare(uint32_t width, uint32_t height, int mode, int t_delay, int 
         uint32_t height = isp_src_fmt.format.height;
         mParamsSplitter        = new IspParamsSplitter();
 
-        struct rkisp_isp_info isp_act_info;
-        memset(&isp_act_info, 0, sizeof(isp_act_info));
-        if (mIspCoreDev->io_control(RKISP_CMD_GET_ISP_INFO, &isp_act_info) != 0) {
-            LOGE_CAMHW("%s:%d can't get act isp info", __FUNCTION__, __LINE__);
-        }
+        struct rkisp_unite_info unite_info;
+        memset(&unite_info, 0, sizeof(unite_info));
+        bool unite_ioctl_ok =
+            (mIspCoreDev->io_control(RKISP_CMD_GET_UNITE_INFO, &unite_info) == 0);
+        if (unite_ioctl_ok && (unite_info.h_div == 0 || unite_info.v_div == 0))
+            unite_ioctl_ok = false;
 
-        if (isp_act_info.act_width  == width / 2 + extended_pixel &&
-            isp_act_info.act_height == height / 2 + extended_pixel) {
-            mIspUniteMode = RK_AIQ_ISP_UNITE_MODE_FOUR_GRID;
-            mParamsSplitter->SetPicInfo({0, 0, width, height})
-            .SetLeftIspRect({0, 0, width / 2 + extended_pixel, height / 2 + extended_pixel})
-            .SetRightIspRect({width / 2 - extended_pixel, 0, width / 2 + extended_pixel, height / 2 + extended_pixel})
-            .SetBottomLeftIspRect({0, height / 2 - extended_pixel, width / 2 + extended_pixel, height / 2 + extended_pixel})
-            .SetBottomRightIspRect({width / 2 - extended_pixel, height / 2 - extended_pixel, width / 2 + extended_pixel, height / 2 + extended_pixel});
-        } else if (isp_act_info.act_width  == width / 2 + extended_pixel &&
-                   isp_act_info.act_height == height) {
-            mIspUniteMode = RK_AIQ_ISP_UNITE_MODE_TWO_GRID;
-            mParamsSplitter->SetPicInfo({0, 0, width, height})
-            .SetLeftIspRect({0, 0, width / 2 + extended_pixel, height})
-            .SetRightIspRect({width / 2 - extended_pixel, 0, width / 2 + extended_pixel, height});
+        mParamsSplitter->SetPicInfo({0, 0, width, height});
+
+        if (unite_ioctl_ok) {
+            IspParamsSplitter::Rectangle splite_rect[3][3];
+            memset(splite_rect, 0, sizeof(splite_rect));
+            for (uint32_t i = 0; i < unite_info.v_div; i++) {
+                for (uint32_t j = 0; j < unite_info.h_div; j++) {
+                    struct rkisp_unite_window *ori_win =
+                        &unite_info.win[i * unite_info.h_div + j];
+                    splite_rect[i][j].w = ori_win->act_width;
+                    splite_rect[i][j].h = ori_win->act_height;
+                    if (i > 0) {
+                        int last_win_idx = (int)((i - 1) * unite_info.h_div + j);
+                        splite_rect[i][j].y = splite_rect[i - 1][j].y + splite_rect[i - 1][j].h -
+                            unite_info.win[last_win_idx].down_extend - ori_win->up_extend;
+                    }
+                    if (j > 0) {
+                        int last_win_idx = (int)(i * unite_info.h_div + j - 1);
+                        splite_rect[i][j].x = splite_rect[i][j - 1].x + splite_rect[i][j - 1].w -
+                            unite_info.win[last_win_idx].right_extend - ori_win->left_extend;
+                    }
+                }
+            }
+            if (unite_info.h_div == 3 && unite_info.v_div == 3) {
+                mIspUniteMode = RK_AIQ_ISP_UNITE_MODE_3X3;
+                mParamsSplitter->SetLeftIspRect(splite_rect[0][0])
+                    .SetRightIspRect(splite_rect[0][2]);
+            } else if (unite_info.h_div == 2 && unite_info.v_div == 2) {
+                mIspUniteMode = RK_AIQ_ISP_UNITE_MODE_2X2;
+                mParamsSplitter->SetLeftIspRect(splite_rect[0][0])
+                    .SetRightIspRect(splite_rect[0][1])
+                    .SetBottomLeftIspRect(splite_rect[1][0])
+                    .SetBottomRightIspRect(splite_rect[1][1]);
+            } else if (unite_info.h_div == 2 && unite_info.v_div == 1) {
+                mIspUniteMode = RK_AIQ_ISP_UNITE_MODE_1X2;
+                mParamsSplitter->SetLeftIspRect(splite_rect[0][0])
+                    .SetRightIspRect(splite_rect[0][1]);
+            } else {
+                mIspUniteMode = RK_AIQ_ISP_UNITE_MODE_NORMAL;
+            }
         } else {
-            mIspUniteMode = RK_AIQ_ISP_UNITE_MODE_NORMAL;
-            mParamsSplitter->SetPicInfo({0, 0, width, height})
-            .SetLeftIspRect({0, 0, width, height})
-            .SetRightIspRect({0, 0, width, height});
+            LOGW_CAMHW("%s:%d RKISP_CMD_GET_UNITE_INFO unavailable or empty, fallback to "
+                       "RKISP_CMD_GET_ISP_INFO",
+                       __FUNCTION__, __LINE__);
+            struct rkisp_isp_info isp_act_info;
+            memset(&isp_act_info, 0, sizeof(isp_act_info));
+            if (mIspCoreDev->io_control(RKISP_CMD_GET_ISP_INFO, &isp_act_info) != 0) {
+                LOGE_CAMHW("%s:%d can't get act isp info", __FUNCTION__, __LINE__);
+            }
+
+            if (isp_act_info.act_width  == width / 2 + extended_pixel &&
+                isp_act_info.act_height == height / 2 + extended_pixel) {
+                mIspUniteMode = RK_AIQ_ISP_UNITE_MODE_FOUR_GRID;
+                mParamsSplitter->SetPicInfo({0, 0, width, height})
+                    .SetLeftIspRect({0, 0, width / 2 + extended_pixel, height / 2 + extended_pixel})
+                    .SetRightIspRect({width / 2 - extended_pixel, 0, width / 2 + extended_pixel, height / 2 + extended_pixel})
+                    .SetBottomLeftIspRect({0, height / 2 - extended_pixel, width / 2 + extended_pixel, height / 2 + extended_pixel})
+                    .SetBottomRightIspRect({width / 2 - extended_pixel, height / 2 - extended_pixel, width / 2 + extended_pixel, height / 2 + extended_pixel});
+            } else if (isp_act_info.act_width  == width / 2 + extended_pixel &&
+                       isp_act_info.act_height == height) {
+                mIspUniteMode = RK_AIQ_ISP_UNITE_MODE_TWO_GRID;
+                mParamsSplitter->SetPicInfo({0, 0, width, height})
+                    .SetLeftIspRect({0, 0, width / 2 + extended_pixel, height})
+                    .SetRightIspRect({width / 2 - extended_pixel, 0, width / 2 + extended_pixel, height});
+            } else {
+                mIspUniteMode = RK_AIQ_ISP_UNITE_MODE_NORMAL;
+                mParamsSplitter->SetPicInfo({0, 0, width, height})
+                    .SetLeftIspRect({0, 0, width, height})
+                    .SetRightIspRect({0, 0, width, height});
+            }
         }
 
         IspParamsSplitter::Rectangle f = mParamsSplitter->GetPicInfo();
         IspParamsSplitter::Rectangle l = mParamsSplitter->GetLeftIspRect();
         IspParamsSplitter::Rectangle r = mParamsSplitter->GetRightIspRect();
+        const char* unite_mode_str = "RK_AIQ_ISP_UNITE_MODE_NORMAL";
+        if (mIspUniteMode == RK_AIQ_ISP_UNITE_MODE_FOUR_GRID ||
+            mIspUniteMode == RK_AIQ_ISP_UNITE_MODE_2X2)
+            unite_mode_str = "RK_AIQ_ISP_UNITE_MODE_FOUR_GRID / 2X2";
+        else if (mIspUniteMode == RK_AIQ_ISP_UNITE_MODE_TWO_GRID ||
+                 mIspUniteMode == RK_AIQ_ISP_UNITE_MODE_1X2)
+            unite_mode_str = "RK_AIQ_ISP_UNITE_MODE_TWO_GRID / 1X2";
+        else if (mIspUniteMode == RK_AIQ_ISP_UNITE_MODE_3X3)
+            unite_mode_str = "RK_AIQ_ISP_UNITE_MODE_3X3";
         LOGK_CAMHW(
             "Set Multi-ISP Mode ParamSplitter:\n"
             "mIspUniteMode: %s\n"
@@ -3223,10 +3334,7 @@ CamHwIsp20::prepare(uint32_t width, uint32_t height, int mode, int t_delay, int 
             " F : { %u, %u, %u, %u }\n"
             " L : { %u, %u, %u, %u }\n"
             " R : { %u, %u, %u, %u }\n",
-            mIspUniteMode == RK_AIQ_ISP_UNITE_MODE_FOUR_GRID ?
-            "RK_AIQ_ISP_UNITE_MODE_FOUR_GRID" :
-            mIspUniteMode == RK_AIQ_ISP_UNITE_MODE_TWO_GRID ?
-            "RK_AIQ_ISP_UNITE_MODE_TWO_GRID" : "RK_AIQ_ISP_UNITE_MODE_NORMAL",
+            unite_mode_str,
             extended_pixel,
             f.x, f.y, f.w, f.h,
             l.x, l.y, l.w, l.h,
@@ -3347,7 +3455,6 @@ CamHwIsp20::prepare(uint32_t width, uint32_t height, int mode, int t_delay, int 
 
     if (mCifScaleStream.ptr()) {
         mCifScaleStream->set_working_mode(mode);
-        mCifScaleStream->prepare();
     }
 
     _state = CAM_HW_STATE_PREPARED;
@@ -3553,8 +3660,6 @@ CamHwIsp20::hdr_mipi_start_mode(int mode)
             }
         }
     }
-    if (mCifScaleStream.ptr())
-        mCifScaleStream->start();
     LOGD_CAMHW_SUBM(ISP20HW_SUBM, "%s exit", __FUNCTION__);
     return ret;
 }
@@ -4089,70 +4194,6 @@ CamHwIsp20::setIsppSharpFbcRot(struct rkispp_sharp_config* shp_cfg)
 #endif
 
 XCamReturn
-CamHwIsp20::showOtpPdafData(struct rkmodule_pdaf_inf *otp_pdaf)
-{
-    unsigned int gainmap_w, gainmap_h;
-    unsigned int dccmap_w, dccmap_h;
-    char print_buf[256];
-    unsigned int i, j;
-
-    if (otp_pdaf->flag) {
-        gainmap_w = otp_pdaf->gainmap_width;
-        gainmap_h = otp_pdaf->gainmap_height;
-        dccmap_w = otp_pdaf->dccmap_width;
-        dccmap_h = otp_pdaf->dccmap_height;
-        LOGI_CAMHW_SUBM(ISP20HW_SUBM, "[RKPDAFOTPParam]");
-        LOGI_CAMHW_SUBM(ISP20HW_SUBM, "flag=%d;", otp_pdaf->flag);
-        LOGI_CAMHW_SUBM(ISP20HW_SUBM, "gainmap_width=%d;", gainmap_w);
-        LOGI_CAMHW_SUBM(ISP20HW_SUBM, "gainmap_height=%d;", gainmap_h);
-        LOGI_CAMHW_SUBM(ISP20HW_SUBM, "gainmap_table=");
-        for (i = 0; i < gainmap_h; i++) {
-            memset(print_buf, 0, sizeof(print_buf));
-            for (j = 0; j < gainmap_w; j++) {
-                sprintf(print_buf + strlen(print_buf), "%d ", otp_pdaf->gainmap[i * gainmap_w + j]);
-            }
-            LOGI_CAMHW_SUBM(ISP20HW_SUBM, "%s", print_buf);
-        }
-
-        LOGI_CAMHW_SUBM(ISP20HW_SUBM, "dcc_mode=%d;", otp_pdaf->dcc_mode);
-        LOGI_CAMHW_SUBM(ISP20HW_SUBM, "dcc_dir=%d;", otp_pdaf->dcc_dir);
-        LOGI_CAMHW_SUBM(ISP20HW_SUBM, "dccmap_width=%d;", otp_pdaf->dccmap_width);
-        LOGI_CAMHW_SUBM(ISP20HW_SUBM, "dccmap_height=%d;", otp_pdaf->dccmap_height);
-        LOGI_CAMHW_SUBM(ISP20HW_SUBM, "dccmap_table=");
-        for (i = 0; i < dccmap_h; i++) {
-            memset(print_buf, 0, sizeof(print_buf));
-            for (j = 0; j < dccmap_w; j++) {
-                sprintf(print_buf + strlen(print_buf), "%d ", otp_pdaf->dccmap[i * dccmap_w + j]);
-            }
-            LOGI_CAMHW_SUBM(ISP20HW_SUBM, "%s", print_buf);
-        }
-        LOGI_CAMHW_SUBM(ISP20HW_SUBM, "pd_offset=0x%x;", otp_pdaf->pd_offset);
-    }
-
-    return XCAM_RETURN_NO_ERROR;
-}
-
-XCamReturn
-CamHwIsp20::showOtpAfData(struct rkmodule_af_inf *af_inf)
-{
-    unsigned int i;
-
-    if (af_inf->flag) {
-        LOGI_CAMHW_SUBM(ISP20HW_SUBM, "[RKAFOTPParam]");
-        LOGI_CAMHW_SUBM(ISP20HW_SUBM, "flag=%d;", af_inf->flag);
-        LOGI_CAMHW_SUBM(ISP20HW_SUBM, "dir_cnt=%d;", af_inf->dir_cnt);
-
-        for (i = 0; i < af_inf->dir_cnt; i++) {
-            LOGI_CAMHW_SUBM(ISP20HW_SUBM, "af_inf=%d;", af_inf->af_otp[i].vcm_dir);
-            LOGI_CAMHW_SUBM(ISP20HW_SUBM, "af_macro=%d;", af_inf->af_otp[i].vcm_start);
-            LOGI_CAMHW_SUBM(ISP20HW_SUBM, "af_macro=%d;", af_inf->af_otp[i].vcm_end);
-        }
-    }
-
-    return XCAM_RETURN_NO_ERROR;
-}
-
-XCamReturn
 CamHwIsp20::getSensorModeData(const char* sns_ent_name,
                               rk_aiq_exposure_sensor_descriptor& sns_des)
 {
@@ -4214,14 +4255,12 @@ CamHwIsp20::getSensorModeData(const char* sns_ent_name,
 
         if (minfo->af.flag) {
             sns_des.otp_af = &minfo->af;
-            showOtpAfData(sns_des.otp_af);
         } else {
             sns_des.otp_af = nullptr;
         }
 
         if (minfo->pdaf.flag) {
             sns_des.otp_pdaf = &minfo->pdaf;
-            showOtpPdafData(sns_des.otp_pdaf);
         } else {
             sns_des.otp_pdaf = nullptr;
         }

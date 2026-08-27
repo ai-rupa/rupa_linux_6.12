@@ -194,6 +194,7 @@ public:
     void rkAiqCalcDone(SmartPtr<RkAiqFullParamsProxy>& results);
     void rkAiqCalcExpDone(SmartPtr<RkAiqExpParamsProxy>& results);
     void rkAiqCalcFailed(const char* msg);
+    void rkAiqSetVcpSclInfo(bool en, int ratio);
     // from RkLumaAnalyzerCb
     void rkLumaCalcDone(rk_aiq_luma_params_t luma_params);
     void rkLumaCalcFailed(const char* msg);

@@ -1,33 +1,30 @@
 #!/bin/bash -e
+# chromium/test_simplebrowser.sh - SimpleBrowser test
 
+DIR_CHROMIUM="$(cd "$(dirname "$0")" && pwd)"
+source "${DIR_CHROMIUM}/../common/common.sh"
 
-# Export mpp_syslog_perror
 export mpp_syslog_perror=1
 
-# Get kernel version
+# Set debug parameters
 KERNEL_VERSION=$(uname -r)
-
-# Set rk_vcodec debug parameter based on kernel version
 if echo "$KERNEL_VERSION" | grep -q '^4\.4'; then
     echo 0x100 > /sys/module/rk_vcodec/parameters/debug
 else
     echo 0x100 > /sys/module/rk_vcodec/parameters/mpp_dev_debug
 fi
 
-## Set CPU governor to performance
-# Find all CPU governor files
-GOVERNOR_FILES=$(find /sys/ -name *governor)
+set_performance_governor
 
-# Set governor to performance
-echo performance | tee $GOVERNOR_FILES > /dev/null 2>&1 || true
+TEST_ID=$(test_begin "chromium" "simplebrowser" "SimpleBrowser test on $SOC_FAMILY")
 
-if [ -e "/usr/lib/qt/examples/webenginewidgets/simplebrowser" ] ;
-then
-	cd /usr/lib/qt/examples/webenginewidgets/simplebrowser
-	./simplebrowser
-	#./simplebrowser https://www.baidu.com
-	#./simplebrowser "file:///oem/SampleVideo_1280x720_5mb.mp4"
+if [[ -e "/usr/lib/qt/examples/webenginewidgets/simplebrowser" ]]; then
+    cd /usr/lib/qt/examples/webenginewidgets/simplebrowser
+    log_info "chromium" "Starting SimpleBrowser"
+    ./simplebrowser
+    test_end "$TEST_ID" "PASS"
 else
-	echo "Please sure the config/rockchip_xxx_defconfig include "qtwebengine.config"........"
+    log_error "chromium" "SimpleBrowser not found. Include qtwebengine.config in defconfig."
+    test_end "$TEST_ID" "FAIL" "SimpleBrowser not installed"
+    exit 1
 fi
-echo "the governor is performance for now, please restart it........"

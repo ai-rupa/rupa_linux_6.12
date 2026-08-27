@@ -1,0 +1,58 @@
+From f79dea206bd2ca47a201ff4d4ccc1c1288ce843d Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Fri, 7 Feb 2025 16:43:29 +0800
+Subject: [PATCH 45/98] gl-renderer: Disable fallback shader by default
+
+Disable fallback shader creation at startup for performance.
+Enable manually with WESTON_GL_FALLBACK_SHADER environment variable.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ libweston/renderer-gl/gl-renderer.c | 10 ++++++----
+ libweston/renderer-gl/gl-shaders.c  |  9 +++++++++
+ 2 files changed, 15 insertions(+), 4 deletions(-)
+
+diff --git a/libweston/renderer-gl/gl-renderer.c b/libweston/renderer-gl/gl-renderer.c
+index d1723748..14a54676 100644
+--- a/libweston/renderer-gl/gl-renderer.c
++++ b/libweston/renderer-gl/gl-renderer.c
+@@ -5706,10 +5706,12 @@ gl_renderer_setup(struct weston_compositor *ec)
+ 
+ 	glActiveTexture(GL_TEXTURE0);
+ 
+-	gr->fallback_shader = gl_renderer_create_fallback_shader(gr);
+-	if (!gr->fallback_shader) {
+-		weston_log("Error: compiling fallback shader failed.\n");
+-		return -1;
++	if (getenv("WESTON_GL_FALLBACK_SHADER")) {
++		gr->fallback_shader = gl_renderer_create_fallback_shader(gr);
++		if (!gr->fallback_shader) {
++			weston_log("Error: compiling fallback shader failed.\n");
++			return -1;
++		}
+ 	}
+ 
+ 	gr->debug_mode_binding =
+diff --git a/libweston/renderer-gl/gl-shaders.c b/libweston/renderer-gl/gl-shaders.c
+index 02ba41c7..a45f540f 100644
+--- a/libweston/renderer-gl/gl-shaders.c
++++ b/libweston/renderer-gl/gl-shaders.c
+@@ -973,6 +973,15 @@ gl_renderer_use_program(struct gl_renderer *gr,
+ 		weston_log("Error: failed to generate shader program.\n");
+ 		gr->current_shader = NULL;
+ 
++		if (!gr->fallback_shader) {
++			gr->fallback_shader =
++				gl_renderer_create_fallback_shader(gr);
++			if (!gr->fallback_shader) {
++				weston_log("Error: compiling fallback shader failed.\n");
++				return false;
++			}
++		}
++
+ 		/*
+ 		 * We only have one fallback shader, so it cannot do correct
+ 		 * color on color managed outputs. Hence, what is painted
+-- 
+2.39.5
+

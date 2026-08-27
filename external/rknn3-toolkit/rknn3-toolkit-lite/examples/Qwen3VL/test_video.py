@@ -40,20 +40,17 @@ first_token = None
 def result_callback(userdata, result_ptr, state):
     global tokenizer, first_token
 
-    # 函数静态变量（首次调用时初始化）
     if not hasattr(result_callback, "accumulated_tokens"):
         result_callback.accumulated_tokens = []
         result_callback.last_output_text = ""
 
     def decode_safe(tokens):
-        """用 tokenizer 解码并移除可能的半截替换字符（�）以确保不打印不完整 UTF-8。"""
         text = tokenizer.decode(tokens, skip_special_tokens=True, clean_up_tokenization_spaces=False)
-        # 遇到替换字符则截到第一个替换字符前（避免打印半截字符）
-        return text.split('�', 1)[0] if '�' in text else text
+        return text.split('\ufffd', 1)[0] if '\ufffd' in text else text
 
     # ERROR
     if state == 5:
-        print("\n\n[错误] 推理过程中发生错误")
+        print("\n\nError occurred during inference")
         return 0
 
     # FINISH / STOP / MAX_TOKEN
@@ -65,7 +62,7 @@ def result_callback(userdata, result_ptr, state):
                 if new_part:
                     print(new_part, end="", flush=True)
             except Exception as e:
-                print(f"\n[Decode错误: {e}] 剩余tokens: {len(result_callback.accumulated_tokens)}", flush=True)
+                print(f"\n[Decode error: {e}]", flush=True)
         result_callback.accumulated_tokens.clear()
         result_callback.last_output_text = ""
         msg = {2: "Finished", 3: "Stop", 4: "Max new token reached"}.get(state, "Unknown")
@@ -77,14 +74,13 @@ def result_callback(userdata, result_ptr, state):
         print("\n\nWaiting for UTF-8 encoded character")
         return 0
 
-    # NORMAL（累积并尝试打印安全前缀）
+    # NORMAL
     if state == 0:
         n = result_ptr.contents.num_tokens
-        # 取新 tokens（保留原有索引访问方式以兼容 C 结构）
         new_tokens = [result_ptr.contents.token_ids[i] for i in range(n)]
         result_callback.accumulated_tokens.extend(new_tokens)
-        if first_token == None:
-           first_token = time.perf_counter()
+        if first_token is None:
+            first_token = time.perf_counter()
         try:
             safe_text = decode_safe(result_callback.accumulated_tokens)
             new_part = safe_text[len(result_callback.last_output_text):]
@@ -92,7 +88,7 @@ def result_callback(userdata, result_ptr, state):
                 print(new_part, end="", flush=True)
                 result_callback.last_output_text += new_part
         except Exception as e:
-            print(f"\n[临时Decode错误: {e}]，等待更多tokens", flush=True)
+            print(f"\n[Temp decode error: {e}], waiting for more tokens", flush=True)
             return 0
 
     return 0
@@ -114,17 +110,17 @@ def tokenizer_callback(userdata, text_ptr, text_len, tokens_ptr, n_tokens_max):
     
     return n_tokens
 
-def embed_callback(userdata, tokens_ptr, num_tokens, embded, length):
+def embed_callback(userdata, tokens_ptr, num_tokens, embed, length):
     global embeds_data
     embedding_dim = embeds_data.shape[1]
 
     expected_len = num_tokens * embedding_dim * np.dtype(np.float16).itemsize
     if length != expected_len:
-        print("invalid embded buffer")
+        print("invalid embed buffer")
         return -1
 
     dst = np.ctypeslib.as_array(
-        ctypes.cast(embded, ctypes.POINTER(ctypes.c_uint16)),
+        ctypes.cast(embed, ctypes.POINTER(ctypes.c_uint16)),
         shape=(num_tokens * embedding_dim,)
     ).view(np.float16)
 
@@ -206,16 +202,16 @@ def dump_all_tensor_attr(rknn_vision, rknn_llm):
         dump_tensor_attr(output_attr, prefix = "rknn_llm output")
 
 
-def vision_inference(img1,img2,rknn_vision_lite):
+def vision_inference(img1,img2,rknn_vision_lite): # prune版 qwen3vl-2b
     img1 = cv2.cvtColor(img1, cv2.COLOR_BGR2RGB)
     img1 = cv2.resize(img1, (384, 384)).transpose(2,0,1).reshape(1,3,384, 384)
 
     img2 = cv2.cvtColor(img2, cv2.COLOR_BGR2RGB)
     img2 = cv2.resize(img2, (384, 384)).transpose(2,0,1).reshape(1,3,384, 384)
 
-    feature = prune_model_img_process(img1,img2) # prune版 qwen3vl-2b，若是完整版模型将这部分代码删除就行，可以参考mobilenet的例子
+    feature = prune_model_img_process(img1,img2)
     feature = np.float16(feature)
-    outputs = rknn_vision.inference(inputs=[feature])
+    outputs = rknn_vision_lite.inference(inputs=[feature])
     return outputs
 
 
@@ -317,7 +313,8 @@ if __name__ == '__main__':
         cap.set(cv2.CAP_PROP_POS_FRAMES, target_frame)
         ret, frame2 = cap.read()
 
-        outputs = vision_inference(frame1,frame2,rknn_vision)
+        #视频推理目前vision_inference仅支持裁剪版，完整版需要有两个图片接口
+        outputs = vision_inference(frame1,frame2,rknn_vision) 
         outputs[0] = np.expand_dims(outputs[0], 0)
         features.append(outputs[0])
         deepstack_tensors_0.append(outputs[1])
@@ -328,12 +325,11 @@ if __name__ == '__main__':
     deepstack_tensors_0 =  np.float16(np.concatenate(deepstack_tensors_0, axis=0))
     deepstack_tensors_1 =  np.float16(np.concatenate(deepstack_tensors_1, axis=0))
     deepstack_tensors_2 =  np.float16(np.concatenate(deepstack_tensors_2, axis=0))
-    print("shape", features.shape, deepstack_tensors_0.shape, deepstack_tensors_1.shape, deepstack_tensors_2.shape)
 
 
     prompts = ["<video>请介绍这个rockchip相关的视频"]
     for prompt in prompts:
-        output0_attr = rknn_vision.get_inputs_tensor_attr()[0]  # 获取vision输出的attr，用于对齐deepstack的size
+        output0_attr = rknn_vision.get_outputs_tensor_attr()[0]  # 获取vision输出的attr，用于对齐deepstack的size
         deepstack_aligned_size = output0_attr.aligned_size * features.shape[0]
 
         inputs = []
@@ -361,7 +357,6 @@ if __name__ == '__main__':
                 deepstack_tensor.aux_data = deepstack_tensors_1
             else:
                 deepstack_tensor.aux_data = deepstack_tensors_2
-            print(deepstack_tensor.aux_data.shape)
             deepstack_tensor.align_size = deepstack_aligned_size
             inputs.append(deepstack_tensor)
 

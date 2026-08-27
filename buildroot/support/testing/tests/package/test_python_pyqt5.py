@@ -3,6 +3,7 @@ import os
 import infra.basetest
 
 
+# gitlab-runner: 2xlarge
 class TestPythonPyQt5(infra.basetest.BRTest):
     # We use a specific configuration for:
     # - using Aarch64, to have more than 256MB memory,
@@ -28,7 +29,7 @@ class TestPythonPyQt5(infra.basetest.BRTest):
         BR2_PACKAGE_DEJAVU=y
         BR2_PACKAGE_LIBDRM=y
         BR2_PACKAGE_MESA3D=y
-        BR2_PACKAGE_MESA3D_GALLIUM_DRIVER_SWRAST=y
+        BR2_PACKAGE_MESA3D_GALLIUM_DRIVER_SOFTPIPE=y
         BR2_PACKAGE_MESA3D_LLVM=y
         BR2_PACKAGE_MESA3D_OPENGL_EGL=y
         BR2_PACKAGE_MESA3D_OPENGL_ES=y

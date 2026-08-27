@@ -1,0 +1,39 @@
+From 8e3811a1b1b852a437af6f74db90c6106d4dcdd0 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Mon, 2 Dec 2024 12:06:24 +0800
+Subject: [PATCH 74/98] kiosk-shell: Fix output assignment after output
+ destruction
+
+Reset appid_output_assigned flag when an output is destroyed and prevent
+output assignment when no outputs are available to avoid invalid state.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ kiosk-shell/kiosk-shell.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/kiosk-shell/kiosk-shell.c b/kiosk-shell/kiosk-shell.c
+index 3794c361..1879a076 100644
+--- a/kiosk-shell/kiosk-shell.c
++++ b/kiosk-shell/kiosk-shell.c
+@@ -169,6 +169,7 @@ kiosk_shell_surface_notify_output_destroy(struct wl_listener *listener, void *da
+ 			     struct kiosk_shell_surface, output_destroy_listener);
+ 
+ 	kiosk_shell_surface_set_output(shsurf, NULL);
++	shsurf->appid_output_assigned = false;
+ }
+ 
+ static struct kiosk_shell_surface *
+@@ -1003,7 +1004,8 @@ desktop_surface_committed(struct weston_desktop_surface *desktop_surface,
+ 	if (surface->width == 0)
+ 		return;
+ 
+-	if (!shsurf->appid_output_assigned && app_id) {
++	if (!shsurf->appid_output_assigned && app_id &&
++	    !wl_list_empty(&shsurf->shell->output_list)) {
+ 		struct kiosk_shell_output *shoutput = NULL;
+ 
+ 		/* reset previous output being set in _added() as the output is
+-- 
+2.39.5
+

@@ -1,4 +1,4 @@
-From 67be0f1c296a00dbcc8845bf8fa2b11edc9a267d Mon Sep 17 00:00:00 2001
+From 009a0eb7978299aa1cce4dfce1aa01bf2af0a0b1 Mon Sep 17 00:00:00 2001
 From: Jeffy Chen <jeffy.chen@rock-chips.com>
 Date: Mon, 22 Apr 2024 11:20:01 +0800
 Subject: [PATCH 3/4] render: gles2: Support EGL_WL_bind_wayland_display
@@ -26,7 +26,7 @@ Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
  14 files changed, 294 insertions(+), 29 deletions(-)
 
 diff --git a/include/render/egl.h b/include/render/egl.h
-index 103ab57df..ca5007c0c 100644
+index 103ab57..ca5007c 100644
 --- a/include/render/egl.h
 +++ b/include/render/egl.h
 @@ -3,11 +3,36 @@
@@ -128,7 +128,7 @@ index 103ab57df..ca5007c0c 100644
   * Creates an EGL image from the given dmabuf attributes. Check usability
   * of the dmabuf with wlr_egl_check_import_dmabuf once first.
 diff --git a/include/wlr/interfaces/wlr_buffer.h b/include/wlr/interfaces/wlr_buffer.h
-index 4244a00d5..4060728bc 100644
+index 4244a00..4060728 100644
 --- a/include/wlr/interfaces/wlr_buffer.h
 +++ b/include/wlr/interfaces/wlr_buffer.h
 @@ -24,8 +24,9 @@ struct wlr_buffer_impl {
@@ -144,7 +144,7 @@ index 4244a00d5..4060728bc 100644
  
  /**
 diff --git a/include/wlr/render/egl.h b/include/wlr/render/egl.h
-index 9bf1b8019..59435f752 100644
+index 9bf1b80..59435f7 100644
 --- a/include/wlr/render/egl.h
 +++ b/include/wlr/render/egl.h
 @@ -25,6 +25,7 @@
@@ -156,7 +156,7 @@ index 9bf1b8019..59435f752 100644
  struct wlr_egl;
  
 diff --git a/include/wlr/render/interface.h b/include/wlr/render/interface.h
-index 89f6de970..7ed5c7557 100644
+index 89f6de9..7ed5c75 100644
 --- a/include/wlr/render/interface.h
 +++ b/include/wlr/render/interface.h
 @@ -20,6 +20,8 @@ struct wlr_box;
@@ -169,19 +169,19 @@ index 89f6de970..7ed5c7557 100644
  		struct wlr_renderer *renderer, uint32_t buffer_caps);
  	const struct wlr_drm_format_set *(*get_render_formats)(
 diff --git a/include/wlr/render/pass.h b/include/wlr/render/pass.h
-index 2159bc3df..e5b8b2b1a 100644
+index 61ab771..43e5683 100644
 --- a/include/wlr/render/pass.h
 +++ b/include/wlr/render/pass.h
-@@ -13,6 +13,7 @@
- #include <stdint.h>
+@@ -14,6 +14,7 @@
  #include <wayland-server-core.h>
+ #include <wlr/render/color.h>
  #include <wlr/util/box.h>
 +#include <wlr/types/wlr_buffer.h>
  
  struct wlr_renderer;
  struct wlr_buffer;
 diff --git a/render/egl.c b/render/egl.c
-index b886aad51..738e772fc 100644
+index d8690aa..17fa546 100644
 --- a/render/egl.c
 +++ b/render/egl.c
 @@ -5,6 +5,7 @@
@@ -400,7 +400,7 @@ index b886aad51..738e772fc 100644
  		struct wlr_dmabuf_attributes *attributes, bool *external_only) {
  	if (!egl->exts.KHR_image_base || !egl->exts.EXT_image_dma_buf_import) {
 diff --git a/render/gles2/renderer.c b/render/gles2/renderer.c
-index e362daee8..e189ee028 100644
+index e362dae..e189ee0 100644
 --- a/render/gles2/renderer.c
 +++ b/render/gles2/renderer.c
 @@ -139,12 +139,19 @@ struct wlr_gles2_buffer *gles2_buffer_get_or_create(struct wlr_gles2_renderer *r
@@ -444,7 +444,7 @@ index e362daee8..e189ee028 100644
  	.get_render_formats = gles2_get_render_formats,
  	.get_drm_fd = gles2_get_drm_fd,
 diff --git a/render/gles2/texture.c b/render/gles2/texture.c
-index 9a967ebdb..3b57abb1b 100644
+index 9a967eb..3b57abb 100644
 --- a/render/gles2/texture.c
 +++ b/render/gles2/texture.c
 @@ -356,9 +356,8 @@ static struct wlr_texture *gles2_texture_from_pixels(
@@ -513,7 +513,7 @@ index 9a967ebdb..3b57abb1b 100644
  		wlr_buffer_end_data_ptr_access(buffer);
  		return tex;
 diff --git a/render/wlr_renderer.c b/render/wlr_renderer.c
-index e65314ccc..571183729 100644
+index e65314c..5711837 100644
 --- a/render/wlr_renderer.c
 +++ b/render/wlr_renderer.c
 @@ -75,6 +75,12 @@ const struct wlr_drm_format_set *wlr_renderer_get_render_formats(
@@ -530,7 +530,7 @@ index e65314ccc..571183729 100644
  }
  
 diff --git a/types/buffer/resource.c b/types/buffer/resource.c
-index 14d8f82d1..60a384844 100644
+index 14d8f82..60a3848 100644
 --- a/types/buffer/resource.c
 +++ b/types/buffer/resource.c
 @@ -31,7 +31,7 @@ static const struct wlr_buffer_resource_interface *get_buffer_resource_iface(
@@ -552,7 +552,7 @@ index 14d8f82d1..60a384844 100644
  		wlr_log(WLR_ERROR, "Failed to create %s buffer", iface->name);
  		return NULL;
 diff --git a/types/wlr_drm.c b/types/wlr_drm.c
-index f8db8291b..480fbee99 100644
+index f8db829..480fbee 100644
 --- a/types/wlr_drm.c
 +++ b/types/wlr_drm.c
 @@ -57,14 +57,14 @@ static const struct wlr_buffer_impl buffer_impl = {
@@ -582,7 +582,7 @@ index f8db8291b..480fbee99 100644
  	assert(buffer != NULL);
  	return &buffer->base;
 diff --git a/types/wlr_linux_dmabuf_v1.c b/types/wlr_linux_dmabuf_v1.c
-index 3165e8805..5f1b3481d 100644
+index 3165e88..5f1b348 100644
 --- a/types/wlr_linux_dmabuf_v1.c
 +++ b/types/wlr_linux_dmabuf_v1.c
 @@ -74,14 +74,14 @@ static const struct wl_buffer_interface wl_buffer_impl = {
@@ -612,7 +612,7 @@ index 3165e8805..5f1b3481d 100644
  		wlr_dmabuf_v1_buffer_try_from_buffer_resource(resource);
  	assert(buffer != NULL);
 diff --git a/types/wlr_shm.c b/types/wlr_shm.c
-index 171724471..cf3c55846 100644
+index 1717244..cf3c558 100644
 --- a/types/wlr_shm.c
 +++ b/types/wlr_shm.c
 @@ -73,17 +73,17 @@ static const struct wl_buffer_interface wl_buffer_impl;
@@ -637,7 +637,7 @@ index 171724471..cf3c55846 100644
  }
  
 diff --git a/types/wlr_single_pixel_buffer_v1.c b/types/wlr_single_pixel_buffer_v1.c
-index 9b82717fa..94d87944b 100644
+index 9b82717..94d8794 100644
 --- a/types/wlr_single_pixel_buffer_v1.c
 +++ b/types/wlr_single_pixel_buffer_v1.c
 @@ -19,19 +19,19 @@ static const struct wl_buffer_interface wl_buffer_impl = {

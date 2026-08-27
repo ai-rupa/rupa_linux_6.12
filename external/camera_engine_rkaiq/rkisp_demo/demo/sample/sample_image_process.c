@@ -63,6 +63,7 @@
 #include "sample_sysctl.h"
 #include "sample_aibnr_module.h"
 #include "sample_aiynr_module.h"
+#include "sample_extproc.h"
 
 struct module_sample_info {
     const char * const name;
@@ -167,6 +168,7 @@ static void sample_usage()
     printf("\t A) SYSCTL:       module test sample.\n");
     printf("\t B) AIBNR:      module test sample.\n");
     printf("\t C) AIYNR:      module test sample.\n");
+    printf("\t D) EXTPROC:    module test sample.\n");
     printf("\t z) ALL:       module test sample.\n");
     printf("\n");
     printf("\t please press the key: ");
@@ -409,6 +411,11 @@ XCamReturn sample_main (const void *arg)
     case 'C': {
         printf("enter AIYNR module test\n");
         sample_aiynr_module(arg);
+        break;
+    }
+    case 'D': {
+        printf("enter EXTPROC module test\n");
+        sample_extproc(arg);
         break;
     }
     case 'z': {

@@ -62,6 +62,7 @@ bin/rk35/rk3562_bl32_v1.08.bin
 
 - 通过提交信息，当前版本能在源码仓库中被溯源
 - 统一提交风格
+- 目前 `Build from...` 和 `Update features...`是必填项，如果不知道`Update features`的内容应该填写什么，建议跟`Build from`内容保持一致即可。
 
 > **注意**：本文档只是做出了基本的规范要求，提交者为了更准确溯源可以在此基础规则上自行做出合理调整。
 
@@ -249,6 +250,8 @@ Change-Id: I0d35a045596666aee54be6e2cf7efd01788bcc58
 
 ## Release文档
 
+### 内容要求
+
 Binary文件更新时请同步更新`doc/release/`下的中、英文档，具体格式请参考现有文档。几点重要说明：
 
 - `文件`：如果更新的是多个文件，可用`{}` 模糊表示。
@@ -259,7 +262,14 @@ Binary文件更新时请同步更新`doc/release/`下的中、英文档，具体
 
   > 英文版本：critical > important > moderate。
 
-- `New`：有新的feature更新时启用，以文字形式逐项说明。
+- `New`：有新的feature更新时启用，以文字形式逐项说明。每一项说明都必须有顺序编号（即使只有一项）。
+
+  例如：
+
+  ```
+  1. 新增 ...
+  2. 提升 ...
+  ```
 
 - `Fixed`：修复问题时启用，以表格形式逐项说明。
 
@@ -268,3 +278,13 @@ Binary文件更新时请同步更新`doc/release/`下的中、英文档，具体
 - 更新完成后在末尾插入水平分隔符：`------`。
 
 - 提交前执行检查： `./scripts/checkpatch.sh` 。
+
+### **自动生成**
+
+除了手动添加Release文档内容，用户还可以按需修改 `scripts/doc-template.txt` ，然后执行下面的命令自动生成对应的`doc/release/*.md`内容。
+
+```shell
+./scripts/release-doc.sh -f scripts/doc-template.txt
+```
+
+> 这种方式下用户只需要关注文档内容本身，不需要关心md文档和内容格式。

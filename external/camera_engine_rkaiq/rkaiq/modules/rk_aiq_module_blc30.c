@@ -42,9 +42,12 @@ void rk_aiq_blc30_params_cvt(void* attr, isp_params_t* isp_params,
     bool autoblc_en = psta->autoBlc.sw_blcT_autoBlc_en & pdyn->obcPostTnr.sw_blcT_obcPostTnr_en &
                       pBlcInfo->init_success & (cvtinfo->frameNum == 1) & cvtinfo->btnr_en;
     float damping_val = CLIP(psta->autoBlc.sw_blcT_damping_val, 0, 1);
-    float totalGain = cvtinfo->ae_exp->LinearExp.exp_real_params.analog_gain
-                      * cvtinfo->ae_exp->LinearExp.exp_real_params.digital_gain
-                      * cvtinfo->ae_exp->LinearExp.exp_real_params.isp_dgain;
+    float totalGain   = 1;
+    if (cvtinfo->ae_exp) {
+        totalGain = cvtinfo->ae_exp->LinearExp.exp_real_params.analog_gain *
+                    cvtinfo->ae_exp->LinearExp.exp_real_params.digital_gain *
+                    cvtinfo->ae_exp->LinearExp.exp_real_params.isp_dgain;
+    }
     int number = totalGain, gain_index = 0;
     while (number > 0) {
         number >>= 1;
@@ -274,25 +277,8 @@ lib_init_success:
 #endif
 
     if (cvtinfo->frameNum > 1) {
-        if (phwcfg->bls1_en == 1 || phwcfg->isp_ob_offset > 0) {
-            if (cvtinfo->blc_warning_count < 5) {
-                LOGE_ABLC("When using HDR mode, obcPostTnr and ob_offset should be off to avoid data overflow.\n"
-                          "So bls1_en, isp_ob_offset and isp_ob_predgain will be forcibly set to 0 in HWI.");
-            }
-            else if (cvtinfo->blc_warning_count % 300 == 0) {
-                LOGE_ABLC("When using HDR mode, obcPostTnr and ob_offset should be off to avoid data overflow.\n"
-                          "So bls1_en, isp_ob_offset and isp_ob_predgain will be forcibly set to 0 in HWI.");
-            }
-            cvtinfo->blc_warning_count++;
-        }
-        // hdr won't use blc1 and blc_ob
-        phwcfg->bls1_en = 0;
-        phwcfg->isp_ob_offset = 0;
+        // hdr can't use predgain
         phwcfg->isp_ob_predgain = 0;
-        pBlcInfo->pre_ob_offset = 0;
-#if ISP_HW_V35 || ISP_HW_V351s
-        phwcfg->isp_ob_offset1 = 0;
-#endif
     }
 
 #if ISP_HW_V35 || ISP_HW_V351s

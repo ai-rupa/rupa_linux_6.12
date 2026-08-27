@@ -22,6 +22,7 @@
 #include <video/of_videomode.h>
 #include <video/videomode.h>
 
+#include <drm/display/drm_dp_aux_bus.h>
 #include <drm/display/drm_dp_helper.h>
 #include <drm/drm_atomic.h>
 #include <drm/drm_atomic_helper.h>
@@ -221,13 +222,16 @@ static int rockchip_dp_match_by_id(struct device *dev, const void *data)
 static struct rockchip_dp_device *
 rockchip_dp_find_by_id(struct device_driver *drv, unsigned int id)
 {
+	struct rockchip_dp_device *dp = NULL;
 	struct device *dev;
 
 	dev = driver_find_device(drv, NULL, &id, rockchip_dp_match_by_id);
-	if (!dev)
-		return NULL;
+	if (dev) {
+		dp = dev_get_drvdata(dev);
+		put_device(dev);
+	}
 
-	return dev_get_drvdata(dev);
+	return dp;
 }
 
 static int rockchip_dp_pre_init(struct rockchip_dp_device *dp)
@@ -345,7 +349,7 @@ static int rockchip_dp_bridge_attach(struct analogix_dp_plat_data *plat_data,
 		sdev->connector = connector;
 		sdev->of_node = dp->dev->of_node;
 		sdev->loader_protect = rockchip_dp_loader_protect;
-		rockchip_drm_register_sub_dev(sdev);
+		devm_rockchip_drm_register_sub_dev(dp->dev, sdev);
 	}
 
 	return 0;
@@ -354,11 +358,7 @@ static int rockchip_dp_bridge_attach(struct analogix_dp_plat_data *plat_data,
 static void rockchip_dp_bridge_detach(struct analogix_dp_plat_data *plat_data,
 				      struct drm_bridge *bridge)
 {
-	struct rockchip_dp_device *dp = pdata_encoder_to_dp(plat_data);
-	struct rockchip_drm_sub_dev *sdev = &dp->sub_dev;
 
-	if (sdev->connector)
-		rockchip_drm_unregister_sub_dev(sdev);
 }
 
 static enum drm_mode_status
@@ -433,7 +433,7 @@ static void rockchip_dp_drm_encoder_enable(struct drm_encoder *encoder,
 
 	ret = drm_of_encoder_active_endpoint(dp->dev->of_node, encoder, &endpoint);
 	if (ret < 0)
-		return;
+		goto out_pm_put;
 
 	remote_port_parent = of_graph_get_remote_port_parent(endpoint.local_node);
 	if (remote_port_parent) {
@@ -451,6 +451,7 @@ static void rockchip_dp_drm_encoder_enable(struct drm_encoder *encoder,
 	if (ret != 0)
 		DRM_DEV_ERROR(dp->dev, "Could not write to GRF reg lcdc_sel: %d\n", ret);
 
+out_pm_put:
 	pm_runtime_mark_last_busy(dp->dev);
 	pm_runtime_put_autosuspend(dp->dev);
 }
@@ -761,22 +762,37 @@ static const struct component_ops rockchip_dp_component_ops = {
 	.unbind = rockchip_dp_unbind,
 };
 
+static int rockchip_dp_link_panel(struct drm_dp_aux *aux)
+{
+	struct analogix_dp_plat_data *plat_data = analogix_dp_aux_to_plat_data(aux);
+	struct rockchip_dp_device *dp = pdata_encoder_to_dp(plat_data);
+	int ret;
+
+	/*
+	 * If drm_of_find_panel_or_bridge() returns -ENODEV, there may be no valid panel
+	 * or bridge nodes. The driver should go on for the driver-free bridge or the DP
+	 * mode applications.
+	 */
+	ret = drm_of_find_panel_or_bridge(dp->dev->of_node, 1, 0,
+					  &plat_data->panel, &plat_data->bridge);
+	if (ret && ret != -ENODEV)
+		return ret;
+
+	dp->plat_data.skip_connector = rockchip_dp_skip_connector(dp->plat_data.bridge);
+
+	return component_add(dp->dev, &rockchip_dp_component_ops);
+}
+
 static int rockchip_dp_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	const struct rockchip_dp_chip_data *dp_data;
-	struct drm_panel *panel = NULL;
-	struct drm_bridge *bridge = NULL;
 	struct rockchip_dp_device *dp;
 	int id, i, ret;
 
 	dp_data = of_device_get_match_data(dev);
 	if (!dp_data)
 		return -ENODEV;
-
-	ret = drm_of_find_panel_or_bridge(dev->of_node, 1, 0, &panel, &bridge);
-	if (ret < 0 && ret != -ENODEV)
-		return ret;
 
 	dp = devm_kzalloc(dev, sizeof(*dp), GFP_KERNEL);
 	if (!dp)
@@ -802,7 +818,6 @@ static int rockchip_dp_probe(struct platform_device *pdev)
 	dp->plat_data.ssc = dp->data->ssc;
 	dp->plat_data.support_dp_mode = dp->data->support_dp_mode;
 	dp->plat_data.max_bpc = dp->data->max_bpc ? dp->data->max_bpc : 8;
-	dp->plat_data.panel = panel;
 	dp->plat_data.dev_type = dp->data->chip_type;
 	dp->plat_data.power_on = rockchip_dp_poweron;
 	dp->plat_data.power_off = rockchip_dp_powerdown;
@@ -811,8 +826,6 @@ static int rockchip_dp_probe(struct platform_device *pdev)
 	dp->plat_data.detach = rockchip_dp_bridge_detach;
 	dp->plat_data.convert_to_split_mode = drm_mode_convert_to_split_mode;
 	dp->plat_data.convert_to_origin_mode = drm_mode_convert_to_origin_mode;
-	dp->plat_data.skip_connector = rockchip_dp_skip_connector(bridge);
-	dp->plat_data.bridge = bridge;
 	dp->plat_data.disable_psr = device_property_read_bool(dp->dev, "rockchip,disable-psr");
 
 	ret = rockchip_dp_of_probe(dp);
@@ -856,9 +869,20 @@ static int rockchip_dp_probe(struct platform_device *pdev)
 			dp->plat_data.left_display = true;
 	}
 
-	ret = component_add(dev, &rockchip_dp_component_ops);
-	if (ret)
-		return ret;
+	ret = devm_of_dp_aux_populate_bus(analogix_dp_get_aux(dp->adp), rockchip_dp_link_panel);
+	if (ret) {
+		/*
+		 * If devm_of_dp_aux_populate_bus() returns -ENODEV, the done_probing() will not
+		 * be called because there are no EP devices. Then the rockchip_dp_link_panel()
+		 * will be called directly in order to support the other valid DT configurations.
+		 *
+		 * NOTE: The devm_of_dp_aux_populate_bus() is allowed to return -EPROBE_DEFER.
+		 */
+		if (ret != -ENODEV)
+			return dev_err_probe(dp->dev, ret, "failed to populate aux bus\n");
+
+		return rockchip_dp_link_panel(analogix_dp_get_aux(dp->adp));
+	}
 
 	return 0;
 }

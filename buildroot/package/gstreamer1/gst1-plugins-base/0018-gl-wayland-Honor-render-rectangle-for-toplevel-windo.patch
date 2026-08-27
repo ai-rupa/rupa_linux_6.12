@@ -1,4 +1,4 @@
-From 962802dd6b00589b6ff5e8338053394df275232c Mon Sep 17 00:00:00 2001
+From 9e554a55acb8ae18b68554ca3e478a289a47e162 Mon Sep 17 00:00:00 2001
 From: Jeffy Chen <jeffy.chen@rock-chips.com>
 Date: Thu, 4 May 2023 17:52:33 +0800
 Subject: [PATCH 18/21] gl: wayland: Honor render-rectangle for toplevel window
@@ -12,10 +12,10 @@ Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
  1 file changed, 5 insertions(+)
 
 diff --git a/gst-libs/gst/gl/wayland/gstglwindow_wayland_egl.c b/gst-libs/gst/gl/wayland/gstglwindow_wayland_egl.c
-index 9883c2f..762877b 100644
+index d5f498b..872ad98 100644
 --- a/gst-libs/gst/gl/wayland/gstglwindow_wayland_egl.c
 +++ b/gst-libs/gst/gl/wayland/gstglwindow_wayland_egl.c
-@@ -758,6 +758,11 @@ _set_render_rectangle (gpointer data)
+@@ -761,6 +761,11 @@ _set_render_rectangle (gpointer data)
  
    window_resize (render->window_egl, render->rect.w, render->rect.h);
  

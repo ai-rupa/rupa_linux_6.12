@@ -1,0 +1,32 @@
+From bcaff24cc08e4625f5492e68b3c14aed162fa8c5 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Tue, 16 Jan 2024 16:30:39 +0800
+Subject: [PATCH 65/98] backend-drm: Skip gamma reset by default, enable via
+ env
+
+Skip gamma reset to preserve current gamma settings. Set
+WESTON_DRM_RESET_GAMMA environment variable to enable reset.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ libweston/backend-drm/kms.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/libweston/backend-drm/kms.c b/libweston/backend-drm/kms.c
+index 3f5ff677..64b50d38 100644
+--- a/libweston/backend-drm/kms.c
++++ b/libweston/backend-drm/kms.c
+@@ -870,6 +870,10 @@ drm_output_reset_legacy_gamma(struct drm_output *output)
+ 	uint32_t i;
+ 	int ret;
+ 
++	/* Skip gamma reset by default to preserve current gamma settings */
++	if (!getenv("WESTON_DRM_RESET_GAMMA"))
++		return;
++
+ 	if (len == 0)
+ 		return;
+ 
+-- 
+2.39.5
+

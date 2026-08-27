@@ -246,9 +246,10 @@ int UVCProcess::deinitialize() {
   UVCProcessCtx *ctx = getUVCProcessCtx(mCtx);
 
 #ifdef UVC_ENABLE_NN
-  if (ctx->nnCtx)
+  if (ctx->nnCtx){
     ctx->nnCtx->stopProcess();
     delete ctx->nnCtx;
+  }
 #endif
 
   if (ctx)
@@ -275,8 +276,6 @@ int UVCProcess::configVi() {
   ctx->viChnCtx = uvc_get_vi_chn_ctx(ctx->mUvcCfg, MPI_VI_CHANNEL_TYPE_UVC);
 
   if(ctx->mUvcCfg.common_cfg.uvc_enable_ir_bright_dark_frame) {
-    //you must set fps
-    camera_control_start(ctx->mUvcCfg.vi_cfg[MPI_VI_CHANNEL_TYPE_IR_BRIGHT_DARK_FRAME].dev_id, 0, 0, 0, 0, 0);
     uvc_vi_config(&ctx->mUvcCfg, MPI_VI_CHANNEL_TYPE_IR_BRIGHT_DARK_FRAME);
     ctx->viChnCtxIrDarkFrame = uvc_get_vi_chn_ctx(ctx->mUvcCfg, MPI_VI_CHANNEL_TYPE_IR_BRIGHT_DARK_FRAME);
   }
@@ -321,10 +320,8 @@ int UVCProcess::stopVi() {
   if (!ctx->mUvcCfg.common_cfg.userdata_enable)
     uvc_vi_stop(ctx->mUvcCfg, MPI_VI_CHANNEL_TYPE_UVC);
 #endif
-  if(ctx->mUvcCfg.common_cfg.uvc_enable_ir_bright_dark_frame) {
+  if(ctx->mUvcCfg.common_cfg.uvc_enable_ir_bright_dark_frame)
     uvc_vi_stop(ctx->mUvcCfg, MPI_VI_CHANNEL_TYPE_IR_BRIGHT_DARK_FRAME);
-    camera_control_stop(ctx->mUvcCfg.vi_cfg[MPI_VI_CHANNEL_TYPE_IR_BRIGHT_DARK_FRAME].dev_id);
-  }
   return 0;
 }
 
@@ -518,6 +515,7 @@ int UVCProcess::configProcess(UVC_CTRL_INFO uvcCtrlInfo) {
     switch (ctx->mUvcCtx.fcc) {
     case V4L2_PIX_FMT_NV12:
     case V4L2_PIX_FMT_UYVY:
+    case V4L2_PIX_FMT_BGR24:
       if (ctx->mUvcCfg.common_cfg.uvc_enable_vpss)
         ctx->mFmtType = UVC_FMT_TYPE_VI_VPSS_UVC;
       else
@@ -565,6 +563,27 @@ int UVCProcess::configProcess(UVC_CTRL_INFO uvcCtrlInfo) {
       LOG_ERROR("process not support this fcc 0x%x\n", ctx->mUvcCtx.fcc);
       break;
     }
+
+    if (ctx->mUvcCfg.common_cfg.uvc_enable_ir_bright_dark_frame)
+      camera_control_start(ctx->mUvcCfg.vi_cfg[MPI_VI_CHANNEL_TYPE_IR_BRIGHT_DARK_FRAME].dev_id, 0, 0, 0, 0, 0);
+
+    set_uvc_control_start(uvcCtrlInfo.video_id, uvcCtrlInfo.width,
+                          uvcCtrlInfo.height, uvcCtrlInfo.fps, uvcCtrlInfo.fcc,
+                          uvcCtrlInfo.eptz[UVC_EPTZ_AUTO]);
+
+#ifdef RV1126B
+    int32_t s32Ret = RK_FAILURE;
+    if (rk_isp_need_raw_pipe_ctrl(uvcCtrlInfo.index)) {
+      s32Ret = RK_MPI_VI_CtrlRawStream(uvcCtrlInfo.index, RK_FALSE);
+      LOG_INFO("raw stream control by rkaiq\n");
+    } else {
+      s32Ret = RK_MPI_VI_CtrlRawStream(uvcCtrlInfo.index, RK_TRUE);
+      LOG_INFO("raw stream control by rockit\n");
+    }
+    if (s32Ret != RK_SUCCESS) {
+      LOG_ERROR("RK_MPI_VI_CtrlRawStream %x\n", s32Ret);
+    }
+#endif
 
     switch (ctx->mFmtType) {
     case UVC_FMT_TYPE_VI_UVC:
@@ -756,6 +775,10 @@ int UVCProcess::stopProcess() {
     LOG_ERROR("not support this type:%d\n", ctx->mFmtType);
     break;
   }
+
+  set_uvc_control_stop(ctx->mUvcCtx.video_id);
+  if (ctx->mUvcCfg.common_cfg.uvc_enable_ir_bright_dark_frame)
+    camera_control_stop(ctx->mUvcCfg.vi_cfg[MPI_VI_CHANNEL_TYPE_IR_BRIGHT_DARK_FRAME].dev_id);
 
   resetCtx();
 

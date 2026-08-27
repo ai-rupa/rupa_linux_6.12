@@ -432,9 +432,6 @@ static XCamReturn newAiqParamPool(AiqCore_t* pAiqCore, int type) {
     case RK_AIQ_ALGO_TYPE_ADRC:
         NEW_PARAMS_POOL(RESULT_TYPE_DRC_PARAM, rk_aiq_isp_drc_params_t);
         break;
-    case RK_AIQ_ALGO_TYPE_AFD:
-        NEW_PARAMS_POOL(RESULT_TYPE_AFD_PARAM, rk_aiq_isp_afd_params_t);
-        break;
     case RK_AIQ_ALGO_TYPE_ARGBIR:
 #if RKAIQ_HAVE_RGBIR_REMOSAIC
         NEW_PARAMS_POOL(RESULT_TYPE_RGBIR_PARAM, rk_aiq_isp_rgbir_params_t);
@@ -967,6 +964,9 @@ static XCamReturn newAiqGroupAnayzer(AiqCore_t* pAiqCore, const struct RkAiqAlgo
 
     for (int i = 0; i < RK_AIQ_CORE_ANALYZE_MAX; i++) {
         if (groupMaps[i]) {
+            if (i == RK_AIQ_CORE_ANALYZE_AFD) {
+                continue;
+            }
             pAiqCore->mFullParamReqGroupsMasks |= 1ULL << (uint64_t)(i);
         }
     }
@@ -1150,6 +1150,7 @@ XCamReturn AiqCore_init(AiqCore_t* pAiqCore, const char* sns_ent_name,
 
     pAiqCore->mIsSingleThread = true;
     pAiqCore->mSafeEnableAlgo = true;
+    pAiqCore->mHasInitExp     = false;
     aiqMutex_init(&pAiqCore->_update_mutex);
     aiqMutex_init(&pAiqCore->mIspStatsMutex);
     aiqMutex_init(&pAiqCore->mApiMutex);
@@ -1809,11 +1810,6 @@ static XCamReturn getAiqParamsBuffer(AiqCore_t* pAiqCore, AiqFullParams_t* aiqPa
         NEW_PARAMS_BUFFER(CAC);
 #endif
         break;
-    case RK_AIQ_ALGO_TYPE_AFD:
-#if RKAIQ_HAVE_AFD
-        NEW_PARAMS_BUFFER(AFD);
-#endif
-        break;
     case RK_AIQ_ALGO_TYPE_ARGBIR:
 #if RKAIQ_HAVE_RGBIR_REMOSAIC
         NEW_PARAMS_BUFFER(RGBIR);
@@ -1954,6 +1950,9 @@ static AiqFullParams_t* analyzeInternal(AiqCore_t * pAiqCore,
     for (int i = 0; i < cnts; i++) {
         AiqAlgoHandler_t* pHdl = pHdlList[i];
         bool got_buffer        = false;
+        if (grp_type == RK_AIQ_CORE_ANALYZE_AFD) {
+            got_buffer = true;
+        }
         while (pHdl) {
             if (pHdl->mEnable) {
                 int type = AiqAlgoHandler_getAlgoType(pHdl);
@@ -2089,8 +2088,18 @@ XCamReturn AiqCore_prepare(AiqCore_t * pAiqCore,
 
     if ((pAiqCore->mState == RK_AIQ_CORE_STATE_STOPED) ||
             (pAiqCore->mState == RK_AIQ_CORE_STATE_PREPARED)) {
-        pAiqCore->mAlogsComSharedParams.conf_type |= RK_AIQ_ALGO_CONFTYPE_KEEPSTATUS;
-        LOGD_ANALYZER("prepare from stopped, should keep algo status !");
+        int hdr_mode = 0;
+        if (mode == RK_AIQ_WORKING_MODE_NORMAL) {
+            hdr_mode = 0;
+        } else if (RK_AIQ_HDR_IS_HDR2(mode)) {
+            hdr_mode = 1;
+        } else if (RK_AIQ_HDR_IS_HDR3(mode)) {
+            hdr_mode = 2;
+        }
+        if (pAiqCore->mAlogsComSharedParams.hdr_mode == hdr_mode) {
+            pAiqCore->mAlogsComSharedParams.conf_type |= RK_AIQ_ALGO_CONFTYPE_KEEPSTATUS;
+            LOGD_ANALYZER("prepare from stopped, should keep algo status !");
+        }
     }
     if (mode == RK_AIQ_WORKING_MODE_NORMAL) {
         pAiqCore->mAlogsComSharedParams.hdr_mode = 0;
@@ -2129,13 +2138,20 @@ XCamReturn AiqCore_prepare(AiqCore_t * pAiqCore,
 #if defined(RKAIQ_HAVE_MULTIISP)
 
     if (pAiqCore->mHwInfo.is_multi_isp_mode) {
-        XCAM_ASSERT((sensor_des->isp_acq_width % 32 == 0));  // &&
         //(sensor_des->isp_acq_height % 16 == 0));
         uint32_t extended_pixel          = pAiqCore->mHwInfo.multi_isp_extended_pixel;
         AiqStatsTranslator_t* translator = pAiqCore->mTranslator;
         uint32_t size                    = sensor_des->isp_acq_width * sensor_des->isp_acq_height;
         int isp_unite_mode               = translator->mIspUniteMode;
+        Rectangle_t rect;
+        rect.x = 0;
+        rect.y = 0;
+        rect.w = sensor_des->isp_acq_width;
+        rect.h = sensor_des->isp_acq_height;
+        AiqStatsTranslator_SetPicInfo(translator, &rect);
+#if 0
         if (isp_unite_mode == RK_AIQ_ISP_UNITE_MODE_FOUR_GRID) {
+            XCAM_ASSERT((sensor_des->isp_acq_width % 32 == 0));
             AiqStatsTranslator_SetMultiIspMode(translator, true);
             AiqStatsTranslator_SetIspUniteMode(translator, RK_AIQ_ISP_UNITE_MODE_FOUR_GRID);
             Rectangle_t rect;
@@ -2165,6 +2181,7 @@ XCamReturn AiqCore_prepare(AiqCore_t * pAiqCore,
             rect.h = sensor_des->isp_acq_height / 2 + extended_pixel;
             AiqStatsTranslator_SetBottomRightIspRect(translator, &rect);
         } else if (isp_unite_mode == RK_AIQ_ISP_UNITE_MODE_TWO_GRID) {
+            XCAM_ASSERT((sensor_des->isp_acq_width % 32 == 0));
             AiqStatsTranslator_SetMultiIspMode(translator, true);
             AiqStatsTranslator_SetIspUniteMode(translator, RK_AIQ_ISP_UNITE_MODE_TWO_GRID);
             Rectangle_t rect;
@@ -2192,6 +2209,7 @@ XCamReturn AiqCore_prepare(AiqCore_t * pAiqCore,
             AiqStatsTranslator_SetLeftIspRect(translator, &rect);
             AiqStatsTranslator_SetRightIspRect(translator, &rect);
         }
+#endif
         Rectangle_t f = AiqStatsTranslator_GetPicInfo(translator);
         Rectangle_t l = AiqStatsTranslator_GetLeftIspRect(translator);
         Rectangle_t r = AiqStatsTranslator_GetRightIspRect(translator);
@@ -2220,9 +2238,20 @@ XCamReturn AiqCore_prepare(AiqCore_t * pAiqCore,
             pHandle = AiqAlgoHandler_getNextHdl(pHandle);
         }
     }
+
+    AiqCore_runInitialAnalyze(pAiqCore);
+
+    pAiqCore->mState = RK_AIQ_CORE_STATE_PREPARED;
+
+    EXIT_ANALYZER_FUNCTION();
+
+    return XCAM_RETURN_NO_ERROR;
+}
+
+XCamReturn AiqCore_runInitialAnalyze(AiqCore_t* pAiqCore) {
+    // run algos without stats to generate initial params
     pAiqCore->mAlogsComSharedParams.init = true;
-    // run algos without stats to generate
-    // initial params
+
     for (int i = 0; i < RK_AIQ_CORE_ANALYZE_MAX; i++) {
         RkAiqAlgosGroupShared_t* shared = pAiqCore->mAlogsGroupSharedParamsMap[i];
         if (shared) {
@@ -2239,14 +2268,17 @@ XCamReturn AiqCore_prepare(AiqCore_t * pAiqCore,
     for (uint32_t i = 0; i < RK_AIQ_CORE_ANALYZE_MAX; i++) {
         if (pAiqCore->mAlogsGroupSharedParamsMap[i]) freeGroupSharebuf(pAiqCore->mAlogsGroupSharedParamsMap[i]);
     }
-
     pAiqCore->mAlogsComSharedParams.init = false;
-
-    pAiqCore->mState = RK_AIQ_CORE_STATE_PREPARED;
-
-    EXIT_ANALYZER_FUNCTION();
-
     return XCAM_RETURN_NO_ERROR;
+}
+
+void AiqCore_setInitExp(AiqCore_t* pAiqCore, const ae_linInitExp_t* initExp) {
+    if (!initExp) {
+        pAiqCore->mHasInitExp = false;
+        return;
+    }
+    pAiqCore->mInitExp    = *initExp;
+    pAiqCore->mHasInitExp = true;
 }
 
 static XCamReturn handleAecStats(AiqCore_t* pAiqCore, const aiq_VideoBuffer_t* buffer) {
@@ -2693,7 +2725,7 @@ static XCamReturn handleVicapScaleBufs(AiqCore_t* pAiqCore, aiq_VideoBuffer_t* b
             pAiqCore->mVicapBufs->ready = true;
         }
     }
-    if (pAiqCore->mVicapBufs->ready && pAiqCore->mVicapBufs->frame_id > 2) {
+    if (pAiqCore->mVicapBufs->ready) {
         AiqCoreMsg_t msg;
         msg.msg_id                    = XCAM_MESSAGE_VICAP_POLL_SCL_OK;
         msg.frame_id                  = pAiqCore->mVicapBufs->frame_id;
@@ -2906,7 +2938,7 @@ XCamReturn AiqCore_pushStats(AiqCore_t * pAiqCore, AiqHwEvt_t * evt) {
                 pAiqCore->mStatsLoss += seq > 1 ? seq - pAiqCore->mLatestStatsId - 1 : 0;
 #endif
             pAiqCore->mLatestStatsId = seq;
-            if (delta > 3) {
+            if (delta > 3 && !pAiqCore->mIsVicapVirtualSensor) {
                 LOGW_ANALYZER("stats delta: %d, skip stats %u", delta, seq);
                 return XCAM_RETURN_NO_ERROR;
             }
@@ -3093,7 +3125,7 @@ XCamReturn AiqCore_pushEvts(AiqCore_t* pAiqCore, AiqHwEvt_t* evts) {
 
         pAiqCore->mLatestEvtsId = evts->frame_id;
 
-        if (delta > (pAiqCore->mDefaultDelayCnt + 1)) {
+        if (delta > (pAiqCore->mDefaultDelayCnt + 1) && !pAiqCore->mIsVicapVirtualSensor) {
             LOGW_ANALYZER("sof delta: %d, skip sof %u", delta, seq);
             return XCAM_RETURN_NO_ERROR;
         }
@@ -3639,6 +3671,15 @@ void AiqCore_setDelayCnts(AiqCore_t* pAiqCore, int8_t delayCnts) {
     AiqAnalyzeGroupManager_setDelayCnts(&pAiqCore->mRkAiqCoreGroupManager, delayCnts);
 }
 
+void AiqCore_setVicapVirtualSensor(AiqCore_t* pAiqCore, bool isVirtual) {
+    pAiqCore->mIsVicapVirtualSensor = isVirtual;
+}
+
+bool AiqCore_isVicapVirtualSensor(AiqCore_t* pAiqCore) {
+    if (!pAiqCore) return false;
+    return pAiqCore->mIsVicapVirtualSensor;
+}
+
 void AiqCore_setVicapScaleFlag(AiqCore_t* pAiqCore, bool mode) {
     AiqAnalyzerGroup_t** groups =
         AiqAnalyzeGroupManager_getGroups(&pAiqCore->mRkAiqCoreGroupManager);
@@ -3670,13 +3711,14 @@ void AiqCore_awakenClean(AiqCore_t* pAiqCore, uint32_t sequence) {
 }
 
 XCamReturn AiqCore_setUserOtpInfo(AiqCore_t* pAiqCore, rk_aiq_user_otp_info_t otp_info) {
+#if 0
     if (pAiqCore->mState == RK_AIQ_CORE_STATE_PREPARED ||
             pAiqCore->mState == RK_AIQ_CORE_STATE_STARTED ||
             pAiqCore->mState == RK_AIQ_CORE_STATE_RUNNING) {
         LOGE_ANALYZER("wrong state %d, set otp before prepare\n", pAiqCore->mState);
         return XCAM_RETURN_ERROR_ANALYZER;
     }
-
+#endif
     LOGD_ANALYZER("user awb otp: flag: %d, r:%d,b:%d,gr:%d,gb:%d, golden r:%d,b:%d,gr:%d,gb:%d\n",
                   otp_info.otp_awb.flag, otp_info.otp_awb.r_value, otp_info.otp_awb.b_value,
                   otp_info.otp_awb.gr_value, otp_info.otp_awb.gb_value,
@@ -3878,10 +3920,21 @@ AiqCore_unregister3Aalgo(AiqCore_t* pAiqCore, int algoType)
     return XCAM_RETURN_NO_ERROR;
 }
 
-XCamReturn AiqCore_setTranslaterIspUniteMode(AiqCore_t* pAiqCore, RkAiqIspUniteMode mode) {
+XCamReturn AiqCore_setTranslaterIspUniteInfo(AiqCore_t* pAiqCore, RkAiqIspUniteInfo_t *info) {
 
-    if (pAiqCore->mTranslator)
-        pAiqCore->mTranslator->mIspUniteMode = mode;
+    if (pAiqCore->mTranslator) {
+        pAiqCore->mTranslator->mIspUniteInfo = *info;
+        pAiqCore->mTranslator->mIspUniteMode = info->mode;
+        if (pAiqCore->mTranslator->mIspUniteMode != RK_AIQ_ISP_UNITE_MODE_NORMAL) {
+            pAiqCore->mTranslator->mIsMultiIsp   = true;
+            if (info->mode < RK_AIQ_ISP_UNITE_MODE_3X3) {
+                AiqStatsTranslator_SetLeftIspRect(pAiqCore->mTranslator, &info->isp_rect[0][0]);
+                AiqStatsTranslator_SetRightIspRect(pAiqCore->mTranslator, &info->isp_rect[0][1]);
+                AiqStatsTranslator_SetBottomLeftIspRect(pAiqCore->mTranslator, &info->isp_rect[1][0]);
+                AiqStatsTranslator_SetBottomRightIspRect(pAiqCore->mTranslator, &info->isp_rect[1][1]);
+            }
+        }
+    }
 
     return XCAM_RETURN_NO_ERROR;
 }

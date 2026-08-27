@@ -1215,7 +1215,10 @@ XCamReturn IspParamsSplitter::SplitRawAeBigParams<struct isp2x_rawaebig_meas_cfg
                 left->subwin_en[i] = false;
                 right->subwin_en[i] = true;
                 break;
-
+            default:
+                left->subwin_en[i] = true;
+                right->subwin_en[i] = false;
+                break;
             }
         }
     }
@@ -2738,6 +2741,14 @@ const IspParamsSplitter::Rectangle& IspParamsSplitter::GetRightIspRect() const {
     return right_isp_rect_;
 }
 
+const IspParamsSplitter::Rectangle& IspParamsSplitter::GetBottomLeftIspRect() const {
+    return bottom_left_isp_rect_;
+}
+
+const IspParamsSplitter::Rectangle& IspParamsSplitter::GetBottomRightIspRect() const {
+    return bottom_right_isp_rect_;
+}
+
 template <>
 XCamReturn IspParamsSplitter::SplitIspParams<struct isp3x_isp_params_cfg>(
     struct isp3x_isp_params_cfg* orig_isp_params,
@@ -2877,6 +2888,10 @@ XCamReturn IspParamsSplitter::SplitRawAeBigParamsVertical<struct isp2x_rawaebig_
             case RIGHT_MODE:
                 left->subwin_en[i] = false;
                 right->subwin_en[i] = true;
+                break;
+            default:
+                left->subwin_en[i] = true;
+                right->subwin_en[i] = false;
                 break;
 
             }

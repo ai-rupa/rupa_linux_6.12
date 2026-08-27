@@ -85,6 +85,8 @@ typedef struct {
     void *btnr_cis_info;
 
     int _working_mode;
+
+    int pre_ob;
 } btnr_cvt_info_t;
 
 void bayertnr_logtrans_init(int bayertnr_trans_mode,  int bayertnr_trans_mode_scale, btnr_trans_params_t *pTransPrarms);

@@ -66,6 +66,24 @@ configure_uvc_resolution_uyvy()
     echo -ne \\x55\\x59\\x56\\x59\\x00\\x00\\x10\\x00\\x80\\x00\\x00\\xaa\\x00\\x38\\x9b\\x71 > ${USB_FUNCTIONS_DIR}/$UVC_GS/streaming/uncompressed/u_uyvy/guidFormat
 }
 
+configure_uvc_resolution_bgr888()
+{
+    UVC_DISPLAY_W=$1
+    UVC_DISPLAY_H=$2
+    UVC_DISPLAY_DIR=${USB_FUNCTIONS_DIR}/$UVC_GS/streaming/uncompressed/u_bgr/${UVC_DISPLAY_W}_${UVC_DISPLAY_H}p
+    mkdir ${UVC_DISPLAY_DIR}
+    echo $UVC_DISPLAY_W > ${UVC_DISPLAY_DIR}/wWidth
+    echo $UVC_DISPLAY_H > ${UVC_DISPLAY_DIR}/wHeight
+    echo 333333 > ${UVC_DISPLAY_DIR}/dwDefaultFrameInterval
+    echo $((UVC_DISPLAY_W*UVC_DISPLAY_H*30)) > ${UVC_DISPLAY_DIR}/dwMinBitRate
+    echo $((UVC_DISPLAY_W*UVC_DISPLAY_H*30)) > ${UVC_DISPLAY_DIR}/dwMaxBitRate
+    echo $((UVC_DISPLAY_W*UVC_DISPLAY_H*3)) > ${UVC_DISPLAY_DIR}/dwMaxVideoFrameBufferSize
+    echo -e "333333\n666666\n1000000\n2000000" > ${UVC_DISPLAY_DIR}/dwFrameInterval
+    echo 24 > ${USB_FUNCTIONS_DIR}/$UVC_GS/streaming/uncompressed/u_bgr/bBitsPerPixel
+    # GUID: {7DEB36E4-4F52-11CE-9F53-0020AF0BA770} (UVC BGR24 / V4L2_PIX_FMT_BGR24)
+    echo -ne \\x7d\\xeb\\x36\\xe4\\x4f\\x52\\xce\\x11\\x9f\\x53\\x00\\x20\\xaf\\x0b\\xa7\\x70 > ${USB_FUNCTIONS_DIR}/$UVC_GS/streaming/uncompressed/u_bgr/guidFormat
+}
+
 configure_uvc_resolution_mjpeg()
 {
     UVC_DISPLAY_W=$1
@@ -136,6 +154,8 @@ uvc_device_config_main()
    echo $UVC_NAME > ${USB_FUNCTIONS_DIR}/$UVC_GS/function_name
    echo 3072 > ${USB_FUNCTIONS_DIR}/$UVC_GS/streaming_maxpacket
    echo 2 > ${USB_FUNCTIONS_DIR}/$UVC_GS/uvc_num_request
+   # set bulk maxpayload to 1M beacause some uvc host (like windows) will get wrong when payload is too large
+   echo 1048576 > ${USB_FUNCTIONS_DIR}/$UVC_GS/streaming_bulk_hs_maxpayload
    #echo 1 > /sys/kernel/config/usb_gadget/rockchip/functions/$UVC_GS/streaming_bulk
    echo 6 > /sys/kernel/config/usb_gadget/rockchip/functions/$UVC_GS/streaming_maxburst
 
@@ -150,6 +170,12 @@ uvc_device_config_main()
    configure_uvc_resolution_nv12 1280 720
    configure_uvc_resolution_nv12 1920 1080
    ln -s ${USB_FUNCTIONS_DIR}/$UVC_GS/streaming/uncompressed/u_nv12 ${USB_FUNCTIONS_DIR}/$UVC_GS/streaming/header/h/u
+
+   ## BGR888 support config
+   mkdir /sys/kernel/config/usb_gadget/rockchip/functions/$UVC_GS/streaming/uncompressed/u_bgr
+   configure_uvc_resolution_bgr888 640 360
+   configure_uvc_resolution_bgr888 1280 720
+   ln -s ${USB_FUNCTIONS_DIR}/$UVC_GS/streaming/uncompressed/u_bgr ${USB_FUNCTIONS_DIR}/$UVC_GS/streaming/header/h/u_bgr
 
    ##mjpeg support config
    mkdir ${USB_FUNCTIONS_DIR}/$UVC_GS/streaming/mjpeg/m
@@ -200,6 +226,11 @@ uvc_device_config_sub()
    mkdir /sys/kernel/config/usb_gadget/rockchip/functions/$UVC_GS/streaming/uncompressed/u_nv12
    configure_uvc_resolution_nv12 640 360
    ln -s ${USB_FUNCTIONS_DIR}/$UVC_GS/streaming/uncompressed/u_nv12 ${USB_FUNCTIONS_DIR}/$UVC_GS/streaming/header/h/u
+
+   ## BGR888 support config
+   mkdir /sys/kernel/config/usb_gadget/rockchip/functions/$UVC_GS/streaming/uncompressed/u_bgr
+   configure_uvc_resolution_bgr888 640 360
+   ln -s ${USB_FUNCTIONS_DIR}/$UVC_GS/streaming/uncompressed/u_bgr ${USB_FUNCTIONS_DIR}/$UVC_GS/streaming/header/h/u_bgr
 
    ## mjpeg support config
    mkdir ${USB_FUNCTIONS_DIR}/$UVC_GS/streaming/mjpeg/m

@@ -1,77 +1,85 @@
 #!/bin/bash
-cat /userdata/rockchip/reboot_cnt
-test_dir=/userdata/rockchip/power_lost
-CNT=/userdata/rockchip/reboot_cnt
+# flash_test/power_lost_test.sh - Power lost stress test
+
+DIR_FLASH="$(cd "$(dirname "$0")" && pwd)"
+source "${DIR_FLASH}/../common/common.sh"
+
+# Use /userdata/rockchip-test/ path consistently with S99-auto-reboot and other tests
+test_dir=/userdata/rockchip-test/power_lost
+CNT=/userdata/rockchip-test/power_lost_cnt
 total=5000
 delay=3
-no=0
 
-if [ ! -e "/userdata/rockchip" ]; then
-	echo "no /userdata/rockchip"
-	mkdir -p /userdata/rockchip
+mkdir -p /userdata/rockchip-test
+
+if [[ ! -e "/userdata/rockchip-test/power_lost_test.sh" ]]; then
+    cp "${DIR_FLASH}/power_lost_test.sh" /userdata/rockchip-test/
+    # Also copy common dir so S99 can find dependencies when running via bash
+    cp -r "${DIR_FLASH}/../common" /userdata/rockchip-test/common
+    sync
 fi
 
-if [ ! -e "/userdata/rockchip/power_lost_test.sh" ]; then
-	cp /rockchip/flash_test/power_lost_test.sh /userdata/rockchip/
-fi
-
-if [ -e $CNT ]
-then
-    cnt=`cat $CNT`
-	echo -e $(date)_power_up_$cnt >> /userdata/rockchip/power_lost_test.log
+if [[ -e "$CNT" ]]; then
+    cnt=$(cat "$CNT")
+    log_info "power_lost" "Power up count: $cnt"
+    echo "$(date)_power_up_$cnt" >> /userdata/rockchip-test/power_lost_test.log
 else
-    echo reset power lost count.
+    log_info "power_lost" "Reset power lost count"
     cnt=0
-    echo 0 > $CNT
-	rm /userdata/rockchip/power_lost_test.log
-	echo "$(date) power lost test begin" >> /userdata/rockchip/power_lost_test.log
-	mkdir -p $test_dir
+    echo 0 > "$CNT"
+    rm -f /userdata/rockchip-test/power_lost_test.log
+    echo "$(date) power lost test begin" >> /userdata/rockchip-test/power_lost_test.log
+    mkdir -p "$test_dir"
 fi
 
-if [ $cnt -ge $total ]
-then
-	echo power loat test finished!!!!!!!.
-	echo "off" > $CNT
-	echo "do cleaning ..."
-	rm /userdata/rockchip/power_lost_test.sh
-	rm -rf /userdata/rockchip/power_lost
-	rm -f $CNT
-	exit 0
+if [[ $cnt -ge $total ]]; then
+    log_info "power_lost" "Power lost test finished ($total iterations)"
+    echo "off" > "$CNT"
+    rm -f /userdata/rockchip-test/power_lost_test.sh
+    rm -rf /userdata/rockchip-test/common
+    rm -rf "$test_dir"
+    rm -f "$CNT"
+    sync
+    exit 0
 fi
 
-echo "current cnt = $cnt, total cnt = $total"
-echo "You can stop reboot by: echo off > /userdata/rockchip/reboot_cnt"
-echo "power lost test loop $cnt" >> /userdata/rockchip/power_lost_test.log
-sleep $delay
-if [ $cnt != "off" ]; then
-	echo "$cnt begin dd"
-else
-	echo "power lost test is off"
-	rm /userdata/rockchip/power_lost_test.sh
-	rm -rf /userdata/rockchip/power_lost
-	rm -f $CNT
-	exit 0
+log_info "power_lost" "Current cnt=$cnt, total=$total"
+echo "power lost test loop $cnt" >> /userdata/rockchip-test/power_lost_test.log
+sleep "$delay"
+
+if [[ "$cnt" == "off" ]]; then
+    log_info "power_lost" "Power lost test stopped by user"
+    rm -f /userdata/rockchip-test/power_lost_test.sh
+    rm -rf /userdata/rockchip-test/common
+    rm -rf "$test_dir"
+    rm -f "$CNT"
+    sync
+    exit 0
 fi
 
-let "cnt=$cnt+1"
-echo $cnt > $CNT
-
-rm -rf $test_dir/*
+cnt=$((cnt + 1))
+echo "$cnt" > "$CNT"
 sync
-time dd if=/dev/random of=$test_dir/test_src bs=1M count=2
+
+rm -rf "$test_dir"/*
+sync
+dd if=/dev/random of="$test_dir/test_src" bs=1M count=2 2>/dev/null
+
+set +e
 while true; do
-	echo "power lost test, loop $cnt"
-	time dd if=$test_dir/test_src of=$test_dir/test_dst
-	sync
-	busybox diff $test_dir/test_src $test_dir/test_dst
-	echo $?
-	if [ $? -eq 0 ];then
-		echo "compare equally"
-		rm $test_dir/test_dst
-		sync
-	else
-		echo "compare not equally" >> /userdata/rockchip/power_lost_test.log
-		exit
-	fi
-	sleep 0.1
+    log_debug "power_lost" "Loop $cnt"
+    dd if="$test_dir/test_src" of="$test_dir/test_dst" 2>/dev/null
+    sync
+
+    if busybox diff "$test_dir/test_src" "$test_dir/test_dst" >/dev/null 2>&1; then
+        log_debug "power_lost" "Compare OK"
+        rm -f "$test_dir/test_dst"
+        sync
+    else
+        log_error "power_lost" "Compare FAILED at loop $cnt"
+        echo "$(date) compare failed at loop $cnt" >> /userdata/rockchip-test/power_lost_test.log
+        exit 1
+    fi
+    sleep 0.1
 done
+set -e

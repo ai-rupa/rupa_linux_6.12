@@ -63,6 +63,7 @@ static XCamReturn _handlerAf_prepare(AiqAlgoHandler_t* pAlgoHandler) {
     ret = AiqAlgoHandler_prepare(pAlgoHandler);
     RKAIQCORE_CHECK_RET(ret, "ae handle prepare failed");
 
+    AiqAlgoHandlerAf_t* pAfHdl = (AiqAlgoHandlerAf_t*)pAlgoHandler;
     RkAiqAlgoConfigAf* af_config_int = (RkAiqAlgoConfigAf*)pAlgoHandler->mConfig;
     RkAiqAlgosComShared_t* sharedCom = &pAlgoHandler->mAiqCore->mAlogsComSharedParams;
 
@@ -73,8 +74,20 @@ static XCamReturn _handlerAf_prepare(AiqAlgoHandler_t* pAlgoHandler) {
     af_config_int->win_v_size = 0;
     af_config_int->lens_des   = sharedCom->snsDes.lens_des;
     // for otp
-    af_config_int->otp_af = sharedCom->snsDes.otp_af;
-    af_config_int->otp_pdaf = sharedCom->snsDes.otp_pdaf;
+    if (pAfHdl->api_otp_af.flag != 0) {
+        af_config_int->otp_af = &pAfHdl->api_otp_af;
+        LOGI_AF("use otp af info from user api");
+    } else {
+        af_config_int->otp_af = sharedCom->snsDes.otp_af;
+        LOGI_AF("use otp af info from driver");
+    }
+    if (pAfHdl->api_otp_pdaf.flag != 0) {
+        af_config_int->otp_pdaf = &pAfHdl->api_otp_pdaf;
+        LOGI_AF("use otp pdaf info from user api");
+    } else {
+        af_config_int->otp_pdaf = sharedCom->snsDes.otp_pdaf;
+        LOGI_AF("use otp pdaf info from driver");
+    }
 
     if ((af_config_int->com.u.prepare.sns_op_width != 0) &&
             (af_config_int->com.u.prepare.sns_op_height != 0)) {
@@ -369,6 +382,35 @@ static XCamReturn _handlerAf_genIspResult(AiqAlgoHandler_t* pAlgoHandler, AiqFul
     }
 #endif
 
+    {
+        rk_aiq_af_focusrange range;
+        rk_aiq_af_result_t result;
+        int motor_range;
+
+        if (sharedCom->snsDes.lens_des.focus_support) {
+            rk_aiq_uapi_af_getFocusRange(pAlgoHandler->mAlgoCtx, &range);
+            rk_aiq_uapi_af_getSearchResult(pAlgoHandler->mAlgoCtx, &result);
+            if (result.stat == RK_AIQ_AF_SEARCH_END) {
+                sharedCom->af_converged = true;
+            } else {
+                sharedCom->af_converged = false;
+            }
+
+            motor_range = range.max_pos - range.min_pos;
+            if (result.final_pos >= 0) {
+                sharedCom->af_focuspos = (float)(result.final_pos - range.min_pos) / motor_range;
+            } else {
+                sharedCom->af_focuspos = -1;
+            }
+
+            LOGD_AF("af_converged %d, af_focuspos %f, pos: %d, %d, %d",
+                sharedCom->af_converged, sharedCom->af_focuspos,
+                result.final_pos, range.min_pos, range.max_pos);
+        } else {
+            sharedCom->af_converged = true;
+            sharedCom->af_focuspos = 1; // 0 near, 1 far
+        }
+    }
     aiqMutex_lock(&pAfHdl->mPdLibOutputMutex);
     aiqCond_broadcast(&pAfHdl->mPdLibOutputCond);
     aiqMutex_unlock(&pAfHdl->mPdLibOutputMutex);
@@ -826,6 +868,28 @@ XCamReturn AiqAlgoHandlerAf_getPdafLibOutput(AiqAlgoHandlerAf_t* pAfHdl, rk_aiq_
     aiqMutex_unlock(&pAfHdl->mPdLibOutputMutex);
 
     return XCAM_RETURN_NO_ERROR;
+}
+
+XCamReturn AiqAlgoHandlerAf_setOtpAf(AiqAlgoHandlerAf_t* pAfHdl, struct rkmodule_af_inf *otp_af, struct rkmodule_pdaf_inf *otp_pdaf)
+{
+    ENTER_ANALYZER_FUNCTION();
+
+    XCamReturn ret = XCAM_RETURN_NO_ERROR;
+
+    AiqAlgoHandler_t* pHdl = (AiqAlgoHandler_t*)pAfHdl;
+
+    if (otp_af == NULL || otp_pdaf == NULL) {
+        EXIT_ANALYZER_FUNCTION();
+        return XCAM_RETURN_ERROR_FAILED;
+    }
+
+    aiqMutex_lock(&pHdl->mCfgMutex);
+    pAfHdl->api_otp_af = *otp_af;
+    pAfHdl->api_otp_pdaf = *otp_pdaf;
+    aiqMutex_unlock(&pHdl->mCfgMutex);
+
+    EXIT_ANALYZER_FUNCTION();
+    return ret;
 }
 
 #endif

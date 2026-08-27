@@ -177,10 +177,33 @@ enum rockchip_drm_vop_aclk_mode {
 	ROCKCHIP_VOP_ACLK_MAX_MODE,
 };
 
-enum rockchip_drm_vrr_type {
+enum rockchip_drm_vrr_mode {
 	ROCKCHIP_VRR_VFP_MODE = 0,
 	ROCKCHIP_VRR_HFP_MODE = 1,
 	ROCKCHIP_VRR_DCLK_MODE = 2,
+};
+
+enum rockchip_hdmi_vrr_type {
+	HDMI_VRR_OFF = 0,
+	HDMI_QMS_VRR,
+	/*
+	 * Gaming VRR: The refresh rate is dynamically derived from the rate
+	 * at which userspace submits new frames, with no fixed target.
+	 * VOP timing switches take effect within the same frame to minimize
+	 * latency.
+	 */
+	HDMI_GAMING_VRR,
+	/*
+	 * TFRSYNC (Target Frame Rate Sync) VRR: Userspace sets a specific
+	 * target refresh rate via the CRTC "variable refresh rate" property,
+	 * and the driver adjusts VFP to match that rate. Internally reuses
+	 * the gaming-VRR infrastructure (VFP-based timing adjustment), but
+	 * unlike gaming-VRR the rate is explicitly specified rather than
+	 * derived from commit cadence. After hdmi sending the EMP packet
+	 * to enable gaming-VRR it takes 6 VSYNC cycles before the new refresh
+	 * rate can be set and take effect.
+	 */
+	HDMI_TFRSYNC_VRR,
 };
 
 #define ROCKCHIP_MULTI_REFRESH_RATE_TABLE_COUNT 30
@@ -230,7 +253,7 @@ struct rockchip_drm_mode_info {
 	u32 fva_support;
 
 	/**
-	 *@reserved: reserved for future version
+	 * @reserved: reserved for future version
 	 */
 	u32 reserved[10];
 };
@@ -245,11 +268,11 @@ struct rockchip_drm_modes_info {
 	 */
 	u32 mode_count;
 	/**
-	 *@reserved: reserved for future version
+	 * @reserved: reserved for future version
 	 */
 	u32 reserved[10];
 	/**
-	 * @mode_info: a array of mode info
+	 * @mode_info: an array of mode info
 	 */
 	struct rockchip_drm_mode_info mode_info[];
 };
@@ -261,6 +284,12 @@ struct rockchip_drm_sub_dev {
 	int (*loader_protect)(struct rockchip_drm_sub_dev *sub_dev, bool on);
 	void (*update_vfp_for_vrr)(struct drm_connector *connector, struct drm_display_mode *mode,
 				   int vfp);
+	/*
+	 * Using for gaming vrr that timing switching HDMI_GAMING_VRR.
+	 * Notify the HDMI controller to enable gaming vrr.
+	 */
+	void (*vrr_enable)(struct rockchip_drm_sub_dev *sub_dev,
+			   struct drm_crtc_state *crtc_state);
 };
 
 struct rockchip_sdr2hdr_state {
@@ -437,7 +466,25 @@ struct rockchip_hdmi_vrr_state {
 	bool m_const;
 	u8 next_tfr_val;
 	u8 fva_factor_m1_val;
+	/*
+	 * HDMI Gaming VRR requires a gap between EMP (Emitted Metadata Packet)
+	 * transmission and VOP timing changes:
+	 *
+	 *   Enable:  start EMP first  → wait gap frames → start VOP timing changes
+	 *   Disable: restore BRR timing first → wait gap frames → stop EMP
+	 *
+	 * This field tracks the remaining gap frames during transitions:
+	 *
+	 *   (0, VOP2_HDMI_EMP_FRAME_GAP]  - transition in progress, counting down
+	 *                                    each vsync; reaches 0 when gap expires
+	 *   0, vrr_type == HDMI_VRR_OFF   - gap expired, pending HDMI EMP stop
+	 *                                    (handled in next atomic_flush)
+	 *   VOP2_HDMI_EMP_FRAME_GAP + 1   - transition complete, EMP already stopped
+	 *   0, vrr_type == HDMI_GAMING_VRR - normal VRR operation (no transition)
+	 */
+	u8 emp_frame_gap;
 	unsigned int vrr_frame_cnt;
+	enum rockchip_hdmi_vrr_type vrr_type;
 	const struct mvrr_const_val *mconst_val;
 };
 
@@ -537,7 +584,7 @@ struct rockchip_crtc_state {
 	int min_refresh_rate;
 	int shift_x;
 	int shift_y;
-	int vrr_type;
+	enum rockchip_drm_vrr_mode vrr_mode;
 };
 
 #define to_rockchip_crtc_state(s) \
@@ -886,6 +933,7 @@ struct rockchip_drm_mode_color_caps {
 	u64 color_caps;
 };
 
+void rockchip_connector_vrr_enable(struct drm_crtc *crtc, struct drm_crtc_state *new_crtc_state);
 void rockchip_connector_update_vfp_for_vrr(struct drm_crtc *crtc, struct drm_display_mode *mode,
 					   int vfp);
 int rockchip_drm_dma_attach_device(struct drm_device *drm_dev,
@@ -902,8 +950,8 @@ void rockchip_drm_crtc_standby(struct drm_crtc *crtc, bool standby);
 void rockchip_drm_crtc_output_post_enable(struct drm_crtc *crtc, int intf);
 void rockchip_drm_crtc_output_pre_disable(struct drm_crtc *crtc, int intf);
 
-void rockchip_drm_register_sub_dev(struct rockchip_drm_sub_dev *sub_dev);
-void rockchip_drm_unregister_sub_dev(struct rockchip_drm_sub_dev *sub_dev);
+int devm_rockchip_drm_register_sub_dev(struct device *dev,
+				       struct rockchip_drm_sub_dev *sub_dev);
 struct rockchip_drm_sub_dev *rockchip_drm_get_sub_dev(struct device_node *node);
 int rockchip_drm_add_modes_noedid(struct drm_connector *connector);
 void rockchip_drm_te_handle(struct drm_crtc *crtc);

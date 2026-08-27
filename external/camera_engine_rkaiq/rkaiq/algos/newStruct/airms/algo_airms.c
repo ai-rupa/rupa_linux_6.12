@@ -152,6 +152,14 @@ static int dump(const RkAiqAlgoCom* self, st_string* result)
     aiq_string_printf(result, buffer);
     aiq_string_printf(result, "\n");
 
+    memset(buffer, 0, MAX_LINE_LENGTH);
+    snprintf(buffer, MAX_LINE_LENGTH, "sw_aiRmsCfg_wbgainApply_mode=%s",
+             sta->sw_aiRmsCfg_wbgainApply_mode == AIRMS_WBGAIN_APPLY_CIS   ? "CIS"
+             : sta->sw_aiRmsCfg_wbgainApply_mode == AIRMS_WBGAIN_APPLY_CPU ? "CPU"
+                                                                           : "ISP");
+    aiq_string_printf(result, buffer);
+    aiq_string_printf(result, "\n");
+
     return 0;
 }
 #endif

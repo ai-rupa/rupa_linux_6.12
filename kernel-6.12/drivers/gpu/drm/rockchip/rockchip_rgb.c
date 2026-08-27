@@ -92,6 +92,11 @@ struct rockchip_rgb_funcs {
 struct rockchip_rgb_data {
 	u32 rgb_max_dclk_rate;
 	u32 mcu_max_dclk_rate;
+
+	u32 bt1120_delayline_num;
+	u32 bt656_delayline_num;
+	u32 rgb_delayline_num;
+
 	const struct rockchip_rgb_funcs *funcs;
 };
 
@@ -145,9 +150,6 @@ struct rockchip_mcu_panel {
 	struct gpio_desc *te_gpio;
 
 	struct device_node *np_crtc;
-
-	bool prepared;
-	bool enabled;
 };
 
 struct rockchip_rgb {
@@ -167,7 +169,7 @@ struct rockchip_rgb {
 	bool data_sync_bypass;
 	bool phy_enabled;
 	bool support_psr;
-	const struct rockchip_rgb_funcs *funcs;
+	const struct rockchip_rgb_data *plat_data;
 	struct rockchip_drm_sub_dev sub_dev;
 };
 
@@ -184,6 +186,26 @@ static inline struct rockchip_rgb *encoder_to_rgb(struct drm_encoder *e)
 static inline struct rockchip_mcu_panel *to_rockchip_mcu_panel(struct drm_panel *panel)
 {
 	return container_of(panel, struct rockchip_mcu_panel, base);
+}
+
+static int rockchip_rgb_get_delayline_num(struct rockchip_rgb *rgb)
+{
+	const struct rockchip_rgb_data *plat_data = rgb->plat_data;
+	struct drm_crtc *crtc = rgb->encoder.crtc;
+	struct rockchip_crtc_state *s = to_rockchip_crtc_state(crtc->state);
+
+	if (rgb->delayline_num >= 0)
+		return rgb->delayline_num;
+
+	if (!plat_data)
+		return -EINVAL;
+
+	if (s->output_if & VOP_OUTPUT_IF_BT1120)
+		return plat_data->bt1120_delayline_num;
+	else if (s->output_if & VOP_OUTPUT_IF_BT656)
+		return plat_data->bt656_delayline_num;
+	else
+		return plat_data->rgb_delayline_num;
 }
 
 static enum drm_connector_status
@@ -263,6 +285,7 @@ static void rockchip_rgb_encoder_atomic_enable(struct drm_encoder *encoder,
 					       struct drm_atomic_state *state)
 {
 	struct rockchip_rgb *rgb = encoder_to_rgb(encoder);
+	const struct rockchip_rgb_data *plat_data = rgb->plat_data;
 	struct rockchip_crtc_state *s;
 	struct drm_crtc *new_crtc;
 	struct drm_crtc_state *old_crtc_state;
@@ -280,8 +303,8 @@ static void rockchip_rgb_encoder_atomic_enable(struct drm_encoder *encoder,
 
 	pinctrl_pm_select_default_state(rgb->dev);
 
-	if (rgb->funcs && rgb->funcs->enable)
-		rgb->funcs->enable(rgb);
+	if (plat_data && plat_data->funcs && plat_data->funcs->enable)
+		plat_data->funcs->enable(rgb);
 
 	if (rgb->phy && !rgb->phy_enabled) {
 		phy_power_on(rgb->phy);
@@ -301,19 +324,19 @@ static void rockchip_rgb_encoder_atomic_disable(struct drm_encoder *encoder,
 						struct drm_atomic_state *state)
 {
 	struct rockchip_rgb *rgb = encoder_to_rgb(encoder);
+	const struct rockchip_rgb_data *plat_data = rgb->plat_data;
 	struct drm_crtc *old_crtc, *new_crtc;
 	struct rockchip_crtc_state *s;
 	struct drm_crtc_state *new_crtc_state = NULL;
 
 	new_crtc = drm_atomic_get_new_crtc_for_encoder(state, encoder);
-	/* No crtc means we're doing a full shutdown */
-	if (!new_crtc)
-		return;
-
-	new_crtc_state = drm_atomic_get_new_crtc_state(state, new_crtc);
-	/* Entering self-refresh, do nothing */
-	if (new_crtc_state && new_crtc_state->self_refresh_active)
-		return;
+	/* No crtc indicates full power off */
+	if (new_crtc) {
+		new_crtc_state = drm_atomic_get_new_crtc_state(state, new_crtc);
+		/* Entering self-refresh, do nothing */
+		if (new_crtc_state && new_crtc_state->self_refresh_active)
+			return;
+	}
 
 	if (rgb->panel) {
 		drm_panel_disable(rgb->panel);
@@ -325,8 +348,8 @@ static void rockchip_rgb_encoder_atomic_disable(struct drm_encoder *encoder,
 		rgb->phy_enabled = false;
 	}
 
-	if (rgb->funcs && rgb->funcs->disable)
-		rgb->funcs->disable(rgb);
+	if (plat_data && plat_data->funcs && plat_data->funcs->disable)
+		plat_data->funcs->disable(rgb);
 
 	pinctrl_pm_select_sleep_state(rgb->dev);
 
@@ -427,8 +450,8 @@ static int rockchip_rgb_encoder_loader_protect(struct rockchip_drm_sub_dev *sub_
 	if (rgb->np_mcu_panel) {
 		struct rockchip_mcu_panel *mcu_panel = to_rockchip_mcu_panel(rgb->panel);
 
-		mcu_panel->prepared = true;
-		mcu_panel->enabled = true;
+		mcu_panel->base.enabled = on;
+		mcu_panel->base.prepared = on;
 
 		return 0;
 	}
@@ -779,17 +802,12 @@ static int rockchip_mcu_panel_disable(struct drm_panel *panel)
 	struct rockchip_mcu_panel *mcu_panel = to_rockchip_mcu_panel(panel);
 	int ret = 0;
 
-	if (!mcu_panel->enabled)
-		return 0;
-
 	if (mcu_panel->desc->delay.disable)
 		msleep(mcu_panel->desc->delay.disable);
 
 	ret = rockchip_mcu_panel_xfer_mcu_cmd_seq(mcu_panel, mcu_panel->desc->exit_seq);
 	if (ret)
 		DRM_DEV_ERROR(panel->dev, "failed to send exit cmds seq\n");
-
-	mcu_panel->enabled = false;
 
 	return 0;
 }
@@ -798,16 +816,11 @@ static int rockchip_mcu_panel_unprepare(struct drm_panel *panel)
 {
 	struct rockchip_mcu_panel *mcu_panel = to_rockchip_mcu_panel(panel);
 
-	if (!mcu_panel->prepared)
-		return 0;
-
 	gpiod_direction_output(mcu_panel->reset_gpio, 1);
 	gpiod_direction_output(mcu_panel->enable_gpio, 0);
 
 	if (mcu_panel->desc->delay.unprepare)
 		msleep(mcu_panel->desc->delay.unprepare);
-
-	mcu_panel->prepared = false;
 
 	return 0;
 }
@@ -816,9 +829,6 @@ static int rockchip_mcu_panel_prepare(struct drm_panel *panel)
 {
 	struct rockchip_mcu_panel *mcu_panel = to_rockchip_mcu_panel(panel);
 	unsigned int delay;
-
-	if (mcu_panel->prepared)
-		return 0;
 
 	gpiod_direction_output(mcu_panel->enable_gpio, 1);
 
@@ -836,8 +846,6 @@ static int rockchip_mcu_panel_prepare(struct drm_panel *panel)
 	if (mcu_panel->desc->delay.init)
 		msleep(mcu_panel->desc->delay.init);
 
-	mcu_panel->prepared = true;
-
 	return 0;
 }
 
@@ -846,17 +854,12 @@ static int rockchip_mcu_panel_enable(struct drm_panel *panel)
 	struct rockchip_mcu_panel *mcu_panel = to_rockchip_mcu_panel(panel);
 	int ret = 0;
 
-	if (mcu_panel->enabled)
-		return 0;
-
 	ret = rockchip_mcu_panel_xfer_mcu_cmd_seq(mcu_panel, mcu_panel->desc->init_seq);
 	if (ret)
 		DRM_DEV_ERROR(panel->dev, "failed to send init cmds seq\n");
 
 	if (mcu_panel->desc->delay.enable)
 		msleep(mcu_panel->desc->delay.enable);
-
-	mcu_panel->enabled = true;
 
 	return 0;
 }
@@ -1063,7 +1066,7 @@ static int rockchip_rgb_bind(struct device *dev, struct device *master,
 		rgb->sub_dev.of_node = rgb->dev->of_node;
 		rgb->sub_dev.loader_protect = rockchip_rgb_encoder_loader_protect;
 		drm_object_attach_property(&connector->base, private->connector_id_prop, rgb->id);
-		rockchip_drm_register_sub_dev(&rgb->sub_dev);
+		devm_rockchip_drm_register_sub_dev(dev, &rgb->sub_dev);
 	}
 
 	rockchip_rgb_drm_self_refresh_helper_init(rgb);
@@ -1084,8 +1087,6 @@ static void rockchip_rgb_unbind(struct device *dev, struct device *master,
 
 	rockchip_rgb_drm_self_refresh_helper_cleanup(rgb);
 
-	if (rgb->sub_dev.connector)
-		rockchip_drm_unregister_sub_dev(&rgb->sub_dev);
 	if (rgb->panel)
 		drm_connector_cleanup(&rgb->connector);
 
@@ -1101,7 +1102,6 @@ static int rockchip_rgb_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct rockchip_rgb *rgb;
-	const struct rockchip_rgb_data *rgb_data;
 	struct fwnode_handle *fwnode_mcu_panel;
 	int ret, id;
 
@@ -1128,13 +1128,12 @@ static int rockchip_rgb_probe(struct platform_device *pdev)
 	if (of_property_read_u32(dev->of_node, "rockchip,delayline-num", &rgb->delayline_num))
 		rgb->delayline_num = -1;
 
-	rgb_data = of_device_get_match_data(dev);
-	if (rgb_data) {
-		rgb->funcs = rgb_data->funcs;
+	rgb->plat_data = of_device_get_match_data(dev);
+	if (rgb->plat_data) {
 		if (rgb->np_mcu_panel)
-			rgb->max_dclk_rate = rgb_data->mcu_max_dclk_rate;
+			rgb->max_dclk_rate = rgb->plat_data->mcu_max_dclk_rate;
 		else
-			rgb->max_dclk_rate = rgb_data->rgb_max_dclk_rate;
+			rgb->max_dclk_rate = rgb->plat_data->rgb_max_dclk_rate;
 	}
 	rgb->id = id;
 	rgb->dev = dev;
@@ -1225,20 +1224,19 @@ static const struct rockchip_rgb_data rk3288_rgb = {
 
 static void rk3506_rgb_enable(struct rockchip_rgb *rgb)
 {
-	struct drm_crtc *crtc = rgb->encoder.crtc;
-	struct rockchip_crtc_state *s = to_rockchip_crtc_state(crtc->state);
+	int delayline_num;
+	u32 val;
 
-	regmap_write(rgb->grf, RK3506_GRF_SOC_CON2,
-		     RK3506_GRF_VOP_DATA_BYPASS(rgb->data_sync_bypass ? 0x3 : 0x0));
-	if (s->output_if & VOP_OUTPUT_IF_BT1120 || s->output_if & VOP_OUTPUT_IF_BT656)
-		regmap_write(rgb->grf, RK3506_GRF_SOC_CON2, RK3506_GRF_VOP_DLL_SEL(0x20));
-	else
-		regmap_write(rgb->grf, RK3506_GRF_SOC_CON2, RK3506_GRF_VOP_DLL_SEL(0x10));
-
-	if (rgb->delayline_num >= 0) {
-		regmap_write(rgb->grf, RK3506_GRF_SOC_CON2,
-			     RK3506_GRF_VOP_DLL_SEL(rgb->delayline_num));
+	if (rgb->data_sync_bypass) {
+		regmap_write(rgb->grf, RK3506_GRF_SOC_CON2, RK3506_GRF_VOP_DATA_BYPASS(0x3));
+		return;
 	}
+
+	val = RK3506_GRF_VOP_DATA_BYPASS(0);
+	delayline_num = rockchip_rgb_get_delayline_num(rgb);
+	if (delayline_num >= 0)
+		val |= RK3506_GRF_VOP_DLL_SEL(delayline_num);
+	regmap_write(rgb->grf, RK3506_GRF_SOC_CON2, val);
 }
 
 static const struct rockchip_rgb_funcs rk3506_rgb_funcs = {
@@ -1248,6 +1246,9 @@ static const struct rockchip_rgb_funcs rk3506_rgb_funcs = {
 static const struct rockchip_rgb_data rk3506_rgb = {
 	.rgb_max_dclk_rate = 120000,
 	.mcu_max_dclk_rate = 120000,
+	.bt1120_delayline_num = 0x20,
+	.bt656_delayline_num = 0x20,
+	.rgb_delayline_num = 0x10,
 	.funcs = &rk3506_rgb_funcs,
 };
 
@@ -1281,8 +1282,19 @@ static const struct rockchip_rgb_data rk3568_rgb = {
 
 static void rk3572_rgb_enable(struct rockchip_rgb *rgb)
 {
-	regmap_write(rgb->grf, RK3572_GRF_IOC_MISC2,
-		     RK3572_VOP_MCU_SEL(rgb->data_sync_bypass));
+	int delayline_num;
+	u32 val;
+
+	if (rgb->data_sync_bypass) {
+		regmap_write(rgb->grf, RK3572_GRF_IOC_MISC2, RK3572_VOP_MCU_SEL(1));
+		return;
+	}
+
+	val = RK3572_VOP_MCU_SEL(0);
+	delayline_num = rockchip_rgb_get_delayline_num(rgb);
+	if (delayline_num >= 0)
+		val |= RK3572_VOP_DLL_SEL(1) | RK3572_VOP_DCLK_DELAYLINE(delayline_num);
+	regmap_write(rgb->grf, RK3572_GRF_IOC_MISC2, val);
 }
 
 static const struct rockchip_rgb_funcs rk3572_rgb_funcs = {
@@ -1290,17 +1302,27 @@ static const struct rockchip_rgb_funcs rk3572_rgb_funcs = {
 };
 
 static const struct rockchip_rgb_data rk3572_rgb = {
+	.bt1120_delayline_num = 0x2,
+	.bt656_delayline_num = 0x2,
+	.rgb_delayline_num = 0x4,
 	.funcs = &rk3572_rgb_funcs,
 };
 
 static void rk3576_rgb_enable(struct rockchip_rgb *rgb)
 {
-	regmap_write(rgb->grf, RK3576_IOC_GRF_MISC_CON8,
-		     RK3576_VOP_MCU_SEL(rgb->data_sync_bypass));
-	regmap_write(rgb->grf, RK3576_IOC_GRF_MISC_CON8, RK3576_VOP_DLL_SEL(true));
-	regmap_write(rgb->grf, RK3576_IOC_GRF_MISC_CON8,
-		     RK3576_VOP_DCLK_DELAYLINE(rgb->delayline_num >= 0 ?
-					       rgb->delayline_num : 0x5));
+	int delayline_num;
+	u32 val;
+
+	if (rgb->data_sync_bypass) {
+		regmap_write(rgb->grf, RK3576_IOC_GRF_MISC_CON8, RK3576_VOP_MCU_SEL(1));
+		return;
+	}
+
+	val = RK3576_VOP_MCU_SEL(0);
+	delayline_num = rockchip_rgb_get_delayline_num(rgb);
+	if (delayline_num >= 0)
+		val |= RK3576_VOP_DLL_SEL(1) | RK3576_VOP_DCLK_DELAYLINE(delayline_num);
+	regmap_write(rgb->grf, RK3576_IOC_GRF_MISC_CON8, val);
 }
 
 static const struct rockchip_rgb_funcs rk3576_rgb_funcs = {
@@ -1308,6 +1330,9 @@ static const struct rockchip_rgb_funcs rk3576_rgb_funcs = {
 };
 
 static const struct rockchip_rgb_data rk3576_rgb = {
+	.bt1120_delayline_num = 0x5,
+	.bt656_delayline_num = 0x5,
+	.rgb_delayline_num = 0x5,
 	.funcs = &rk3576_rgb_funcs,
 };
 
@@ -1327,22 +1352,19 @@ static const struct rockchip_rgb_data rv1126_rgb = {
 
 static void rv1126b_rgb_enable(struct rockchip_rgb *rgb)
 {
-	struct drm_crtc *crtc = rgb->encoder.crtc;
-	struct rockchip_crtc_state *s = to_rockchip_crtc_state(crtc->state);
+	int delayline_num;
+	u32 val;
 
-	if (s->output_if & VOP_OUTPUT_IF_BT1120 || s->output_if & VOP_OUTPUT_IF_BT656) {
-		regmap_write(rgb->grf, RV1126B_GRF_VOP_LCDC_CON, RV1126B_VOP_DCLK_DLL_SEL(1));
-		regmap_write(rgb->grf, RV1126B_GRF_VOP_LCDC_CON, RV1126B_VOP_DCLK_DLL_NUM(0x15));
+	if (rgb->data_sync_bypass) {
+		regmap_write(rgb->grf, RV1126B_GRF_VOP_LCDC_CON, RV1126B_VOP_MCU_SEL(1));
+		return;
 	}
 
-	regmap_write(rgb->grf, RV1126B_GRF_VOP_LCDC_CON,
-		     RV1126B_VOP_MCU_SEL(rgb->data_sync_bypass));
-
-	if (rgb->delayline_num >= 0) {
-		regmap_write(rgb->grf, RV1126B_GRF_VOP_LCDC_CON, RV1126B_VOP_DCLK_DLL_SEL(1));
-		regmap_write(rgb->grf, RV1126B_GRF_VOP_LCDC_CON,
-			     RV1126B_VOP_DCLK_DLL_NUM(rgb->delayline_num));
-	}
+	val = RV1126B_VOP_MCU_SEL(0);
+	delayline_num = rockchip_rgb_get_delayline_num(rgb);
+	if (delayline_num >= 0)
+		val |= RV1126B_VOP_DCLK_DLL_SEL(1) | RV1126B_VOP_DCLK_DLL_NUM(delayline_num);
+	regmap_write(rgb->grf, RV1126B_GRF_VOP_LCDC_CON, val);
 }
 
 static const struct rockchip_rgb_funcs rv1126b_rgb_funcs = {
@@ -1350,6 +1372,9 @@ static const struct rockchip_rgb_funcs rv1126b_rgb_funcs = {
 };
 
 static const struct rockchip_rgb_data rv1126b_rgb = {
+	.bt1120_delayline_num = 0x15,
+	.bt656_delayline_num = 0x15,
+	.rgb_delayline_num = 0x0,
 	.funcs = &rv1126b_rgb_funcs,
 };
 

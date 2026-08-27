@@ -1,5 +1,18 @@
 # RV1103B Release Note
 
+## rv1103b_ddr_924MHz{_tb}_v1.07.bin
+
+| Date       | File                              | Build commit | Severity  |
+| ---------- | :-------------------------------- | ------------ | --------- |
+| 2026-06-18 | rv1103b_ddr_924MHz{_tb}_v1.07.bin | 2bf646c6e6   | important |
+
+### New
+
+1. Add non-KGD package support.
+2. Add support for 8-bit bus width detection.
+
+------
+
 ## rv1103b_tee_ta_v1.05.bin
 
 | Date       | File                     | Build commit | Severity  |

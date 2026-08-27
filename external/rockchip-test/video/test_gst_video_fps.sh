@@ -1,27 +1,39 @@
 #!/bin/bash
+# video/test_gst_video_fps.sh - Video playback with FPS display
 
-URI=/oem/SampleVideo_1280x720_5mb.mp4
+DIR_VIDEO="$(cd "$(dirname "$0")" && pwd)"
+source "${DIR_VIDEO}/../common/common.sh"
 
+URI="${1:-/oem/SampleVideo_1280x720_5mb.mp4}"
 export mpp_syslog_perror=1
 
-if [ "$1" != "" ]; then
-    URI=$1
-    if [ "${URI:0:1}" != "/" ]; then
-        URI=$(readlink -f $URI)
-    fi
-fi
+resolve_uri "$URI"
+URI="$RESOLVED_URI"
 
-if [ "${URI:0:1}" == "/" ]; then
-    URI=file://$URI
-fi
+SINK=$(get_video_sink)
 
-# Hardware detection logic
-VIDEO_SINK="kmssink"
-if ls /dev/mali* >/dev/null 2>&1; then
-    VIDEO_SINK="waylandsink fullscreen=true"
-fi
+TEST_ID=$(test_begin "video" "fps" "Video FPS display with $SINK")
+log_info "video" "Playing with FPS: $URI with sink=$SINK"
 
-GST_DEBUG=fps*:7 gst-launch-1.0 uridecodebin uri=$URI ! fpsdisplaysink \
-    video-sink="$VIDEO_SINK" \
-    text-overlay=false \
-    signal-fps-measurements=true
+set +e
+if [[ "$SINK" == "waylandsink" ]]; then
+    GST_DEBUG=fps*:7 gst-launch-1.0 uridecodebin uri="$URI" ! fpsdisplaysink \
+        video-sink="waylandsink fullscreen=true" \
+        text-overlay=false \
+        signal-fps-measurements=true \
+        sync=false
+else
+    GST_DEBUG=fps*:7 gst-launch-1.0 uridecodebin uri="$URI" ! fpsdisplaysink \
+        video-sink="kmssink" \
+        text-overlay=false \
+        signal-fps-measurements=true
+fi
+EXIT_CODE=$?
+set -e
+
+if [[ $EXIT_CODE -eq 0 ]]; then
+    test_end "$TEST_ID" "PASS"
+else
+    test_end "$TEST_ID" "FAIL" "gst-launch-1.0 exited with code $EXIT_CODE"
+    exit 1
+fi

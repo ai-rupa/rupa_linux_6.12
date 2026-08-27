@@ -84,12 +84,18 @@ std::vector<char> &cnpy::operator+=(std::vector<char> &lhs, const char *rhs) {
     return lhs;
 }
 
-void cnpy::parse_npy_header(unsigned char *buffer, size_t &word_size, std::vector<size_t> &shape, bool &fortran_order,
+void cnpy::parse_npy_header(unsigned char *buffer, size_t buffer_size, size_t &word_size, std::vector<size_t> &shape, bool &fortran_order,
                             std::string &typeName) {
+    if (buffer_size < 11) {
+        throw std::runtime_error("parse_npy_header: buffer too small for npy header preamble");
+    }
     // std::string magic_string(buffer,6);
     uint8_t major_version = *reinterpret_cast<uint8_t *>(buffer + 6);
     uint8_t minor_version = *reinterpret_cast<uint8_t *>(buffer + 7);
     uint16_t header_len = *reinterpret_cast<uint16_t *>(buffer + 8);
+    if (10 + header_len > buffer_size) {
+        throw std::runtime_error("parse_npy_header: buffer too small for npy header data");
+    }
     std::string header(reinterpret_cast<char *>(buffer + 9), header_len);
 
     size_t loc1, loc2;
@@ -266,7 +272,7 @@ cnpy::NpyArray load_the_npz_array(FILE *fp, uint32_t compr_bytes, uint32_t uncom
     size_t word_size;
     bool fortran_order;
     std::string typeName;
-    cnpy::parse_npy_header(&buffer_uncompr[0], word_size, shape, fortran_order, typeName);
+    cnpy::parse_npy_header(&buffer_uncompr[0], uncompr_bytes, word_size, shape, fortran_order, typeName);
 
     cnpy::NpyArray array(shape, word_size, fortran_order, typeName);
 

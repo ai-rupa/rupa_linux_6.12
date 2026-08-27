@@ -490,6 +490,26 @@ XCamReturn RkAiqAfHandleInt::getPdafLibOutput(rk_aiq_pdlib_output* pdlib_output,
     return ret;
 }
 
+XCamReturn RkAiqAfHandleInt::setOtpAf(struct rkmodule_af_inf *otp_af, struct rkmodule_pdaf_inf *otp_pdaf)
+{
+    ENTER_ANALYZER_FUNCTION();
+
+    XCamReturn ret                              = XCAM_RETURN_NO_ERROR;
+
+    if (otp_af == NULL || otp_pdaf == NULL) {
+        EXIT_ANALYZER_FUNCTION();
+        return XCAM_RETURN_ERROR_FAILED;
+    }
+
+    mCfgMutex.lock();
+    mApiOtpAf = *otp_af;
+    mApiOtpPdaf = *otp_pdaf;
+    mCfgMutex.unlock();
+
+    EXIT_ANALYZER_FUNCTION();
+    return ret;
+}
+
 XCamReturn RkAiqAfHandleInt::prepare() {
     ENTER_ANALYZER_FUNCTION();
 
@@ -509,8 +529,20 @@ XCamReturn RkAiqAfHandleInt::prepare() {
     af_config_int->lens_des   = sharedCom->snsDes.lens_des;
 
     // for otp
-    af_config_int->otp_af = sharedCom->snsDes.otp_af;
-    af_config_int->otp_pdaf = sharedCom->snsDes.otp_pdaf;
+    if (mApiOtpAf.flag != 0) {
+        af_config_int->otp_af = &mApiOtpAf;
+        LOGI_AF("use otp af info from user api");
+    } else {
+        af_config_int->otp_af = sharedCom->snsDes.otp_af;
+        LOGI_AF("use otp af info from driver");
+    }
+    if (mApiOtpPdaf.flag != 0) {
+        af_config_int->otp_pdaf = &mApiOtpPdaf;
+        LOGI_AF("use otp pdaf info from user api");
+    } else {
+        af_config_int->otp_pdaf = sharedCom->snsDes.otp_pdaf;
+        LOGI_AF("use otp pdaf info from driver");
+    }
 
     if ((af_config_int->com.u.prepare.sns_op_width != 0) &&
             (af_config_int->com.u.prepare.sns_op_height != 0)) {

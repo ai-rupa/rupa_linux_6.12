@@ -69,6 +69,7 @@ private:
     int get_sensor_fps(float& fps);
     int get_nr_switch(rk_aiq_sensor_nr_switch_t* nr_switch);
     int get_dcg_ratio(rk_aiq_sensor_dcg_ratio_t* dcg_ratio);
+    int get_exp_offset(rk_aiq_sensor_exp_offset_t* exp_offset);
     int _width;
     int _height;
     uint32_t _fmt_code;

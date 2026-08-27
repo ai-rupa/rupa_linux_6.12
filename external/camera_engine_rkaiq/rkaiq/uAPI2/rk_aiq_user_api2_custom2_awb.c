@@ -154,8 +154,7 @@ static XCamReturn AwbDemoProcessing(const RkAiqAlgoCom* inparams, RkAiqAlgoResCo
     RkAiqAlgoProcAwb* AwbProcParams = (RkAiqAlgoProcAwb*)inparams;
     RkAiqAlgoProcResAwb* AwbProcResParams = (RkAiqAlgoProcResAwb*)outparams;
     RkAiqAwbAlgoContext2* algo_ctx = (RkAiqAwbAlgoContext2*)inparams->ctx;
-    LOGI_AWB("cid(%d)----------------------------------------------frame_id (%d)----------------------------------------------\n",
-     inparams->cid, inparams->frame_id);
+
     if(algo_ctx->isRkCb){
         ret= awb_processing2(inparams, outparams);
         return ret;
@@ -164,7 +163,8 @@ static XCamReturn AwbDemoProcessing(const RkAiqAlgoCom* inparams, RkAiqAlgoResCo
         LOGE_AWB("wrong awb mode");
         return ret;
     }
-
+    LOGI_AWB("cid(%d)----------------------------------------------frame_id (%d)----------------------------------------------\n",
+     inparams->cid, inparams->frame_id);
     if(!inparams->u.proc.init) { // init=ture, stats=null
         if (!AwbProcParams->awb_statsBuf_v39) {
             LOGE_AWB("awb stats is null");
@@ -283,13 +283,13 @@ static XCamReturn _customGruopAwbRes2rkAwbRes(rk_aiq_singlecam_3a_result_t ** rk
 static XCamReturn AwbDemoGroupProcessing(const RkAiqAlgoCom* inparams, RkAiqAlgoResCom* outparams)
 {
 
-    LOGD_AWB_SUBM(0xff, "%s ENTER --------------------frame%d  ---------------------", __func__,inparams->frame_id);
     XCamReturn ret = XCAM_RETURN_NO_ERROR;
     RkAiqAwbAlgoContext2* algo_ctx = (RkAiqAwbAlgoContext2*)inparams->ctx;
     if(algo_ctx->isRkCb){
         ret= awbGroupProcessing2(inparams, outparams);
         return ret;
     }
+    LOGD_AWB_SUBM(0xff, "%s ENTER --------------------frame%d  ---------------------", __func__,inparams->frame_id);
 
 #if RKAIQ_HAVE_AWB_V39
     RkAiqAlgoCamGroupProcIn* AwbProcParams = (RkAiqAlgoCamGroupProcIn*)inparams;
@@ -323,6 +323,10 @@ static XCamReturn AwbDemoGroupProcessing(const RkAiqAlgoCom* inparams, RkAiqAlgo
     }
     // gen part of proc result which is from customRes
     _customGruopAwbRes2rkAwbRes(AwbProcResParams->camgroupParmasArray ,AwbProcResParams->arraySize,&algo_ctx->customRes);
+    for(int i=0; i < AwbProcResParams->arraySize; i++){
+        IS_UPDATE_MEM((AwbProcResParams->camgroupParmasArray[i]->awb._awbCfgV39), AwbProcParams->_offset_is_update) = true;
+        IS_UPDATE_MEM((AwbProcResParams->camgroupParmasArray[i]->awb._awbGainV32Params), AwbProcParams->_offset_is_update) = true;
+    }
     RETURN_RESULT_IF_DIFFERENT(ret, XCAM_RETURN_NO_ERROR);
 #endif
     LOG1_AWB_SUBM(0xff, "%s EXIT", __func__);

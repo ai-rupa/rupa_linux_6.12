@@ -23,6 +23,7 @@
 
 #define RKAIQ_DEFAULT_IQ_PATH "/etc/iqfiles/"
 
+// clang-format off
 #ifdef ANDROID_OS
 #include <cutils/properties.h>
 #endif
@@ -37,6 +38,7 @@
 #include "RkAiqVersion.h"
 #include "common/rkaiq_ini.h"
 #include "hwi_c/aiq_fake_camhw.h"
+#include "hwi_c/aiq_CamHwBase.h"
 #include "uAPI2/rk_aiq_user_api2_ae.h"
 
 #include "uAPI2/rk_aiq_user_api2_ablc_v32.h"
@@ -58,6 +60,7 @@
 #if RKAIQ_HAVE_AIBNR
 #include "uAPI2/rk_aiq_user_api2_aibnr.h"
 #endif
+// clang-format on
 
 int g_rkaiq_isp_hw_ver = 0;
 static bool g_bypass_uapi = false;
@@ -92,6 +95,7 @@ static void rk_aiq_deinit_lib(void) /*__attribute__((destructor))*/;
 static bool g_rk_aiq_init_lib = false;
 
 static void _set_fast_aewb_as_init(const rk_aiq_sys_ctx_t* ctx, rk_aiq_working_mode_t mode);
+static void _extproc_cleanup_locked(rk_aiq_sys_ctx_t* ctx);
 
 rk_aiq_camgroup_ctx_t* get_binded_group_ctx(const rk_aiq_sys_ctx_t* ctx)
 {
@@ -759,6 +763,8 @@ rk_aiq_uapi2_sysctl_deinit_locked(rk_aiq_sys_ctx_t* ctx)
     RKAIQRegistry_deinit();
 #endif
 
+    _extproc_cleanup_locked(ctx);
+
     if (ctx->_rkAiqManager) {
         AiqManager_deinit(ctx->_rkAiqManager);
         aiq_free(ctx->_rkAiqManager);
@@ -953,6 +959,10 @@ rk_aiq_uapi2_sysctl_init(const char* sns_ent_name,
 
     ctx->_sensor_entity_name = strndup(sns_ent_name, 128);
     ctx->_rkAiqManager = (AiqManager_t*)aiq_mallocz(sizeof(AiqManager_t));
+    if (!ctx->_rkAiqManager) {
+        ret = XCAM_RETURN_ERROR_MEM;
+        goto error;
+    }
 
     rk_aiq_static_info_t* s_info = AiqCamHw_getStaticCamHwInfo(sns_ent_name, 0);
     // TODO: for sensor sync check(ensure 1608 sensor is slave mode).
@@ -2351,6 +2361,12 @@ XCamReturn rk_aiq_uapi2_sysctl_setUserOtpInfo(rk_aiq_sys_ctx_t* sys_ctx, rk_aiq_
         return ret;
     }
     ret = AiqCamHw_setUserOtpInfo(sys_ctx->_camHw, &otp_info);
+    if (ret != XCAM_RETURN_NO_ERROR) {
+        return ret;
+    }
+#ifndef ISP_HW_V33
+    ret = rk_aiq_user_api2_af_SetOtpAf(sys_ctx, &otp_info.otp_af, &otp_info.otp_pdaf);
+#endif
     return ret;
 }
 
@@ -2511,6 +2527,9 @@ void rk_aiq_uapi2_get_aiqversion_info(const rk_aiq_sys_ctx_t* ctx, rk_aiq_versio
     const char* ver_str = RK_AIQ_VERSION;
     const char* start = ver_str + strlen(RK_AIQ_VERSION_HEAD);
     strcpy(vers->aiq_ver, start);
+
+    if (ctx->_calibDbProj)
+        memcpy(&vers->productInfo, &ctx->_calibDbProj->product_info, sizeof(CalibDbProductInfo_t));
 }
 
 XCamReturn
@@ -2768,7 +2787,161 @@ XCamReturn rk_aiq_uapi2_setMasterCamSyncList(const rk_aiq_sys_ctx_t* ctx, uint32
     return AiqCore_setMasterCamSyncList(master_cam_id, sync_cam_ids, sync_cam_num);
 }
 
+XCamReturn rk_aiq_uapi2_sysctl_triggerCapture(rk_aiq_sys_ctx_t* ctx,
+                                              const rk_aiq_capture_trigger_t* trigger) {
+    XCamReturn ret = XCAM_RETURN_NO_ERROR;
+    ENTER_XCORE_FUNCTION();
+    RKAIQ_API_SMART_LOCK(ctx);
+
+    if (!trigger) {
+        LOGE("Invalid parameter: trigger is NULL");
+        return XCAM_RETURN_ERROR_PARAM;
+    }
+
+    if (trigger->frame_count == 0) {
+        LOGE("Invalid frame_count: must be >= 1");
+        return XCAM_RETURN_ERROR_PARAM;
+    }
+
+    if (ctx->cam_type == RK_AIQ_CAM_TYPE_GROUP) {
+        LOGE("not support for camera group");
+        return XCAM_RETURN_ERROR_FAILED;
+    }
+
+    // Process 3A metadata if enabled
+    if (trigger->use_frame_meta) {
+        const rk_aiq_frame_info_t* meta = &trigger->frame_meta;
+
+        // Set AWB manual wbgain from meta
+        if (meta->awg_rgain > 0 || meta->awg_bgain > 0) {
+            awb_gainCtrl_t awb_attr = {0};
+            ret                     = rk_aiq_user_api2_awb_GetWbGainCtrlAttrib(ctx, &awb_attr);
+            if (ret == XCAM_RETURN_NO_ERROR) {
+                awb_attr.byPass                          = 0;
+                awb_attr.opMode                          = RK_AIQ_OP_MODE_MANUAL;
+                awb_attr.manualPara.mode                 = mwb_mode_wbgain;
+                awb_attr.manualPara.cfg.manual_wbgain[0] = meta->awg_rgain;
+                awb_attr.manualPara.cfg.manual_wbgain[3] = meta->awg_bgain;
+                ret = rk_aiq_user_api2_awb_SetWbGainCtrlAttrib(ctx, &awb_attr);
+                if (ret != XCAM_RETURN_NO_ERROR) {
+                    LOGE("Failed to set AWB wbgain: %d", ret);
+                } else {
+                    LOGI("AWB manual wbgain set: rgain=%.4f, bgain=%.4f", meta->awg_rgain,
+                         meta->awg_bgain);
+                }
+            } else {
+                LOGE("Failed to get AWB attr: %d", ret);
+            }
+        }
+
+        // Set AE manual exposure from meta
+        if (meta->normal_exp > 0 || meta->normal_gain > 0) {
+            ae_api_expSwAttr_t expSwAttr = {0};
+            ret                          = rk_aiq_user_api2_ae_getExpSwAttr(ctx, &expSwAttr);
+            if (ret == XCAM_RETURN_NO_ERROR) {
+                expSwAttr.commCtrl.sw_aeT_opt_mode                     = RK_AIQ_OP_MODE_MANUAL;
+                expSwAttr.commCtrl.meCtrl.linMe.sw_aeT_manTime_en      = true;
+                expSwAttr.commCtrl.meCtrl.linMe.sw_aeT_manGain_en      = true;
+                expSwAttr.commCtrl.meCtrl.linMe.sw_aeT_manIspDGain_en  = true;
+                expSwAttr.commCtrl.meCtrl.linMe.sw_aeT_manTime_val     = meta->normal_exp;
+                expSwAttr.commCtrl.meCtrl.linMe.sw_aeT_manGain_val     = meta->normal_gain;
+                expSwAttr.commCtrl.meCtrl.linMe.sw_aeT_manIspDGain_val = meta->isp_dgain[0];
+                ret = rk_aiq_user_api2_ae_setExpSwAttr(ctx, expSwAttr);
+                if (ret != XCAM_RETURN_NO_ERROR) {
+                    LOGE("Failed to set AE expSwAttr: %d", ret);
+                } else {
+                    LOGI("AE manual exp set: time=%.6f, gain=%.3f, isp_dgain=%.3f",
+                         meta->normal_exp, meta->normal_gain, meta->isp_dgain[0]);
+                }
+            } else {
+                LOGE("Failed to get AE expSwAttr: %d", ret);
+            }
+
+            ae_api_linExpAttr_t LinExpAttr;
+
+            LinExpAttr.initExp.sw_aeT_initTime_val     = meta->normal_exp;
+            LinExpAttr.initExp.sw_aeT_initGain_val     = meta->normal_gain;
+            LinExpAttr.initExp.sw_aeT_initIspDGain_val = meta->isp_dgain[0];
+
+            /* Also store initExp directly in AiqCore for use in runInitialAnalyze */
+            if (ctx->_analyzer) AiqCore_setInitExp(ctx->_analyzer, &LinExpAttr.initExp);
+
+            LOGI("cid[%d] set initExp: time=%.6f, gain=%.3f, isp_dgain=%.3f", ctx->_camPhyId,
+                 LinExpAttr.initExp.sw_aeT_initTime_val, LinExpAttr.initExp.sw_aeT_initGain_val,
+                 LinExpAttr.initExp.sw_aeT_initIspDGain_val);
+
+            // Set exposure params directly to sensor via AiqCamHw_setExposureParams
+            AiqAecExpInfoWrapper_t expWrapper;
+            memset(&expWrapper, 0, sizeof(expWrapper));
+
+            // Use exp_set_tbl[0] for fake sensor _setExposureParams
+            expWrapper.ae_proc_res_rk.exp_set_cnt = 1;
+            RKAiqAecExpInfo_t* pExpTbl            = &expWrapper.ae_proc_res_rk.exp_set_tbl[0];
+
+            // Linear exposure
+            pExpTbl->LinearExp.exp_real_params.integration_time          = meta->normal_exp;
+            pExpTbl->LinearExp.exp_real_params.analog_gain               = meta->normal_gain;
+            pExpTbl->LinearExp.exp_real_params.digital_gain              = 1.0f;
+            pExpTbl->LinearExp.exp_real_params.isp_dgain                 = meta->isp_dgain[0];
+            pExpTbl->LinearExp.exp_sensor_params.coarse_integration_time = meta->normal_exp_reg;
+            pExpTbl->LinearExp.exp_sensor_params.analog_gain_code_global = meta->normal_gain_reg;
+            pExpTbl->LinearExp.exp_sensor_params.digital_gain_global     = 1;
+            pExpTbl->LinearExp.exp_sensor_params.isp_digital_gain        = 1;
+
+            ret = AiqCamHw_setExposureParams(ctx->_camHw, &expWrapper);
+            if (ret != XCAM_RETURN_NO_ERROR) {
+                LOGE("AiqCamHw_setExposureParams failed: %d", ret);
+            } else {
+                LOGI("setExposureParams: lin_time=%.6f, lin_gain=%.3f, isp_dgain=%.3f",
+                     meta->normal_exp, meta->normal_gain, meta->isp_dgain[0]);
+            }
+        }
+
+        LOGI("3A metadata processed: frame_id=%d", meta->frame_id);
+    }
+
+    /* Run one no-stats analyze pass so the first captured frame uses
+     * up-to-date algorithm parameters rather than stale prepare-time values. */
+    if (ctx->_analyzer) {
+        XCamReturn init_ret = AiqCore_runInitialAnalyze(ctx->_analyzer);
+        if (init_ret != XCAM_RETURN_NO_ERROR) {
+            LOGW("AiqCore_runInitialAnalyze failed: %d, continuing", init_ret);
+        } else {
+            AiqFullParams_t* initParams = AiqCore_getAiqFullParams(ctx->_analyzer);
+
+            if (initParams) {
+                uint32_t frame_id          = trigger->frame_meta.frame_id;
+                initParams->_base.frame_id = frame_id;
+                for (int i = 0; i < RESULT_TYPE_MAX_PARAM; i++) {
+                    if (initParams->pParamsArray[i])
+                        initParams->pParamsArray[i]->frame_id = frame_id;
+                }
+            }
+
+            LOGI("apply initial params: frame_id=%d", initParams ? initParams->_base.frame_id : 0);
+
+            ret = AiqManager_applyAnalyzerResult(ctx->_rkAiqManager, initParams, true);
+            if (ret != XCAM_RETURN_NO_ERROR) {
+                LOGW("set initial params error %d", ret);
+            }
+        }
+    }
+
+    LOGI("Capture triggered: frame_count=%d, use_frame_meta=%d", trigger->frame_count,
+         trigger->use_frame_meta);
+
+    ret = AiqCamHw_triggerCapture(ctx->_camHw, trigger);
+    if (ret != XCAM_RETURN_NO_ERROR) {
+        LOGE("AiqCamHw_triggerCapture failed: %d", ret);
+        return ret;
+    }
+
+    EXIT_XCORE_FUNCTION();
+    return XCAM_RETURN_NO_ERROR;
+}
+
 #include "rk_aiq_user_api2_common.c"
+#include "uAPI2_c/rk_aiq_user_api2_extproc.c"
 #if defined(ISP_HW_V39)
 #include "rk_aiq_user_api2_3dlut.c"
 #include "rk_aiq_user_api2_rgbir.c"

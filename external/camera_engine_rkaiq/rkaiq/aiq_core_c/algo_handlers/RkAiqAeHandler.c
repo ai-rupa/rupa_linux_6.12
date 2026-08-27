@@ -119,6 +119,9 @@ static XCamReturn _handlerAe_prepare(AiqAlgoHandler_t* pAlgoHandler) {
     ae_config_int->nr_switch = sharedCom->snsDes.nr_switch;
     ae_config_int->dcg_ratio = sharedCom->snsDes.dcg_ratio;
     ae_config_int->spd_ratio = sharedCom->snsDes.spd_ratio;
+    ae_config_int->lcg2lofic_ratio = sharedCom->snsDes.lcg2lofic_ratio;
+    ae_config_int->lofic2vs_ratio = sharedCom->snsDes.lofic2vs_ratio;
+    ae_config_int->exp_offset = sharedCom->snsDes.exp_offset;
 
     // only for isp351
     ae_config_int->isBtnrLogdomain = _handlerAe_isBtnrLogdomain(pAlgoHandler);
@@ -365,6 +368,14 @@ static XCamReturn _handlerAe_processing(AiqAlgoHandler_t* pAlgoHandler) {
                          ae_proc_res_int->new_ae_exp->LinearExp.exp_real_params.analog_gain *
                          ae_proc_res_int->new_ae_exp->LinearExp.exp_real_params.digital_gain *
                          ae_proc_res_int->new_ae_exp->LinearExp.exp_real_params.isp_dgain;
+
+            if (pAlgoHandler->mAiqCore->mIsVicapVirtualSensor) {
+                if (pAlgoHandler->mAiqCore->mHasInitExp) {
+                    ae_linInitExp_t* pInitExp = &pAlgoHandler->mAiqCore->mInitExp;
+                    hdr_iso[0] =
+                        50 * pInitExp->sw_aeT_initGain_val * pInitExp->sw_aeT_initIspDGain_val;
+                }
+            }
         } else {
             for(int i = 0; i < 3; i++) {
                 hdr_iso[i] = 50 *
@@ -536,6 +547,9 @@ static XCamReturn _handlerAe_genIspResult(AiqAlgoHandler_t* pAlgoHandler, AiqFul
         ae_post_rk->ae_post_res_rk.HDCIris.zoomPos = iris_param->HDCIris.zoomPos;
         cur_params->pParamsArray[RESULT_TYPE_IRIS_PARAM] = params->pParamsArray[RESULT_TYPE_IRIS_PARAM];
     }
+
+    iris_param->PIris.step = ae_proc->new_ae_exp->Iris.PIris.step;
+    iris_param->PIris.update = ae_proc->new_ae_exp->Iris.PIris.update;
 
     // meas
     if (pAeHdl->useStatsApiCfg) {

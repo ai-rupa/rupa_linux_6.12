@@ -15,7 +15,7 @@
 
 #define RKCIF_MAX_CSI_NUM		4
 
-#define RKCIF_API_VERSION		KERNEL_VERSION(0, 1, 0xa)
+#define RKCIF_API_VERSION		KERNEL_VERSION(0, 2, 0)
 
 #define V4L2_EVENT_RESET_DEV		0X1001
 #define V4L2_EVENT_EXPOSURE		0X1002
@@ -39,7 +39,7 @@
 	_IOW('V', BASE_VIDIOC_PRIVATE + 6, int)
 
 #define RKCIF_CMD_SET_CSI_IDX \
-	_IOW('V', BASE_VIDIOC_PRIVATE + 7, unsigned int)
+	_IOW('V', BASE_VIDIOC_PRIVATE + 7, struct rkcif_csi_info)
 
 #define RKCIF_CMD_SET_QUICK_STREAM \
 	_IOWR('V', BASE_VIDIOC_PRIVATE + 8, struct rkcif_quick_stream_param)
@@ -126,10 +126,40 @@ struct rkcif_fps {
 	int fps;
 };
 
+struct rkcif_csi_info {
+	int csi_num;
+	int csi_idx[RKCIF_MAX_CSI_NUM];
+	int dphy_vendor[RKCIF_MAX_CSI_NUM];
+};
+
+/*
+ * function: to quick start or stop stream
+ * on(input): to start or stop stream
+ * frame_num(output): for aiq to record frame number after stop stream
+ * resume_mode(input): set resume_mode to driver for AOV, set -1 for other case
+ */
 struct rkcif_quick_stream_param {
 	int on;
 	__u32 frame_num;
 	int resume_mode;
+};
+
+enum rkcif_scl_mode {
+	RKCIF_SCL_MODE_SCALE,
+	RKCIF_SCL_MODE_BINNING,
+	RKCIF_SCL_MODE_EXTRACTION,
+};
+
+enum rkcif_extraction_pattern {
+	RKCIF_EXTRACTION_PATTERN_UP_LEFT,
+	RKCIF_EXTRACTION_PATTERN_UP_RIGHT,
+	RKCIF_EXTRACTION_PATTERN_BOTTOM_LEFT,
+	RKCIF_EXTRACTION_PATTERN_BOTTOM_RIGHT,
+};
+
+struct rkcif_exp_delay {
+	__u32 time_delay;
+	__u32 gain_delay;
 };
 
 struct rkcif_exp {
@@ -146,6 +176,33 @@ struct rkcif_effect_exp {
 struct rkcif_buffer_info {
 	__u32 buf_num;
 	int dma_fd[VIDEO_MAX_FRAME];
+};
+
+
+/*
+ * enum vicap_output_path - VICAP output path selection
+ *
+ * This enum describes the selectable output paths of VICAP.
+ *
+ * FULL_IDx:
+ *   Full-resolution output paths. Image data is output without scaling.
+ *
+ * SCLx:
+ *   Scaler output paths. Image data is output from the scaler.
+ *
+ * Note:
+ *   DVP, MIPI/LVDS, and SCL are all considered output path selections
+ *   within VICAP. This enum only represents which output path is selected.
+ */
+enum vicap_output_path {
+    VICAP_OUT_PATH_FULL_ID0,
+    VICAP_OUT_PATH_FULL_ID1,
+    VICAP_OUT_PATH_FULL_ID2,
+    VICAP_OUT_PATH_FULL_ID3,
+
+    VICAP_OUT_PATH_SCL0,
+    VICAP_OUT_PATH_SCL1,
+    VICAP_OUT_PATH_SCL2,
 };
 
 #endif

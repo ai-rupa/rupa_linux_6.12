@@ -1,17 +1,35 @@
 #!/bin/bash
+# gpu/gpu_test.sh - GPU test dispatcher
+# Supports both interactive and CLI modes.
 
-DIR_GPU=`dirname $0`
+DIR_GPU="$(cd "$(dirname "$0")" && pwd)"
 
-info_view()
-{
-    echo "*****************************************************"
-    echo "***                                               ***"
-    echo "***                 GPU TEST                      ***"
-    echo "***                                               ***"
-    echo "*****************************************************"
-}
+# CLI mode: --list
+if [[ "${1:-}" == "--list" ]]; then
+    echo "glmark2 fullscreen test"
+    echo "glmark2 normal test (800x600)"
+    echo "glmark2 offscreen test"
+    echo "glmark2 stress test"
+    exit 0
+fi
 
-info_view
+# CLI mode: --test <name>
+if [[ "${1:-}" == "--test" ]]; then
+    case "${2:-}" in
+        fullscreen) exec bash "$DIR_GPU/glmark2_test.sh" --mode fullscreen "$@" ;;
+        normal)     exec bash "$DIR_GPU/glmark2_test.sh" --mode normal "$@" ;;
+        offscreen)  exec bash "$DIR_GPU/glmark2_test.sh" --mode offscreen "$@" ;;
+        stress)     exec bash "$DIR_GPU/glmark2_test.sh" --mode stress "$@" ;;
+        *) echo "Unknown test: $2" >&2; exit 1 ;;
+    esac
+fi
+
+# Interactive mode (original behavior)
+echo "*****************************************************"
+echo "***                                               ***"
+echo "***                 GPU TEST                      ***"
+echo "***                                               ***"
+echo "*****************************************************"
 echo "***********************************************************"
 echo "glmark2 fullscreen test:                                 1"
 echo "glmark2 normal test (800x600):                           2"
@@ -21,40 +39,10 @@ echo "***********************************************************"
 
 read -t 30 GPU_CHOICE
 
-glmark2_fullscreen_test()
-{
-	bash ${DIR_GPU}/test_fullscreen_glmark2.sh
-}
-
-glmark2_normal_test()
-{
-	bash ${DIR_GPU}/test_normal_glmark2.sh
-}
-
-glmark2_offscreen_test()
-{
-	bash ${DIR_GPU}/test_offscreen_glmark2.sh
-}
-
-glmark2_stress_test()
-{
-	bash ${DIR_GPU}/test_stress_glmark2.sh
-}
-
 case ${GPU_CHOICE} in
-	1)
-		glmark2_fullscreen_test
-		;;
-	2)
-		glmark2_normal_test
-		;;
-	3)
-		glmark2_offscreen_test
-		;;
-	4)
-		glmark2_stress_test
-		;;
-	*)
-		echo "not found your input."
-		;;
+    1) bash "$DIR_GPU/glmark2_test.sh" --mode fullscreen ;;
+    2) bash "$DIR_GPU/glmark2_test.sh" --mode normal ;;
+    3) bash "$DIR_GPU/glmark2_test.sh" --mode offscreen ;;
+    4) bash "$DIR_GPU/glmark2_test.sh" --mode stress ;;
+    *) echo "not found your input." ;;
 esac

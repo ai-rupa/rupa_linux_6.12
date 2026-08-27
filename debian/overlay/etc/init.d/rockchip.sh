@@ -34,7 +34,7 @@ install_packages() {
 		apt install -fy --allow-downgrades /libmali-*$MALI*.deb
 		;;
         rk3326|px30)
-		MALI=bifrost-g31-g24p0
+		MALI=bifrost-g31-g29p1
 		ISP=rkisp
 		[ -e /usr/lib/aarch64-linux-gnu/ ] && apt install -fy --allow-downgrades /camera_engine_$ISP*.deb
 		apt install -fy --allow-downgrades /libmali-*$MALI*.deb
@@ -46,14 +46,14 @@ install_packages() {
 		apt install -fy --allow-downgrades /libmali-*$MALI*.deb
 		;;
         rk3568|rk3566)
-		MALI=bifrost-g52-g24p0
+		MALI=bifrost-g52-g29p1
 		ISP=rkaiq_rk3568
 		[ -e /usr/lib/aarch64-linux-gnu/ ] && tar xvf /rknpu2.tar -C /
 		[ -e /usr/lib/aarch64-linux-gnu/ ] && apt install -fy --allow-downgrades /camera_engine_$ISP*.deb
 		apt install -fy --allow-downgrades /libmali-*$MALI*.deb
 		;;
         rk3562)
-		MALI=bifrost-g52-g24p0
+		MALI=bifrost-g52-g29p1
 		ISP=rkaiq_rk3562
 		[ -e /usr/lib/aarch64-linux-gnu/ ] && tar xvf /rknpu2.tar -C /
 		[ -e /usr/lib/aarch64-linux-gnu/ ] && apt install -fy --allow-downgrades /camera_engine_$ISP*.deb
@@ -67,7 +67,7 @@ install_packages() {
 		apt install -fy --allow-downgrades /libmali-*$MALI*.deb
 		;;
         rk3576)
-		MALI=bifrost-g52-g24p0
+		MALI=bifrost-g52-g29p1
 		ISP=rkaiq_rk3576
 		[ -e /usr/lib/aarch64-linux-gnu/ ] && tar xvf /rknpu2.tar -C /
 		[ -e /usr/lib/aarch64-linux-gnu/ ] && apt install -fy --allow-downgrades /camera_engine_$ISP*.deb
@@ -75,7 +75,7 @@ install_packages() {
 		;;
         rk3588|rk3588s)
 		ISP=rkaiq_rk3588
-		MALI=valhall-g610-g24p0
+		MALI=valhall-g610-g29p1
 		[ -e /usr/lib/aarch64-linux-gnu/ ] && tar xvf /rknpu2.tar -C /
 		[ -e /usr/lib/aarch64-linux-gnu/ ] && apt install -fy --allow-downgrades /camera_engine_$ISP*.deb
 		apt install -fy --allow-downgrades /libmali-*$MALI*.deb

@@ -105,6 +105,76 @@ static uint32_t rk_format_to_media_format(rk_aiq_format_t format) {
     return pixelformat;
 }
 
+rk_aiq_format_t v4l2_format_to_rk_format(uint32_t v4l2_format) {
+    rk_aiq_format_t format = (rk_aiq_format_t)-1;
+    switch (v4l2_format) {
+        case V4L2_PIX_FMT_SBGGR8:
+            format = RK_PIX_FMT_SBGGR8;
+            break;
+        case V4L2_PIX_FMT_SRGGB8:
+            format = RK_PIX_FMT_SRGGB8;
+            break;
+        case V4L2_PIX_FMT_SGBRG8:
+            format = RK_PIX_FMT_SGBRG8;
+            break;
+        case V4L2_PIX_FMT_SGRBG8:
+            format = RK_PIX_FMT_SGRBG8;
+            break;
+        case V4L2_PIX_FMT_SBGGR10:
+            format = RK_PIX_FMT_SBGGR10;
+            break;
+        case V4L2_PIX_FMT_SRGGB10:
+            format = RK_PIX_FMT_SRGGB10;
+            break;
+        case V4L2_PIX_FMT_SGBRG10:
+            format = RK_PIX_FMT_SGBRG10;
+            break;
+        case V4L2_PIX_FMT_SGRBG10:
+            format = RK_PIX_FMT_SGRBG10;
+            break;
+        case V4L2_PIX_FMT_SBGGR12:
+            format = RK_PIX_FMT_SBGGR12;
+            break;
+        case V4L2_PIX_FMT_SRGGB12:
+            format = RK_PIX_FMT_SRGGB12;
+            break;
+        case V4L2_PIX_FMT_SGBRG12:
+            format = RK_PIX_FMT_SGBRG12;
+            break;
+        case V4L2_PIX_FMT_SGRBG12:
+            format = RK_PIX_FMT_SGRBG12;
+            break;
+        case V4L2_PIX_FMT_SBGGR14:
+            format = RK_PIX_FMT_SBGGR14;
+            break;
+        case V4L2_PIX_FMT_SRGGB14:
+            format = RK_PIX_FMT_SRGGB14;
+            break;
+        case V4L2_PIX_FMT_SGBRG14:
+            format = RK_PIX_FMT_SGBRG14;
+            break;
+        case V4L2_PIX_FMT_SGRBG14:
+            format = RK_PIX_FMT_SGRBG14;
+            break;
+        case V4L2_PIX_FMT_SBGGR16:
+            format = RK_PIX_FMT_SBGGR16;
+            break;
+        case V4L2_PIX_FMT_SGBRG16:
+            format = RK_PIX_FMT_SGBRG16;
+            break;
+        case V4L2_PIX_FMT_SGRBG16:
+            format = RK_PIX_FMT_SGRBG16;
+            break;
+        case V4L2_PIX_FMT_SRGGB16:
+            format = RK_PIX_FMT_SRGGB16;
+            break;
+        default:
+            LOGE_CAMHW_SUBM(FAKECAM_SUBM, "%s no support V4L2 pixel format: 0x%x\n", __func__,
+                            v4l2_format);
+    }
+    return format;
+}
+
 static void CTimer_init(CTimer_t* pTimer, AiqFakeSensorHw_t* pFakeSns) {
     aiq_memset(pTimer, 0, sizeof(pTimer));
     pTimer->_dev = pFakeSns;
@@ -196,6 +266,8 @@ XCamReturn _get_sensor_desc(AiqFakeSensorHw_t* pFakeSnsHw,
     sns_des->sensor_output_height = pFakeSnsHw->_height;
     sns_des->sensor_pixelformat   = get_v4l2_pixelformat(pFakeSnsHw->_fmt_code);
 
+    if (pFakeSnsHw->mIsVicapVirtualSensor) sns_des->bayer_mode = RKMODULE_QUARD_BAYER;
+
     return XCAM_RETURN_NO_ERROR;
 }
 
@@ -220,6 +292,21 @@ static int _get_dcg_ratio(rk_aiq_sensor_dcg_ratio_t* dcg_ratio) {
     dcg_ratio->integer   = 0;
     dcg_ratio->decimal   = 0;
     dcg_ratio->div_coeff = 0;
+
+    return 0;
+}
+
+static int _get_exp_offset(rk_aiq_sensor_exp_offset_t* exp_offset) {
+    exp_offset->valid     = false;
+    exp_offset->integer[0]   = 0;
+    exp_offset->integer[1]   = 0;
+    exp_offset->integer[2]   = 0;
+    exp_offset->decimal[0]   = 0;
+    exp_offset->decimal[1]   = 0;
+    exp_offset->decimal[2]   = 0;
+    exp_offset->div_coeff[0] = 1;
+    exp_offset->div_coeff[1] = 1;
+    exp_offset->div_coeff[2] = 1;
 
     return 0;
 }
@@ -253,12 +340,16 @@ static XCamReturn _get_sensor_descriptor(AiqSensorHw_t* pSnsHw,
     if (_get_dcg_ratio(&sns_des->dcg_ratio)) {
         // do nothing;
     }
+    if (_get_exp_offset(&sns_des->exp_offset)) {
+        // do nothing;
+    }
 
     return XCAM_RETURN_NO_ERROR;
 }
 
 static XCamReturn _setExposureParams(AiqSensorHw_t* pBaseSns, AiqAecExpInfoWrapper_t* expPar) {
     AiqFakeSensorHw_t* pFakeSnsHw = (AiqFakeSensorHw_t*)pBaseSns;
+    AiqAecExpInfoWrapper_t* aec_exp = expPar;
     AiqSensorExpInfo_t* pSnsExp   = NULL;
     AiqMapItem_t* pItem           = NULL;
     int ret                       = 0;
@@ -298,7 +389,89 @@ static XCamReturn _setExposureParams(AiqSensorHw_t* pBaseSns, AiqAecExpInfoWrapp
         }
         pBaseSns->_first = false;
 
+        if (pBaseSns->_last_exp_time)
+            AIQ_REF_BASE_UNREF(&pBaseSns->_last_exp_time->_base._ref_base);
+        pBaseSns->_last_exp_time = pSnsExp;
+        AIQ_REF_BASE_REF(&pSnsExp->_base._ref_base);
+
         LOGD_CAMHW_SUBM(FAKECAM_SUBM, "exp-sync: first set exp, add id[0] to the effected exp map");
+    } else if (pFakeSnsHw->mIsVicapVirtualSensor) {
+        if (aec_exp->algo_id == 0) {
+            if (aec_exp->ae_proc_res_rk.exp_set_cnt > 0) {
+                SensorHwExpItem_t tmp;
+                aiq_memset(&tmp, 0, sizeof(SensorHwExpItem_t));
+
+                LOGD_CAMHW_SUBM(SENSOR_SUBM, "cam%d setExp: tbl_cnt=%d, exp_list_remain=%d",
+                                pBaseSns->mCamPhyId, aec_exp->ae_proc_res_rk.exp_set_cnt,
+                                aiqList_size(pBaseSns->_exp_list));
+                /* when new exp-table comes, remove elem until meet the first one of last exp-table
+                 */
+                AiqListItem_t* pItem = NULL;
+                bool rm              = false;
+                AIQ_LIST_FOREACH(pBaseSns->_exp_list, pItem, rm) {
+                    SensorHwExpItem_t* pSnsExp = (SensorHwExpItem_t*)pItem->_pData;
+                    if (!pSnsExp->_isFirst) {
+                        AIQ_REF_BASE_UNREF(&pSnsExp->_pSnsExp->_base._ref_base);
+                        pItem = aiqList_erase_item_locked(pBaseSns->_exp_list, pItem);
+                        rm    = true;
+                    }
+                }
+
+                for (int i = 0; i < aec_exp->ae_proc_res_rk.exp_set_cnt; i++) {
+                    if (aiqPool_freeNums(pBaseSns->_expParamsPool)) {
+                        AiqPoolItem_t* pItem = aiqPool_getFree(pBaseSns->_expParamsPool);
+                        pSnsExp              = (AiqSensorExpInfo_t*)(pItem->_pData);
+                    } else {
+                        LOGE_CAMHW_SUBM(SENSOR_SUBM, "cam%d no free exp params buffer",
+                                        pBaseSns->mCamPhyId);
+                        aiqMutex_unlock(&pBaseSns->_mutex);
+                        return XCAM_RETURN_ERROR_MEM;
+                    }
+
+                    pSnsExp->aecExpInfo = aec_exp->new_ae_exp;
+                    pSnsExp->aecExpInfo.LinearExp =
+                        aec_exp->ae_proc_res_rk.exp_set_tbl[i].LinearExp;
+                    pSnsExp->aecExpInfo.HdrExp[0] =
+                        aec_exp->ae_proc_res_rk.exp_set_tbl[i].HdrExp[0];
+                    pSnsExp->aecExpInfo.HdrExp[1] =
+                        aec_exp->ae_proc_res_rk.exp_set_tbl[i].HdrExp[1];
+                    pSnsExp->aecExpInfo.HdrExp[2] =
+                        aec_exp->ae_proc_res_rk.exp_set_tbl[i].HdrExp[2];
+                    pSnsExp->aecExpInfo.frame_length_lines =
+                        aec_exp->ae_proc_res_rk.exp_set_tbl[i].frame_length_lines;
+                    pSnsExp->aecExpInfo.CISFeature.SNR =
+                        aec_exp->ae_proc_res_rk.exp_set_tbl[i].CISFeature.SNR;
+                    pSnsExp->SensorDpccInfo = aec_exp->SensorDpccInfo;
+                    pSnsExp->exp_i2c_params = &aec_exp->exp_i2c_params;
+
+                    /* set a flag when it's fisrt elem of exp-table*/
+                    tmp._pSnsExp = pSnsExp;
+                    tmp._isFirst = (i == 0 ? true : false);
+                    ret          = aiqList_push(pBaseSns->_exp_list, &tmp);
+                    if (ret) {
+                        LOGE_CAMHW_SUBM(SENSOR_SUBM, "cam%d exp_list is full !\n",
+                                        pBaseSns->mCamPhyId);
+                        AIQ_REF_BASE_UNREF(&pSnsExp->_base._ref_base);
+                        aiqMutex_unlock(&pBaseSns->_mutex);
+                        return XCAM_RETURN_ERROR_MEM;
+                    }
+
+                    if (pBaseSns->_working_mode == RK_AIQ_WORKING_MODE_NORMAL) {
+                        LOGD_CAMHW_SUBM(
+                            SENSOR_SUBM,
+                            "cam%d exp_list push tbl[%d]: gain=%.4f, time=%.6f, isp_dgain=%.4f",
+                            pBaseSns->mCamPhyId, i,
+                            pSnsExp->aecExpInfo.LinearExp.exp_real_params.analog_gain,
+                            pSnsExp->aecExpInfo.LinearExp.exp_real_params.integration_time,
+                            pSnsExp->aecExpInfo.LinearExp.exp_real_params.isp_dgain);
+                    }
+                }
+                aec_exp->exp_i2c_params.bValid      = false;
+                aec_exp->ae_proc_res_rk.exp_set_cnt = 0;
+            }
+        } else {
+            LOGE_CAMHW_SUBM(SENSOR_SUBM, "unsurpported now !");
+        }
     }
 
     EXIT_CAMHW_FUNCTION();
@@ -324,6 +497,7 @@ static XCamReturn _getSensorModeData(AiqSensorHw_t* pBaseSns, const char* sns_en
     // add nr_switch
     sns_des->nr_switch = sensor_desc.nr_switch;
     sns_des->dcg_ratio = sensor_desc.dcg_ratio;
+    sns_des->exp_offset = sensor_desc.exp_offset;
 
     sns_des->sensor_output_width  = sensor_desc.sensor_output_width;
     sns_des->sensor_output_height = sensor_desc.sensor_output_height;
@@ -339,6 +513,51 @@ static XCamReturn _getSensorModeData(AiqSensorHw_t* pBaseSns, const char* sns_en
 
 static XCamReturn _handle_sof(AiqSensorHw_t* pSnsHw, int64_t time, uint32_t frameid) {
     ENTER_CAMHW_FUNCTION();
+
+    AiqFakeSensorHw_t* pFakeSnsHw = (AiqFakeSensorHw_t*)pSnsHw;
+    AiqMapItem_t* pItem           = NULL;
+    AiqSensorExpInfo_t* exp_time  = NULL;
+    int32_t effecting_frame_id    = frameid + pSnsHw->_gain_delay;
+    SensorHwExpItem_t snsExpListItem;
+
+    if (!pFakeSnsHw->mIsVicapVirtualSensor) return XCAM_RETURN_BYPASS;
+
+    aiqMutex_lock(&pSnsHw->_mutex);
+
+    pSnsHw->_frame_sequence = frameid;
+    LOGD_CAMHW_SUBM(SENSOR_SUBM, "cam%d frameid=%u, exp_list size=%d", pSnsHw->mCamPhyId, frameid,
+                    aiqList_size(pSnsHw->_exp_list));
+
+    while (aiqMap_size(pSnsHw->_effecting_exp_map) > 5) {
+        pItem = aiqMap_begin(pSnsHw->_effecting_exp_map);
+        if (pItem) {
+            AIQ_REF_BASE_UNREF(&(*((AiqSensorExpInfo_t**)(pItem->_pData)))->_base._ref_base);
+            aiqMap_erase(pSnsHw->_effecting_exp_map, pItem->_key);
+        }
+    }
+
+    if (aiqList_size(pSnsHw->_exp_list) > 0) {
+        aiqList_get(pSnsHw->_exp_list, &snsExpListItem);
+        if (pSnsHw->_last_exp_time) AIQ_REF_BASE_UNREF(&pSnsHw->_last_exp_time->_base._ref_base);
+        exp_time = pSnsHw->_last_exp_time = snsExpListItem._pSnsExp;
+
+        exp_time->_base.frame_id = effecting_frame_id;
+        aiqMap_insert(pSnsHw->_effecting_exp_map, (void*)(intptr_t)effecting_frame_id, &exp_time);
+        AIQ_REF_BASE_REF(&exp_time->_base._ref_base);
+
+        if (pSnsHw->_working_mode == RK_AIQ_WORKING_MODE_NORMAL) {
+            LOGD_CAMHW_SUBM(
+                SENSOR_SUBM,
+                "cam%d sof[%d]: exp_map insert fid=%d, gain=%.4f, time=%.6f, isp_dgain=%.4f",
+                pSnsHw->mCamPhyId, frameid, effecting_frame_id,
+                exp_time->aecExpInfo.LinearExp.exp_real_params.analog_gain,
+                exp_time->aecExpInfo.LinearExp.exp_real_params.integration_time,
+                exp_time->aecExpInfo.LinearExp.exp_real_params.isp_dgain);
+        }
+    }
+
+    aiqMutex_unlock(&pSnsHw->_mutex);
+
     EXIT_CAMHW_FUNCTION();
     return XCAM_RETURN_NO_ERROR;
 }
@@ -383,6 +602,10 @@ static XCamReturn _get_mirror_flip(AiqSensorHw_t* pSnsHw, bool* mirror, bool* fl
 
 static XCamReturn _set_exp_delay_info(AiqSensorHw_t* pSnsHw, int time_delay, int gain_delay,
                                       int hcg_lcg_mode_delay) {
+    pSnsHw->_time_delay            = time_delay;
+    pSnsHw->_gain_delay            = gain_delay;
+    pSnsHw->_dcg_gain_mode_delayed = hcg_lcg_mode_delay;
+
     return XCAM_RETURN_NO_ERROR;
 }
 
@@ -394,7 +617,7 @@ static XCamReturn _start(AiqSensorHw_t* pSnsHw, bool prepared) {
 
     (*v4l2_dev->start)(v4l2_dev, prepared);
 
-    if (!pFakeSnsHw->use_rkrawstream) {
+    if (!pFakeSnsHw->use_rkrawstream && !pFakeSnsHw->mIsVicapVirtualSensor) {
         CTimer_SetTimer(pFakeSnsHw->_timer, 0, 5000);
         CTimer_StartTimer(pFakeSnsHw->_timer);
     }
@@ -409,8 +632,11 @@ static XCamReturn _stop(AiqSensorHw_t* pSnsHw) {
 
     ENTER_CAMHW_FUNCTION();
     if (!pFakeSnsHw->use_rkrawstream) {
-        CTimer_StopTimer(pFakeSnsHw->_timer);
-        aiqList_reset(pFakeSnsHw->_vbuf_list);
+        if (!pFakeSnsHw->mIsVicapVirtualSensor) {
+            CTimer_StopTimer(pFakeSnsHw->_timer);
+            aiqList_reset(pFakeSnsHw->_vbuf_list);
+        }
+
         _SensorHw_stop(pSnsHw);
     }
     EXIT_CAMHW_FUNCTION();
@@ -556,7 +782,7 @@ static XCamReturn _enqueue_rawbuffer(AiqFakeSensorHw_t* pFakeSns, struct rk_aiq_
         pSnsExp->aecExpInfo.LinearExp.exp_sensor_params.coarse_integration_time =
             vbuf->buf_info[0].exp_time_reg;
         pSnsExp->aecExpInfo.LinearExp.exp_real_params.analog_gain      = vbuf->buf_info[0].exp_gain;
-        pSnsExp->aecExpInfo.LinearExp.exp_real_params.cis_total_gain   = vbuf->buf_info[0].exp_gain;
+        pSnsExp->aecExpInfo.LinearExp.exp_real_params.cis_total_gain   = vbuf->buf_info[0].cis_total_gain;
         pSnsExp->aecExpInfo.LinearExp.exp_real_params.integration_time = vbuf->buf_info[0].exp_time;
         pSnsExp->aecExpInfo.LinearExp.exp_sensor_params.digital_gain_global = 1;
         pSnsExp->aecExpInfo.LinearExp.exp_sensor_params.isp_digital_gain    = 1;
@@ -573,6 +799,7 @@ static XCamReturn _enqueue_rawbuffer(AiqFakeSensorHw_t* pFakeSns, struct rk_aiq_
         pSnsExp->aecExpInfo.HdrExp[2].exp_sensor_params.isp_digital_gain    = 1;
         pSnsExp->aecExpInfo.HdrExp[2].exp_real_params.digital_gain          = 1.0f;
         pSnsExp->aecExpInfo.HdrExp[2].exp_real_params.isp_dgain             = vbuf->buf_info[2].exp_ispdgain;
+        pSnsExp->aecExpInfo.HdrExp[2].exp_real_params.cis_total_gain        = vbuf->buf_info[2].cis_total_gain;
 
         pSnsExp->aecExpInfo.HdrExp[1].exp_sensor_params.analog_gain_code_global =
             vbuf->buf_info[1].exp_gain_reg;
@@ -584,6 +811,7 @@ static XCamReturn _enqueue_rawbuffer(AiqFakeSensorHw_t* pFakeSns, struct rk_aiq_
         pSnsExp->aecExpInfo.HdrExp[1].exp_sensor_params.isp_digital_gain    = 1;
         pSnsExp->aecExpInfo.HdrExp[1].exp_real_params.digital_gain          = 1.0f;
         pSnsExp->aecExpInfo.HdrExp[1].exp_real_params.isp_dgain             = vbuf->buf_info[1].exp_ispdgain;
+        pSnsExp->aecExpInfo.HdrExp[1].exp_real_params.cis_total_gain        = vbuf->buf_info[1].cis_total_gain;
 
         pSnsExp->aecExpInfo.HdrExp[0].exp_sensor_params.analog_gain_code_global =
             vbuf->buf_info[0].exp_gain_reg;
@@ -595,6 +823,7 @@ static XCamReturn _enqueue_rawbuffer(AiqFakeSensorHw_t* pFakeSns, struct rk_aiq_
         pSnsExp->aecExpInfo.HdrExp[0].exp_sensor_params.isp_digital_gain    = 1;
         pSnsExp->aecExpInfo.HdrExp[0].exp_real_params.digital_gain          = 1.0f;
         pSnsExp->aecExpInfo.HdrExp[0].exp_real_params.isp_dgain             = vbuf->buf_info[0].exp_ispdgain;
+        pSnsExp->aecExpInfo.HdrExp[0].exp_real_params.cis_total_gain        = vbuf->buf_info[0].cis_total_gain;
 
         aiqMap_insert(pSnsHw->_effecting_exp_map, (void*)(intptr_t)fid, &pSnsExp);
         LOGD_CAMHW_SUBM(FAKECAM_SUBM, "add id[%d] to the effected exp map", fid);
@@ -819,7 +1048,13 @@ void AiqFakeSensorHw_init(AiqFakeSensorHw_t* pFakeSnsHw, const char* name, int c
 #if RKAIQ_HAVE_DUMPSYS
     pSnsHw->dump = NULL;
 #endif
-    {
+
+    if (strstr(name, VICAP_VIRTUAL_SENSOR_SUFFIX))
+        pFakeSnsHw->mIsVicapVirtualSensor = true;
+    else
+        pFakeSnsHw->mIsVicapVirtualSensor = false;
+
+    if (!pFakeSnsHw->mIsVicapVirtualSensor) {
         // init list
         AiqListConfig_t vBufListCfg;
         vBufListCfg._name      = "vbuf_list";
@@ -828,18 +1063,26 @@ void AiqFakeSensorHw_init(AiqFakeSensorHw_t* pFakeSnsHw, const char* name, int c
         pFakeSnsHw->_vbuf_list = aiqList_init(&vBufListCfg);
         if (!pFakeSnsHw->_vbuf_list)
             LOGE_CAMHW_SUBM(SENSOR_SUBM, "init %s error", vBufListCfg._name);
+
+        pFakeSnsHw->_timer = aiq_mallocz(sizeof(CTimer_t));
+        CTimer_init(pFakeSnsHw->_timer, pFakeSnsHw);
     }
-    pFakeSnsHw->_timer = aiq_mallocz(sizeof(CTimer_t));
-    CTimer_init(pFakeSnsHw->_timer, pFakeSnsHw);
 }
 
 void AiqFakeSensorHw_deinit(AiqFakeSensorHw_t* pFakeSnsHw) {
     AiqSensorHw_t* pSnsHw = (AiqSensorHw_t*)pFakeSnsHw;
 
-    CTimer_deinit(pFakeSnsHw->_timer);
-    if (pFakeSnsHw->_timer) free(pFakeSnsHw->_timer);
+    if (pFakeSnsHw->_timer) {
+        CTimer_deinit(pFakeSnsHw->_timer);
+        if (pFakeSnsHw->_timer) {
+            free(pFakeSnsHw->_timer);
+            pFakeSnsHw->_timer = NULL;
+        }
+    }
 
     AiqFakeV4l2Device_deinit((AiqFakeV4l2Device_t*)(pSnsHw->mSd));
+    aiq_free(pSnsHw->mSd);
+    pSnsHw->mSd = NULL;
     AiqSensorHw_deinit(pSnsHw);
     aiqMutex_deInit(&pFakeSnsHw->_sync_mutex);
     aiqCond_deInit(&pFakeSnsHw->_sync_cond);

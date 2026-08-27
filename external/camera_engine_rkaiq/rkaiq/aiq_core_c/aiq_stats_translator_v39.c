@@ -191,6 +191,8 @@ void MergeAecHistBinStats(
                 merge_stats[tmp] += left_stats[i] + right_stats[i];
             }
             break;
+        default:
+            break;
         }
 
     } else {
@@ -210,6 +212,8 @@ void MergeAecHistBinStats(
             for(int i = 0; i < ISP32_HIST_BIN_N_MAX; i++) {
                 merge_stats[i] = left_stats[i] + right_stats[i];
             }
+            break;
+        default:
             break;
         }
     }
@@ -2031,6 +2035,8 @@ static void MergeAwbHistBinStats(
 
         }
         break;
+    default:
+        break;
     }
 }
 
@@ -2061,6 +2067,8 @@ static void MergeAwbExcWpStats(
             merge_stats[i].hw_awbCfg_bGainSum_val = left_stats->sum_exc[i].bgain_exc + right_stats->sum_exc[i].bgain_exc;
             merge_stats[i].hw_awbCfg_statsWp_count = left_stats->sum_exc[i].wp_num_exc + right_stats->sum_exc[i].wp_num_exc;
         }
+        break;
+    default:
         break;
     }
 }

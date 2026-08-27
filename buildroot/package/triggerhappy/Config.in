@@ -7,3 +7,5 @@ config BR2_PACKAGE_TRIGGERHAPPY
 	  attaches to the input device files and interprets the event
 	  data received and executes scripts configured in its
 	  configuration.
+
+	  https://github.com/wertarbyte/triggerhappy

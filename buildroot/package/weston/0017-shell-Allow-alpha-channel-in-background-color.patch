@@ -1,0 +1,44 @@
+From d400c334578311403030b7e82232bc8d2cf3846c Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Fri, 20 Mar 2026 18:55:16 +0800
+Subject: [PATCH 17/98] shell: Allow alpha channel in background color
+
+Remove forced opaque alpha and use configured alpha.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ clients/desktop-shell.c   | 4 ----
+ kiosk-shell/kiosk-shell.c | 2 +-
+ 2 files changed, 1 insertion(+), 5 deletions(-)
+
+diff --git a/clients/desktop-shell.c b/clients/desktop-shell.c
+index 54ba1063..64fb4388 100644
+--- a/clients/desktop-shell.c
++++ b/clients/desktop-shell.c
+@@ -1248,10 +1248,6 @@ background_create(struct desktop *desktop, struct output *output)
+ 	weston_config_section_get_color(s, "background-color",
+ 					&background->color, 0x00000000);
+ 
+-	/* Backgrounds must be fully opaque. */
+-	if (background->color != 0)
+-		background->color |= 0xFF000000;
+-
+ 	weston_config_section_get_string(s, "background-type",
+ 					 &type, "tile");
+ 	if (type == NULL) {
+diff --git a/kiosk-shell/kiosk-shell.c b/kiosk-shell/kiosk-shell.c
+index 9560ec17..176c78fd 100644
+--- a/kiosk-shell/kiosk-shell.c
++++ b/kiosk-shell/kiosk-shell.c
+@@ -718,7 +718,7 @@ kiosk_shell_output_recreate_background(struct kiosk_shell_output *shoutput)
+ 	curtain_params.r = ((bg_color >> 16) & 0xff) / 255.0;
+ 	curtain_params.g = ((bg_color >> 8) & 0xff) / 255.0;
+ 	curtain_params.b = ((bg_color >> 0) & 0xff) / 255.0;
+-	curtain_params.a = 1.0;
++	curtain_params.a = ((bg_color >> 24) & 0xff) / 255.0;
+ 
+ 	curtain_params.pos = output->pos;
+ 	curtain_params.width = output->width;
+-- 
+2.39.5
+

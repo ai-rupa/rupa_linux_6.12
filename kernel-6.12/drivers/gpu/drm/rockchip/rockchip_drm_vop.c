@@ -4873,13 +4873,13 @@ static void vop_tv_config_update(struct drm_crtc *crtc,
 
 	if (vop_data->feature & VOP_FEATURE_OUTPUT_10BIT)
 		brightness = interpolate(0, -128, 100, 127, s->tv_state->brightness);
-	else if (vop->version == VOP_VERSION_PX30_BIG || vop->version >= VOP_VERSION_RK3506)
+	else if (vop->version == VOP_VERSION_PX30_BIG || vop->version >= VOP_VERSION_RV1126)
 		brightness = interpolate(0, -64, 100, 63, s->tv_state->brightness);
 	else
 		brightness = interpolate(0, -32, 100, 31, s->tv_state->brightness);
 
 	if ((VOP_MAJOR(vop->version) == 3) ||
-	    (VOP_MAJOR(vop->version) == 2 && VOP_MINOR(vop->version) == 6)) { /* px30 vopb */
+	    vop->version == VOP_VERSION_PX30_BIG || vop->version >= VOP_VERSION_RV1126) {
 		contrast = interpolate(0, 0, 100, 511, s->tv_state->contrast);
 		saturation = interpolate(0, 0, 100, 511, s->tv_state->saturation);
 		/*
@@ -4889,8 +4889,14 @@ static void vop_tv_config_update(struct drm_crtc *crtc,
 		 *  a:[0~30]
 		 *    sin_hue = sin(a)*256;
 		 *    cos_hue = cos(a)*256;
+		 *
+		 * BCSH uses clockwise as positive hue angle while CSC(in VOP2
+		 * and VOP3) uses counter-clockwise. Unify to counter-clockwise
+		 * as positive direction: invert the configured hue parameter
+		 * for BCSH.
 		 */
-		hue = interpolate(0, -30, 100, 30, s->tv_state->hue);
+
+		hue = interpolate(0, 30, 100, -30, s->tv_state->hue);
 		sin_hue = fixp_sin32(hue) >> 23;
 		cos_hue = fixp_cos32(hue) >> 23;
 		VOP_CTRL_SET(vop, bcsh_sat_con, saturation * contrast / 0x100);
@@ -4905,8 +4911,13 @@ static void vop_tv_config_update(struct drm_crtc *crtc,
 		 *  a:[0~30]
 		 *    sin_hue = sin(a)*128;
 		 *    cos_hue = cos(a)*128;
+		 *
+		 * BCSH uses clockwise as positive hue angle while CSC(in VOP2
+		 * and VOP3) uses counter-clockwise. Unify to counter-clockwise
+		 * as positive direction: invert the configured hue parameter
+		 * for BCSH.
 		 */
-		hue = interpolate(0, -30, 100, 30, s->tv_state->hue);
+		hue = interpolate(0, 30, 100, -30, s->tv_state->hue);
 		sin_hue = fixp_sin32(hue) >> 24;
 		cos_hue = fixp_cos32(hue) >> 24;
 		VOP_CTRL_SET(vop, bcsh_sat_con, saturation * contrast / 0x80);

@@ -700,7 +700,7 @@ static int convert_image_rga(image_buffer_t* src_img, image_buffer_t* dst_img, i
     if (drect.width != dstWidth || drect.height != dstHeight) {
         im_rect dst_whole_rect = {0, 0, dstWidth, dstHeight};
         int imcolor;
-        char* p_imcolor = &imcolor;
+        char* p_imcolor = (char*)&imcolor;
         p_imcolor[0] = color;
         p_imcolor[1] = color;
         p_imcolor[2] = color;
@@ -747,6 +747,11 @@ int convert_image(image_buffer_t* src_img, image_buffer_t* dst_img, image_rect_t
     printf("convert image use cpu\n");
     ret = convert_image_cpu(src_img, dst_img, src_box, dst_box, color);
 #else
+#if defined(DISABLE_RGA_ON_RK3572)
+    // RGA disabled on RK3572, use CPU directly
+    printf("RGA disabled on RK3572, convert image use cpu\n");
+    ret = convert_image_cpu(src_img, dst_img, src_box, dst_box, color);
+#else
     if(src_img->width % 16 == 0 && dst_img->width % 16 == 0) {
         ret = convert_image_rga(src_img, dst_img, src_box, dst_box, color);
         if (ret != 0) {
@@ -757,7 +762,8 @@ int convert_image(image_buffer_t* src_img, image_buffer_t* dst_img, image_rect_t
         printf("src width is not 4/16-aligned, convert image use cpu\n");
         ret = convert_image_cpu(src_img, dst_img, src_box, dst_box, color);
     }
-#endif
+#endif // DISABLE_RGA_ON_RK3572
+#endif // DISABLE_RGA
     return ret;
 }
 

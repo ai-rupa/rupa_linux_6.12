@@ -175,6 +175,21 @@
 #define VOP2_MAX_VP_OUTPUT_WIDTH	4096
 /* KHZ */
 #define VOP2_MAX_DCLK_RATE		600000
+/* VFP seamless switch: safe margin before VOP scan line overtakes new vtotal */
+#define VOP2_VFP_SAFE_MARGIN		5
+/* VFP seamless switch: extra lines to extend vtotal when scan line too close */
+#define VOP2_VFP_EXTEND_MARGIN		20
+/*
+ * When HDMI Gaming VRR is enabled, EMP packet must be sent at least
+ * one frame before the actual refresh rate switch to notify the TV
+ * to enter Gaming VRR mode. When HDMI Gaming VRR is disabled, the system
+ * must first switch back to the base refresh rate, and then stop sending the EMP
+ * packet. Considering that when the HDMI controller first enables EMP packet
+ * transmission, it takes 2 vsync to take effect, and to prevent some TVs from
+ * switching VRR mode too slowly in the future, the gap between the HDMI EMP packet
+ * transmission switch and the actual VOP timing switch is set to 3 frames.
+ */
+#define VOP2_HDMI_EMP_FRAME_GAP		3
 
 enum vop2_data_format {
 	VOP2_FMT_ARGB8888 = 0,
@@ -1062,6 +1077,17 @@ struct vop2 {
 	bool iommu_fault_in_progress;
 
 	/**
+	 * @cluster_once_enabled:
+	 * RK3572 Cluster0 and Cluster1 share one AFBC decoder.
+	 * Cluster1 with AFBC must not be enabled before Cluster0's first enable.
+	 * This flag tracks whether Cluster0 has ever been enabled since VOP power-on,
+	 * so the restriction can be relaxed after the first enable sequence.
+	 *
+	 * Reset on VOP disable for correctness across suspend/resume.
+	 */
+	bool cluster_once_enabled;
+
+	/**
 	 * @sync_vp_mask: Bitmask of video ports with the display synchronization function;
 	 *
 	 * If the VP0 and VP1 are synchronized via DT configs:
@@ -1072,6 +1098,9 @@ struct vop2 {
 	 * The value of it should be the same with above DT property: 0x3.
 	 */
 	uint8_t sync_vp_mask;
+
+	/* Mask to disable AFBC support per window */
+	u32 disable_afbc_mask;
 
 	unsigned long aclk_current_freq;
 	enum rockchip_drm_vop_aclk_mode aclk_mode;
@@ -1217,6 +1246,7 @@ static void vop2_wait_for_fs_by_done_bit_status(struct vop2_video_port *vp);
 static int vop2_clk_reset(struct reset_control *rstc);
 static inline bool vop2_cluster_window(struct vop2_win *win);
 static inline bool vop2_cluster_sub_window(struct vop2_win *win);
+static inline bool vop2_multi_area_window(struct vop2_win *win);
 static inline bool vop2_multi_area_sub_window(struct vop2_win *win);
 static void vop2_wait_for_scan_timing_max_to_assigned_line(struct vop2_video_port *vp,
 							   u32 current_line,
@@ -1619,6 +1649,33 @@ static struct vop2_win *vop2_find_win_by_phys_id(struct vop2 *vop2, uint8_t phys
 	}
 
 	return NULL;
+}
+
+/*
+ * Check whether any active plane attached to the video port has an
+ * SDR eotf, which indicates that sdr2hdr conversion is needed.
+ */
+static inline bool vop2_vp_has_sdr_layer(struct vop2 *vop2, unsigned long win_mask)
+{
+	struct vop2_win *win;
+	struct drm_plane_state *pstate;
+	struct vop2_plane_state *vpstate;
+	int phys_id;
+
+	for_each_set_bit(phys_id, &win_mask, ROCKCHIP_MAX_LAYER) {
+		win = vop2_find_win_by_phys_id(vop2, phys_id);
+		pstate = win->base.state;
+		vpstate = to_vop2_plane_state(pstate);
+
+		if (!vop2_plane_active(pstate))
+			continue;
+
+		if (vpstate->eotf != HDMI_EOTF_SMPTE_ST2084 &&
+		    vpstate->eotf != HDMI_EOTF_BT_2100_HLG)
+			return true;
+	}
+
+	return false;
 }
 
 static struct vop2_power_domain *vop2_find_pd_by_id(struct vop2 *vop2, uint16_t id)
@@ -2190,13 +2247,15 @@ static inline void rk3588_vop2_cfg_done(struct drm_crtc *crtc)
 	uint32_t val = 0;
 
 	if (vp->reserved_plane_phy_id != ROCKCHIP_VOP2_PHY_ID_INVALID) {
-		if (vop2->version < VOP_VERSION_RK3572) {
-			val = vp->win_cfg_done_bits;
-			VOP_CTRL_SET(vop2, win_cfg_done, val);
-		}
-		VOP_CTRL_SET(vop2, wb_cfg_done, 1);
-		VOP_MODULE_SET(vop2, vp, sys_cfg_done, 1);
-		rockchip_drm_dbg(vop2->dev, VOP_DEBUG_CFG_DONE, "win cfg_done_bits:0x%x\n", val);
+		if (vop2->version < VOP_VERSION_RK3572)
+			vop2_writel(vop2, RK3588_SYS_WIN_REG_CFG_DONE,
+				    vp->win_cfg_done_bits | (vp->win_cfg_done_bits << 16));
+		val = RK3568_VOP2_GLB_CFG_DONE_EN | RK3568_VOP2_WB_CFG_DONE |
+		      (RK3568_VOP2_WB_CFG_DONE << 16) | BIT(vp_data->reg_done_bit) |
+		      (BIT(vp_data->reg_done_bit) << 16);
+		vop2_writel(vop2, 0, val);
+		rockchip_drm_dbg(vop2->dev, VOP_DEBUG_CFG_DONE, "win cfg_done_bits:0x%x\n",
+				 vp->win_cfg_done_bits);
 	} else if (vop2->version >= VOP_VERSION_RK3572) {
 		VOP_MODULE_SET(vop2, vp, cfg_done, 1);
 		rockchip_drm_dbg(vop2->dev, VOP_DEBUG_CFG_DONE, "cfg_done\n");
@@ -2477,6 +2536,7 @@ static void vop2_win_multi_area_disable(struct vop2_win *parent)
 static void vop2_win_disable(struct vop2_win *win, bool skip_splice_win)
 {
 	struct vop2 *vop2 = win->vop2;
+	struct vop2_plane_state *vpstate = to_vop2_plane_state(win->base.state);
 	struct vop2_video_port *vp = NULL;
 	uint32_t vp_id;
 
@@ -2547,6 +2607,11 @@ static void vop2_win_disable(struct vop2_win *win, bool skip_splice_win)
 			vp = &vop2->vps[vp_id];
 			if (vp->reserved_plane_phy_id != ROCKCHIP_VOP2_PHY_ID_INVALID)
 				vp->win_cfg_done_bits |= BIT(win->reg_done_bit);
+
+			if (vpstate->cgc_en) {
+				vpstate->cgc_en = false;
+				VOP_MODULE_SET(vop2, vp, cgc_path_en, 0);
+			}
 		}
 	}
 
@@ -3084,6 +3149,11 @@ static bool rockchip_vop2_mod_supported(struct drm_plane *plane, u32 format, u64
 	       vop3_convert_tiled_format(format, 0) >= 0;
 }
 
+static inline bool vop2_multi_area_window(struct vop2_win *win)
+{
+	return (win->feature & WIN_FEATURE_MULTI_AREA);
+}
+
 static inline bool vop2_multi_area_sub_window(struct vop2_win *win)
 {
 	return (win->parent && (win->feature & WIN_FEATURE_MULTI_AREA));
@@ -3091,7 +3161,7 @@ static inline bool vop2_multi_area_sub_window(struct vop2_win *win)
 
 static inline bool vop2_cluster_window(struct vop2_win *win)
 {
-	return  (win->feature & (WIN_FEATURE_CLUSTER_MAIN | WIN_FEATURE_CLUSTER_SUB));
+	return (win->feature & (WIN_FEATURE_CLUSTER_MAIN | WIN_FEATURE_CLUSTER_SUB));
 }
 
 static inline bool vop2_cluster_sub_window(struct vop2_win *win)
@@ -3101,12 +3171,17 @@ static inline bool vop2_cluster_sub_window(struct vop2_win *win)
 
 static inline bool vop2_cursor_window(struct vop2_win *win)
 {
-	return  (win->feature & WIN_FEATURE_HW_CURSOR);
+	return (win->feature & WIN_FEATURE_HW_CURSOR);
 }
 
 static inline bool vop2_msmart_window(struct vop2_win *win)
 {
-	return  (win->feature & WIN_FEATURE_MSMART);
+	return (win->feature & WIN_FEATURE_MSMART);
+}
+
+static inline bool vop2_sub_window(struct vop2_win *win)
+{
+	return vop2_cluster_sub_window(win) || vop2_multi_area_sub_window(win);
 }
 
 static inline bool vop2_has_feature(struct vop2 *vop2, uint64_t feature)
@@ -3858,7 +3933,7 @@ static bool vop3_csc_is_r2r_y2y_mode(struct post_csc_convert_mode convert_mode,
 	if (convert_mode.is_input_full_range != convert_mode.is_output_full_range)
 		return true;
 
-	if (convert_mode.intput_color_encoding != convert_mode.output_color_encoding)
+	if (convert_mode.input_color_encoding != convert_mode.output_color_encoding)
 		return true;
 
 	return false;
@@ -3903,13 +3978,13 @@ static void vop2_plane_setup_csc_mode(struct vop2_video_port *vp,
 	struct drm_plane_state *pstate = &vpstate->base;
 	struct rockchip_crtc_state *vcstate = to_rockchip_crtc_state(vp->rockchip_crtc.crtc.state);
 	struct vop2 *vop2 = vp->vop2;
-	int is_input_yuv = pstate->fb->format->is_yuv;
-	int is_output_yuv = vcstate->yuv_overlay;
 	struct vop2_win *win = to_vop2_win(pstate->plane);
 	const struct vop2_data *vop2_data = vop2->data;
 	const struct vop2_win_data *win_data = &vop2_data->win[win->win_id];
 	int csc_y2r_bit_depth = CSC_10BIT_DEPTH;
 	int input_color_range = pstate->color_range;
+	bool is_input_yuv = pstate->fb->format->is_yuv;
+	bool is_output_yuv = vcstate->yuv_overlay;
 
 	if (win->feature & WIN_FEATURE_Y2R_13BIT_DEPTH)
 		csc_y2r_bit_depth = CSC_13BIT_DEPTH;
@@ -3989,9 +4064,10 @@ static void vop2_plane_setup_csc_mode(struct vop2_video_port *vp,
 
 	if (win->csc_coe_offset) {
 		struct post_csc_convert_mode convert_mode = {};
+		bool dci_color_swap = false;
 
 		convert_mode.is_input_yuv = is_input_yuv;
-		convert_mode.intput_color_encoding = pstate->color_encoding;
+		convert_mode.input_color_encoding = pstate->color_encoding;
 		convert_mode.is_input_full_range = pstate->color_range;
 		convert_mode.pixel_depth = 10;
 		convert_mode.coef_precision = win_data->csc_coe_bits;
@@ -4000,7 +4076,7 @@ static void vop2_plane_setup_csc_mode(struct vop2_video_port *vp,
 
 		convert_mode.is_output_yuv = is_output_yuv;
 		/* apart from bt2020, vop process recommends using bt709. */
-		if (convert_mode.intput_color_encoding != DRM_COLOR_YCBCR_BT2020)
+		if (convert_mode.input_color_encoding != DRM_COLOR_YCBCR_BT2020)
 			convert_mode.output_color_encoding = DRM_COLOR_YCBCR_BT709;
 		else
 			convert_mode.output_color_encoding = DRM_COLOR_YCBCR_BT2020;
@@ -4013,7 +4089,16 @@ static void vop2_plane_setup_csc_mode(struct vop2_video_port *vp,
 		else if (!is_input_yuv && is_output_yuv)
 			vpstate->r2y_en = 1;
 
-		if (vop3_csc_is_r2r_y2y_mode(convert_mode, NULL)) {
+		/*
+		 * When DCI is enabled, if DCI CSC performs an R2Y conversion
+		 * and it is YUV overlay, the plane CSC needs to perform a
+		 * YUV to VYU swap.
+		 */
+		if (vop2->version >= VOP_VERSION_RK3572 && vpstate->dci_en &&
+		    !pstate->fb->format->is_yuv && vcstate->yuv_overlay)
+			dci_color_swap = true;
+
+		if (vop3_csc_is_r2r_y2y_mode(convert_mode, NULL) || dci_color_swap) {
 			if (!convert_mode.is_input_yuv) {
 				convert_mode.swap_channels = RK_PQ_CSC_V2_R2Y_R2R;
 				vpstate->r2y_en = 1;
@@ -4707,7 +4792,7 @@ static void vop2_wb_commit(struct drm_crtc *crtc)
 			VOP_MODULE_SET(vop2, wb, vir_stride_en, 1);
 			VOP_MODULE_SET(vop2, wb, post_empty_stop_en, 1);
 			if (one_frame_mode) {
-				if (vop2->version >= VOP_VERSION_RK3572)
+				if (vop2->version == VOP_VERSION_RK3576)
 					VOP_MODULE_SET(vop2, wb, auto_gating, 0);
 				VOP_MODULE_SET(vop2, wb, one_frame_mode, 1);
 				vop2_write_reg_uncached(vop2, &wb->regs->enable, 1);
@@ -6122,6 +6207,8 @@ static void vop2_disable(struct drm_crtc *crtc)
 	}
 	if (vop2->version == VOP_VERSION_RK3588 || vop2->version == VOP_VERSION_RK3576)
 		vop2_power_off_all_pd(vop2);
+	else if (vop2->version == VOP_VERSION_RK3572)
+		vop2->cluster_once_enabled = false;
 
 	/*
 	 * Reset AXI to get a clean state, which is conducive to recovering
@@ -6607,6 +6694,7 @@ static void vop2_crtc_atomic_disable(struct drm_crtc *crtc,
 	const struct vop2_video_port_data *vp_data = &vop2->data->vp[vp->id];
 	struct vop2_video_port *splice_vp = &vop2->vps[vp_data->splice_vp_id];
 	bool dual_channel = !!(vcstate->output_flags & ROCKCHIP_OUTPUT_DUAL_CHANNEL_LEFT_RIGHT_MODE);
+	unsigned long flags;
 	int ret;
 
 	WARN_ON(vp->event);
@@ -6772,7 +6860,11 @@ static void vop2_crtc_atomic_disable(struct drm_crtc *crtc,
 	vcstate->output_type = 0;
 	vcstate->hdmi_vrr.m_const = 0;
 	vcstate->hdmi_vrr.next_tfr_val = 0;
+	spin_lock_irqsave(&vop2->irq_lock, flags);
 	vcstate->hdmi_vrr.refresh_rate_ready_to_change = false;
+	vcstate->hdmi_vrr.emp_frame_gap = 0;
+	vcstate->hdmi_vrr.vrr_type = HDMI_VRR_OFF;
+	spin_unlock_irqrestore(&vop2->irq_lock, flags);
 	vp->splice_mode_right = false;
 	vp->loader_protect = false;
 	vp->enabled_win_mask = 0;
@@ -7301,49 +7393,12 @@ static int vop3_msmart_grid_linear_yuv_format_check(struct drm_plane *plane,
 
 /*
  * For RK3572 MSMART0/1, the min actual width limit as follow:
- * XR30/AR30/XB30/AB30, XR24/AR24/XB24/AB24: actual_w > 4
- * RG24/BG24: actual_w > 5
- * RG16/BG16, AR15/AB15/XR15/XB15: actual_w > 8
- * NV12/NV21, NV16/NV61, NV24/NV42: actual_w > 16
- * NV15, NV20, NV30: actual_w > 12
+ * NV12/NV21, NV16/NV61, NV24/NV42: actual_w >= 17
+ * Others: actual_w >= 16
  */
 static int vop3_msmart_min_width_check(struct drm_plane *plane, uint32_t format, uint32_t actual_w)
 {
 	switch (format) {
-	case DRM_FORMAT_XRGB2101010:
-	case DRM_FORMAT_ARGB2101010:
-	case DRM_FORMAT_XBGR2101010:
-	case DRM_FORMAT_ABGR2101010:
-	case DRM_FORMAT_XRGB8888:
-	case DRM_FORMAT_ARGB8888:
-	case DRM_FORMAT_XBGR8888:
-	case DRM_FORMAT_ABGR8888:
-		if (actual_w <= 4) {
-			drm_err(plane->dev, "%s %p4cc actual width %d <= 4\n", plane->name,
-				&format, actual_w);
-			return -EINVAL;
-		}
-		break;
-	case DRM_FORMAT_RGB888:
-	case DRM_FORMAT_BGR888:
-		if (actual_w <= 5) {
-			drm_err(plane->dev, "%s %p4cc actual width %d <= 5\n", plane->name,
-				&format, actual_w);
-			return -EINVAL;
-		}
-		break;
-	case DRM_FORMAT_RGB565:
-	case DRM_FORMAT_BGR565:
-	case DRM_FORMAT_ARGB1555:
-	case DRM_FORMAT_ABGR1555:
-	case DRM_FORMAT_XRGB1555:
-	case DRM_FORMAT_XBGR1555:
-		if (actual_w <= 8) {
-			drm_err(plane->dev, "%s %p4cc actual width %d <= 8\n", plane->name,
-				&format, actual_w);
-			return -EINVAL;
-		}
-		break;
 	case DRM_FORMAT_NV12:
 	case DRM_FORMAT_NV21:
 	case DRM_FORMAT_NV16:
@@ -7356,16 +7411,12 @@ static int vop3_msmart_min_width_check(struct drm_plane *plane, uint32_t format,
 			return -EINVAL;
 		}
 		break;
-	case DRM_FORMAT_NV15:
-	case DRM_FORMAT_NV20:
-	case DRM_FORMAT_NV30:
-		if (actual_w <= 12) {
-			drm_err(plane->dev, "%s %p4cc actual width %d <= 12\n", plane->name,
+	default:
+		if (actual_w <= 15) {
+			drm_err(plane->dev, "%s %p4cc actual width %d <= 15\n", plane->name,
 				&format, actual_w);
 			return -EINVAL;
 		}
-		break;
-	default:
 		break;
 	};
 
@@ -7683,10 +7734,12 @@ static int vop2_plane_atomic_check(struct drm_plane *plane, struct drm_atomic_st
 	}
 
 	if (vop2_msmart_window(win)) {
-		ret = vop3_msmart_min_width_check(plane, fb->format->format,
-						  drm_rect_width(src) >> 16);
-		if (ret)
-			return ret;
+		if (vpstate->msmart_data && vpstate->msmart_data->data) {
+			ret = vop3_msmart_min_width_check(plane, fb->format->format,
+							  drm_rect_width(src) >> 16);
+			if (ret)
+				return ret;
+		}
 	}
 
 	if (rockchip_afbc(plane, fb->modifier) || rockchip_rfbc(plane, fb->modifier))
@@ -7847,10 +7900,12 @@ static void vop2_plane_atomic_disable(struct drm_plane *plane, struct drm_atomic
 	vp = to_vop2_video_port(crtc);
 
 	vop2_win_disable(win, false);
-	vp->enabled_win_mask &= ~BIT(win->phys_id);
+	if (!vop2_sub_window(win))
+		vp->enabled_win_mask &= ~BIT(win->phys_id);
 	if (win->splice_win) {
 		vop2_win_disable(win->splice_win, false);
-		vp->enabled_win_mask &= ~BIT(win->splice_win->phys_id);
+		if (!vop2_sub_window(win->splice_win))
+			vp->enabled_win_mask &= ~BIT(win->splice_win->phys_id);
 	}
 
 	spin_unlock(&vop2->reg_lock);
@@ -8130,8 +8185,8 @@ static void vop3_dci_config(struct vop2_win *win, struct vop2_plane_state *vpsta
 		convert_mode.is_input_full_range =
 			pstate->color_range == DRM_COLOR_YCBCR_FULL_RANGE ? true : false;
 		convert_mode.is_output_full_range = true;
-		convert_mode.intput_color_encoding = pstate->color_encoding;
-		convert_mode.output_color_encoding = convert_mode.intput_color_encoding;
+		convert_mode.input_color_encoding = pstate->color_encoding;
+		convert_mode.output_color_encoding = convert_mode.input_color_encoding;
 		convert_mode.is_input_yuv = pstate->fb->format->is_yuv;
 		convert_mode.is_output_yuv = true;
 		convert_mode.pixel_depth = 10;
@@ -8401,9 +8456,15 @@ static void vop2_win_atomic_update(struct vop2_win *win, struct drm_rect *src, s
 			format = vop2_convert_format(fb->format->format);
 	}
 
-	vop2_plane_setup_csc_mode(vp, vpstate);
+	/*
+	 * The plane CSC mode setting depends on the value of
+	 * vpstate->dci_en (set by vop3_dci_config). Therefore,
+	 * vop2_plane_setup_csc_mode must be kept after vop3_dci_config.
+	 */
 	if (win->feature & WIN_FEATURE_DCI)
 		vop3_dci_config(win, vpstate);
+
+	vop2_plane_setup_csc_mode(vp, vpstate);
 
 	afbc_half_block_en = vop2_afbc_half_block_enable(vop2, vpstate);
 
@@ -8421,7 +8482,7 @@ static void vop2_win_atomic_update(struct vop2_win *win, struct drm_rect *src, s
 		rk3588_vop2_win_cfg_axi(win);
 
 	if (is_vop3(vop2)) {
-		if (!win->parent && !vop2_cluster_window(win))
+		if (!win->parent && vop2_multi_area_window(win))
 			VOP_WIN_SET(vop2, win, scale_engine_num, win->scale_engine_num);
 
 		/* Only esmart win0 and cluster win0 need to enter config vp id and win dly num */
@@ -8629,7 +8690,8 @@ static void vop2_win_atomic_update(struct vop2_win *win, struct drm_rect *src, s
 	VOP_WIN_SET(vop2, win, dither_up, dither_up);
 
 	VOP_WIN_SET(vop2, win, enable, 1);
-	vp->enabled_win_mask |= BIT(win->phys_id);
+	if (!vop2_sub_window(win))
+		vp->enabled_win_mask |= BIT(win->phys_id);
 	if (vop2_cluster_window(win)) {
 		lb_mode = vop2_get_cluster_lb_mode(win, vpstate);
 		VOP_CLUSTER_SET(vop2, win, lb_mode, lb_mode);
@@ -8690,6 +8752,22 @@ static void vop2_plane_atomic_update(struct drm_plane *plane, struct drm_atomic_
 	if (!pstate->visible) {
 		vop2_plane_atomic_disable(plane, state);
 		return;
+	}
+
+	/*
+	 * RK3572 Cluster0 and Cluster1 share a single AFBC decoder.
+	 * Cluster1 with afbc format should not be enabled before Cluster0.
+	 */
+	if (vop2->version == VOP_VERSION_RK3572 && !vop2->disable_afbc_mask) {
+		struct vop2_win *cluster0_win = vop2_find_win_by_phys_id(vop2, ROCKCHIP_VOP2_CLUSTER0);
+
+		if ((win->phys_id == ROCKCHIP_VOP2_CLUSTER1 && vpstate->afbc_en) &&
+		    (cluster0_win && !VOP_WIN_GET(vop2, cluster0_win, enable)) &&
+		    !(vp->win_mask & BIT(ROCKCHIP_VOP2_CLUSTER0)) && vop2->cluster_once_enabled == false)
+			DRM_WARN("Cluster1 should not be enabled before Cluster0\n");
+
+		if (win->phys_id == ROCKCHIP_VOP2_CLUSTER0 && vpstate->afbc_en)
+			vop2->cluster_once_enabled = true;
 	}
 
 	/*
@@ -9502,8 +9580,8 @@ static int vop2_crtc_loader_protect(struct drm_crtc *crtc, bool on, void *data)
 					pd->vp_mask |= BIT(vp->id);
 					pd = pd->parent;
 				}
-
-				vp->enabled_win_mask |= BIT(win->phys_id);
+				if (!vop2_sub_window(win))
+					vp->enabled_win_mask |= BIT(win->phys_id);
 				crtc_state = drm_atomic_get_crtc_state(crtc->state->state, crtc);
 				vcstate = to_rockchip_crtc_state(crtc_state);
 				vp->output_if = vcstate->output_if;
@@ -9518,7 +9596,8 @@ static int vop2_crtc_loader_protect(struct drm_crtc *crtc, bool on, void *data)
 					splice_vp->win_mask |=  BIT(splice_win->phys_id);
 					splice_win->vp_mask = BIT(splice_vp->id);
 					vop2->active_vp_mask |= BIT(splice_vp->id);
-					vp->enabled_win_mask |= BIT(splice_win->phys_id);
+					if (!vop2_sub_window(splice_win))
+						vp->enabled_win_mask |= BIT(splice_win->phys_id);
 
 					if (splice_win->pd &&
 					    VOP_WIN_GET(vop2, splice_win, enable)) {
@@ -9761,7 +9840,7 @@ static int vop2_vrr_info_dump(struct drm_crtc *crtc, struct seq_file *s)
 
 	DEBUG_PRINT("\tCurrent refresh rate: %d\n", vcstate->request_refresh_rate);
 
-	switch (vcstate->vrr_type) {
+	switch (vcstate->vrr_mode) {
 	case ROCKCHIP_VRR_DCLK_MODE:
 		DEBUG_PRINT("\tType: DCLK\n");
 		current_pixel_clock = mode->crtc_clock * vcstate->request_refresh_rate /
@@ -9795,10 +9874,13 @@ static int vop2_crtc_debugfs_dump(struct drm_crtc *crtc, struct seq_file *s)
 	struct vop2 *vop2 = vp->vop2;
 	struct drm_crtc_state *crtc_state = crtc->state;
 	struct drm_display_mode *mode = &crtc->state->adjusted_mode;
+	struct drm_display_mode tmp;
 	struct rockchip_crtc_state *state = to_rockchip_crtc_state(crtc->state);
 	bool interlaced = !!(mode->flags & DRM_MODE_FLAG_INTERLACE);
 	struct drm_plane *plane;
 	unsigned long aclk_rate;
+	u64 dividend, dclk_rate_kHz;
+	u32 actual_fps_x100;
 
 	DEBUG_PRINT("Video Port%d: %s\n", vp->id, crtc_state->active ? "ACTIVE" : "DISABLED");
 
@@ -9814,6 +9896,15 @@ static int vop2_crtc_debugfs_dump(struct drm_crtc *crtc, struct seq_file *s)
 	else
 		aclk_rate = clk_get_rate(vop2->aclk);
 
+	/* Calculate refresh rate multiplied by 100 to keep two decimal precision */
+	drm_mode_copy(&tmp, mode);
+	tmp.clock *= 100;
+	dclk_rate_kHz = clk_get_rate(vp->dclk) / 1000;
+	/* The expected crtc_clock and actual hardware dclk may have integer multiple relation */
+	dclk_rate_kHz *= DIV64_U64_ROUND_CLOSEST((u64)mode->crtc_clock, dclk_rate_kHz);
+	dividend = mul_u32_u32(drm_mode_vrefresh(&tmp), dclk_rate_kHz);
+	actual_fps_x100 = div64_u64(dividend, (u64)mode->crtc_clock);
+
 	vop2_dump_connector_on_crtc(crtc, s);
 	DEBUG_PRINT("\tbus_format[%x]: %s\n", state->bus_format,
 		    drm_get_bus_format_name(state->bus_format));
@@ -9827,11 +9918,11 @@ static int vop2_crtc_debugfs_dump(struct drm_crtc *crtc, struct seq_file *s)
 		    state->post_r2y_en ? csc_mode_to_string(vop2, state->post_csc_mode) : "off",
 		    state->sharp_en, state->acm_en, state->post_y2r_en ?
 		    csc_mode_to_string(vop2, state->post_csc_y2r_mode) : "off");
-	DEBUG_PRINT("    Display mode: %dx%d%s%d\n",
+	DEBUG_PRINT("    Display mode: %dx%d%s%u.%02u\n",
 		    mode->hdisplay, mode->vdisplay, interlaced ? "i" : "p",
-		    drm_mode_vrefresh(mode));
-	DEBUG_PRINT("\tdclk[%d kHz] real_dclk[%d kHz] aclk[%ld kHz] type[%x] flag[%x]\n",
-		    mode->clock, mode->crtc_clock, aclk_rate / 1000,
+		    actual_fps_x100 / 100, actual_fps_x100 % 100);
+	DEBUG_PRINT("\tdclk[%d kHz] crtc_dclk[%d kHz] real_dclk[%lu kHz] aclk[%ld kHz] type[%x] flag[%x]\n",
+		    mode->clock, mode->crtc_clock, clk_get_rate(vp->dclk) / 1000, aclk_rate / 1000,
 		    mode->type, mode->flags);
 	DEBUG_PRINT("\tH: %d %d %d %d\n", mode->hdisplay, mode->hsync_start,
 		    mode->hsync_end, mode->htotal);
@@ -12532,13 +12623,13 @@ static void vop2_crtc_atomic_enable(struct drm_crtc *crtc, struct drm_atomic_sta
 		val = vtotal << 16 | (vtotal + vsync_len);
 		VOP_MODULE_SET(vop2, vp, vs_st_end_f1, val);
 		VOP_MODULE_SET(vop2, vp, dsp_interlace, 1);
-		VOP_MODULE_SET(vop2, vp, dsp_filed_pol, 1);
+		VOP_MODULE_SET(vop2, vp, dsp_field_pol, 1);
 		VOP_MODULE_SET(vop2, vp, p2i_en, 1);
 		vtotal += vtotal + 1;
 		act_end = vact_end_f1;
 	} else {
 		VOP_MODULE_SET(vop2, vp, dsp_interlace, 0);
-		VOP_MODULE_SET(vop2, vp, dsp_filed_pol, 0);
+		VOP_MODULE_SET(vop2, vp, dsp_field_pol, 0);
 		VOP_MODULE_SET(vop2, vp, p2i_en, 0);
 		act_end = vact_end;
 	}
@@ -12553,14 +12644,24 @@ static void vop2_crtc_atomic_enable(struct drm_crtc *crtc, struct drm_atomic_sta
 	VOP_MODULE_SET(vop2, vp, dsp_vs_end, vsync_len);
 	/*
 	 * when display interface support vrr, config vtotal
-	 * valid immediately except HDMI QMS-VRR. HDMI QMS-VRR
-	 * requires cfg done to accurately handle the vrr process.
-	 * Fixme: HDMI GAMING-VRR needs to config vtotal valid immediately,
-	 * the next version will be implemented.
+	 * valid immediately except HDMI QMS-VRR and TFRSYNC-VRR.
+	 * HDMI QMS-VRR and TFRSYNC-VRR require cfg done to accurately
+	 * handle the vrr process.
 	 */
 	if (vcstate->max_refresh_rate && vcstate->min_refresh_rate &&
-	    !output_if_is_hdmi(vcstate->output_if))
+	    vcstate->hdmi_vrr.vrr_type != HDMI_QMS_VRR &&
+	    vcstate->hdmi_vrr.vrr_type != HDMI_TFRSYNC_VRR)
 		VOP_MODULE_SET(vop2, vp, sw_dsp_vtotal_imd, 1);
+
+	/*
+	 * After HDMI HPD or when waking up from standby, if the
+	 * Gaming VRR mode is not exited, VOP timing dynamic changes
+	 * will occur immediately.
+	 */
+	if (vcstate->hdmi_vrr.vrr_type == HDMI_GAMING_VRR) {
+		vcstate->hdmi_vrr.emp_frame_gap = VOP2_HDMI_EMP_FRAME_GAP;
+		vcstate->hdmi_vrr.refresh_rate_ready_to_change = false;
+	}
 
 	snprintf(clk_name, sizeof(clk_name), "dclk_out%d", vp->id);
 	dclk_out = vop2_clk_get(vop2, clk_name);
@@ -12847,6 +12948,7 @@ static int vop2_crtc_atomic_check(struct drm_crtc *crtc,
 	struct rockchip_crtc_state *new_vcstate = to_rockchip_crtc_state(new_crtc_state);
 	struct rockchip_crtc_state *old_vcstate = to_rockchip_crtc_state(old_crtc_state);
 	struct drm_display_mode *adjusted_mode = &new_crtc_state->adjusted_mode;
+	unsigned long flags;
 
 	if (vop2_has_feature(vop2, VOP_FEATURE_SPLICE)) {
 		if (adjusted_mode->hdisplay > VOP2_MAX_VP_OUTPUT_WIDTH) {
@@ -12877,6 +12979,28 @@ static int vop2_crtc_atomic_check(struct drm_crtc *crtc,
 	if (vp_data->feature & VOP_FEATURE_DOVI)
 		new_crtc_state->mode_changed |=
 			vop2_dovi_mode_changed(crtc, state);
+
+	spin_lock_irqsave(&vop2->irq_lock, flags);
+	if (output_if_is_hdmi(new_vcstate->output_if)) {
+		if (new_crtc_state->vrr_enabled != old_crtc_state->vrr_enabled) {
+			new_vcstate->hdmi_vrr.emp_frame_gap = VOP2_HDMI_EMP_FRAME_GAP;
+			new_vcstate->hdmi_vrr.refresh_rate_ready_to_change = false;
+		}
+
+		if (new_crtc_state->vrr_enabled)
+			new_vcstate->hdmi_vrr.vrr_type = HDMI_GAMING_VRR;
+		else if (new_vcstate->hdmi_vrr.next_tfr_val)
+			new_vcstate->hdmi_vrr.vrr_type = HDMI_QMS_VRR;
+		else if (new_vcstate->request_refresh_rate &&
+			(new_vcstate->request_refresh_rate >= new_vcstate->min_refresh_rate &&
+			new_vcstate->request_refresh_rate <= new_vcstate->max_refresh_rate))
+			new_vcstate->hdmi_vrr.vrr_type = HDMI_TFRSYNC_VRR;
+		else
+			new_vcstate->hdmi_vrr.vrr_type = HDMI_VRR_OFF;
+	} else {
+		new_vcstate->hdmi_vrr.vrr_type = HDMI_VRR_OFF;
+	}
+	spin_unlock_irqrestore(&vop2->irq_lock, flags);
 
 	return 0;
 }
@@ -12996,7 +13120,6 @@ static void vop3_setup_hdr_data(struct vop2_video_port *vp, uint8_t win_phys_id,
 	struct drm_crtc_state *cstate = vp->rockchip_crtc.crtc.state;
 	struct rockchip_crtc_state *vcstate = to_rockchip_crtc_state(cstate);
 	unsigned long win_mask = vp->win_mask;
-	int phys_id;
 	/* hdr data used by platforms prior to rk3572 */
 	struct hdrvivid_regs *hdrvivid_data = NULL;
 	struct hdr_extend *hdr_extend = NULL;
@@ -13006,7 +13129,7 @@ static void vop3_setup_hdr_data(struct vop2_video_port *vp, uint8_t win_phys_id,
 	/* emp metadata */
 	uint32_t *hdrvivid_dynamic_metadata = NULL;
 	struct rockchip_gem_object *lut_gem_obj;
-	bool have_sdr_layer = false;
+	bool has_sdr_layer = false;
 	uint32_t hdr_mode;
 	int i;
 	u32 *tone_lut_kvaddr;
@@ -13016,6 +13139,10 @@ static void vop3_setup_hdr_data(struct vop2_video_port *vp, uint8_t win_phys_id,
 	uint8_t adapt_mode = 0;
 
 	if (vop2->version < VOP_VERSION_RK3572) {
+		vp->hdr_en = false;
+		vp->hdr_in = false;
+		vp->hdr_out = false;
+		vp->sdr2hdr_en = false;
 		vpstate->hdr_in = false;
 		vpstate->hdr2sdr_en = false;
 
@@ -13089,32 +13216,14 @@ static void vop3_setup_hdr_data(struct vop2_video_port *vp, uint8_t win_phys_id,
 		vp->sdr2hdr_en = true;
 	}
 
-	/*
-	 * To confirm whether need to enable sdr2hdr.
-	 */
-	for_each_set_bit(phys_id, &win_mask, ROCKCHIP_MAX_LAYER) {
-		win = vop2_find_win_by_phys_id(vop2, phys_id);
-		plane = &win->base;
-		pstate = plane->state;
-		vpstate = to_vop2_plane_state(pstate);
-
-		/* skip inactive plane */
-		if (!vop2_plane_active(pstate))
-			continue;
-
-		if (vpstate->eotf != HDMI_EOTF_SMPTE_ST2084 &&
-		    vpstate->eotf != HDMI_EOTF_BT_2100_HLG) {
-			have_sdr_layer = true;
-			break;
-		}
-	}
+	has_sdr_layer = vop2_vp_has_sdr_layer(vop2, win_mask);
 
 	if (hdr_mode == PQHDR2SDR_WITH_DYNAMIC || hdr_mode == HLG2SDR_WITH_DYNAMIC ||
 	    hdr_mode == HLG2SDR_WITHOUT_DYNAMIC || hdr_mode == HDR102SDR) {
 		vpstate->hdr2sdr_en = true;
 	} else {
 		vp->hdr_out = true;
-		if (have_sdr_layer)
+		if (has_sdr_layer)
 			vp->sdr2hdr_en = true;
 	}
 
@@ -13257,8 +13366,9 @@ static void vop3_setup_dynamic_hdr(struct vop2_video_port *vp, uint8_t win_phys_
 	case HDR_HDR10:
 	case HDR_HLGSTATIC:
 	case HDR_HDRVIVID:
+	case HDR_HDR10PLUS:
 		/*
-		 * hdr module support hdr10, hlg, vividhdr
+		 * hdr module support hdr10, hdr10+, hlg, vividhdr
 		 * sdr2hdr module support hdrnone for sdr2hdr
 		 */
 		vop3_setup_hdr_data(vp, win_phys_id, 0);
@@ -14786,8 +14896,15 @@ vop2_crtc_update_vrr_timing(struct drm_crtc *crtc, unsigned int new_vtotal, unsi
 		}
 	}
 
-	/* config all connectors attach to this crtc */
-	rockchip_connector_update_vfp_for_vrr(crtc, adjust_mode, new_vfp);
+	/*
+	 * Config all connectors attached to this crtc except HDMI. HDMI does not
+	 * require VFP configuration. HDMI_GAMING_VRR calls this function from the
+	 * vsync interrupt handler, and the mutex lock rockchip_drm_sub_dev_lock
+	 * in rockchip_connector_update_vfp_for_vrr() is not allowed to be used in
+	 * an interrupt handler.
+	 */
+	if (!output_if_is_hdmi(vcstate->output_if))
+		rockchip_connector_update_vfp_for_vrr(crtc, adjust_mode, new_vfp);
 }
 
 static void vop2_crtc_vfp_seamless_switch(struct drm_crtc *crtc)
@@ -14797,9 +14914,10 @@ static void vop2_crtc_vfp_seamless_switch(struct drm_crtc *crtc)
 	struct vop2 *vop2 = vp->vop2;
 	struct drm_display_mode *adjust_mode = &crtc->state->adjusted_mode;
 	struct rockchip_hdmi_vrr_state *hdmi_vrr = &vcstate->hdmi_vrr;
-	unsigned int vrefresh, vrefresh_khz;
-	unsigned int new_vtotal, vfp, new_vfp;
+	unsigned int vrefresh = 0, vrefresh_khz = 0;
+	unsigned int new_vtotal = 0, vfp = 0, new_vfp = 0, max_vtotal = 0;
 	u8 brr_vic;
+	u32 current_line = 0;
 
 	DRM_DEV_DEBUG(vop2->dev, "change refresh rate by changing vfp\n");
 	/*
@@ -14807,7 +14925,7 @@ static void vop2_crtc_vfp_seamless_switch(struct drm_crtc *crtc)
 	 * If next_tfr_val is 0, it indicates that current mode is hdmi
 	 * gaming-vrr/fva, or eDP/DSI vrr.
 	 */
-	if (hdmi_vrr->next_tfr_val) {
+	if (vcstate->hdmi_vrr.vrr_type == HDMI_QMS_VRR) {
 		brr_vic = drm_match_cea_mode(adjust_mode);
 		if (!brr_vic) {
 			DRM_ERROR("qms vrr can't support resolution:\n");
@@ -14838,6 +14956,46 @@ static void vop2_crtc_vfp_seamless_switch(struct drm_crtc *crtc)
 		vfp = adjust_mode->vsync_start - adjust_mode->vdisplay;
 		new_vfp = vfp + new_vtotal - adjust_mode->vtotal;
 		hdmi_vrr->refresh_rate_ready_to_change = false;
+	} else if (vcstate->hdmi_vrr.vrr_type == HDMI_GAMING_VRR) {
+		vrefresh = drm_mode_vrefresh(adjust_mode);
+		if (!vrefresh)
+			return;
+
+		new_vtotal = adjust_mode->crtc_vtotal * vrefresh / vcstate->max_refresh_rate;
+		max_vtotal = adjust_mode->crtc_vtotal * vrefresh / vcstate->min_refresh_rate;
+
+		/*
+		 * Clamp new_vtotal to the lower bound. The vtotal must not be less than
+		 * the BRR (Base Refresh Rate) vtotal, which corresponds to the highest
+		 * refresh rate (minimum vtotal).
+		 */
+		if (new_vtotal < adjust_mode->crtc_vtotal)
+			new_vtotal = adjust_mode->crtc_vtotal;
+
+		/* Get the current number of lines scanned by VOP  */
+		current_line = vop2_read_vcnt(vp);
+
+		/*
+		 * If the current VOP scan line is too close to the max vtotal, because vtotal
+		 * register value has already been set to max vtotal in the interrupt
+		 * handler when the previous vsync interrupt was triggered, and a new
+		 * vsync interrupt is about to occur. At this point, setting the vtotal
+		 * register close to max vtotal is of little significance.
+		 */
+		if (current_line + VOP2_VFP_EXTEND_MARGIN > max_vtotal)
+			return;
+
+		/*
+		 * If the current VOP scan line is too close to the new vtotal (within
+		 * VOP2_VFP_SAFE_MARGIN lines), the frame timing would be violated.
+		 * Extend the vtotal by VOP2_VFP_EXTEND_MARGIN lines beyond the current
+		 * scan position to keep the VOP from overtaking the vertical total.
+		 */
+		if (current_line + VOP2_VFP_SAFE_MARGIN >= new_vtotal)
+			new_vtotal = current_line + VOP2_VFP_EXTEND_MARGIN;
+
+		vfp = adjust_mode->crtc_vsync_start - adjust_mode->crtc_vdisplay;
+		new_vfp = vfp + new_vtotal - adjust_mode->crtc_vtotal;
 	} else {
 		vrefresh = drm_mode_vrefresh(adjust_mode);
 
@@ -14846,6 +15004,7 @@ static void vop2_crtc_vfp_seamless_switch(struct drm_crtc *crtc)
 		vfp = adjust_mode->crtc_vsync_start - adjust_mode->crtc_vdisplay;
 		new_vfp = vfp + new_vtotal - adjust_mode->crtc_vtotal;
 	}
+
 	vop2_crtc_update_vrr_timing(crtc, new_vtotal, new_vfp);
 }
 
@@ -14853,29 +15012,71 @@ static void vop2_crtc_update_vrr(struct drm_crtc *crtc)
 {
 	struct rockchip_crtc_state *vcstate = to_rockchip_crtc_state(crtc->state);
 	struct vop2_video_port *vp = to_vop2_video_port(crtc);
+	struct vop2 *vop2 = vp->vop2;
+	struct drm_crtc_state *cstate = vp->rockchip_crtc.crtc.state;
+	unsigned long flags;
+	bool set_vrr_enable = false;
+	bool timing_switch = false;
 
-	/*
-	 * In hdmi qms vrr scenarios, it is possible to switch
-	 * timing several frames after refresh rate is configured
-	 */
+	spin_lock_irqsave(&vop2->irq_lock, flags);
+
 	if (output_if_is_hdmi(vcstate->output_if)) {
-		if (!vcstate->hdmi_vrr.refresh_rate_ready_to_change)
-			return;
-	} else {
-		if (!vp->refresh_rate_change)
-			return;
+		/*
+		 * Enabling Gaming VRR: first commit after vrr_enabled
+		 * instructs HDMI to start sending EMP packets. VOP timing
+		 * switch happens after the gap expires in the vsync irq.
+		 */
+		if (vcstate->hdmi_vrr.vrr_type == HDMI_GAMING_VRR &&
+		    vcstate->hdmi_vrr.emp_frame_gap) {
+			set_vrr_enable = true;
+		} else if (vcstate->hdmi_vrr.vrr_type == HDMI_VRR_OFF &&
+			   vcstate->hdmi_vrr.emp_frame_gap == 0) {
+			/*
+			 * Disabling Gaming VRR: after the vsync irq has restored the base
+			 * refresh rate timing and the gap has expired, tell HDMI to
+			 * stop sending EMP packets. Set emp_frame_gap to a sentinel
+			 * value (GAP + 1) to prevent re-triggering.
+			 * FIXME: When emp_frame_gap reaches zero during VRR disable, HDMI EMP
+			 * stop depends on the next atomic_flush. If userspace submits no new
+			 * frames (fully static), EMP packets continue indefinitely, leaving
+			 * the TV in VRR mode. This is harmless for static content but needs
+			 * further investigation with more VRR TV models.
+			 */
+			vcstate->hdmi_vrr.emp_frame_gap = VOP2_HDMI_EMP_FRAME_GAP + 1;
+			set_vrr_enable = true;
+		} else if (vcstate->hdmi_vrr.refresh_rate_ready_to_change) {
+			timing_switch = true;
+		}
+	} else if (vp->refresh_rate_change) {
+		timing_switch = true;
 	}
+
+	spin_unlock_irqrestore(&vop2->irq_lock, flags);
+
+	if (set_vrr_enable)
+		rockchip_connector_vrr_enable(crtc, cstate);
+
+	if (!timing_switch)
+		return;
 
 	if (!vcstate->min_refresh_rate || !vcstate->max_refresh_rate)
 		return;
 
-	if (vcstate->request_refresh_rate < vcstate->min_refresh_rate ||
-	    vcstate->request_refresh_rate > vcstate->max_refresh_rate) {
-		DRM_ERROR("invalid rate:%d\n", vcstate->request_refresh_rate);
-		return;
+	/*
+	 * In Gaming VRR, the refresh rate is dynamically derived from the rate
+	 * at which userspace submits new frames so it does not rely on the
+	 * request_refresh_rate configured via the DRM "variable refresh rate"
+	 * property to specify the refresh rate.
+	 */
+	if (vcstate->hdmi_vrr.vrr_type != HDMI_GAMING_VRR) {
+		if (vcstate->request_refresh_rate < vcstate->min_refresh_rate ||
+		    vcstate->request_refresh_rate > vcstate->max_refresh_rate) {
+			DRM_ERROR("invalid rate:%d\n", vcstate->request_refresh_rate);
+			return;
+		}
 	}
 
-	switch (vcstate->vrr_type) {
+	switch (vcstate->vrr_mode) {
 	case ROCKCHIP_VRR_DCLK_MODE:
 		vop2_crtc_dclk_seamless_switch(crtc);
 		break;
@@ -15233,9 +15434,6 @@ static void vop2_crtc_atomic_begin(struct drm_crtc *crtc, struct drm_atomic_stat
 		if (current_line > assigned_line)
 			vop2_wait_for_scan_timing_max_to_assigned_line(vp, current_line, assigned_line);
 	}
-
-	if (vop2->version == VOP_VERSION_RK3588 || vop2->version == VOP_VERSION_RK3576)
-		vop2_crtc_update_vrr(crtc);
 
 	/* Process cluster sub windows overlay. */
 	drm_atomic_crtc_for_each_plane(plane, crtc) {
@@ -15604,9 +15802,9 @@ static void vop2_tv_config_update(struct drm_crtc *crtc,
 				r2y_convert_mode.is_output_full_range = vcstate->color_range;
 
 			if (has_bt2020_plane)
-				r2y_convert_mode.intput_color_encoding = DRM_COLOR_YCBCR_BT2020;
+				r2y_convert_mode.input_color_encoding = DRM_COLOR_YCBCR_BT2020;
 			else
-				r2y_convert_mode.intput_color_encoding = DRM_COLOR_YCBCR_BT709;
+				r2y_convert_mode.input_color_encoding = DRM_COLOR_YCBCR_BT709;
 
 			r2y_convert_mode.output_color_encoding = vcstate->color_encoding;
 
@@ -15647,13 +15845,13 @@ static void vop2_tv_config_update(struct drm_crtc *crtc,
 
 			if (!vcstate->post_r2y_en) {
 				if (has_bt2020_plane)
-					y2r_convert_mode.intput_color_encoding =
+					y2r_convert_mode.input_color_encoding =
 						DRM_COLOR_YCBCR_BT2020;
 				else
-					y2r_convert_mode.intput_color_encoding =
+					y2r_convert_mode.input_color_encoding =
 						DRM_COLOR_YCBCR_BT709;
 			} else {
-				y2r_convert_mode.intput_color_encoding =
+				y2r_convert_mode.input_color_encoding =
 					r2y_convert_mode.output_color_encoding;
 			}
 
@@ -15694,7 +15892,12 @@ static void vop2_tv_config_update(struct drm_crtc *crtc,
 					 vcstate->tv_state->brightness);
 	contrast = interpolate(0, 0, 100, 511, vcstate->tv_state->contrast);
 	saturation = interpolate(0, 0, 100, 511, vcstate->tv_state->saturation);
-	hue = interpolate(0, -30, 100, 30, vcstate->tv_state->hue);
+	/*
+	 * BCSH uses clockwise as positive hue angle while CSC uses
+	 * counter-clockwise. Unify to counter-clockwise as positive
+	 * direction: invert the configured hue parameter for BCSH.
+	 */
+	hue = interpolate(0, 30, 100, -30, vcstate->tv_state->hue);
 
 	/*
 	 *  a:[-30~0]:
@@ -15810,7 +16013,13 @@ static void vop3_post_csc_config(struct drm_crtc *crtc, struct post_acm *acm, st
 	else
 		acm_enable = acm->acm_enable;
 
-	if (acm_enable) {
+	/*
+	 * RK3576:
+	 * overlay -> sharp -> r2y -> acm -> y2r
+	 * RK3538/RK3572:
+	 * overlay -> r2y -> sharp -> acm -> y2r
+	 */
+	if (acm_enable || (vop2->version != VOP_VERSION_RK3576 && post_sharp_enabled(crtc))) {
 		if (!vcstate->yuv_overlay)
 			post_r2y_en = true;
 
@@ -15833,8 +16042,10 @@ static void vop3_post_csc_config(struct drm_crtc *crtc, struct post_acm *acm, st
 		if (!vcstate->yuv_overlay) {
 			r2y_convert_mode.is_input_yuv = false;
 			if (!post_r2y_en) {
-				/* do rgb full/limited range convert in r2y */
-				if (vcstate->color_range != DRM_COLOR_YCBCR_FULL_RANGE)
+				/* do rgb range and colorspace convert in r2y */
+				if (vcstate->color_range != DRM_COLOR_YCBCR_FULL_RANGE ||
+				    (vcstate->color_encoding != DRM_COLOR_YCBCR_BT709 &&
+				     !has_bt2020_plane))
 					post_r2r_en = true;
 			}
 		} else {
@@ -15855,11 +16066,11 @@ static void vop3_post_csc_config(struct drm_crtc *crtc, struct post_acm *acm, st
 		 * In all other scenarios, the csc of the layer is output in bt709 colorspace.
 		 */
 		if (cgc_enabled)
-			r2y_convert_mode.intput_color_encoding = vcstate->color_encoding;
+			r2y_convert_mode.input_color_encoding = vcstate->color_encoding;
 		else if (has_bt2020_plane)
-			r2y_convert_mode.intput_color_encoding = DRM_COLOR_YCBCR_BT2020;
+			r2y_convert_mode.input_color_encoding = DRM_COLOR_YCBCR_BT2020;
 		else
-			r2y_convert_mode.intput_color_encoding = DRM_COLOR_YCBCR_BT709;
+			r2y_convert_mode.input_color_encoding = DRM_COLOR_YCBCR_BT709;
 
 		if (post_r2y_en)
 			r2y_convert_mode.is_output_yuv = true;
@@ -15877,12 +16088,12 @@ static void vop3_post_csc_config(struct drm_crtc *crtc, struct post_acm *acm, st
 			r2y_convert_mode.is_output_full_range =
 				r2y_convert_mode.is_input_full_range;
 
-		/* r2y csc do r2r, colorspace will not be changed */
-		if (post_r2y_en)
+		/* r2y csc do r2y and r2r range convert */
+		if (post_r2y_en || post_r2r_en)
 			r2y_convert_mode.output_color_encoding = vcstate->color_encoding;
 		else
 			r2y_convert_mode.output_color_encoding =
-				r2y_convert_mode.intput_color_encoding;
+				r2y_convert_mode.input_color_encoding;
 
 		r2y_convert_mode.pixel_depth = 10;
 		r2y_convert_mode.coef_precision = 10;
@@ -15943,8 +16154,10 @@ static void vop3_post_csc_config(struct drm_crtc *crtc, struct post_acm *acm, st
 	} else if (!vcstate->yuv_overlay) {
 		/* if there are yuv planes, choose max plane's range */
 		if (max_yuv_pstate) {
-			/* Todo RGB limit range plane */
-			convert_mode.is_input_full_range = true;
+			if (post_r2y_en && !vop2_is_full_range_csc_mode(vcstate->post_csc_mode))
+				convert_mode.is_input_full_range = false;
+			else
+				convert_mode.is_input_full_range = true;
 		} else {
 			if (rgb_limited_plane)
 				convert_mode.is_input_full_range = false;
@@ -15962,17 +16175,17 @@ static void vop3_post_csc_config(struct drm_crtc *crtc, struct post_acm *acm, st
 	 * When all layers are rgb, the value of input_color_encoding
 	 * has no actual utility, however, the plane csc only supports
 	 * limited range under bt709. Therefore, in this scene, the colorspace
-	 * of plane csc is selected as bt601. The intput_color_encoding
+	 * of plane csc is selected as bt601. The input_color_encoding
 	 * is consistent with colorspace of plane csc, which is DRM_COLOR_YCBCR_BT601.
 	 * If there are any yuv planes, value of post-csc input_color_encoding
 	 * selects the value of the yuv plane with the largest area.
 	 */
 	if (r2y_csc_supported)
-		convert_mode.intput_color_encoding = r2y_convert_mode.output_color_encoding;
+		convert_mode.input_color_encoding = r2y_convert_mode.output_color_encoding;
 	else if (!max_yuv_pstate)
-		convert_mode.intput_color_encoding = DRM_COLOR_YCBCR_BT601;
+		convert_mode.input_color_encoding = DRM_COLOR_YCBCR_BT601;
 	else
-		convert_mode.intput_color_encoding = max_yuv_plane_color_encoding;
+		convert_mode.input_color_encoding = max_yuv_plane_color_encoding;
 
 	convert_mode.pixel_depth = 10;
 	convert_mode.coef_precision = 10;
@@ -16276,6 +16489,16 @@ static void vop2_cfg_update(struct drm_crtc *crtc,
 		}
 	}
 
+	/*
+	 * When RK3588 dolby core is enabled and no layer is enabled, it is
+	 * necessary to ensure that a normal black screen image is displayed
+	 * by enabling DSP_BG_DISPLAY_EN.
+	 */
+	if (vop2->version == VOP_VERSION_RK3588) {
+		if (vop2_is_dovi_mode(vp) && !vp->enabled_win_mask)
+			val |= RK3588_VP0_DSP_BG_DISPLAY_EN;
+	}
+
 	VOP_MODULE_SET(vop2, vp, dsp_background, val);
 	VOP_MODULE_SET(vop2, vp, overlay_mode, vcstate->yuv_overlay);
 	if (vcstate->splice_mode) {
@@ -16459,6 +16682,10 @@ static void vop2_crtc_atomic_flush(struct drm_crtc *crtc, struct drm_atomic_stat
 		vop2_crtc_enable_line_flag_event(crtc, vcstate->line_flag);
 	else
 		vop2_crtc_disable_line_flag_event(crtc);
+
+	if (vop2->version == VOP_VERSION_RK3588 || vop2->version == VOP_VERSION_RK3576 ||
+	    vop2->version == VOP_VERSION_RK3572)
+		vop2_crtc_update_vrr(crtc);
 
 	spin_lock_irqsave(&vop2->irq_lock, flags);
 	vop2_wb_commit(crtc);
@@ -17225,6 +17452,100 @@ static void vop2_frac_mvrr_update(struct drm_crtc *crtc, struct vop2_video_port 
 	}
 }
 
+static void vop2_vrr_set_vtotal_max(struct vop2_video_port *vp)
+{
+	struct vop2 *vop2 = vp->vop2;
+	struct drm_crtc *crtc = &vp->rockchip_crtc.crtc;
+	struct drm_crtc_state *cstate = crtc->state;
+	struct rockchip_crtc_state *vcstate;
+	struct drm_display_mode *adjust_mode;
+	u32 max_vtotal, vtotal, vfp, max_vfp, vrefresh;
+	unsigned long flags;
+	u8 imd_mode;
+	bool in_gap, set_vrr_timing = false;
+
+	if (!cstate)
+		return;
+
+	vcstate = to_rockchip_crtc_state(cstate);
+
+	/*
+	 * In the current version, only the HDMI interface supports
+	 * dynamically changing the frame rate based on the speed at
+	 * which userspace commits a new frame (i.e., HDMI_GAMING_VRR).
+	 */
+	if (!output_if_is_hdmi(vcstate->output_if))
+		return;
+
+	adjust_mode = &cstate->adjusted_mode;
+
+	vrefresh = drm_mode_vrefresh(&cstate->adjusted_mode);
+	if (!vrefresh || vrefresh < vcstate->min_refresh_rate ||
+	    vrefresh > vcstate->max_refresh_rate)
+		return;
+
+	max_vtotal = adjust_mode->crtc_vtotal * vrefresh / vcstate->min_refresh_rate;
+	vfp = adjust_mode->crtc_vsync_start - adjust_mode->crtc_vdisplay;
+	max_vfp = vfp + max_vtotal - adjust_mode->crtc_vtotal;
+
+	spin_lock_irqsave(&vop2->irq_lock, flags);
+
+	/* Only handle GAMING VRR and VRR_OFF */
+	if (vcstate->hdmi_vrr.vrr_type != HDMI_GAMING_VRR &&
+	    vcstate->hdmi_vrr.vrr_type != HDMI_VRR_OFF)
+		goto out;
+
+	/*
+	 * emp_frame_gap counts down from VOP2_HDMI_EMP_FRAME_GAP to 0
+	 * during VRR enable/disable transitions.  Values outside this
+	 * range indicate the transition has completed.
+	 */
+	in_gap = (vcstate->hdmi_vrr.emp_frame_gap > 0 &&
+		  vcstate->hdmi_vrr.emp_frame_gap <= VOP2_HDMI_EMP_FRAME_GAP);
+
+	if (vcstate->hdmi_vrr.vrr_type == HDMI_VRR_OFF) {
+		/*
+		 * Disabling Gaming VRR: during the gap period, restore
+		 * the base refresh rate timing each vsync. After the
+		 * gap expires, vop2_crtc_update_vrr() in atomic_flush
+		 * will tell HDMI to stop sending EMP packets.
+		 */
+		if (in_gap) {
+			vcstate->hdmi_vrr.emp_frame_gap--;
+			vtotal = adjust_mode->crtc_vtotal;
+			vfp = adjust_mode->crtc_vsync_start - adjust_mode->crtc_vdisplay;
+			imd_mode = 0;
+			set_vrr_timing = true;
+		}
+	} else {
+		if (in_gap) {
+			/*
+			 * Enabling Gaming VRR: wait for the EMP packet gap before
+			 * allowing VOP timing changes. EMP was already enabled by
+			 * vop2_crtc_update_vrr() in atomic_flush on the first commit.
+			 */
+			vcstate->hdmi_vrr.emp_frame_gap--;
+			if (vcstate->hdmi_vrr.emp_frame_gap == 0)
+				vcstate->hdmi_vrr.refresh_rate_ready_to_change = true;
+		} else if (vcstate->hdmi_vrr.refresh_rate_ready_to_change &&
+			vcstate->min_refresh_rate && vcstate->max_refresh_rate) {
+			/* Normal Gaming VRR operation: extend vtotal to max */
+			imd_mode = 1;
+			vtotal = max_vtotal;
+			vfp = max_vfp;
+			set_vrr_timing = true;
+		}
+	}
+
+out:
+	spin_unlock_irqrestore(&vop2->irq_lock, flags);
+
+	if (set_vrr_timing) {
+		VOP_MODULE_SET(vop2, vp, sw_dsp_vtotal_imd, imd_mode);
+		vop2_crtc_update_vrr_timing(crtc, vtotal, vfp);
+	}
+}
+
 static irqreturn_t vop2_isr(int irq, void *data)
 {
 	struct vop2 *vop2 = data;
@@ -17336,6 +17657,7 @@ static irqreturn_t vop2_isr(int irq, void *data)
 				drm_crtc_handle_vblank(crtc);
 				vop2_handle_vblank(vop2, crtc);
 			}
+			vop2_vrr_set_vtotal_max(vp);
 			vop2_frac_mvrr_update(crtc, vp);
 			active_irqs &= ~FS_FIELD_INTR;
 			ret = IRQ_HANDLED;
@@ -17565,6 +17887,7 @@ static irqreturn_t vop3_vp_isr(int irq, void *data)
 		}
 		drm_crtc_handle_vblank(crtc);
 		vop2_handle_vblank(vop2, crtc);
+		vop2_vrr_set_vtotal_max(vp);
 		vop2_frac_mvrr_update(crtc, vp);
 		active_irqs &= ~FS_FIELD_INTR;
 		ret = IRQ_HANDLED;
@@ -17786,21 +18109,55 @@ static int rk3576_shared_mode_esmart_scale_engine(int phy_id)
 	}
 }
 
+static int vop3_get_esmart_scale_engine_by_lb_mode(struct vop2 *vop2, int phy_id)
+{
+	const struct vop2_scale_engine *scale_engine = vop2->data->scale_engine;
+	int i;
+
+	/* Find the scale engine configurations according to the esmart lb mode */
+	scale_engine += vop2->esmart_lb_mode * VOP2_MAX_MULTI_AREA_WIN;
+
+	for (i = 0; i < VOP2_MAX_MULTI_AREA_WIN; i++) {
+		if (scale_engine[i].plane_phy_id == phy_id)
+			return scale_engine[i].scale_engine_num;
+	}
+
+	return 0;
+}
+
+/**
+ * RK3528/RK3562/RK3576 platforms require configuring the scale engine number
+ * for each esmart window during driver initialization. The configuration
+ * follows these rules:
+ *
+ * 1. The scale engine number must be unique for each esmart window.
+ * 2. Valid scale engine numbers are determined by the esmart lb mode:
+ *    - VOP3_ESMART_8K_MODE supports 0
+ *    - VOP3_ESMART_4K_4K_MODE supports 0, 1
+ *    - VOP3_ESMART_4K_2K_2K_MODE supports 0, 1, 2
+ *    - VOP3_ESMART_2K_2K_2K_2K_MODE supports 0, 1, 2, 3
+ *    - VOP3_ESMART_4K_4K_4K_MODE supports 0, 1, 2
+ *    - VOP3_ESMART_4K_4K_2K_2K_MODE supports 0, 1, 2, 3
+ * 3. Scale engine number is static and fixed at init time, cannot be changed
+ *    dynamically.
+ */
 static void vop3_init_esmart_scale_engine(struct vop2 *vop2)
 {
-	u8 scale_engine_num = 0;
 	struct drm_plane *plane = NULL;
+
+	if (!vop2->data->scale_engine)
+		return;
 
 	drm_for_each_plane(plane, vop2->drm_dev) {
 		struct vop2_win *win = to_vop2_win(plane);
 
-		if (win->parent || vop2_cluster_window(win))
+		if (win->parent || !vop2_multi_area_window(win))
 			continue;
 
 		if (vop2->shared_mode_res.shared_mode)
 			win->scale_engine_num = rk3576_shared_mode_esmart_scale_engine(win->phys_id);
 		else
-			win->scale_engine_num = scale_engine_num++;
+			win->scale_engine_num = vop3_get_esmart_scale_engine_by_lb_mode(vop2, win->phys_id);
 	}
 }
 
@@ -17810,6 +18167,7 @@ static int vop2_plane_init(struct vop2 *vop2, struct vop2_win *win, unsigned lon
 	unsigned int blend_caps = BIT(DRM_MODE_BLEND_PIXEL_NONE) | BIT(DRM_MODE_BLEND_PREMULTI) |
 				  BIT(DRM_MODE_BLEND_COVERAGE);
 	unsigned int max_width, max_height;
+	const uint64_t *format_modifiers;
 	int ret;
 
 	/*
@@ -17832,9 +18190,15 @@ static int vop2_plane_init(struct vop2 *vop2, struct vop2_win *win, unsigned lon
 	if (vop3_ignore_plane(vop2, win))
 		return -EACCES;
 
+	if (vop2->disable_afbc_mask & BIT(win->phys_id)) {
+		format_modifiers = NULL;
+		win->feature &= ~WIN_FEATURE_AFBDC;
+	} else {
+		format_modifiers = win->format_modifiers;
+	}
 	ret = drm_universal_plane_init(vop2->drm_dev, &win->base, possible_crtcs,
 				       &vop2_plane_funcs, win->formats, win->nformats,
-				       win->format_modifiers, win->type, win->name);
+				       format_modifiers, win->type, win->name);
 	if (ret) {
 		DRM_DEV_ERROR(vop2->dev, "failed to initialize plane %d\n", ret);
 		return ret;
@@ -19438,7 +19802,7 @@ static int vop2_bind(struct device *dev, struct device *master, void *data)
 	struct device_node *vop_out_node;
 	struct device_node *mcu_timing_node;
 	u8 enabled_vp_mask = 0;
-	char *plane_mask_string;
+	char *plane_mask_string, *disable_afbc_plane_string;
 
 	vop2_data = of_device_get_match_data(dev);
 	if (!vop2_data)
@@ -19507,8 +19871,27 @@ static int vop2_bind(struct device *dev, struct device *master, void *data)
 	 * };
 	 */
 	ret = of_property_read_u8(dev->of_node, "esmart_lb_mode", &vop2->esmart_lb_mode);
-	if (ret < 0)
+	if (ret < 0 || vop2->esmart_lb_mode >= VOP3_ESMART_LB_MODE_MAX)
 		vop2->esmart_lb_mode = vop2->data->esmart_lb_mode;
+
+	/*
+	 * Disable AFBC support for specific windows via DTS.
+	 * This avoids the Cluster0/Cluster1 enable order constraint on RK3572.
+	 *
+	 * example:
+	 * &vop {
+	 *     rockchip,disable-afbc-mask = <(1 << ROCKCHIP_VOP2_CLUSTER1)>;
+	 * };
+	 */
+	of_property_read_u32(dev->of_node, "rockchip,disable-afbc-mask", &vop2->disable_afbc_mask);
+	if (vop2->disable_afbc_mask) {
+		disable_afbc_plane_string = vop2_plane_mask_to_string(vop2->disable_afbc_mask);
+		if (disable_afbc_plane_string) {
+			DRM_DEV_INFO(dev, "AFBC disabled for windows: %s[0x%x]\n",
+				     disable_afbc_plane_string, vop2->disable_afbc_mask);
+			kfree(disable_afbc_plane_string);
+		}
+	}
 
 	ret = vop2_win_init(vop2);
 	if (ret)

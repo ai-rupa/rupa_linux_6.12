@@ -1,0 +1,11 @@
+[Unit]
+Description=rockchip test ab update stress service
+
+[Service]
+Type=forking
+User=root
+ExecStart=/etc/init.d/S99-ab-stress start
+ExecStop=/etc/init.d/S99-ab-stress stop
+
+[Install]
+WantedBy=multi-user.target

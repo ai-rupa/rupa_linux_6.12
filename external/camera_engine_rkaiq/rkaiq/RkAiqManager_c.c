@@ -24,6 +24,8 @@
 #include "hwi_c/isp351s/aiq_CamHwIsp351s.h"
 #include "iq_parser_v2/cis_head.h"
 
+XCamReturn AiqExtproc_prepare(void* extproc_ctx, uint32_t width, uint32_t height);
+
 #define RKAIQMNG_CHECK_RET(ret, format, ...) \
     if (ret) { \
         LOGE(format, ##__VA_ARGS__); \
@@ -100,6 +102,14 @@ static void printSenceCisPara(AiqManager_t* pAiqManager) {
         LOGD_ANALYZER("=== CIS CMPS_OUT Configuration ===");
         LOGD_ANALYZER("  Enable      : %d", cis_cmpsout->en);
         LOGD_ANALYZER("  CMPS Mode   : %d", cis_cmpsout->sta.hw_cisCfgCmps_mode);
+        LOGD_ANALYZER("===================================\n");
+    }
+
+    calibdb_cis_wb_t* cis_wb =
+        (calibdb_cis_wb_t*)(CALIBDBV2_GET_MODULE_PTR(pAiqManager->mCalibDbV2, CisWb));
+    if (cis_wb) {
+        LOGD_ANALYZER("=== CIS WB Configuration ===");
+        LOGD_ANALYZER("  setWbGnInSensor_en      : %d", cis_wb->setWbGnInSensor_en);
         LOGD_ANALYZER("===================================\n");
     }
 }
@@ -235,6 +245,10 @@ static XCamReturn hwResCb(void* pCtx, AiqHwEvt_t* hwres)
         }
     }
     else if (hwres->type == ISP_POLL_AIISP) {
+        if (pAiqManager->mExtProcBtnrIirCb && pAiqManager->mExtProcCtx) {
+            XCamReturn ext_ret = pAiqManager->mExtProcBtnrIirCb(pAiqManager->mExtProcCtx, hwres);
+            if (ext_ret == XCAM_RETURN_BYPASS) return XCAM_RETURN_NO_ERROR;
+        }
 #if RKAIQ_HAVE_AIBNR
         AiqHwAinnEvt_t *ainnEvt = (AiqHwAinnEvt_t *)hwres;
         AibnrManager_hdlEvent(&pAiqManager->mAibnrManager, ainnEvt);
@@ -382,6 +396,8 @@ XCamReturn AiqManager_applyAnalyzerResult(AiqManager_t* pAiqManager, AiqFullPara
         LOGW_ANALYZER("empty aiq params results!");
         return ret;
     }
+
+    aiqMutex_lock(&pAiqManager->mParamsListMutex);
 
     if (aiqParams->_base.frame_id == pAiqManager->mLastAweekId)
         ignoreIsUpdate = true;
@@ -612,6 +628,8 @@ XCamReturn AiqManager_applyAnalyzerResult(AiqManager_t* pAiqManager, AiqFullPara
         AIQ_REF_BASE_UNREF(&params->_ref_base);
     }
 
+    aiqMutex_unlock(&pAiqManager->mParamsListMutex);
+
     EXIT_XCORE_FUNCTION();
 
     return ret;
@@ -626,6 +644,7 @@ AiqManager_applyAnalyzerExpResult(AiqManager_t* pAiqManager, aiq_params_base_t* 
         return ret;
     }
 
+    aiqMutex_lock(&pAiqManager->mParamsListMutex);
     aiqList_push(pAiqManager->mParamsList, &results);
 
     ret = AiqCamHw_applyAnalyzerResultList(pAiqManager->mCamHw, pAiqManager->mParamsList);
@@ -633,6 +652,7 @@ AiqManager_applyAnalyzerExpResult(AiqManager_t* pAiqManager, aiq_params_base_t* 
         LOGE_ANALYZER("cid:%d, fid:%d apply exp param to hw failed", results->frame_id,
                       AiqCamHw_getCamPhyId(pAiqManager->mCamHw));
     }
+    aiqMutex_unlock(&pAiqManager->mParamsListMutex);
 
     return ret;
 
@@ -651,6 +671,14 @@ rkAiqCalcExpDone(void* pCtx, aiq_params_base_t* results)
 {
     ENTER_XCORE_FUNCTION();
     AiqManager_applyAnalyzerExpResult((AiqManager_t*)pCtx, results);
+    EXIT_XCORE_FUNCTION();
+}
+
+static void
+rkAiqCalcSetVcpSclInfo(void* pCtx, bool en, int ratio)
+{
+    ENTER_XCORE_FUNCTION();
+    AiqCamHw_setCifSclStartFlag(((AiqManager_t*)pCtx)->mCamHw, ratio, en);
     EXIT_XCORE_FUNCTION();
 }
 
@@ -717,9 +745,10 @@ XCamReturn AiqManager_init(AiqManager_t* pAiqManager, const char* sns_ent_name, 
 
     pAiqManager->mLastAweekId = -1;
     pAiqManager->mAnalyzeCb.pCtx = pAiqManager;
-    pAiqManager->mAnalyzeCb.rkAiqCalcDone    = rkAiqCalcDone;
-    pAiqManager->mAnalyzeCb.rkAiqCalcExpDone = rkAiqCalcExpDone;
-    pAiqManager->mAnalyzeCb.rkAiqCalcFailed  = NULL;
+    pAiqManager->mAnalyzeCb.rkAiqCalcDone          = rkAiqCalcDone;
+    pAiqManager->mAnalyzeCb.rkAiqCalcExpDone       = rkAiqCalcExpDone;
+    pAiqManager->mAnalyzeCb.rkAiqCalcSetVcpSclInfo = rkAiqCalcSetVcpSclInfo;
+    pAiqManager->mAnalyzeCb.rkAiqCalcFailed        = NULL;
     AiqCore_setAnalyzeResultCb(pAiqManager->mRkAiqAnalyzer, &pAiqManager->mAnalyzeCb);
 
     GlobalParamsManager_setManager(&pAiqManager->mGlobalParamsManager, pAiqManager);
@@ -772,6 +801,7 @@ XCamReturn AiqManager_init(AiqManager_t* pAiqManager, const char* sns_ent_name, 
     pAiqManager->mParamsList = aiqList_init(&paramsListCfg);
     if (!pAiqManager->mParamsList)
         LOGE_ANALYZER("init %s error", paramsListCfg._name);
+    aiqMutex_init(&pAiqManager->mParamsListMutex);
 
 #if RKAIQ_HAVE_DUMPSYS
     pAiqManager->dump_mods = __dump_mods;
@@ -890,6 +920,12 @@ XCamReturn AiqManager_prepare(AiqManager_t* pAiqManager, uint32_t width, uint32_
     }
 #endif
 
+    if (AiqCamHw_isVicapVirtualSensor(pAiqManager->mCamHw)) {
+        LOGI_ANALYZER("VicapVirtualSensor detected, set delayCnts to 1");
+        AiqCore_setVicapVirtualSensor(pAiqManager->mRkAiqAnalyzer, true);
+        AiqCore_setDelayCnts(pAiqManager->mRkAiqAnalyzer, 1);
+    }
+
 #ifdef RKAIQ_ENABLE_CAMGROUP
     AiqCamHw_setGroupMode(pAiqManager->mCamHw, pAiqManager->mCamGroupCoreManager ? true : false, pAiqManager->mIsMain);
 #endif
@@ -907,7 +943,8 @@ XCamReturn AiqManager_prepare(AiqManager_t* pAiqManager, uint32_t width, uint32_
 
     xcam_mem_clear(sensor_des);
     ret = AiqCamHw_getSensorModeData(pAiqManager->mCamHw, pAiqManager->mSnsEntName, &sensor_des);
-    AiqCamHw_setSnsOtpInfo(pAiqManager->mCamHw, &sensor_des.otp_awb, sensor_des.otp_lsc, &pAiqManager->mRkAiqAnalyzer->mUserOtpInfo);
+    AiqCamHw_setSnsOtpInfo(pAiqManager->mCamHw, &sensor_des.otp_awb, sensor_des.otp_lsc,
+        sensor_des.otp_af, sensor_des.otp_pdaf, &pAiqManager->mRkAiqAnalyzer->mUserOtpInfo);
     pAiqManager->sensor_output_width = sensor_des.sensor_output_width;
     pAiqManager->sensor_output_height = sensor_des.sensor_output_height;
     int w, h, aligned_w, aligned_h;
@@ -923,8 +960,10 @@ XCamReturn AiqManager_prepare(AiqManager_t* pAiqManager, uint32_t width, uint32_
     RKAIQMNG_CHECK_RET(ret, "getSensorModeData error %d", ret);
     AiqCore_notifyIspStreamMode(pAiqManager->mRkAiqAnalyzer,
                                 AiqCamHw_getIspStreamMode(pAiqManager->mCamHw));
-    AiqCore_setTranslaterIspUniteMode(pAiqManager->mRkAiqAnalyzer,
-                                      AiqCamHw_getIspUniteMode(pAiqManager->mCamHw));
+    RkAiqIspUniteInfo_t isp_unite_info;
+    AiqCamHw_getIspUniteInfo(pAiqManager->mCamHw, &isp_unite_info);
+    AiqCore_setTranslaterIspUniteInfo(pAiqManager->mRkAiqAnalyzer,
+                                        &isp_unite_info);
     ret = AiqCore_prepare(pAiqManager->mRkAiqAnalyzer, &sensor_des, working_mode_hw);
     RKAIQMNG_CHECK_RET(ret, "analyzer prepare error %d", ret);
 #if RKAIQ_HAVE_AIBNR
@@ -945,6 +984,12 @@ XCamReturn AiqManager_prepare(AiqManager_t* pAiqManager, uint32_t width, uint32_
     RknnManager_prepare(&pAiqManager->mRknnManager,
                         pAiqManager->mCamHw,
                         pAiqManager->mCalibDbV2);
+
+    if (pAiqManager->mExtProcCtx) {
+        ret = AiqExtproc_prepare(pAiqManager->mExtProcCtx, sensor_des.isp_acq_width,
+                                 sensor_des.isp_acq_height);
+        if (ret != XCAM_RETURN_NO_ERROR) LOGE_ANALYZER("extproc prepare error %d", ret);
+    }
 
     AiqFullParams_t* initParams = AiqCore_getAiqFullParams(pAiqManager->mRkAiqAnalyzer);
 
@@ -1048,6 +1093,8 @@ XCamReturn AiqManager_deinit(AiqManager_t* pAiqManager)
 
     XCamReturn ret = XCAM_RETURN_NO_ERROR;
 
+    pAiqManager->mExtProcCtx = NULL;
+
     // stop first in prepared status, some resources and process were
     // done at prepare stage
     if (pAiqManager->_state == AIQ_STATE_PREPARED)
@@ -1076,6 +1123,7 @@ XCamReturn AiqManager_deinit(AiqManager_t* pAiqManager)
         aiqList_deinit(pAiqManager->mParamsList);
         pAiqManager->mParamsList = NULL;
     }
+    aiqMutex_deInit(&pAiqManager->mParamsListMutex);
 
     GlobalParamsManager_deinit(&pAiqManager->mGlobalParamsManager);
 #if RKAIQ_HAVE_AIBNR

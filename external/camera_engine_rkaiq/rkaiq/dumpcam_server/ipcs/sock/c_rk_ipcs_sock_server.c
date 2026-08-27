@@ -246,11 +246,15 @@ RK_BOOL AIQIPCSockServer_stop(AIQIPCSockServer *const me) {
         return RK_FALSE;
 
     if (me->mServerSocketFd >= 0) {
+        // shutdown() immediately wakes up any thread blocked in select() on
+        // this fd; close() alone does not reliably do so on Linux.
+        shutdown(me->mServerSocketFd, SHUT_RDWR);
         close(me->mServerSocketFd);
         me->mServerSocketFd = -1;
     }
 
     if (me->mClientSocketFd >= 0) {
+        shutdown(me->mClientSocketFd, SHUT_RDWR);
         close(me->mClientSocketFd);
         me->mClientSocketFd = -1;
     }

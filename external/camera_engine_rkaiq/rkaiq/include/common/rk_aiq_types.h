@@ -23,6 +23,7 @@
 #include <stdio.h>
 #include "common/rk_aiq_comm.h"
 #include "common/rk_aiq_mems_sensor.h"
+#include "common/rk_aiq_offline_raw.h"
 #include "common/rk-camera-module.h"
 #include "algos/adebayer/rk_aiq_types_adebayer_algo.h"
 #include "algos/ae/rk_aiq_types_ae_algo.h"
@@ -366,6 +367,14 @@ typedef struct rk_aiq_sensor_dcg_ratio_s {
     uint32_t div_coeff;
 } rk_aiq_sensor_dcg_ratio_t;
 
+typedef struct rk_aiq_sensor_exp_offset_s {
+    // exp offset(float) = integer + decimal/div_coeff, unit is us
+    bool valid;
+    uint32_t integer[3];
+    uint32_t decimal[3];
+    uint32_t div_coeff[3];
+} rk_aiq_sensor_exp_offset_t;
+
 typedef struct {
     bool focus_support;
     bool iris_support;
@@ -466,6 +475,9 @@ typedef struct {
     rk_aiq_sensor_nr_switch_t nr_switch;
     rk_aiq_sensor_dcg_ratio_t dcg_ratio;
     rk_aiq_sensor_dcg_ratio_t spd_ratio;
+    rk_aiq_sensor_dcg_ratio_t lcg2lofic_ratio;
+    rk_aiq_sensor_dcg_ratio_t lofic2vs_ratio;
+    rk_aiq_sensor_exp_offset_t exp_offset;
     rk_aiq_lens_descriptor lens_des;
     struct rkmodule_awb_inf otp_awb;
     struct rkmodule_lsc_inf *otp_lsc;
@@ -701,9 +713,12 @@ typedef enum rk_isp_stream_mode_e {
     RK_ISP_STREAM_MODE_OFFLNIE,
 } rk_isp_stream_mode_t;
 
+#define USER_OTP_UPDATE_FLAG_MASK (0x10000000)
 typedef struct {
     struct rkmodule_awb_inf otp_awb;
     struct rkmodule_lsc_inf otp_lsc;
+    struct rkmodule_af_inf otp_af;
+    struct rkmodule_pdaf_inf otp_pdaf;
 } rk_aiq_user_otp_info_t;
 
 typedef enum {
@@ -758,5 +773,22 @@ typedef struct {
     uint32_t count;
     rk_aiq_face_roi_t roi[RK_AIQ_FACEINFO_MAX_NUM];
 } rk_aiq_face_info_t;
+
+/**
+ * struct rk_aiq_capture_trigger_s - capture trigger configuration
+ * @frame_count:    number of frames to capture (1: single, >1: burst, 0: invalid)
+ * @use_frame_meta: whether to use the frame_meta for 3A control (0: disable, 1: enable)
+ * @frame_meta:     3A metadata for setting exposure/gain/white balance
+ * @reserved:       reserved for future use, must be zero
+ *
+ * Used by rk_aiq_uapi2_sysctl_triggerCapture() to describe
+ * a capture request with optional 3A metadata.
+ */
+typedef struct rk_aiq_capture_trigger_s {
+    uint32_t frame_count;
+    uint32_t use_frame_meta;
+    rk_aiq_frame_info_t frame_meta;
+    uint32_t reserved[3];
+} rk_aiq_capture_trigger_t;
 
 #endif

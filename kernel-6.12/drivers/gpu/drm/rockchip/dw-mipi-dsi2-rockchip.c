@@ -1151,7 +1151,7 @@ dw_mipi_dsi2_encoder_atomic_check(struct drm_encoder *encoder,
 
 		s->max_refresh_rate = dsi2->max_refresh_rate;
 		s->min_refresh_rate = dsi2->min_refresh_rate;
-		s->vrr_type = ROCKCHIP_VRR_DCLK_MODE;
+		s->vrr_mode = ROCKCHIP_VRR_DCLK_MODE;
 	}
 
 	if (dw_mipi_dsi2_is_cmd_mode(dsi2)) {
@@ -1582,7 +1582,6 @@ static int dw_mipi_dsi2_get_dsc_params_from_sink(struct dw_mipi_dsi2 *dsi2,
 	struct cmd_header *header;
 	const void *data;
 	char *d;
-	uint8_t *dsc_packed_pps;
 	int len;
 	u32 version_major, version_minor;
 
@@ -1632,12 +1631,25 @@ static int dw_mipi_dsi2_get_dsc_params_from_sink(struct dw_mipi_dsi2 *dsi2,
 			return -EINVAL;
 
 		if (header->cmd_type == MIPI_DSI_PICTURE_PARAMETER_SET) {
-			dsc_packed_pps = devm_kmemdup(dsi2->dev, d,
-						      header->payload_length, GFP_KERNEL);
-			if (!dsc_packed_pps)
+			u8 max_pps_length = sizeof(struct drm_dsc_picture_parameter_set);
+			/*
+			 * PPS payload length may be less than
+			 * sizeof(struct drm_dsc_picture_parameter_set),
+			 * allocate full size buffer and copy only the
+			 * actual payload bytes.
+			 */
+			if (header->payload_length > max_pps_length) {
+				dev_err(dsi2->dev, "dsc pps length %u is too large, max %u\n",
+					header->payload_length, max_pps_length);
+
+				return -EINVAL;
+			}
+
+			pps = devm_kzalloc(dsi2->dev, max_pps_length, GFP_KERNEL);
+			if (!pps)
 				return -ENOMEM;
 
-			pps = (struct drm_dsc_picture_parameter_set *)dsc_packed_pps;
+			memcpy(pps, d, header->payload_length);
 			break;
 		}
 
@@ -1715,7 +1727,7 @@ static int dw_mipi_dsi2_register_sub_dev(struct dw_mipi_dsi2 *dsi2,
 	dsi2->sub_dev.connector = connector;
 	dsi2->sub_dev.of_node = dev->of_node;
 	dsi2->sub_dev.loader_protect = dw_mipi_dsi2_encoder_loader_protect;
-	rockchip_drm_register_sub_dev(&dsi2->sub_dev);
+	devm_rockchip_drm_register_sub_dev(dsi2->dev, &dsi2->sub_dev);
 
 	return 0;
 }
@@ -1814,8 +1826,6 @@ static void dw_mipi_dsi2_unbind(struct device *dev, struct device *master,
 	struct dw_mipi_dsi2 *dsi2 = dev_get_drvdata(dev);
 
 	if (dsi2->sub_dev.connector) {
-		rockchip_drm_unregister_sub_dev(&dsi2->sub_dev);
-
 		if (dsi2->connector.funcs)
 			dsi2->connector.funcs->destroy(&dsi2->connector);
 	}

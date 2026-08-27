@@ -1,52 +1,83 @@
+[中文](README_CN.md)
+
 # RKNN3-MODEL-ZOO
 
-RK1820 / RK1828 是 Rockchip 推出的 AI 协处理器芯片，可通过 PCIe 或 USB 接口连接至 RK3588 / RK3576 等主控 SoC，提供高效的 AI 推理加速能力。
+RKNN3 SDK provides the complete software stack for deploying AI models on RK1820/RK1828 coprocessors, including:
 
-**RKNN3 SDK** 为该协处理器平台提供完整的开发工具链：
+- **[RKNN3-Toolkit](https://github.com/airockchip/rknn3-toolkit)**: PC-side software development kit for model conversion, inference, performance evaluation, etc.
+- **RKNN3 Runtime**: On-board runtime library providing C/C++ programming interfaces for deploying RKNN models and accelerating AI applications.
+- **[RKNN3 Model Zoo](https://github.com/airockchip/rknn3-model-zoo)**: Model conversion and deployment example repository, including reference implementations for CNN / LLM / VLM and other models.
 
-| 组件 | 说明 |
-|------|------|
-| RKNN3 Toolkit | PC 端模型转换与量化工具 |
-| RKNN3 Runtime | 板端推理运行时库 |
-| RKNN3 Model Zoo | 模型转换与部署示例（本仓库） |
+This repository provides a complete model deployment workflow:
+- **Model Export**: Export HuggingFace / PyTorch models to ONNX format
+- **Model Conversion**: Convert ONNX models to RKNN format using RKNN3 Toolkit
+- **On-board Deployment**: Provide C++ inference example code
 
-本仓库提供了完整的模型部署流程：
-- **模型导出**：将 HuggingFace / PyTorch 模型导出为 ONNX 格式
-- **模型转换**：使用 RKNN3 Toolkit 将 ONNX 等模型转换为 RKNN 格式
-- **板端部署**：提供 C++ 推理示例代码
+## 1. Supported Models
 
-## 1. 支持的模型
+### LLM/VLM
 
-- Qwen2.5
-- Qwen2.5-VL
-- Qwen2.5-Omni
-- Qwen3
-- Qwen3-VL
-- Qwen3-Embedding
 - FastVLM
+- SmolVLM / SmolVLM2
+- GLM-Edge
+- GME-Qwen2-VL
 - InternVLM
 - Janus-Pro
-- SmolVLM
-- UI_TARS
-- GME-Qwen2-VL
-- glm-edge
-- MobileNetV1/V2、ResNet50
-- YOLOv5/v6/v8
-- SenseVoice
+- MiniCPM-V / MiniCPM-V-4
+- Qwen2.5 / Qwen2.5-VL / Qwen2.5-Omni
+- Qwen3 / Qwen3-VL / Qwen3-VL-LoRA
+- Gemma-4
+
+### ASR (Speech Recognition)
+
+- Qwen3-ASR (Streaming / Non-streaming)
+- SenseVoiceSmall
+- Zipformer
+
+### TTS (Text-to-Speech)
+
+- Qwen3-TTS
+- VITS (LJSpeech / VCTK)
+
+### Embedding / Reranker
+
+- Qwen3-Embedding
+- Qwen3-Reranker
+
+### Translation
+
 - HY-MT1.5
 
-## 2. 支持的平台
+### OCR
 
-| 主芯片 | 协处理器 | 操作系统 |
-|--------|----------|----------|
-| RK3588 系列 | RK1820 / RK1828 | Linux / Android |
-| RK3576 系列 | RK1820 / RK1828 | Linux / Android |
+- PaddleOCR-VL
 
-## 3. LLM 模型部署（以 Qwen2.5-3B 为例）
+### CV (Computer Vision)
 
-### 3.1 导出模型配置
+- MobileNetV1 / MobileNetV2 / ResNet
+- YOLOv5 / YOLOv6 / YOLOv8
+- DINOv3
+- SigLIP2
 
-> **环境要求**：Python 3.10
+## 2. Supported Platforms
+
+| Host SoC | Coprocessor | OS |
+|----------|-------------|-----|
+| RK3588 Series | RK1820 / RK1828 | Linux / Android |
+| RK3576 Series | RK1820 / RK1828 | Linux / Android |
+| RK3572 Series | - | Linux / Android |
+
+> **Build and runtime library notes**:
+> - The top-level build scripts `build-linux.sh` / `build-android.sh` accept `-t rk3588`, `rk3576`, `rk3572`, and `x86`.
+> - RKNN3 runtime libraries installed into each demo's `lib/` directory are SoC-specific:
+>   - `RK3588` / `RK3576`: `librknn3_api.so` and `librknn3_api_rkcp.so`
+>   - `RK3572`: `librknn3_api.so` and `librknn3_api_native.so`
+
+## 3. LLM Model Deployment (Example: Qwen2.5-3B)
+
+### 3.1 Export Model Configuration
+
+> **Requirements**: Python 3.10
 
 ```bash
 cd rknn3_model_zoo/
@@ -57,64 +88,64 @@ cd examples/Qwen2_5/python/
 python export_llm.py --quant
 ```
 
-#### 参数说明
+#### Parameters
 
-| 参数 | 类型 | 说明 | 默认值 |
-|------|------|------|--------|
-| `--load_weight` | bool | 加载模型权重（`False` 时仅导出模型结构） | `True` |
-| `--quan_dataset` | bool | 生成量化数据集（需 `--load_weight=True`） | `True` |
-| `--model_path` | str | 模型路径或 HuggingFace 名称 | `Qwen/Qwen2.5-3B-Instruct` |
-| `--export_llm_path` | str | 导出路径 | `../model/llm/Qwen2.5-3B-Instruct.onnx` |
-| `--quant` | bool | 启用 AWQ + GRQ 量化算法 | `False` |
-| `--modelscope` | bool | 从 ModelScope 下载模型（国内用户推荐） | `False` |
+| Parameter | Type | Description | Default |
+|-----------|------|-------------|---------|
+| `--load_weight` | bool | Load model weights (`False` exports structure only) | `True` |
+| `--quan_dataset` | bool | Generate quantization dataset (requires `--load_weight=True`) | `True` |
+| `--model_path` | str | Model path or HuggingFace name | `Qwen/Qwen2.5-3B-Instruct` |
+| `--export_llm_path` | str | Export path | `../model/llm/Qwen2.5-3B-Instruct.onnx` |
+| `--quant` | bool | Enable GRQ quantization | `False` |
+| `--modelscope` | bool | Download from ModelScope (recommended for China users) | `False` |
 
-> **说明**：
-> - 使用 AWQ + GRQ 量化时，模型自带量化参数，转换 RKNN 时无需量化数据集
-> - 导出的配置文件包括：ONNX 模型、Config、Tokenizer、Embed 文件
+> **Notes**:
+> - When using GRQ quantization, the model contains quantization parameters; no quantization dataset is needed for RKNN conversion
+> - Exported configuration files include: ONNX model, Config, Tokenizer, and Embed files
 
-### 3.2 导出 RKNN 模型
+### 3.2 Export RKNN Model
 
 ```bash
 python export_rknn.py
 ```
 
-#### 参数说明
+#### Parameters
 
-| 参数 | 类型 | 说明 | 默认值 |
-|------|------|------|--------|
-| `--onnx_path` | str | 输入 ONNX 模型路径 | `../model/llm/Qwen2.5-3B-Instruct.onnx` |
-| `--config` | str | 模型 Config 路径 | `../model/llm/Qwen2.5-3B-Instruct.config.pkl` |
-| `--rknn_path` | str | 输出 RKNN 模型路径 | `../model/llm/Qwen2.5-3B-Instruct.rknn` |
-| `--dataset_path` | str | 量化数据集路径 | `../data/dataset.txt` |
+| Parameter | Type | Description | Default |
+|-----------|------|-------------|---------|
+| `--onnx_path` | str | Input ONNX model path | `../model/llm/Qwen2.5-3B-Instruct.onnx` |
+| `--config` | str | Model Config path | `../model/llm/Qwen2.5-3B-Instruct.config.pkl` |
+| `--rknn_path` | str | Output RKNN model path | `../model/llm/Qwen2.5-3B-Instruct.rknn` |
+| `--dataset_path` | str | Quantization dataset path | `../data/dataset.txt` |
 
-> **说明**：
-> - 使用 AWQ + GRQ 量化时，转换 RKNN 会忽略量化数据集
-> - 导出采用权重分离模式，生成 `.rknn` 和 `.weight` 两个文件
+> **Notes**:
+> - When using GRQ quantization, RKNN conversion ignores the quantization dataset
+> - Export uses weight-separated mode, generating both `.rknn` and `.weight` files
 
-### 3.3 Linux 平台示例
+### 3.3 Linux Platform Example
 
-#### 编译
+#### Build
 
 ```bash
 cd ../../../
 
-# 可选：指定交叉编译器路径
+# Optional: specify cross-compiler path
 export GCC_COMPILER=<GCC_COMPILER_PATH>
 
-# 编译命令
+# Build command
 ./build-linux.sh -t <TARGET_PLATFORM> -a <ARCH> -d Qwen2_5
 
-# 示例：RK3588 平台
+# Example: RK3588 platform
 ./build-linux.sh -t rk3588 -a aarch64 -d Qwen2_5
 ```
 
-#### 推送到开发板
+#### Push to Board
 
 ```bash
 adb push install/<TARGET_PLATFORM>_linux_<ARCH>/rknn_Qwen2_5_demo/ /data/
 ```
 
-#### 运行
+#### Run
 
 ```bash
 adb shell
@@ -130,13 +161,11 @@ export LD_LIBRARY_PATH=./lib
     "Who are you?"
 ```
 
+## 4. VLM Model Deployment (Example: FastVLM-1.5B)
 
+### 4.1 Export Model Configuration
 
-## 4. VLM 模型部署（以 FastVLM-1.5B 为例）
-
-### 4.1 导出模型配置
-
-> **环境要求**：Python 3.10
+> **Requirements**: Python 3.10
 
 ```bash
 cd rknn3_model_zoo/
@@ -145,101 +174,101 @@ export PYTHONPATH=./
 
 cd examples/FastVLM/python/
 
-# 导出 LLM 模型配置
+# Export LLM model configuration
 cd ./llm
 python export_llm.py --quant
 
-# 导出 Vision 模型配置
+# Export Vision model configuration
 cd ../vision/
 python export_vision.py
 ```
 
-#### LLM 导出参数（export_llm.py）
+#### LLM Export Parameters (export_llm.py)
 
-| 参数 | 类型 | 说明 | 默认值 |
-|------|------|------|--------|
-| `--load_weight` | bool | 加载模型权重（`False` 时仅导出模型结构） | `True` |
-| `--quan_dataset` | bool | 生成量化数据集（需 `--load_weight=True`） | `True` |
-| `--model_path` | str | 模型路径或 HuggingFace 名称 | `../../llava-fastvithd_1.5b_stage3` |
-| `--export_llm_path` | str | 导出路径 | `../../model/llm/FastVLM-llm.onnx` |
-| `--quant` | bool | 启用 AWQ + GRQ 量化算法 | `False` |
-| `--modelscope` | bool | 从 ModelScope 下载模型（国内用户推荐） | `False` |
+| Parameter | Type | Description | Default |
+|-----------|------|-------------|---------|
+| `--load_weight` | bool | Load model weights (`False` exports structure only) | `True` |
+| `--quan_dataset` | bool | Generate quantization dataset (requires `--load_weight=True`) | `True` |
+| `--model_path` | str | Model path or HuggingFace name | `../../llava-fastvithd_1.5b_stage3` |
+| `--export_llm_path` | str | Export path | `../../model/llm/FastVLM-llm.onnx` |
+| `--quant` | bool | Enable AWQ + GRQ quantization | `False` |
+| `--modelscope` | bool | Download from ModelScope (recommended for China users) | `False` |
 
-> **说明**：
-> - 模型需从外部下载
-> - 使用 AWQ + GRQ 量化时，模型自带量化参数，转换 RKNN 时无需量化数据集
-> - 导出的配置文件包括：ONNX 模型、Config、Tokenizer、Embed 文件
+> **Notes**:
+> - Model needs to be downloaded externally
+> - When using AWQ + GRQ quantization, the model contains quantization parameters; no quantization dataset is needed for RKNN conversion
+> - Exported configuration files include: ONNX model, Config, Tokenizer, and Embed files
 
-#### Vision 导出参数（export_vision.py）
+#### Vision Export Parameters (export_vision.py)
 
-| 参数 | 类型 | 说明 | 默认值 |
-|------|------|------|--------|
-| `--load_weight` | bool | 加载模型权重 | `True` |
-| `--model_path` | str | 模型路径 | `../../llava-fastvithd_1.5b_stage3` |
-| `--export_vision_path` | str | 导出路径 | `../../model/vision/FastVLM-vision.onnx` |
-| `--img_size` | int | 输入图像分辨率 | `512` |
+| Parameter | Type | Description | Default |
+|-----------|------|-------------|---------|
+| `--load_weight` | bool | Load model weights | `True` |
+| `--model_path` | str | Model path | `../../llava-fastvithd_1.5b_stage3` |
+| `--export_vision_path` | str | Export path | `../../model/vision/FastVLM-vision.onnx` |
+| `--img_size` | int | Input image resolution | `512` |
 
-> **说明**：Vision 模型仅导出 ONNX 格式
+> **Note**: Vision model exports ONNX format only
 
-### 4.2 导出 RKNN 模型
+### 4.2 Export RKNN Model
 
 ```bash
-# 导出 Vision RKNN 模型
+# Export Vision RKNN model
 cd ./vision
 python export_rknn.py
 
-# 导出 LLM RKNN 模型
+# Export LLM RKNN model
 cd ../llm
 python export_rknn.py
 ```
 
-#### Vision RKNN 导出参数
+#### Vision RKNN Export Parameters
 
-| 参数 | 类型 | 说明 | 默认值 |
-|------|------|------|--------|
-| `--onnx_path` | str | 输入 ONNX 模型路径 | `../../model/vision/FastVLM-vision.onnx` |
-| `--rknn_path` | str | 输出 RKNN 模型路径 | `../../model/vision/FastVLM-vision.rknn` |
-| `--dataset_path` | str | 量化数据集路径 | `../../../../datasets/MMBench/vision/datasets.txt` |
+| Parameter | Type | Description | Default |
+|-----------|------|-------------|---------|
+| `--onnx_path` | str | Input ONNX model path | `../../model/vision/FastVLM-vision.onnx` |
+| `--rknn_path` | str | Output RKNN model path | `../../model/vision/FastVLM-vision.rknn` |
+| `--dataset_path` | str | Quantization dataset path | `../../../../datasets/MMBench/vision/datasets.txt` |
 
-> **说明**：默认使用 Normal 量化算法，可设置 `quantized_algorithm='grq'` 以提高精度
+> **Note**: Uses Normal quantization by default; set `quantized_algorithm='grq'` for higher accuracy
 
-#### LLM RKNN 导出参数
+#### LLM RKNN Export Parameters
 
-| 参数 | 类型 | 说明 | 默认值 |
-|------|------|------|--------|
-| `--onnx_path` | str | 输入 ONNX 模型路径 | `../../model/llm/FastVLM-llm.onnx` |
-| `--config` | str | 模型 Config 路径 | `../../model/llm/FastVLM-llm.config.pkl` |
-| `--rknn_path` | str | 输出 RKNN 模型路径 | `../../model/llm/FastVLM-llm.rknn` |
-| `--dataset_path` | str | 量化数据集路径 | `../../data/llm/dataset.txt` |
+| Parameter | Type | Description | Default |
+|-----------|------|-------------|---------|
+| `--onnx_path` | str | Input ONNX model path | `../../model/llm/FastVLM-llm.onnx` |
+| `--config` | str | Model Config path | `../../model/llm/FastVLM-llm.config.pkl` |
+| `--rknn_path` | str | Output RKNN model path | `../../model/llm/FastVLM-llm.rknn` |
+| `--dataset_path` | str | Quantization dataset path | `../../data/llm/dataset.txt` |
 
-> **说明**：
-> - 使用 AWQ + GRQ 量化时，转换 RKNN 会忽略量化数据集
-> - 导出采用权重分离模式，生成 `.rknn` 和 `.weight` 两个文件
+> **Notes**:
+> - When using AWQ + GRQ quantization, RKNN conversion ignores the quantization dataset
+> - Export uses weight-separated mode, generating both `.rknn` and `.weight` files
 
-### 4.3 Linux 平台示例
+### 4.3 Linux Platform Example
 
-#### 编译
+#### Build
 
 ```bash
 cd rknn3_model_zoo/
 
-# 可选：指定交叉编译器路径
+# Optional: specify cross-compiler path
 export GCC_COMPILER=<GCC_COMPILER_PATH>
 
-# 编译命令
+# Build command
 ./build-linux.sh -t <TARGET_PLATFORM> -a <ARCH> -d FastVLM
 
-# 示例：RK3588 平台
+# Example: RK3588 platform
 ./build-linux.sh -t rk3588 -a aarch64 -d FastVLM
 ```
 
-#### 推送到开发板
+#### Push to Board
 
 ```bash
 adb push install/<TARGET_PLATFORM>_linux_<ARCH>/rknn_FastVLM_demo/ /data/
 ```
 
-#### 运行
+#### Run
 
 ```bash
 adb shell
@@ -258,21 +287,135 @@ export LD_LIBRARY_PATH=./lib
     "Please describe the content of the picture."
 ```
 
-## 5. 模型适配指南
+### 4.4 SpeedUP Usage
 
-- **同系列模型兼容**：同一系列的示例程序相互兼容。例如，Qwen2.5-0.5B 的示例可直接用于 Qwen2.5-7B，只需修改模型加载路径。
+The Qwen2.5-VL and Qwen3-VL examples can link against the SpeedUP third-party library for inference acceleration.
 
-- **新模型适配**：对于本仓库未收录的 LLM 模型，请参考 [LLM 模型适配教程](LLM_model_modification_guide_CN.md) 进行 ONNX 导出和部署移植。
+#### File Location
 
-## 6. 注意事项
+Keep the following files in the release package:
 
-- **Transformers 版本**：不同模型依赖的 `transformers` 版本可能不同，导出 ONNX 前请安装对应版本。版本信息可从模型的config.json（例如https://huggingface.co/Qwen/Qwen2.5-7B-Instruct/blob/main/config.json ）中的 `transformers_version` 字段获取。
+```text
+3rdparty/SpeedUP/
+├── include/speedup.h
+├── Linux/aarch64/libSpeedUP.so
+└── Android/arm64-v8a/libSpeedUP.so
+```
 
-- **PyTorch 版本**：建议使用 PyTorch <= 2.8.0（Qwen3-VL等少数模型，需 PyTorch >= 2.9.0，具体看对应模型下的requirements.txt）
+#### Build
 
-## 7. 其他说明
+Qwen2.5-VL:
 
-本仓库默认使用以下镜像站点获取模型：
-- [ModelScope](https://www.modelscope.cn)（国内推荐）
+```bash
+./build-linux.sh -t rk3588 -a aarch64 -d Qwen2_5_VL
+```
+
+Qwen3-VL:
+
+```bash
+./build-linux.sh -t rk3588 -a aarch64 -d Qwen3_VL
+```
+
+After installation, `libSpeedUP.so` is copied into the corresponding demo `lib/` directory.
+
+#### Runtime Arguments
+
+Qwen2.5-VL:
+
+```bash
+./rknn_qwen2_5_vl_demo \
+    <vision_model_path> <vision_weight_path> \
+    <llm_model_path> <llm_weight_path> \
+    <tokenizer_path> <embedding_path> \
+    <vision_core_mask> <llm_core_mask> \
+    <image_path> <prompt> \
+    [model_width model_height] [speedup_ratio]
+```
+
+Qwen3-VL:
+
+```bash
+./rknn_qwen3_vl_demo \
+    <vision_model_path> <vision_weight_path> \
+    <llm_model_path> <llm_weight_path> \
+    <tokenizer_path> <embedding_path> \
+    <vision_core_mask> <llm_core_mask> \
+    <image_path> <prompt> \
+    [model_width model_height] [speedup_ratio]
+```
+
+`speedup_ratio` is optional:
+
+| Value | Mode |
+|-------|------|
+| `1.0` | Auto |
+| `0.0` | Disabled |
+| `(0.0, 1.0)` | Manual |
+
+For RKNN3 multi-core devices, this is usually suitable:
+
+```bash
+0xff 0xff
+```
+
+#### Examples
+
+Qwen2.5-VL:
+
+```bash
+cd /userdata/rknn3-model-zoo/install/rk3588_linux_aarch64/rknn_Qwen2_5_VL_demo
+export LD_LIBRARY_PATH=./lib:$LD_LIBRARY_PATH
+
+./rknn_qwen2_5_vl_demo \
+    /userdata/Qwen2.5-VL-3B/Qwen2.5-VL-3B-vision.rknn \
+    /userdata/Qwen2.5-VL-3B/Qwen2.5-VL-3B-vision.weight \
+    /userdata/Qwen2.5-VL-3B/Qwen2.5-VL-3B-llm.rknn \
+    /userdata/Qwen2.5-VL-3B/Qwen2.5-VL-3B-llm.weight \
+    /userdata/Qwen2.5-VL-3B/Qwen2.5-VL-3B-llm.tokenizer.gguf \
+    /userdata/Qwen2.5-VL-3B/Qwen2.5-VL-3B-llm.embed.bin \
+    0xff 0xff \
+    /userdata/rknn3-model-zoo/examples/Qwen2_5_VL/data/vision/demo.jpg \
+    "Describe this image" \
+    392 392 \
+    1.0
+```
+
+Qwen3-VL:
+
+```bash
+cd /userdata/rknn3-model-zoo/install/rk3588_linux_aarch64/rknn_Qwen3_VL_demo
+export LD_LIBRARY_PATH=./lib:$LD_LIBRARY_PATH
+
+./rknn_qwen3_vl_demo \
+    /userdata/Qwen3-VL-model/Qwen3-VL-4B-vision_384_384.rknn \
+    /userdata/Qwen3-VL-model/Qwen3-VL-4B-vision_384_384.weight \
+    /userdata/Qwen3-VL-model/Qwen3-VL-4B-llm.rknn \
+    /userdata/Qwen3-VL-model/Qwen3-VL-4B-llm.weight \
+    /userdata/Qwen3-VL-model/Qwen3-VL-4B-llm.tokenizer.gguf \
+    /userdata/Qwen3-VL-model/Qwen3-VL-4B-llm.embed.bin \
+    0xff 0xff \
+    /userdata/rknn3-model-zoo/examples/Qwen2_5_VL/data/vision/demo.jpg \
+    "Describe this image" \
+    384 384 \
+    1.0
+```
+
+## 5. Model Adaptation Guide
+
+- **Same-series Compatibility**: Examples within the same model series are interchangeable. For instance, the Qwen2.5-0.5B example works directly with Qwen2.5-7B by simply changing the model loading path.
+
+- **New Model Adaptation**: For LLM models not included in this repository, refer to the [LLM Model Adaptation Tutorial](LLM_model_modification_guide_EN.md) for ONNX export and deployment porting.
+
+## 6. Important Notes
+
+- **Transformers Version**: Different models may require different `transformers` versions. Before exporting to ONNX, install the correct version. Version info can be found in the `transformers_version` field of the model's config.json (e.g., https://huggingface.co/Qwen/Qwen2.5-7B-Instruct/blob/main/config.json ). Some models have special version requirements; refer to the `requirements.txt` in each example directory.
+
+- **PyTorch Version**: Recommended PyTorch <= 2.8.0 (Qwen3-VL, Gemma-4 service models require PyTorch >= 2.9.0; PaddleOCR-VL requires transformers == 4.55.0. Please refer to the requirements.txt under the corresponding model for specific details.)
+
+- **Module Compatibility**: Gemma-4 Audio and LLM models must use the same version (both E2B or both E4B); mixing versions is not supported.
+
+## 7. Additional Notes
+
+This repository uses the following mirror sites by default to obtain model files:
+- [ModelScope](https://www.modelscope.cn) (recommended for China users)
 - [HuggingFace Mirror](https://hf-mirror.com)
-

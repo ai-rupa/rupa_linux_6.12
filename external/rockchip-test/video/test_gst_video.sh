@@ -1,28 +1,28 @@
 #!/bin/bash
+# video/test_gst_video.sh - Basic video playback test
 
-URI=/oem/SampleVideo_1280x720_5mb.mp4
+DIR_VIDEO="$(cd "$(dirname "$0")" && pwd)"
+source "${DIR_VIDEO}/../common/common.sh"
 
+URI="${1:-/oem/SampleVideo_1280x720_5mb.mp4}"
 export mpp_syslog_perror=1
 
-# Hardware detection logic
-if ls /dev/mali* 1>/dev/null 2>&1; then
-    SINK="waylandsink"
+resolve_uri "$URI"
+URI="$RESOLVED_URI"
+
+SINK=$(get_video_sink)
+
+TEST_ID=$(test_begin "video" "playback" "Video playback with $SINK")
+log_info "video" "Playing: $URI with sink=$SINK"
+
+set +e
+gst-launch-1.0 uridecodebin uri="$URI" ! "$SINK" fullscreen=true
+EXIT_CODE=$?
+set -e
+
+if [[ $EXIT_CODE -eq 0 ]]; then
+    test_end "$TEST_ID" "PASS"
 else
-    SINK="kmssink"
+    test_end "$TEST_ID" "FAIL" "gst-launch-1.0 exited with code $EXIT_CODE"
+    exit 1
 fi
-
-if [ "$1" != "" ]
-then
-    URI=$1
-    if [ "${URI:0:1}" != "/" ]
-    then
-        URI=$(readlink -f $URI)
-    fi
-fi
-
-if [ "${URI:0:1}" == "/" ]
-then
-    URI=file://$URI
-fi
-
-gst-launch-1.0 uridecodebin uri=$URI ! "$SINK" fullscreen=true

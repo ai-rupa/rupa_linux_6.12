@@ -653,6 +653,7 @@ RKADK_S32 ThumbnailJpgDecode(RKADK_THUMB_ATTR_S *pstSrcThmAttr,
   MPP_CHN_S stVdecChn, stVpssChn;
   VIDEO_FRAME_INFO_S sFrameIn = {0};
   RKADK_THUMB_CHN_ATTR_S stThumbChnAttr;
+  int timeout = pstDstThmAttr->timeout > 0 ? pstDstThmAttr->timeout : -1;
 
   if (pstSrcThmAttr->pu8Buf[0] != 0xFF || pstSrcThmAttr->pu8Buf[1] != 0xD8) {
     RKADK_LOGD("Invalid jpeg data");
@@ -707,7 +708,7 @@ RKADK_S32 ThumbnailJpgDecode(RKADK_THUMB_ATTR_S *pstSrcThmAttr,
   stStream.bEndOfStream = RK_FALSE;
   stStream.bEndOfFrame = RK_FALSE;
   stStream.bBypassMbBlk = RK_TRUE;
-  ret = RK_MPI_VDEC_SendStream(stVdecChn.s32ChnId, &stStream, -1);
+  ret = RK_MPI_VDEC_SendStream(stVdecChn.s32ChnId, &stStream, timeout);
   if(ret) {
     RKADK_LOGE("Send vdec[%d] stream failed[%x]", stVdecChn.s32ChnId, ret);
     goto exit;
@@ -715,7 +716,7 @@ RKADK_S32 ThumbnailJpgDecode(RKADK_THUMB_ATTR_S *pstSrcThmAttr,
 
   //get decode frame
   memset(&sFrameIn, 0, sizeof(VIDEO_FRAME_INFO_S));
-  ret = RK_MPI_VDEC_GetFrame(stVdecChn.s32ChnId, &sFrameIn, -1);
+  ret = RK_MPI_VDEC_GetFrame(stVdecChn.s32ChnId, &sFrameIn, timeout);
   if(ret) {
     RKADK_LOGE("Get vdec[%d] frame failed[%d]", stVdecChn.s32ChnId, ret);
     goto exit;

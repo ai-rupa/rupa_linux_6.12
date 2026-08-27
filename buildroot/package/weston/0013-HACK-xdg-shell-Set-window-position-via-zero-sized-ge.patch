@@ -1,0 +1,125 @@
+From a3c5ecb0df0a3467b721fc6039d8521453fd0897 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Wed, 27 Feb 2019 17:06:58 +0800
+Subject: [PATCH 13/98] HACK: xdg-shell: Set window position via zero-sized
+ geometry
+
+When set_window_geometry is called with 0x0 size, interpret x and y as
+window position. This is a workaround for missing window positioning API.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ desktop-shell/shell.c         |  7 +++++++
+ include/libweston/desktop.h   |  4 ++++
+ include/libweston/libweston.h |  2 ++
+ libweston/compositor.c        |  2 ++
+ libweston/desktop/surface.c   | 12 ++++++++++++
+ libweston/desktop/xdg-shell.c | 10 ++++++++++
+ 6 files changed, 37 insertions(+)
+
+diff --git a/desktop-shell/shell.c b/desktop-shell/shell.c
+index fffb3d68..48c7b3eb 100644
+--- a/desktop-shell/shell.c
++++ b/desktop-shell/shell.c
+@@ -3900,6 +3900,13 @@ weston_view_set_initial_position(struct weston_view *view,
+ 	pixman_rectangle32_t area;
+ 	struct weston_coord_global pos;
+ 
++	if (view->has_position) {
++		pos.c = weston_coord(view->geometry.pos_offset.x,
++				     view->geometry.pos_offset.y);
++		weston_view_set_position(view, pos);
++		return;
++	}
++
+ 	/* As a heuristic place the new window on the same output as the
+ 	 * pointer. Falling back to the output containing 0, 0.
+ 	 *
+diff --git a/include/libweston/desktop.h b/include/libweston/desktop.h
+index 8e348fa7..b9e4b567 100644
+--- a/include/libweston/desktop.h
++++ b/include/libweston/desktop.h
+@@ -177,6 +177,10 @@ weston_desktop_surface_set_size(struct weston_desktop_surface *surface,
+ void
+ weston_desktop_surface_set_orientation(struct weston_desktop_surface *surface,
+ 				       enum weston_top_level_tiled_orientation tile_orientation);
++
++void
++weston_desktop_surface_set_position(struct weston_desktop_surface *surface,
++				    int32_t x, int32_t y);
+ void
+ weston_desktop_surface_close(struct weston_desktop_surface *surface);
+ void
+diff --git a/include/libweston/libweston.h b/include/libweston/libweston.h
+index aa787386..2bb673be 100644
+--- a/include/libweston/libweston.h
++++ b/include/libweston/libweston.h
+@@ -1749,6 +1749,8 @@ struct weston_view {
+ 		pixman_region32_t scissor; /* always a simple rect */
+ 	} geometry;
+ 
++	bool has_position;
++
+ 	/* State derived from geometry state, read-only.
+ 	 * This is updated by weston_view_update_transform().
+ 	 */
+diff --git a/libweston/compositor.c b/libweston/compositor.c
+index c2822ad4..8ceddde4 100644
+--- a/libweston/compositor.c
++++ b/libweston/compositor.c
+@@ -2128,6 +2128,8 @@ weston_view_set_position(struct weston_view *view,
+ 	assert(view->surface->committed != subsurface_committed);
+ 	assert(!view->geometry.parent);
+ 
++	view->has_position = true;
++
+ 	if (view->geometry.pos_offset.x == pos.c.x &&
+ 	    view->geometry.pos_offset.y == pos.c.y)
+ 		return;
+diff --git a/libweston/desktop/surface.c b/libweston/desktop/surface.c
+index 3c77a4b9..8efff15f 100644
+--- a/libweston/desktop/surface.c
++++ b/libweston/desktop/surface.c
+@@ -771,6 +771,18 @@ weston_desktop_surface_make_label(struct weston_desktop_surface *surface)
+ 	return label;
+ }
+ 
++void
++weston_desktop_surface_set_position(struct weston_desktop_surface *surface,
++				    int32_t x, int32_t y)
++{
++	struct weston_desktop_view *view;
++	struct weston_coord_global pos;
++
++	pos.c = weston_coord(x, y);
++	wl_list_for_each(view, &surface->view_list, link)
++		weston_view_set_position(view->view, pos);
++}
++
+ void
+ weston_desktop_surface_set_title(struct weston_desktop_surface *surface,
+ 				 const char *title)
+diff --git a/libweston/desktop/xdg-shell.c b/libweston/desktop/xdg-shell.c
+index 8ca5dd6f..72e2e3cb 100644
+--- a/libweston/desktop/xdg-shell.c
++++ b/libweston/desktop/xdg-shell.c
+@@ -1778,6 +1778,16 @@ weston_desktop_xdg_surface_protocol_set_window_geometry(struct wl_client *wl_cli
+ 	struct weston_desktop_xdg_surface *surface =
+ 		weston_desktop_surface_get_implementation_data(dsurface);
+ 
++	/* HACK: zero-sized geometry sets window position */
++	if (!width && !height) {
++		struct weston_desktop_xdg_toplevel *toplevel =
++			weston_desktop_surface_get_implementation_data(dsurface);
++		if (!toplevel->current.state.fullscreen &&
++		    !toplevel->current.state.maximized)
++			weston_desktop_surface_set_position(dsurface, x, y);
++		return;
++	}
++
+ 	if (!weston_desktop_xdg_surface_check_role(surface))
+ 		return;
+ 
+-- 
+2.39.5
+

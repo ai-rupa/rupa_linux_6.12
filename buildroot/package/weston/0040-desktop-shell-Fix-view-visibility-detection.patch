@@ -1,0 +1,34 @@
+From f415eed7a52673b1249c8d92a49f703fa3b5a5e4 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Wed, 8 Apr 2026 12:20:46 +0800
+Subject: [PATCH 40/98] desktop-shell: Fix view visibility detection
+
+Use view transform bounding box instead of single point for correct
+visibility check.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ desktop-shell/shell.c | 7 +++----
+ 1 file changed, 3 insertions(+), 4 deletions(-)
+
+diff --git a/desktop-shell/shell.c b/desktop-shell/shell.c
+index 83fb9826..78ee84cd 100644
+--- a/desktop-shell/shell.c
++++ b/desktop-shell/shell.c
+@@ -4373,10 +4373,9 @@ shell_reposition_view_on_output_change(struct weston_view *view)
+ 	 * otherwise, move it to the first output. */
+ 	visible = 0;
+ 	wl_list_for_each(output, &ec->output_list, link) {
+-		struct weston_coord_global pos;
+-
+-		pos = weston_view_get_pos_offset_global(view);
+-		if (weston_output_contains_coord(output, pos)) {
++		pixman_box32_t box = view->transform.boundingbox.extents;
++		if (pixman_region32_contains_rectangle(&output->region, &box) !=
++		    PIXMAN_REGION_OUT) {
+ 			visible = 1;
+ 			break;
+ 		}
+-- 
+2.39.5
+

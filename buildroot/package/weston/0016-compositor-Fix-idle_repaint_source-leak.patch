@@ -1,0 +1,31 @@
+From 496cf6613147bab5f43373f405b7f46d53ca5a01 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Fri, 20 Mar 2026 18:53:23 +0800
+Subject: [PATCH 16/98] compositor: Fix idle_repaint_source leak
+
+Properly remove and clear idle_repaint_source in schedule_repaint_reset.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ libweston/compositor.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/libweston/compositor.c b/libweston/compositor.c
+index aa664789..ce3680d2 100644
+--- a/libweston/compositor.c
++++ b/libweston/compositor.c
+@@ -3709,6 +3709,11 @@ weston_output_flush_damage_for_primary_plane(struct weston_output *output,
+ WL_EXPORT void
+ weston_output_schedule_repaint_reset(struct weston_output *output)
+ {
++	if (output->idle_repaint_source) {
++		wl_event_source_remove(output->idle_repaint_source);
++		output->idle_repaint_source = NULL;
++	}
++
+ 	weston_output_put_back_feedback_list(output);
+ 	output->repaint_status = REPAINT_NOT_SCHEDULED;
+ 	TL_POINT(output->compositor, TLP_CORE_REPAINT_EXIT_LOOP,
+-- 
+2.39.5
+

@@ -1,0 +1,15 @@
+config BR2_PACKAGE_RKNN3_RUNTIME
+	bool "rknn3-runtime"
+	help
+	  RKNN3 runtime library for Rockchip NPU.
+
+	  This package provides the RKNN3 API runtime libraries
+	  for running LLM models on Rockchip NPU (RK3572 and later).
+
+	  https://www.rock-chips.com
+
+config BR2_PACKAGE_RKNN3_RUNTIME_ARCH
+	string
+	depends on BR2_ARCH = "arm" || BR2_ARCH = "aarch64"
+	default "aarch64" if BR2_ARCH="aarch64"
+	default BR2_ARCH

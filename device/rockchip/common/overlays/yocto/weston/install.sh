@@ -15,4 +15,4 @@ $RK_RSYNC "$OVERLAY_DIR/" "$TARGET_DIR/"
 message "Installing Rockchip camera and video test scripts..."
 $RK_RSYNC "$RK_SDK_DIR/external/rockchip-test/" \
 	"$TARGET_DIR/rockchip-test/" \
-	--include="camera/" --include="video/" --exclude="/*"
+	--include="common/" --include="camera/" --include="video/" --exclude="/*"

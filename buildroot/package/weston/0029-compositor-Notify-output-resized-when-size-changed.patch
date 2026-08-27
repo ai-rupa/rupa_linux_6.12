@@ -1,0 +1,42 @@
+From c04e8ee53e8acea0635229206013afe5b6979212 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Tue, 7 Apr 2026 10:57:57 +0800
+Subject: [PATCH 29/98] compositor: Notify output resized when size changed
+
+Emit output_resized_signal when output transform/scale changes cause
+effective size change, ensuring clients receive updated dimensions.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ libweston/compositor.c | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/libweston/compositor.c b/libweston/compositor.c
+index ebaf6a0d..1e240183 100644
+--- a/libweston/compositor.c
++++ b/libweston/compositor.c
+@@ -7470,6 +7470,9 @@ weston_output_update_matrix(struct weston_output *output)
+ static void
+ weston_output_transform_scale_init(struct weston_output *output, uint32_t transform, uint32_t scale)
+ {
++	int32_t old_width = output->width;
++	int32_t old_height = output->height;
++
+ 	output->transform = transform;
+ 	output->native_scale = scale;
+ 	assert(output->current_scale > 0);
+@@ -7478,6 +7481,11 @@ weston_output_transform_scale_init(struct weston_output *output, uint32_t transf
+ 					output->current_mode->width,
+ 					output->current_mode->height,
+ 					transform, scale);
++
++	/* Notify resized signal when effective output size changes */
++	if (output->enabled &&
++	    (output->width != old_width || output->height != old_height))
++		wl_signal_emit(&output->compositor->output_resized_signal, output);
+ }
+ 
+ static void
+-- 
+2.39.5
+

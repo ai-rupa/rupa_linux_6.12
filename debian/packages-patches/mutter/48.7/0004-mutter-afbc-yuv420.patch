@@ -1,0 +1,321 @@
+From e985dfb5fe4e1492979a4ace9ba20b9e86c32917 Mon Sep 17 00:00:00 2001
+From: Weiye Chen <weiye.chen@rock-chips.com>
+Date: Sat, 6 Jun 2026 06:15:38 +0000
+Subject: [PATCH] mutter: AFBC YUV420_8BIT/10BIT external-OES GPU compositing
+
+Rockchip waylandsink sends AFBC-compressed NV12/NV15 as single-plane
+DRM_FORMAT_YUV420_8BIT / _10BIT buffers; mutter had no format_info for these
+Mali pseudo-formats, so negotiation failed with not-negotiated(-4).
+
+realize_afbc_external_oes() imports the single AFBC plane via
+GL_OES_EGL_image_external (the Mali texture unit decompresses AFBC in
+hardware, halving compositor texture-read bandwidth) and reuses the
+NV12_EXT_OES shader; init_formats() advertises both formats.
+
+AFBC block size is per-SoC: the GStreamer stack tags every buffer 16x16, but
+RK3572's rkvdec emits 32x8 (cf. kernel format_modifiers_afbc_tiled_for_rk3572
+in rockchip_vop2_reg.c). Importing 32x8 as 16x16 makes Mali read twice the
+superblock columns -> side-by-side double image. meta_detect_rk_soc() reads
+/proc/device-tree/compatible and selects 32x8 on RK3572, 16x16 elsewhere.
+YUV->RGB uses a resolution heuristic (>=720p -> BT.709).
+
+Signed-off-by: Weiye Chen <weiye.chen@rock-chips.com>
+---
+ src/wayland/meta-wayland-dma-buf.c | 246 +++++++++++++++++++++++++++++
+ 1 file changed, 246 insertions(+)
+
+diff --git a/src/wayland/meta-wayland-dma-buf.c b/src/wayland/meta-wayland-dma-buf.c
+index f188b33..a1ed62c 100644
+--- a/src/wayland/meta-wayland-dma-buf.c
++++ b/src/wayland/meta-wayland-dma-buf.c
+@@ -44,6 +44,8 @@
+ #include <sys/stat.h>
+ #include <sys/types.h>
+ #include <unistd.h>
++#include <fcntl.h>
++#include <string.h>
+
+ #include "backends/meta-backend-private.h"
+ #include "backends/meta-egl-ext.h"
+@@ -71,6 +73,40 @@
+
+ #define META_WAYLAND_DMA_BUF_MAX_FDS 4
+
++/* AFBC YUV420 pseudo-formats used by Mali / Rockchip waylandsink for
++ * compressed NV12 / NV15 surfaces.  Older drm_fourcc.h may lack these. */
++#ifndef DRM_FORMAT_YUV420_8BIT
++#define DRM_FORMAT_YUV420_8BIT  fourcc_code('Y', 'U', '0', '8')
++#endif
++#ifndef DRM_FORMAT_YUV420_10BIT
++#define DRM_FORMAT_YUV420_10BIT fourcc_code('Y', 'U', '1', '0')
++#endif
++#ifndef DRM_FORMAT_MOD_ARM_AFBC
++#define DRM_FORMAT_MOD_ARM_AFBC(__mode) fourcc_mod_code (ARM, __mode)
++#endif
++#ifndef AFBC_FORMAT_MOD_BLOCK_SIZE_16x16
++#define AFBC_FORMAT_MOD_BLOCK_SIZE_16x16 (1ULL)
++#endif
++#ifndef AFBC_FORMAT_MOD_BLOCK_SIZE_32x8
++#define AFBC_FORMAT_MOD_BLOCK_SIZE_32x8 (2ULL)
++#endif
++#ifndef AFBC_FORMAT_MOD_SPARSE
++#define AFBC_FORMAT_MOD_SPARSE (((uint64_t) 1) << 6)
++#endif
++/* The GStreamer stack (gst1-plugins-base/0012, gst1-plugins-bad/0024/0025)
++ * tags every AFBC buffer with the 16x16 SPARSE modifier (0x0800000000000041),
++ * which is correct for most Rockchip SoCs.  RK3572's VOP/rkvdec instead emit
++ * 32x8 SPARSE (0x0800000000000042) -- cf. the kernel's dedicated
++ * format_modifiers_afbc_tiled_for_rk3572[] in rockchip_vop2_reg.c.  Importing
++ * 32x8 data as 16x16 makes Mali read twice the superblock columns (side-by-side
++ * double image), so the block size is selected per SoC in realize_afbc. */
++#define DRM_AFBC_MODIFIER_16x16 \
++  (DRM_FORMAT_MOD_ARM_AFBC (AFBC_FORMAT_MOD_SPARSE) | \
++   DRM_FORMAT_MOD_ARM_AFBC (AFBC_FORMAT_MOD_BLOCK_SIZE_16x16))
++#define DRM_AFBC_MODIFIER_32x8 \
++  (DRM_FORMAT_MOD_ARM_AFBC (AFBC_FORMAT_MOD_SPARSE) | \
++   DRM_FORMAT_MOD_ARM_AFBC (AFBC_FORMAT_MOD_BLOCK_SIZE_32x8))
++
+ /* Compatible with zwp_linux_dmabuf_feedback_v1.tranche_flags */
+ typedef enum _MetaWaylandDmaBufTrancheFlags
+ {
+@@ -358,6 +394,7 @@ meta_wayland_dma_buf_feedback_copy (MetaWaylandDmaBufFeedback *feedback)
+ static gboolean realize_nv12_external_oes (MetaWaylandBuffer *buffer, GError **error);
+ static gboolean realize_nv15_external_oes (MetaWaylandBuffer *buffer, GError **error);
+ static gboolean realize_p010_external_oes (MetaWaylandBuffer *buffer, GError **error);
++static gboolean realize_afbc_external_oes (MetaWaylandBuffer *buffer, GError **error);
+
+ static gboolean
+ meta_wayland_dma_buf_realize_texture (MetaWaylandBuffer  *buffer,
+@@ -384,6 +421,9 @@ meta_wayland_dma_buf_realize_texture (MetaWaylandBuffer  *buffer,
+     {
+       if (dma_buf->drm_format == DRM_FORMAT_NV15)
+         return realize_nv15_external_oes (buffer, error);
++      if (dma_buf->drm_format == DRM_FORMAT_YUV420_8BIT ||
++          dma_buf->drm_format == DRM_FORMAT_YUV420_10BIT)
++        return realize_afbc_external_oes (buffer, error);
+       g_set_error (error, G_IO_ERROR,
+                    G_IO_ERROR_FAILED,
+                    "Unsupported buffer format %d", dma_buf->drm_format);
+@@ -732,6 +772,174 @@ realize_nv15_external_oes (MetaWaylandBuffer  *buffer,
+   return TRUE;
+ }
+
++/* Rockchip SoCs needing an AFBC block-size override (see DRM_AFBC_MODIFIER_*
++ * above).  The GStreamer stack always tags AFBC buffers 16x16; only chips whose
++ * decoder actually emits a different block size are listed here. */
++typedef enum
++{
++  META_RK_SOC_OTHER = 0,
++  META_RK_SOC_RK3572,
++} MetaRkSoc;
++
++/* Read the SoC from /proc/device-tree/compatible (a NUL-separated string list),
++ * cached after the first call. */
++static MetaRkSoc
++meta_detect_rk_soc (void)
++{
++  static int cached = -1;
++  char buf[512];
++  int fd, n, i;
++
++  if (cached >= 0)
++    return cached;
++
++  cached = META_RK_SOC_OTHER;
++  fd = open ("/proc/device-tree/compatible", O_RDONLY | O_CLOEXEC);
++  if (fd >= 0)
++    {
++      n = read (fd, buf, sizeof (buf) - 1);
++      close (fd);
++      if (n > 0)
++        {
++          for (i = 0; i < n; i++)
++            if (buf[i] == '\0')
++              buf[i] = ' ';
++          buf[n] = '\0';
++          if (strstr (buf, "rk3572"))
++            cached = META_RK_SOC_RK3572;
++        }
++    }
++  return cached;
++}
++
++/* AFBC YUV420 (DRM_FORMAT_YUV420_8BIT / _10BIT) via GL_OES_EGL_image_external.
++ *
++ * Rockchip waylandsink sends AFBC-compressed NV12/NV15 as a SINGLE-plane
++ * buffer re-typed to DRM_FORMAT_YUV420_8BIT (8-bit) or DRM_FORMAT_YUV420_10BIT
++ * (10-bit) carrying DRM_AFBC_MODIFIER.  Mali G310 reports these formats with
++ * the AFBC modifier via eglQueryDmaBufModifiers and imports them as a single
++ * external-OES image (the texture unit decompresses AFBC in hardware), which
++ * roughly halves the texture-read bandwidth during composition.
++ *
++ * Unlike the linear NV12/NV15 path this is strictly single-plane: only PLANE0
++ * is described, with the AFBC modifier; no PLANE1 is attached. */
++static gboolean
++realize_afbc_external_oes (MetaWaylandBuffer  *buffer,
++                           GError            **error)
++{
++  MetaWaylandDmaBufBuffer *dma_buf = buffer->dma_buf.dma_buf;
++  MetaContext *context =
++    meta_wayland_compositor_get_context (buffer->compositor);
++  MetaBackend *backend = meta_context_get_backend (context);
++  MetaEgl *egl = meta_backend_get_egl (backend);
++  ClutterBackend *clutter_backend = meta_backend_get_clutter_backend (backend);
++  CoglContext *cogl_context = clutter_backend_get_cogl_context (clutter_backend);
++  EGLDisplay egl_display = cogl_context_get_egl_display (cogl_context);
++  NV12ExternalOesData *oes_data;
++  EGLImageKHR egl_image;
++  CoglTexture *texture;
++  gboolean is_10bit = (dma_buf->drm_format == DRM_FORMAT_YUV420_10BIT);
++  uint64_t modifier;
++
++  /* These pseudo-formats only exist as AFBC buffers; if the client did not tag
++   * an explicit modifier, fall back to the 16x16 the GStreamer stack uses. */
++  modifier = dma_buf->drm_modifier;
++  if (modifier == DRM_FORMAT_MOD_INVALID)
++    modifier = DRM_AFBC_MODIFIER_16x16;
++
++  /* The GStreamer stack always tags AFBC buffers 16x16, but RK3572's rkvdec
++   * emits 32x8; correct the block size per SoC (other SoCs keep 16x16). */
++  switch (meta_detect_rk_soc ())
++    {
++    case META_RK_SOC_RK3572:
++      modifier = DRM_AFBC_MODIFIER_32x8;
++      break;
++    default:
++      break;
++    }
++
++  {
++    EGLint attribs[32];
++    int atti = 0;
++
++    attribs[atti++] = EGL_WIDTH;                attribs[atti++] = dma_buf->width;
++    attribs[atti++] = EGL_HEIGHT;               attribs[atti++] = dma_buf->height;
++    attribs[atti++] = EGL_LINUX_DRM_FOURCC_EXT; attribs[atti++] = dma_buf->drm_format;
++    attribs[atti++] = EGL_IMAGE_PRESERVED_KHR;  attribs[atti++] = EGL_TRUE;
++
++    /* Single plane only — AFBC packs Y+UV into one compressed buffer. */
++    attribs[atti++] = EGL_DMA_BUF_PLANE0_FD_EXT;          attribs[atti++] = dma_buf->fds[0];
++    attribs[atti++] = EGL_DMA_BUF_PLANE0_OFFSET_EXT;      attribs[atti++] = dma_buf->offsets[0];
++    attribs[atti++] = EGL_DMA_BUF_PLANE0_PITCH_EXT;       attribs[atti++] = dma_buf->strides[0];
++    attribs[atti++] = EGL_DMA_BUF_PLANE0_MODIFIER_LO_EXT; attribs[atti++] = modifier & 0xFFFFFFFF;
++    attribs[atti++] = EGL_DMA_BUF_PLANE0_MODIFIER_HI_EXT; attribs[atti++] = modifier >> 32;
++
++    /* Mali G310 requires YUV hints (Weston is_mali_egl convention).  No
++     * colorimetry travels with the dma-buf, so use the standard resolution
++     * heuristic: SD (< 720p) -> BT.601; HD and up (and all 10-bit) -> BT.709. */
++    attribs[atti++] = EGL_YUV_COLOR_SPACE_HINT_EXT;
++    attribs[atti++] = (is_10bit || dma_buf->height >= 720)
++                        ? EGL_ITU_REC709_EXT : EGL_ITU_REC601_EXT;
++    attribs[atti++] = EGL_SAMPLE_RANGE_HINT_EXT;
++    attribs[atti++] = EGL_YUV_NARROW_RANGE_EXT;
++
++    attribs[atti++] = EGL_NONE;
++
++    egl_image = meta_egl_create_image (egl, egl_display, EGL_NO_CONTEXT,
++                                       EGL_LINUX_DMA_BUF_EXT, NULL,
++                                       attribs, error);
++    if (egl_image == EGL_NO_IMAGE_KHR)
++      {
++        EGLint egl_err = eglGetError ();
++        g_warning ("AFBC ext OES: eglCreateImageKHR failed: EGL error 0x%04x "
++                   "fmt=0x%x w=%d h=%d fd=%d stride=%d offset=%d mod=0x%llx",
++                   egl_err, dma_buf->drm_format,
++                   dma_buf->width, dma_buf->height,
++                   dma_buf->fds[0], dma_buf->strides[0], dma_buf->offsets[0],
++                   (unsigned long long) modifier);
++        g_prefix_error (error,
++                        "AFBC external OES: EGL image creation failed (0x%04x): ",
++                        egl_err);
++        return FALSE;
++      }
++  }
++
++  oes_data = g_new0 (NV12ExternalOesData, 1);
++  oes_data->egl         = egl;
++  oes_data->egl_display = egl_display;
++  oes_data->egl_image   = egl_image;
++
++  texture = cogl_texture_2d_new_from_egl_image_external (
++      cogl_context,
++      dma_buf->width, dma_buf->height,
++      alloc_nv12_external_oes,
++      oes_data,
++      nv12_external_oes_data_free,
++      error);
++  if (!texture)
++    {
++      nv12_external_oes_data_free (oes_data);
++      return FALSE;
++    }
++
++  if (!cogl_texture_allocate (texture, error))
++    {
++      g_object_unref (texture);
++      return FALSE;
++    }
++
++  /* meta_multi_texture_new takes transfer-full of the textures array. */
++  {
++    CoglTexture **textures = g_new (CoglTexture *, 1);
++    textures[0] = texture;
++    buffer->dma_buf.texture =
++      meta_multi_texture_new (META_MULTI_TEXTURE_FORMAT_NV12_EXT_OES,
++                              textures, 1);
++  }
++  buffer->is_y_inverted = dma_buf->is_y_inverted;
++  return TRUE;
++}
++
+ /* P010 (10-bit NV12) via GL_OES_EGL_image_external: same approach as NV12
+  * but with BT.709 color space hints for standard SDR 10-bit content. */
+ static gboolean
+@@ -2464,6 +2672,44 @@ init_formats (MetaWaylandDmaBufManager  *dma_buf_manager,
+       }
+   }
+
++  /* Advertise AFBC YUV420 pseudo-formats (DRM_FORMAT_YUV420_8BIT / _10BIT).
++   * Mali G310 reports these via eglQueryDmaBufModifiers with the AFBC
++   * modifier, so add_format() advertises them automatically; the AFBC
++   * buffers are GL-composited through realize_afbc_external_oes(). */
++  {
++    const uint32_t afbc_formats[] =
++      { DRM_FORMAT_YUV420_8BIT, DRM_FORMAT_YUV420_10BIT };
++    guint f;
++
++    for (f = 0; f < G_N_ELEMENTS (afbc_formats); f++)
++      {
++        gboolean already = FALSE;
++        guint k;
++        EGLint nm = 0;
++
++        for (k = 0; k < dma_buf_manager->formats->len; k++)
++          {
++            if (g_array_index (dma_buf_manager->formats,
++                               MetaWaylandDmaBufFormat, k).drm_format ==
++                afbc_formats[f])
++              { already = TRUE; break; }
++          }
++        if (already)
++          continue;
++
++        if (meta_egl_query_dma_buf_modifiers (egl, egl_display,
++                                              afbc_formats[f],
++                                              0, NULL, NULL, &nm, NULL) &&
++            nm > 0)
++          {
++            add_format (dma_buf_manager, egl_display, afbc_formats[f]);
++            meta_topic (META_DEBUG_WAYLAND,
++                        "Advertising AFBC format 0x%x via "
++                        "GL_OES_EGL_image_external", afbc_formats[f]);
++          }
++      }
++  }
++
+   init_format_table (dma_buf_manager);
+   return TRUE;
+ }
+--
+2.47.3
+

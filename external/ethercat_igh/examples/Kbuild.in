@@ -31,6 +31,8 @@
 
 obj-m := mini/
 
+obj-m += ecat_loopback_jitter/
+
 ifeq (@ENABLE_TTY@,1)
 	obj-m += tty/
 endif

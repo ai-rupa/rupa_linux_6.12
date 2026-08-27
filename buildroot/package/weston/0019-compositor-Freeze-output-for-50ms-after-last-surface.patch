@@ -1,0 +1,61 @@
+From e6b0e3137c4b2cf36930966004bcc74c7b559fce Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Tue, 14 Apr 2026 15:56:38 +0800
+Subject: [PATCH 19/98] compositor: Freeze output for 50ms after last surface
+ resize
+
+Freeze output updates for 50ms after the last surface resize operation
+completes to prevent visual artifacts and ensure stable display.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ include/libweston/libweston.h |  3 +++
+ libweston/compositor.c        | 11 ++++++++++-
+ 2 files changed, 13 insertions(+), 1 deletion(-)
+
+diff --git a/include/libweston/libweston.h b/include/libweston/libweston.h
+index 7f74a1fc..52fcebd7 100644
+--- a/include/libweston/libweston.h
++++ b/include/libweston/libweston.h
+@@ -592,6 +592,9 @@ struct weston_output {
+ 
+ 	/** fifo_v1 - list of surfaces to clear next repaint */
+ 	struct wl_list fifo_barrier_surfaces;
++
++	/* Display freeze deadline */
++	struct timespec freeze_until;
+ };
+ 
+ enum weston_pointer_motion_mask {
+diff --git a/libweston/compositor.c b/libweston/compositor.c
+index 9b993d49..a0a61432 100644
+--- a/libweston/compositor.c
++++ b/libweston/compositor.c
+@@ -4255,14 +4255,23 @@ static bool
+ weston_output_should_freeze(struct weston_output *output)
+ {
+ 	struct weston_paint_node *pnode;
++	struct timespec now;
++
++	weston_compositor_read_presentation_clock(output->compositor, &now);
+ 
+ 	wl_list_for_each(pnode, &output->paint_node_z_order_list,
+ 			 z_order_link) {
+ 		/* Freeze output during ongoing surface resize */
+-		if (pnode->surface->wait_for_resizing)
++		if (pnode->surface->wait_for_resizing) {
++			/* Freeze output for 50ms after last surface resize */
++			timespec_add_msec(&output->freeze_until, &now, 50);
+ 			return true;
++		}
+ 	}
+ 
++	if (timespec_sub_to_msec(&output->freeze_until, &now) > 0)
++		return true;
++
+ 	return false;
+ }
+ 
+-- 
+2.39.5
+

@@ -293,6 +293,458 @@ void SplitAecWin(struct isp2x_window* ori_win, struct isp2x_window* left_win,
     }
 }
 
+void AiqIspParamsSplitter_SplitAecWeightForThree(u8* ori_weight,
+                                         u8* left_weight, u8* middle_weight, u8* right_weight,
+                                         WinSplitMode mode, u8 wnd_num) {
+    switch (mode) {
+        case LEFT_AND_RIGHT_MODE:
+        {
+            u8* merge_wgt[3] = {left_weight, middle_weight, right_weight};
+            for (int i = 0; i < wnd_num; i++) {
+                for (int j = 0; j < 3 * wnd_num; j++) {
+                    int wgt_idx = j / wnd_num;
+                    int sub_idx = j % wnd_num;
+                    int ori_idx = j / 3;
+                    merge_wgt[wgt_idx][i * wnd_num + sub_idx] = ori_weight[i * wnd_num + ori_idx];
+                }
+            }
+        }
+            break;
+        case LEFT_MODE:
+        case MIDDLE_MODE:
+        case RIGHT_MODE:
+            memcpy(left_weight, ori_weight, wnd_num * wnd_num * sizeof(u8));
+            memcpy(middle_weight, ori_weight, wnd_num * wnd_num * sizeof(u8));
+            memcpy(right_weight, ori_weight, wnd_num * wnd_num * sizeof(u8));
+            break;
+        default:
+            break;
+    }
+}
+
+static void SplitAecSubWinForThree(u8* subwin_en,
+                           struct isp2x_window* ori_win,
+                           struct isp2x_window* left_win,
+                           struct isp2x_window* middle_win,
+                           struct isp2x_window* right_win,
+                           Splitter_Rectangle_t left_isp_rect_,
+                           Splitter_Rectangle_t middle_isp_rect_,
+                           Splitter_Rectangle_t right_isp_rect_, WinSplitMode* mode) {
+    for (int i = 0; i < ISP2X_RAWAEBIG_SUBWIN_NUM; i++) {
+        if (subwin_en[i] == 1) {  // only when subwin is enabled, should split hwi params
+            if (ori_win[i].h_offs + ori_win[i].h_size <= left_isp_rect_.w) {
+#ifdef DEBUG
+                printf("win locate in left isp\n");
+#endif
+                mode[i] = LEFT_MODE;
+
+                left_win[i].h_offs = ori_win[i].h_offs;
+                left_win[i].h_size = ori_win[i].h_size;
+                left_win[i].v_offs = ori_win[i].v_offs;
+                left_win[i].v_size = ori_win[i].v_size;
+
+                middle_win[i].h_offs = 0;
+                middle_win[i].h_size = ori_win[i].h_size;
+                middle_win[i].v_offs = ori_win[i].v_offs;
+                middle_win[i].v_size = ori_win[i].v_size;
+
+                right_win[i].h_offs = 0;
+                right_win[i].h_size = ori_win[i].h_size;
+                right_win[i].v_offs = ori_win[i].v_offs;
+                right_win[i].v_size = ori_win[i].v_size;
+            } else if (ori_win[i].h_offs >= right_isp_rect_.x) {
+#ifdef DEBUG
+                printf("win locate in right isp\n");
+#endif
+                mode[i] = RIGHT_MODE;
+
+                // win only locate in right isp, actually stats of left isp would not be used
+                left_win[i].h_offs = 0;
+                left_win[i].h_size = ori_win[i].h_size;
+                left_win[i].v_offs = ori_win[i].v_offs;
+                left_win[i].v_size = ori_win[i].v_size;
+
+                middle_win[i].h_offs = 0;
+                middle_win[i].h_size = ori_win[i].h_size;
+                middle_win[i].v_offs = ori_win[i].v_offs;
+                middle_win[i].v_size = ori_win[i].v_size;
+
+                right_win[i].h_offs = ori_win[i].h_offs - right_isp_rect_.x;
+                right_win[i].h_size = ori_win[i].h_size;
+                right_win[i].v_offs = ori_win[i].v_offs;
+                right_win[i].v_size = ori_win[i].v_size;
+
+            } else if (ori_win[i].h_offs + ori_win[i].h_size <= middle_isp_rect_.w + middle_isp_rect_.x &&
+                       ori_win[i].h_offs >= middle_isp_rect_.x) {
+                mode[i] = MIDDLE_MODE;
+
+                // win only locate in right isp, actually stats of left isp would not be used
+                left_win[i].h_offs = 0;
+                left_win[i].h_size = ori_win[i].h_size;
+                left_win[i].v_offs = ori_win[i].v_offs;
+                left_win[i].v_size = ori_win[i].v_size;
+
+                middle_win[i].h_offs = ori_win[i].h_offs - middle_isp_rect_.x;
+                middle_win[i].h_size = ori_win[i].h_size;
+                middle_win[i].v_offs = ori_win[i].v_offs;
+                middle_win[i].v_size = ori_win[i].v_size;
+
+                right_win[i].h_offs = 0;
+                right_win[i].h_size = ori_win[i].h_size;
+                right_win[i].v_offs = ori_win[i].v_offs;
+                right_win[i].v_size = ori_win[i].v_size;
+
+            } else {
+#ifdef DEBUG
+                printf(" win locate at left&right isp\n");
+#endif
+                mode[i] = LEFT_AND_RIGHT_MODE;
+
+                left_win[i].h_offs = ori_win[i].h_offs;
+                left_win[i].h_size = MAX(0, ((long)left_isp_rect_.w - (long)left_win[i].h_offs));
+                left_win[i].v_offs = ori_win[i].v_offs;
+                left_win[i].v_size = ori_win[i].v_size;
+
+                middle_win[i].h_offs = left_win[i].h_offs + left_win[i].h_size - middle_isp_rect_.x;
+                middle_win[i].h_size = MAX(0, ((long)middle_isp_rect_.w - (long)middle_win[i].h_offs - (long)middle_isp_rect_.x));
+                middle_win[i].v_offs = ori_win[i].v_offs;
+                middle_win[i].v_size = ori_win[i].v_size;
+
+                right_win[i].h_offs = middle_win[i].h_offs + middle_win[i].h_size + middle_isp_rect_.x - right_isp_rect_.x;
+                right_win[i].h_size = MAX(0, ((long)ori_win[i].h_size - (long)left_win[i].h_size - (long)middle_win[i].h_size));
+                right_win[i].v_offs = ori_win[i].v_offs;
+                right_win[i].v_size = ori_win[i].v_size;
+            }
+        }
+    }
+}
+
+void SplitAecWinForThree(struct isp2x_window* ori_win,
+                        struct isp2x_window* left_win,
+                        struct isp2x_window* middle_win,
+                        struct isp2x_window* right_win, u8 wnd_num,
+                        Splitter_Rectangle_t left_isp_rect_,
+                        Splitter_Rectangle_t middle_isp_rect_,
+                        Splitter_Rectangle_t right_isp_rect_,
+                        WinSplitMode* mode) {
+    // win only locate in left isp, actually stats of right isp would not be used
+    if (ori_win->h_offs + ori_win->h_size <= left_isp_rect_.w) {
+#ifdef DEBUG
+        printf("win locate in left isp\n");
+#endif
+        *mode = LEFT_MODE;
+
+        left_win->h_offs = ori_win->h_offs;
+        left_win->h_size = ori_win->h_size;
+        left_win->v_offs = ori_win->v_offs;
+        left_win->v_size = ori_win->v_size;
+
+        middle_win->h_offs = 0;
+        middle_win->h_size = ori_win->h_size;
+        middle_win->v_offs = ori_win->v_offs;
+        middle_win->v_size = ori_win->v_size;
+
+        right_win->h_offs = 0;
+        right_win->h_size = ori_win->h_size;
+        right_win->v_offs = ori_win->v_offs;
+        right_win->v_size = ori_win->v_size;
+    } else if (ori_win->h_offs >= right_isp_rect_.x) {
+#ifdef DEBUG
+        printf("win locate in right isp\n");
+#endif
+        *mode = RIGHT_MODE;
+
+        // win only locate in right isp, actually stats of left isp would not be used
+        left_win->h_offs = 0;
+        left_win->h_size = ori_win->h_size;
+        left_win->v_offs = ori_win->v_offs;
+        left_win->v_size = ori_win->v_size;
+
+        middle_win->h_offs = 0;
+        middle_win->h_size = ori_win->h_size;
+        middle_win->v_offs = ori_win->v_offs;
+        middle_win->v_size = ori_win->v_size;
+
+        right_win->h_offs = ori_win->h_offs - right_isp_rect_.x;
+        right_win->h_size = ori_win->h_size;
+        right_win->v_offs = ori_win->v_offs;
+        right_win->v_size = ori_win->v_size;
+
+    } else if (ori_win->h_offs + ori_win->h_size <= middle_isp_rect_.w + middle_isp_rect_.x &&
+               ori_win->h_offs >= middle_isp_rect_.x) {
+
+        *mode = MIDDLE_MODE;
+
+        left_win->h_offs = 0;
+        left_win->h_size = ori_win->h_size;
+        left_win->v_offs = ori_win->v_offs;
+        left_win->v_size = ori_win->v_size;
+
+        middle_win->h_offs = ori_win->h_offs - middle_isp_rect_.x;
+        middle_win->h_size = ori_win->h_size;
+        middle_win->v_offs = ori_win->v_offs;
+        middle_win->v_size = ori_win->v_size;
+
+        right_win->h_offs = 0;
+        right_win->h_size = ori_win->h_size;
+        right_win->v_offs = ori_win->v_offs;
+        right_win->v_size = ori_win->v_size;
+    } else {
+        *mode = LEFT_AND_RIGHT_MODE;
+
+        // win center locate at overlap zone
+        left_win->h_offs = ori_win->h_offs;
+        left_win->v_offs = ori_win->v_offs;
+        left_win->v_size = ori_win->v_size;
+
+        middle_win->v_offs = ori_win->v_offs;
+        middle_win->v_size = ori_win->v_size;
+
+        right_win->v_offs = ori_win->v_offs;
+        right_win->v_size = ori_win->v_size;
+
+        u16 block_h = ori_win->h_size / (3 * wnd_num);
+
+        left_win->h_size  = block_h * wnd_num;
+        middle_win->h_offs = (left_win->h_size + left_win->h_offs) > middle_isp_rect_.x ?
+                                left_win->h_size + left_win->h_offs - middle_isp_rect_.x : 0;
+        middle_win->h_size = block_h * wnd_num;
+        right_win->h_offs = (middle_win->h_size + middle_win->h_offs + middle_isp_rect_.x > right_isp_rect_.x)
+                                ? middle_win->h_size + middle_win->h_offs + middle_isp_rect_.x - right_isp_rect_.x
+                                : 0;
+        right_win->h_size = block_h * wnd_num;
+    }
+}
+
+void AiqIspParamsSplitter_SplitAecWeightForThreeV(u8* ori_weight,
+                                         u8* left_weight, u8* middle_weight, u8* right_weight,
+                                         WinSplitMode mode, u8 wnd_num) {
+    switch (mode) {
+        case LEFT_AND_RIGHT_MODE:
+        {
+            u8* merge_wgt[3] = {left_weight, middle_weight, right_weight};
+            for (int i = 0; i < wnd_num; i++) {
+                int wgt_idx0 = 3 * i / wnd_num;
+                int wgt_idx1 = (3 * i + 1) / wnd_num;
+                int wgt_idx2 = (3 * i + 2) / wnd_num;
+                int sub_idx0 = 3 * i % wnd_num;
+                int sub_idx1 = (3 * i + 1) % wnd_num;
+                int sub_idx2 = (3 * i + 2) % wnd_num;
+                for (int j = 0; j < wnd_num; j++) {
+                    merge_wgt[wgt_idx0][sub_idx0 * wnd_num + j] = ori_weight[i * wnd_num + j];
+                    merge_wgt[wgt_idx1][sub_idx1 * wnd_num + j] = ori_weight[i * wnd_num + j];
+                    merge_wgt[wgt_idx2][sub_idx2 * wnd_num + j] = ori_weight[i * wnd_num + j];
+                }
+            }
+        }
+            break;
+        case LEFT_MODE:
+        case MIDDLE_MODE:
+        case RIGHT_MODE:
+            memcpy(left_weight, ori_weight, wnd_num * wnd_num * sizeof(u8));
+            memcpy(middle_weight, ori_weight, wnd_num * wnd_num * sizeof(u8));
+            memcpy(right_weight, ori_weight, wnd_num * wnd_num * sizeof(u8));
+            break;
+        default:
+            break;
+    }
+}
+
+static void SplitAecSubWinForThreeV(u8* subwin_en,
+                           struct isp2x_window* ori_win,
+                           struct isp2x_window* left_win,
+                           struct isp2x_window* middle_win,
+                           struct isp2x_window* right_win,
+                           Splitter_Rectangle_t left_isp_rect_,
+                           Splitter_Rectangle_t middle_isp_rect_,
+                           Splitter_Rectangle_t right_isp_rect_, WinSplitMode* mode) {
+    for (int i = 0; i < ISP2X_RAWAEBIG_SUBWIN_NUM; i++) {
+        if (subwin_en[i] == 1) {  // only when subwin is enabled, should split hwi params
+            if (ori_win[i].v_offs + ori_win[i].v_size <= left_isp_rect_.h) {
+#ifdef DEBUG
+                printf("win locate in left isp\n");
+#endif
+                mode[i] = LEFT_MODE;
+
+                left_win[i].h_offs = ori_win[i].h_offs;
+                left_win[i].h_size = ori_win[i].h_size;
+                left_win[i].v_offs = ori_win[i].v_offs;
+                left_win[i].v_size = ori_win[i].v_size;
+
+                middle_win[i].h_offs = ori_win[i].h_offs;
+                middle_win[i].h_size = ori_win[i].h_size;
+                middle_win[i].v_offs = 0;
+                middle_win[i].v_size = ori_win[i].v_size;
+
+                right_win[i].h_offs = ori_win[i].h_offs;
+                right_win[i].h_size = ori_win[i].h_size;
+                right_win[i].v_offs = 0;
+                right_win[i].v_size = ori_win[i].v_size;
+            } else if (ori_win[i].v_offs >= right_isp_rect_.y) {
+#ifdef DEBUG
+                printf("win locate in right isp\n");
+#endif
+                mode[i] = RIGHT_MODE;
+
+                // win only locate in right isp, actually stats of left isp would not be used
+                left_win[i].h_offs = ori_win[i].h_offs;
+                left_win[i].h_size = ori_win[i].h_size;
+                left_win[i].v_offs = 0;
+                left_win[i].v_size = ori_win[i].v_size;
+
+                middle_win[i].h_offs = ori_win[i].h_offs;
+                middle_win[i].h_size = ori_win[i].h_size;
+                middle_win[i].v_offs = 0;
+                middle_win[i].v_size = ori_win[i].v_size;
+
+                right_win[i].h_offs = ori_win[i].h_offs;
+                right_win[i].h_size = ori_win[i].h_size;
+                right_win[i].v_offs = ori_win[i].v_offs - right_isp_rect_.y;
+                right_win[i].v_size = ori_win[i].v_size;
+
+            } else if (ori_win[i].v_offs + ori_win[i].v_size <= middle_isp_rect_.h + middle_isp_rect_.y &&
+                       ori_win[i].v_offs >= middle_isp_rect_.y) {
+                mode[i] = MIDDLE_MODE;
+
+                // win only locate in right isp, actually stats of left isp would not be used
+                left_win[i].h_offs = ori_win[i].h_offs;
+                left_win[i].h_size = ori_win[i].h_size;
+                left_win[i].v_offs = 0;
+                left_win[i].v_size = ori_win[i].v_size;
+
+                middle_win[i].h_offs = ori_win[i].h_offs;
+                middle_win[i].h_size = ori_win[i].h_size;
+                middle_win[i].v_offs = ori_win[i].v_offs - middle_isp_rect_.y;
+                middle_win[i].v_size = ori_win[i].v_size;
+
+                right_win[i].h_offs = ori_win[i].h_offs;
+                right_win[i].h_size = ori_win[i].h_size;
+                right_win[i].v_offs = 0;
+                right_win[i].v_size = ori_win[i].v_size;
+
+            } else {
+#ifdef DEBUG
+                printf(" win locate at left&right isp\n");
+#endif
+                mode[i] = LEFT_AND_RIGHT_MODE;
+
+                left_win[i].h_offs = ori_win[i].h_offs;
+                left_win[i].h_size = ori_win[i].h_size;
+                left_win[i].v_offs = ori_win[i].v_offs;
+                left_win[i].v_size = MAX(0, ((long)left_isp_rect_.h - (long)left_win[i].v_offs));
+
+                middle_win[i].h_offs = ori_win[i].h_offs;
+                middle_win[i].h_size = ori_win[i].h_size;
+                middle_win[i].v_offs = left_win[i].v_offs + left_win[i].v_size - middle_isp_rect_.y;
+                middle_win[i].v_size = MAX(0, ((long)middle_isp_rect_.h - (long)middle_win[i].v_offs - (long)middle_isp_rect_.y));
+
+                right_win[i].h_offs = ori_win[i].h_offs;
+                right_win[i].h_size = ori_win[i].h_size;
+                right_win[i].v_offs = middle_win[i].v_offs + middle_win[i].v_size + middle_isp_rect_.y - right_isp_rect_.y;
+                right_win[i].v_size = MAX(0, ((long)ori_win[i].v_size - (long)left_win[i].v_size - (long)middle_win[i].v_size));
+            }
+        }
+    }
+}
+
+void SplitAecWinForThreeV(struct isp2x_window* ori_win,
+                        struct isp2x_window* left_win,
+                        struct isp2x_window* middle_win,
+                        struct isp2x_window* right_win, u8 wnd_num,
+                        Splitter_Rectangle_t left_isp_rect_,
+                        Splitter_Rectangle_t middle_isp_rect_,
+                        Splitter_Rectangle_t right_isp_rect_,
+                        WinSplitMode* mode) {
+    // win only locate in left isp, actually stats of right isp would not be used
+    if (ori_win->v_offs + ori_win->v_size <= left_isp_rect_.h) {
+#ifdef DEBUG
+        printf("win locate in left isp\n");
+#endif
+        *mode = LEFT_MODE;
+
+        left_win->h_offs = ori_win->h_offs;
+        left_win->h_size = ori_win->h_size;
+        left_win->v_offs = ori_win->v_offs;
+        left_win->v_size = ori_win->v_size;
+
+        middle_win->h_offs = ori_win->h_offs;
+        middle_win->h_size = ori_win->h_size;
+        middle_win->v_offs = 0;
+        middle_win->v_size = ori_win->v_size;
+
+        right_win->h_offs = ori_win->h_offs;
+        right_win->h_size = ori_win->h_size;
+        right_win->v_offs = 0;
+        right_win->v_size = ori_win->v_size;
+    } else if (ori_win->v_offs >= right_isp_rect_.y) {
+#ifdef DEBUG
+        printf("win locate in right isp\n");
+#endif
+        *mode = RIGHT_MODE;
+
+        // win only locate in right isp, actually stats of left isp would not be used
+        left_win->h_offs = ori_win->h_offs;
+        left_win->h_size = ori_win->h_size;
+        left_win->v_offs = 0;
+        left_win->v_size = ori_win->v_size;
+
+        middle_win->h_offs = ori_win->h_offs;
+        middle_win->h_size = ori_win->h_size;
+        middle_win->v_offs = 0;
+        middle_win->v_size = ori_win->v_size;
+
+        right_win->h_offs = ori_win->h_offs;
+        right_win->h_size = ori_win->h_size;
+        right_win->v_offs = ori_win->v_offs - right_isp_rect_.y;
+        right_win->v_size = ori_win->v_size;
+
+    } else if (ori_win->v_offs + ori_win->v_size <= middle_isp_rect_.h + middle_isp_rect_.y &&
+                ori_win->v_offs >= middle_isp_rect_.y) {
+        *mode = MIDDLE_MODE;
+
+        // win only locate in right isp, actually stats of left isp would not be used
+        left_win->h_offs = ori_win->h_offs;
+        left_win->h_size = ori_win->h_size;
+        left_win->v_offs = 0;
+        left_win->v_size = ori_win->v_size;
+
+        middle_win->h_offs = ori_win->h_offs;
+        middle_win->h_size = ori_win->h_size;
+        middle_win->v_offs = ori_win->v_offs - middle_isp_rect_.y;
+        middle_win->v_size = ori_win->v_size;
+
+        right_win->h_offs = ori_win->h_offs;
+        right_win->h_size = ori_win->h_size;
+        right_win->v_offs = 0;
+        right_win->v_size = ori_win->v_size;
+
+    } else {
+        *mode = LEFT_AND_RIGHT_MODE;
+
+        // win center locate at overlap zone
+        left_win->h_offs = ori_win->h_offs;
+        left_win->h_size = ori_win->h_size;
+        left_win->v_offs = ori_win->v_offs;
+
+        middle_win->h_offs = ori_win->h_offs;
+        middle_win->h_size = ori_win->h_size;
+
+        right_win->h_offs = ori_win->h_offs;
+        right_win->h_size = ori_win->h_size;
+
+        u16 block_v = ori_win->v_size / (3 * wnd_num);
+
+        left_win->v_size  = block_v * wnd_num;
+        middle_win->v_offs = (left_win->v_size + left_win->v_offs) > middle_isp_rect_.y ?
+                                left_win->v_size + left_win->v_offs - middle_isp_rect_.y : 0;
+        middle_win->v_size = block_v * wnd_num;
+        right_win->v_offs = (middle_win->v_size + middle_win->v_offs + middle_isp_rect_.y > right_isp_rect_.y)
+                                ? middle_win->v_size + middle_win->v_offs + middle_isp_rect_.y - right_isp_rect_.y
+                                : 0;
+        right_win->v_size = block_v * wnd_num;
+    }
+}
+
 /*********************************************/
 /*      other module hwi splitter            */
 /*********************************************/
@@ -552,8 +1004,417 @@ void AiqIspParamsSplitter_SplitAecWeightVertical(u8* ori_weight, u8* left_weight
         case RIGHT_MODE:
             memcpy(left_weight, ori_weight, wnd_num * wnd_num * sizeof(u8));
             memcpy(right_weight, ori_weight, wnd_num * wnd_num * sizeof(u8));
+            break;
         default:
             break;
+    }
+}
+
+void AiqIspParamsSplitter_SplitAwbWinThree(
+    struct isp2x_window* ori_win, struct isp2x_window* left_win,
+    struct isp2x_window* middle_win, struct isp2x_window* right_win,
+    u8 ds_awb, u8 wnd_num,
+    Splitter_Rectangle_t left_isp_rect_,
+    Splitter_Rectangle_t middle_isp_rect_,
+    Splitter_Rectangle_t right_isp_rect_,
+    WinSplitMode* mode) {
+    u16 win_ds_hsize       = ori_win->h_size >> ds_awb;
+    u16 ori_win_hsize_clip = win_ds_hsize << ds_awb;
+
+    // win only locate in left isp, actually stats of right isp would not be used
+    if (ori_win->h_offs + ori_win_hsize_clip <= left_isp_rect_.w) {
+#ifdef DEBUG
+        printf("win locate in left isp\n");
+#endif
+        *mode = LEFT_MODE;
+
+        left_win->h_offs = ori_win->h_offs;
+        left_win->h_size = ori_win_hsize_clip;
+        left_win->v_offs = ori_win->v_offs;
+        left_win->v_size = ori_win->v_size;
+
+        middle_win->h_offs = 0;
+        middle_win->h_size = ori_win_hsize_clip;
+        middle_win->v_offs = ori_win->v_offs;
+        middle_win->v_size = ori_win->v_size;
+
+        right_win->h_offs = 0;
+        right_win->h_size = ori_win_hsize_clip;
+        right_win->v_offs = ori_win->v_offs;
+        right_win->v_size = ori_win->v_size;
+    } else if (ori_win->h_offs >= right_isp_rect_.x) {
+#ifdef DEBUG
+        printf("win locate in right isp\n");
+#endif
+        *mode = RIGHT_MODE;
+
+        // win only locate in right isp, actually stats of left isp would not be used
+        left_win->h_offs = 0;
+        left_win->h_size = ori_win_hsize_clip;
+        left_win->v_offs = ori_win->v_offs;
+        left_win->v_size = ori_win->v_size;
+
+        middle_win->h_offs = 0;
+        middle_win->h_size = ori_win_hsize_clip;
+        middle_win->v_offs = ori_win->v_offs;
+        middle_win->v_size = ori_win->v_size;
+
+        right_win->h_offs = ori_win->h_offs - right_isp_rect_.x;
+        right_win->h_size = ori_win_hsize_clip;
+        right_win->v_offs = ori_win->v_offs;
+        right_win->v_size = ori_win->v_size;
+
+    } else if (ori_win->h_offs + ori_win->h_size <= middle_isp_rect_.w + middle_isp_rect_.x &&
+               ori_win->h_offs >= middle_isp_rect_.x) {
+
+        *mode = MIDDLE_MODE;
+
+        left_win->h_offs = 0;
+        left_win->h_size = ori_win_hsize_clip;
+        left_win->v_offs = ori_win->v_offs;
+        left_win->v_size = ori_win->v_size;
+
+        middle_win->h_offs = ori_win->h_offs - middle_isp_rect_.x;
+        middle_win->h_size = ori_win_hsize_clip;
+        middle_win->v_offs = ori_win->v_offs;
+        middle_win->v_size = ori_win->v_size;
+
+        right_win->h_offs = 0;
+        right_win->h_size = ori_win_hsize_clip;
+        right_win->v_offs = ori_win->v_offs;
+        right_win->v_size = ori_win->v_size;
+
+    } else {
+        LOG1_AWB(" win locate at left&right isp,and center line locate in overlapping zone!\n");
+
+        *mode = LEFT_AND_RIGHT_MODE;
+
+        // win center locate at overlap zone
+        left_win->h_offs = ori_win->h_offs;
+        left_win->v_offs = ori_win->v_offs;
+        left_win->v_size = ori_win->v_size;
+
+        middle_win->v_offs = ori_win->v_offs;
+        middle_win->v_size = ori_win->v_size;
+
+        right_win->v_offs = ori_win->v_offs;
+        right_win->v_size = ori_win->v_size;
+        // u16 block_h = ori_win->h_size / (2 * wnd_num);
+
+        u16 block_h = win_ds_hsize / (3 * wnd_num);
+
+        left_win->h_size = (block_h * wnd_num) << ds_awb;
+
+        middle_win->h_offs = (left_win->h_size + left_win->h_offs > middle_isp_rect_.x)
+                                ? left_win->h_size + left_win->h_offs - middle_isp_rect_.x
+                                : 0;
+        middle_win->h_offs = middle_win->h_offs & 0xfffe;
+        middle_win->h_size = (block_h * wnd_num) << ds_awb;
+
+        right_win->h_offs = (middle_win->h_size + middle_win->h_offs + middle_isp_rect_.x > right_isp_rect_.x)
+                                ? middle_win->h_size + middle_win->h_offs + middle_isp_rect_.x - right_isp_rect_.x
+                                : 0;
+        right_win->h_offs = right_win->h_offs & 0xfffe;
+        right_win->h_size = (win_ds_hsize - 2 * block_h * wnd_num) << ds_awb;
+        right_win->h_size = right_win->h_offs + right_win->h_size > right_isp_rect_.w
+                                ? (right_isp_rect_.w - right_win->h_offs)
+                                : right_win->h_size;
+    }
+}
+
+void AiqIspParamsSplitter_SplitAwbMultiWinThree(
+    struct isp2x_window* ori_win, struct isp2x_window* left_win, struct isp2x_window* middle_win, struct isp2x_window* right_win,
+    struct isp2x_window* main_left_win, struct isp2x_window* main_middle_win, struct isp2x_window* main_right_win,
+    Splitter_Rectangle_t left_isp_rect_, Splitter_Rectangle_t middle_isp_rect_, Splitter_Rectangle_t right_isp_rect_, WinSplitMode* mode) {
+    if (ori_win->h_offs + ori_win->h_size <= main_left_win->h_offs + main_left_win->h_size) {
+        LOG1_AWB("win locate in left isp\n");
+
+        *mode = LEFT_MODE;
+
+        left_win->h_offs = ori_win->h_offs;
+        left_win->h_size = ori_win->h_size;
+        left_win->v_offs = ori_win->v_offs;
+        left_win->v_size = ori_win->v_size;
+
+        middle_win->h_offs = 0;
+        middle_win->h_size = 0;
+        middle_win->v_offs = 0;
+        middle_win->v_size = 0;
+
+        right_win->h_offs = 0;
+        right_win->h_size = 0;
+        right_win->v_offs = 0;
+        right_win->v_size = 0;
+    } else if (ori_win->h_offs >= right_isp_rect_.x + main_right_win->h_offs) {
+        LOG1_AWB("win locate in right isp\n");
+
+        *mode = RIGHT_MODE;
+
+        // win only locate in right isp, actually stats of left isp would not be used
+        left_win->h_offs = 0;
+        left_win->h_size = 0;
+        left_win->v_offs = 0;
+        left_win->v_size = 0;
+
+        middle_win->h_offs = 0;
+        middle_win->h_size = 0;
+        middle_win->v_offs = 0;
+        middle_win->v_size = 0;
+
+        right_win->h_offs =
+            MAX((int)main_right_win->h_offs, (int)ori_win->h_offs - (int)right_isp_rect_.x);
+        right_win->h_size = ori_win->h_size;
+        right_win->v_offs = ori_win->v_offs;
+        right_win->v_size = ori_win->v_size;
+
+    } else if (ori_win->h_offs + ori_win->h_size <= middle_isp_rect_.w + middle_isp_rect_.x &&
+               ori_win->h_offs >= middle_isp_rect_.x) {
+
+        *mode = MIDDLE_MODE;
+
+        left_win->h_offs = 0;
+        left_win->h_size = 0;
+        left_win->v_offs = 0;
+        left_win->v_size = 0;
+
+        middle_win->h_offs =
+            MAX((int)main_middle_win->h_offs, (int)ori_win->h_offs - (int)middle_isp_rect_.x);;
+        middle_win->h_size = ori_win->h_size;
+        middle_win->v_offs = ori_win->v_offs;
+        middle_win->v_size = ori_win->v_size;
+
+        right_win->h_offs = 0;
+        right_win->h_size = 0;
+        right_win->v_offs = 0;
+        right_win->v_size = 0;
+    } else {
+        LOG1_AWB(" win locate at left&right isp\n");
+
+        *mode = LEFT_AND_RIGHT_MODE;
+
+        left_win->h_offs = ori_win->h_offs;
+        left_win->h_size = MAX(
+            0, ((int)main_left_win->h_offs + (int)main_left_win->h_size - (int)left_win->h_offs));
+        left_win->v_offs = ori_win->v_offs;
+        left_win->v_size = ori_win->v_size;
+
+        middle_win->h_offs =
+            MAX((int)main_middle_win->h_offs,
+                (int)left_win->h_offs + (int)left_win->h_size - (int)middle_isp_rect_.x);
+        middle_win->h_size =  MAX(0, ((int)middle_isp_rect_.w + (int)middle_isp_rect_.x - (int)middle_win->h_offs));
+        middle_win->v_offs = ori_win->v_offs;
+        middle_win->v_size = ori_win->v_size;
+
+        right_win->h_offs =
+            MAX((int)main_right_win->h_offs,
+                (int)middle_win->h_offs + (int)middle_win->h_size + (int)middle_isp_rect_.x - (int)right_isp_rect_.x);
+        right_win->h_size = MAX(0, ((int)ori_win->h_size - (int)left_win->h_size - (int)middle_win->h_size));
+        right_win->v_offs = ori_win->v_offs;
+        right_win->v_size = ori_win->v_size;
+    }
+}
+
+void AiqIspParamsSplitter_SplitAwbWinThreeV(
+    struct isp2x_window* ori_win, struct isp2x_window* left_win,
+    struct isp2x_window* middle_win, struct isp2x_window* right_win,
+    u8 ds_awb, u8 wnd_num,
+    Splitter_Rectangle_t left_isp_rect_,
+    Splitter_Rectangle_t middle_isp_rect_,
+    Splitter_Rectangle_t right_isp_rect_,
+    WinSplitMode* mode) {
+    u16 win_ds_vsize       = ori_win->v_size >> ds_awb;
+    u16 ori_win_vsize_clip = win_ds_vsize << ds_awb;
+
+    // win only locate in left isp, actually stats of right isp would not be used
+    if (ori_win->v_offs + ori_win_vsize_clip <= left_isp_rect_.h) {
+#ifdef DEBUG
+        printf("win locate in left isp\n");
+#endif
+        *mode = LEFT_MODE;
+
+        left_win->v_offs = ori_win->v_offs;
+        left_win->v_size = ori_win_vsize_clip;
+        left_win->h_offs = ori_win->h_offs;
+        left_win->h_size = ori_win->h_size;
+
+        middle_win->v_offs = 0;
+        middle_win->v_size = ori_win_vsize_clip;
+        middle_win->h_offs = ori_win->h_offs;
+        middle_win->h_size = ori_win->h_size;
+
+        right_win->v_offs = 0;
+        right_win->v_size = ori_win_vsize_clip;
+        right_win->h_offs = ori_win->h_offs;
+        right_win->h_size = ori_win->h_size;
+    } else if (ori_win->v_offs >= right_isp_rect_.y) {
+#ifdef DEBUG
+        printf("win locate in right isp\n");
+#endif
+        *mode = RIGHT_MODE;
+
+        // win only locate in right isp, actually stats of left isp would not be used
+        left_win->v_offs = 0;
+        left_win->v_size = ori_win_vsize_clip;
+        left_win->h_offs = ori_win->h_offs;
+        left_win->h_size = ori_win->h_size;
+
+        middle_win->v_offs = 0;
+        middle_win->v_size = ori_win_vsize_clip;
+        middle_win->h_offs = ori_win->h_offs;
+        middle_win->h_size = ori_win->h_size;
+
+        right_win->v_offs = ori_win->v_offs - right_isp_rect_.y;
+        right_win->v_size = ori_win_vsize_clip;
+        right_win->h_offs = ori_win->h_offs;
+        right_win->h_size = ori_win->h_size;
+
+    } else if (ori_win->v_offs + ori_win->v_size <= middle_isp_rect_.h + middle_isp_rect_.y &&
+               ori_win->v_offs >= middle_isp_rect_.y) {
+
+        *mode = MIDDLE_MODE;
+
+        left_win->v_offs = 0;
+        left_win->v_size = ori_win_vsize_clip;
+        left_win->h_offs = ori_win->h_offs;
+        left_win->h_size = ori_win->h_size;
+
+        middle_win->v_offs = ori_win->v_offs - middle_isp_rect_.y;
+        middle_win->v_size = ori_win_vsize_clip;
+        middle_win->h_offs = ori_win->h_offs;
+        middle_win->h_size = ori_win->h_size;
+
+        right_win->v_offs = 0;
+        right_win->v_size = ori_win_vsize_clip;
+        right_win->h_offs = ori_win->h_offs;
+        right_win->h_size = ori_win->h_size;
+
+    } else {
+        LOG1_AWB(" win locate at left&right isp,and center line locate in overlapping zone!\n");
+
+        *mode = LEFT_AND_RIGHT_MODE;
+
+        // win center locate at overlap zone
+        left_win->v_offs = ori_win->v_offs;
+        left_win->h_offs = ori_win->h_offs;
+        left_win->h_size = ori_win->h_size;
+
+        middle_win->h_offs = ori_win->h_offs;
+        middle_win->h_size = ori_win->h_size;
+
+        right_win->h_offs = ori_win->h_offs;
+        right_win->h_size = ori_win->h_size;
+        // u16 block_h = ori_win->v_size / (2 * wnd_num);
+
+        u16 block_h = win_ds_vsize / (3 * wnd_num);
+
+        left_win->v_size = (block_h * wnd_num) << ds_awb;
+
+        middle_win->v_offs = (left_win->v_size + left_win->v_offs > middle_isp_rect_.y)
+                                ? left_win->v_size + left_win->v_offs - middle_isp_rect_.y
+                                : 0;
+        middle_win->v_offs = middle_win->v_offs & 0xfffe;
+        middle_win->v_size = (block_h * wnd_num) << ds_awb;
+
+        right_win->v_offs = (middle_win->v_size + middle_win->v_offs + middle_isp_rect_.y > right_isp_rect_.y)
+                                ? middle_win->v_size + middle_win->v_offs + middle_isp_rect_.y - right_isp_rect_.y
+                                : 0;
+        right_win->v_offs = right_win->v_offs & 0xfffe;
+        right_win->v_size = (win_ds_vsize - 2 * block_h * wnd_num) << ds_awb;
+        right_win->v_size = right_win->v_offs + right_win->v_size > right_isp_rect_.h
+                                ? (right_isp_rect_.h - right_win->v_offs)
+                                : right_win->v_size;
+    }
+}
+
+void AiqIspParamsSplitter_SplitAwbMultiWinThreeV(
+    struct isp2x_window* ori_win, struct isp2x_window* left_win, struct isp2x_window* middle_win, struct isp2x_window* right_win,
+    struct isp2x_window* main_left_win, struct isp2x_window* main_middle_win, struct isp2x_window* main_right_win,
+    Splitter_Rectangle_t left_isp_rect_, Splitter_Rectangle_t middle_isp_rect_, Splitter_Rectangle_t right_isp_rect_, WinSplitMode* mode) {
+    if (ori_win->v_offs + ori_win->v_size <= main_left_win->v_offs + main_left_win->v_size) {
+        LOG1_AWB("win locate in left isp\n");
+
+        *mode = LEFT_MODE;
+
+        left_win->v_offs = ori_win->v_offs;
+        left_win->v_size = ori_win->v_size;
+        left_win->h_offs = ori_win->h_offs;
+        left_win->h_size = ori_win->h_size;
+
+        middle_win->v_offs = 0;
+        middle_win->v_size = 0;
+        middle_win->h_offs = 0;
+        middle_win->h_size = 0;
+
+        right_win->v_offs = 0;
+        right_win->v_size = 0;
+        right_win->h_offs = 0;
+        right_win->h_size = 0;
+    } else if (ori_win->v_offs >= right_isp_rect_.y + main_right_win->v_offs) {
+        LOG1_AWB("win locate in right isp\n");
+
+        *mode = RIGHT_MODE;
+
+        // win only locate in right isp, actually stats of left isp would not be used
+        left_win->v_offs = 0;
+        left_win->v_size = 0;
+        left_win->h_offs = 0;
+        left_win->h_size = 0;
+
+        middle_win->v_offs = 0;
+        middle_win->v_size = 0;
+        middle_win->h_offs = 0;
+        middle_win->h_size = 0;
+
+        right_win->v_offs =
+            MAX((int)main_right_win->v_offs, (int)ori_win->v_offs - (int)right_isp_rect_.y);
+        right_win->v_size = ori_win->v_size;
+        right_win->h_offs = ori_win->h_offs;
+        right_win->h_size = ori_win->h_size;
+
+    } else if (ori_win->v_offs + ori_win->v_size <= middle_isp_rect_.h + middle_isp_rect_.y &&
+               ori_win->v_offs >= middle_isp_rect_.y) {
+
+        *mode = MIDDLE_MODE;
+
+        left_win->v_offs = 0;
+        left_win->v_size = 0;
+        left_win->h_offs = 0;
+        left_win->h_size = 0;
+
+        middle_win->v_offs =
+            MAX((int)main_middle_win->v_offs, (int)ori_win->v_offs - (int)middle_isp_rect_.y);;
+        middle_win->v_size = ori_win->v_size;
+        middle_win->h_offs = ori_win->h_offs;
+        middle_win->h_size = ori_win->h_size;
+
+        right_win->v_offs = 0;
+        right_win->v_size = 0;
+        right_win->h_offs = 0;
+        right_win->h_size = 0;
+    } else {
+        LOG1_AWB(" win locate at left&right isp\n");
+
+        *mode = LEFT_AND_RIGHT_MODE;
+
+        left_win->v_offs = ori_win->v_offs;
+        left_win->v_size = MAX(
+            0, ((int)main_left_win->v_offs + (int)main_left_win->v_size - (int)left_win->v_offs));
+        left_win->h_offs = ori_win->h_offs;
+        left_win->h_size = ori_win->h_size;
+
+        middle_win->v_offs =
+            MAX((int)main_middle_win->v_offs,
+                (int)left_win->v_offs + (int)left_win->v_size - (int)middle_isp_rect_.y);
+        middle_win->v_size =  MAX(0, ((int)middle_isp_rect_.h + (int)middle_isp_rect_.y - (int)middle_win->v_offs));
+        middle_win->h_offs = ori_win->h_offs;
+        middle_win->h_size = ori_win->h_size;
+
+        right_win->v_offs =
+            MAX((int)main_right_win->v_offs,
+                (int)middle_win->v_offs + (int)middle_win->v_size + (int)middle_isp_rect_.y - (int)right_isp_rect_.y);
+        right_win->v_size = MAX(0, ((int)ori_win->v_size - (int)left_win->v_size - (int)middle_win->v_size));
+        right_win->h_offs = ori_win->h_offs;
+        right_win->h_size = ori_win->h_size;
     }
 }
 
@@ -1092,6 +1953,8 @@ XCamReturn AiqIspParamsSplitter_SplitRawAeBigParams(AiqIspParamsSplitter_t* pSpl
                     left->subwin_en[i]  = false;
                     right->subwin_en[i] = true;
                     break;
+                default:
+                    break;
             }
         }
     }
@@ -1205,6 +2068,106 @@ int AiqIspParamsSplitter_AlscMatrixScale(float lrate, float rrate,
     return 0;
 }
 
+int AiqIspParamsSplitter_uniformSplitAlscXtable(int w, int off, int in_size, unsigned short* size_tbl, unsigned short* pos_tbl) {
+    if (in_size <= 0 || in_size > 16) {
+        LOGE("invalid size(%d) for LSC SizeTbl \n", in_size);
+        return -1;
+    }
+    if (pos_tbl == NULL || size_tbl == NULL) {
+        LOGE("null pointer for pos_tbl or size_tbl\n");
+        return -1;
+    }
+    int i = 0;
+    pos_tbl[0] = off;
+    for (i = 1; i < in_size + 1; i++) {
+        pos_tbl[i] = (uint16_t)((i * w) / 16 - 1 + off);
+    }
+    for (i = 0; i < in_size; i++) {
+        size_tbl[i] = pos_tbl[i + 1] - pos_tbl[i];
+    }
+    size_tbl[0] += 1;
+
+    return 0;
+}
+
+static int interpolation_f(const unsigned short *x, int Num, unsigned short x0, float* k)
+{
+    int i;
+    if (x0 <= x[0] || Num < 2)
+    {
+        *k = 0;
+        return 0;
+    }
+    if (x0 >= x[Num - 1])
+    {
+        *k = 1;
+        return Num - 2;
+    }
+
+    for (i = 0; i < Num; i++) {
+        if (x0 < x[i])
+            break;
+    }
+
+    if ((float)x[i] - (float)x[i-1] < 0.1)
+        *k = 0;
+    else
+        *k = ((float)x0 - (float)x[i-1]) / ((float)x[i] - (float)x[i-1]);
+
+    return i-1;
+}
+
+int AiqIspParamsSplitter_getAlscAlignCoef(const unsigned short* in_array,
+                                        unsigned short* new_array,
+                                        unsigned short* left_endpt,
+                                        float* coef, int len) {
+    if (in_array == NULL || new_array == NULL || left_endpt == NULL || coef == NULL || len <= 0) {
+        LOGE("null pointer for in_array or new_array or left_endpt or coef or error len=%d\n", len);
+        return -1;
+    }
+    for (int i = 0; i < len; i++) {
+        left_endpt[i] = interpolation_f(in_array, len, new_array[i], &coef[i]);
+    }
+
+    return 0;
+}
+
+int AiqIspParamsSplitter_AlscMatrixInterp(unsigned short ori_matrix[],
+                                         unsigned short pre_idx[],
+                                         unsigned short dst_matrix[],
+                                         float coef[],
+                                         int cols, int rows, int axis)
+{
+
+    float f = 0;
+    int idx0 = 0;
+    int idx1 = 0;
+    int dst_index = 0;
+    if (axis == 1) { // x-direction
+        for (int row_index = 0; row_index < rows; row_index++) {
+            for (int col_index = 0; col_index < cols; col_index++) {
+                f = coef[col_index];
+                idx0 = pre_idx[col_index];
+                idx1 = idx0 + 1;
+                dst_matrix[dst_index++] = (1 - f) * ori_matrix[row_index * cols + idx0] + f * ori_matrix[row_index * cols + idx1];
+            }
+        }
+    } else { // y-direction
+        for (int col_index = 0; col_index < cols; col_index++) {
+            dst_index = col_index;
+            for (int row_index = 0; row_index < rows; row_index++) {
+                f = coef[row_index];
+                idx0 = pre_idx[row_index];
+                idx1 = idx0 + 1;
+                dst_matrix[dst_index] = (1 - f) * ori_matrix[idx0 * cols + col_index] + f * ori_matrix[idx1 * cols + col_index];
+                dst_index += cols;
+            }
+        }
+    }
+
+    return 0;
+}
+
 static int AlscMatrixSplit(const unsigned short* ori_matrix, int cols, int rows,
                            unsigned short left[], unsigned short right[]) {
     int out_cols                = cols / 2 + cols % 2;
@@ -1252,19 +2215,20 @@ int AiqIspParamsSplitter_SplitAlscXtable(const unsigned short* in_array, int in_
 int AiqIspParamsSplitter_LscGradUpdate(unsigned short xgrad_tbl[], unsigned short ygrad_tbl[],
                                        unsigned short x_sect_tbl[], unsigned short y_sect_tbl[],
                                        int x_sect_size, int y_sect_size) {
-    uint32_t x_size = x_sect_size;
-    uint32_t y_size = y_sect_size;
+    const uint32_t SCALE = 1UL << 15;
 
-    for (uint32_t i = 0; i < x_size; i++) {
-        if (0 < x_sect_tbl[i]) {
-            xgrad_tbl[i] = (uint16_t)((double)(1UL << 15) / x_sect_tbl[i] + 0.5);
+    for (uint32_t i = 0; i < x_sect_size; i++) {
+        unsigned short x = x_sect_tbl[i];
+        if (0 < x) {
+            xgrad_tbl[i] = (uint16_t)((SCALE + x / 2) / x);
         } else {
             return XCAM_RETURN_ERROR_PARAM;
         }
     }
-    for (uint32_t i = 0; i < y_size; i++) {
-        if (0 < y_sect_tbl[i]) {
-            ygrad_tbl[i] = (uint16_t)((double)(1UL << 15) / y_sect_tbl[i] + 0.5);
+    for (uint32_t i = 0; i < y_sect_size; i++) {
+        unsigned short y = y_sect_tbl[i];
+        if (0 < y) {
+            ygrad_tbl[i] = (uint16_t)((SCALE + y / 2) / y);
         } else {
             return XCAM_RETURN_ERROR_PARAM;
         }
@@ -1332,6 +2296,8 @@ XCamReturn AiqIspParamsSplitter_SplitRawAeBigParamsVertical(AiqIspParamsSplitter
                 case RIGHT_MODE:
                     left->subwin_en[i]  = false;
                     right->subwin_en[i] = true;
+                    break;
+                default:
                     break;
             }
         }

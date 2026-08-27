@@ -1,4 +1,4 @@
-From 5b3c4a7f0a594267d58d93da292a205cd5967f0d Mon Sep 17 00:00:00 2001
+From 621ad087bb1dda9332609dbfac4f43f78eb1aa00 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?St=C3=A9phane=20Cerveau?= <scerveau@collabora.com>
 Date: Mon, 9 Aug 2021 18:02:57 +0200
 Subject: [PATCH 03/21] playbin: do not drain on first EOS
@@ -22,7 +22,7 @@ of EOS is equal to active pads (active combiners).
  3 files changed, 100 insertions(+)
 
 diff --git a/gst/playback/gstdecodebin2.c b/gst/playback/gstdecodebin2.c
-index f25a7d5..f6099aa 100644
+index 8339f80..fc5d4b1 100644
 --- a/gst/playback/gstdecodebin2.c
 +++ b/gst/playback/gstdecodebin2.c
 @@ -163,6 +163,9 @@ struct _GstDecodeBin
@@ -89,7 +89,7 @@ index f25a7d5..f6099aa 100644
    g_mutex_clear (&decode_bin->expose_lock);
    g_mutex_clear (&decode_bin->dyn_lock);
    g_mutex_clear (&decode_bin->subtitle_lock);
-@@ -4304,6 +4326,17 @@ gst_decode_pad_handle_eos (GstDecodePad * pad)
+@@ -4306,6 +4328,17 @@ gst_decode_pad_handle_eos (GstDecodePad * pad)
    }
  
    EXPOSE_LOCK (dbin);
@@ -107,7 +107,7 @@ index f25a7d5..f6099aa 100644
    if (dbin->decode_chain) {
      drain_and_switch_chains (dbin->decode_chain, pad, &last_group, &drained,
          &switched);
-@@ -5342,6 +5375,10 @@ unblock_pads (GstDecodeBin * dbin)
+@@ -5360,6 +5393,10 @@ unblock_pads (GstDecodeBin * dbin)
      GST_DEBUG_OBJECT (dpad, "unblocked");
      gst_object_unref (dpad);
    }
@@ -119,7 +119,7 @@ index f25a7d5..f6099aa 100644
  
  static void
 diff --git a/gst/playback/gstplaybin2.c b/gst/playback/gstplaybin2.c
-index aff7e32..1722b4c 100644
+index 8ff8af5..161a73c 100644
 --- a/gst/playback/gstplaybin2.c
 +++ b/gst/playback/gstplaybin2.c
 @@ -332,6 +332,7 @@ struct _GstSourceGroup
@@ -130,7 +130,7 @@ index aff7e32..1722b4c 100644
    gulong autoplug_factories_id;
    gulong autoplug_select_id;
    gulong autoplug_continue_id;
-@@ -3953,6 +3954,30 @@ drained_cb (GstElement * decodebin, GstSourceGroup * group)
+@@ -3955,6 +3956,30 @@ drained_cb (GstElement * decodebin, GstSourceGroup * group)
    group->pending_about_to_finish = TRUE;
  }
  
@@ -161,7 +161,7 @@ index aff7e32..1722b4c 100644
  /* Like gst_element_factory_can_sink_any_caps() but doesn't
   * allow ANY caps on the sinkpad template */
  static gboolean
-@@ -5422,6 +5447,10 @@ activate_group (GstPlayBin * playbin, GstSourceGroup * group, GstState target)
+@@ -5412,6 +5437,10 @@ activate_group (GstPlayBin * playbin, GstSourceGroup * group, GstState target)
    group->drained_id =
        g_signal_connect (uridecodebin, "drained", G_CALLBACK (drained_cb),
        group);
@@ -172,7 +172,7 @@ index aff7e32..1722b4c 100644
  
    /* will be called when a new media type is found. We return a list of decoders
     * including sinks for decodebin to try */
-@@ -5595,6 +5624,7 @@ error_cleanup:
+@@ -5585,6 +5614,7 @@ error_cleanup:
        REMOVE_SIGNAL (group->uridecodebin, group->notify_source_id);
        REMOVE_SIGNAL (group->uridecodebin, group->source_setup_id);
        REMOVE_SIGNAL (group->uridecodebin, group->drained_id);
@@ -180,7 +180,7 @@ index aff7e32..1722b4c 100644
        REMOVE_SIGNAL (group->uridecodebin, group->autoplug_factories_id);
        REMOVE_SIGNAL (group->uridecodebin, group->autoplug_select_id);
        REMOVE_SIGNAL (group->uridecodebin, group->autoplug_continue_id);
-@@ -5684,6 +5714,7 @@ deactivate_group (GstPlayBin * playbin, GstSourceGroup * group)
+@@ -5674,6 +5704,7 @@ deactivate_group (GstPlayBin * playbin, GstSourceGroup * group)
      REMOVE_SIGNAL (group->uridecodebin, group->notify_source_id);
      REMOVE_SIGNAL (group->uridecodebin, group->source_setup_id);
      REMOVE_SIGNAL (group->uridecodebin, group->drained_id);
@@ -189,7 +189,7 @@ index aff7e32..1722b4c 100644
      REMOVE_SIGNAL (group->uridecodebin, group->autoplug_select_id);
      REMOVE_SIGNAL (group->uridecodebin, group->autoplug_continue_id);
 diff --git a/gst/playback/gsturidecodebin.c b/gst/playback/gsturidecodebin.c
-index 86e20a9..c3884a6 100644
+index 8c8dc94..4cf5c4f 100644
 --- a/gst/playback/gsturidecodebin.c
 +++ b/gst/playback/gsturidecodebin.c
 @@ -148,6 +148,8 @@ struct _GstURIDecodeBinClass
@@ -229,7 +229,7 @@ index 86e20a9..c3884a6 100644
  
    /**
     * GstURIDecodeBin::source-setup:
-@@ -1859,6 +1875,20 @@ proxy_drained_signal (GstElement * decodebin, GstURIDecodeBin * dec)
+@@ -1863,6 +1879,20 @@ proxy_drained_signal (GstElement * decodebin, GstURIDecodeBin * dec)
    g_signal_emit (dec, gst_uri_decode_bin_signals[SIGNAL_DRAINED], 0, NULL);
  }
  
@@ -250,7 +250,7 @@ index 86e20a9..c3884a6 100644
  /* make a decodebin and connect to all the signals */
  static GstElement *
  make_decoder (GstURIDecodeBin * decoder)
-@@ -1902,6 +1932,8 @@ make_decoder (GstURIDecodeBin * decoder)
+@@ -1906,6 +1936,8 @@ make_decoder (GstURIDecodeBin * decoder)
          G_CALLBACK (proxy_autoplug_query_signal), decoder);
      g_signal_connect (decodebin, "drained",
          G_CALLBACK (proxy_drained_signal), decoder);

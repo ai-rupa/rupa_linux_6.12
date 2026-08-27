@@ -204,105 +204,85 @@ processing(const RkAiqAlgoCom* inparams, RkAiqAlgoResCom* outparams)
         }
         else if(pAdrcCtx->FrameNumber == HDR_2X_NUM) {
             pAdrcCtx->NextData.AEData.SExpo =
-                pAdrcParams->com.u.proc.nxtExp->HdrExp[0].exp_real_params.analog_gain *
-                pAdrcParams->com.u.proc.nxtExp->HdrExp[0].exp_real_params.digital_gain *
+                pAdrcParams->com.u.proc.nxtExp->HdrExp[0].exp_real_params.cis_total_gain *
                 pAdrcParams->com.u.proc.nxtExp->HdrExp[0].exp_real_params.isp_dgain *
                 pAdrcParams->com.u.proc.nxtExp->HdrExp[0].exp_real_params.integration_time;
             pAdrcCtx->NextData.AEData.MExpo =
-                pAdrcParams->com.u.proc.nxtExp->HdrExp[1].exp_real_params.analog_gain *
-                pAdrcParams->com.u.proc.nxtExp->HdrExp[1].exp_real_params.digital_gain *
+                pAdrcParams->com.u.proc.nxtExp->HdrExp[1].exp_real_params.cis_total_gain *
                 pAdrcParams->com.u.proc.nxtExp->HdrExp[1].exp_real_params.isp_dgain *
                 pAdrcParams->com.u.proc.nxtExp->HdrExp[1].exp_real_params.integration_time;
             pAdrcCtx->NextData.AEData.ISO =
-                pAdrcParams->com.u.proc.nxtExp->HdrExp[1].exp_real_params.analog_gain *
-                pAdrcParams->com.u.proc.nxtExp->HdrExp[1].exp_real_params.digital_gain *
+                pAdrcParams->com.u.proc.nxtExp->HdrExp[1].exp_real_params.cis_total_gain *
                 pAdrcParams->com.u.proc.nxtExp->HdrExp[1].exp_real_params.isp_dgain * ISOMIN;
             if (pAdrcCtx->NextData.AEData.SExpo < FLT_EPSILON) {
                 pAdrcCtx->NextData.AEData.SExpo =
-                    pAdrcParams->com.u.proc.curExp->HdrExp[0].exp_real_params.analog_gain *
-                    pAdrcParams->com.u.proc.curExp->HdrExp[0].exp_real_params.digital_gain *
+                    pAdrcParams->com.u.proc.curExp->HdrExp[0].exp_real_params.cis_total_gain *
                     pAdrcParams->com.u.proc.curExp->HdrExp[0].exp_real_params.isp_dgain *
                     pAdrcParams->com.u.proc.curExp->HdrExp[0].exp_real_params.integration_time;
                 pAdrcCtx->NextData.AEData.MExpo =
-                    pAdrcParams->com.u.proc.curExp->HdrExp[1].exp_real_params.analog_gain *
-                    pAdrcParams->com.u.proc.curExp->HdrExp[1].exp_real_params.digital_gain *
+                    pAdrcParams->com.u.proc.curExp->HdrExp[1].exp_real_params.cis_total_gain *
                     pAdrcParams->com.u.proc.curExp->HdrExp[1].exp_real_params.isp_dgain *
                     pAdrcParams->com.u.proc.curExp->HdrExp[1].exp_real_params.integration_time;
                 pAdrcCtx->NextData.AEData.ISO =
-                    pAdrcParams->com.u.proc.curExp->HdrExp[1].exp_real_params.analog_gain *
-                    pAdrcParams->com.u.proc.curExp->HdrExp[1].exp_real_params.digital_gain *
+                    pAdrcParams->com.u.proc.curExp->HdrExp[1].exp_real_params.cis_total_gain *
                     pAdrcParams->com.u.proc.curExp->HdrExp[1].exp_real_params.isp_dgain * ISOMIN;
             }
             pAdrcCtx->NextData.AEData.LExpo = pAdrcCtx->NextData.AEData.MExpo;
         }
         else if(pAdrcCtx->FrameNumber == HDR_3X_NUM) {
             pAdrcCtx->NextData.AEData.SExpo =
-                pAdrcParams->com.u.proc.nxtExp->HdrExp[0].exp_real_params.analog_gain *
-                pAdrcParams->com.u.proc.nxtExp->HdrExp[0].exp_real_params.digital_gain *
+                pAdrcParams->com.u.proc.nxtExp->HdrExp[0].exp_real_params.cis_total_gain *
                 pAdrcParams->com.u.proc.nxtExp->HdrExp[0].exp_real_params.isp_dgain *
                 pAdrcParams->com.u.proc.nxtExp->HdrExp[0].exp_real_params.integration_time;
             pAdrcCtx->NextData.AEData.MExpo =
-                pAdrcParams->com.u.proc.nxtExp->HdrExp[1].exp_real_params.analog_gain *
-                pAdrcParams->com.u.proc.nxtExp->HdrExp[1].exp_real_params.digital_gain *
+                pAdrcParams->com.u.proc.nxtExp->HdrExp[1].exp_real_params.cis_total_gain *
                 pAdrcParams->com.u.proc.nxtExp->HdrExp[1].exp_real_params.isp_dgain *
                 pAdrcParams->com.u.proc.nxtExp->HdrExp[1].exp_real_params.integration_time;
             pAdrcCtx->NextData.AEData.LExpo =
-                pAdrcParams->com.u.proc.nxtExp->HdrExp[2].exp_real_params.analog_gain *
-                pAdrcParams->com.u.proc.nxtExp->HdrExp[2].exp_real_params.digital_gain *
+                pAdrcParams->com.u.proc.nxtExp->HdrExp[2].exp_real_params.cis_total_gain *
                 pAdrcParams->com.u.proc.nxtExp->HdrExp[2].exp_real_params.isp_dgain *
                 pAdrcParams->com.u.proc.nxtExp->HdrExp[2].exp_real_params.integration_time;
             pAdrcCtx->NextData.AEData.ISO =
-                pAdrcParams->com.u.proc.nxtExp->HdrExp[1].exp_real_params.analog_gain *
-                pAdrcParams->com.u.proc.nxtExp->HdrExp[1].exp_real_params.digital_gain *
+                pAdrcParams->com.u.proc.nxtExp->HdrExp[1].exp_real_params.cis_total_gain *
                 pAdrcParams->com.u.proc.nxtExp->HdrExp[1].exp_real_params.isp_dgain * ISOMIN;
             if (pAdrcCtx->NextData.AEData.SExpo < FLT_EPSILON) {
                 pAdrcCtx->NextData.AEData.SExpo =
-                    pAdrcParams->com.u.proc.curExp->HdrExp[0].exp_real_params.analog_gain *
-                    pAdrcParams->com.u.proc.curExp->HdrExp[0].exp_real_params.digital_gain *
+                    pAdrcParams->com.u.proc.curExp->HdrExp[0].exp_real_params.cis_total_gain *
                     pAdrcParams->com.u.proc.curExp->HdrExp[0].exp_real_params.isp_dgain *
                     pAdrcParams->com.u.proc.curExp->HdrExp[0].exp_real_params.integration_time;
                 pAdrcCtx->NextData.AEData.MExpo =
-                    pAdrcParams->com.u.proc.curExp->HdrExp[1].exp_real_params.analog_gain *
-                    pAdrcParams->com.u.proc.curExp->HdrExp[1].exp_real_params.digital_gain *
+                    pAdrcParams->com.u.proc.curExp->HdrExp[1].exp_real_params.cis_total_gain *
                     pAdrcParams->com.u.proc.curExp->HdrExp[1].exp_real_params.isp_dgain *
                     pAdrcParams->com.u.proc.curExp->HdrExp[1].exp_real_params.integration_time;
                 pAdrcCtx->NextData.AEData.LExpo =
-                    pAdrcParams->com.u.proc.curExp->HdrExp[2].exp_real_params.analog_gain *
-                    pAdrcParams->com.u.proc.curExp->HdrExp[2].exp_real_params.digital_gain *
+                    pAdrcParams->com.u.proc.curExp->HdrExp[2].exp_real_params.cis_total_gain *
                     pAdrcParams->com.u.proc.curExp->HdrExp[2].exp_real_params.isp_dgain *
                     pAdrcParams->com.u.proc.curExp->HdrExp[2].exp_real_params.integration_time;
                 pAdrcCtx->NextData.AEData.ISO =
-                    pAdrcParams->com.u.proc.curExp->HdrExp[1].exp_real_params.analog_gain *
-                    pAdrcParams->com.u.proc.curExp->HdrExp[1].exp_real_params.digital_gain *
+                    pAdrcParams->com.u.proc.curExp->HdrExp[1].exp_real_params.cis_total_gain *
                     pAdrcParams->com.u.proc.curExp->HdrExp[1].exp_real_params.isp_dgain * ISOMIN;
             }
         }
         pAdrcCtx->NextData.AEData.ISO = LIMIT_VALUE(pAdrcCtx->NextData.AEData.ISO, ISOMAX, ISOMIN);
         if (pAdrcCtx->FrameNumber == HDR_2X_NUM || pAdrcCtx->FrameNumber == HDR_2X_NUM) {
             LOGV_ATMO("%s: nextFrame: sexp: %f-%f, mexp: %f-%f, lexp: %f-%f\n", __FUNCTION__,
-                      pAdrcParams->com.u.proc.nxtExp->HdrExp[0].exp_real_params.analog_gain *
-                          pAdrcParams->com.u.proc.nxtExp->HdrExp[0].exp_real_params.digital_gain *
+                      pAdrcParams->com.u.proc.nxtExp->HdrExp[0].exp_real_params.cis_total_gain *
                           pAdrcParams->com.u.proc.nxtExp->HdrExp[0].exp_real_params.isp_dgain,
                       pAdrcParams->com.u.proc.nxtExp->HdrExp[0].exp_real_params.integration_time,
-                      pAdrcParams->com.u.proc.nxtExp->HdrExp[1].exp_real_params.analog_gain *
-                          pAdrcParams->com.u.proc.nxtExp->HdrExp[1].exp_real_params.digital_gain *
+                      pAdrcParams->com.u.proc.nxtExp->HdrExp[1].exp_real_params.cis_total_gain *
                           pAdrcParams->com.u.proc.nxtExp->HdrExp[1].exp_real_params.isp_dgain,
                       pAdrcParams->com.u.proc.nxtExp->HdrExp[1].exp_real_params.integration_time,
-                      pAdrcParams->com.u.proc.nxtExp->HdrExp[2].exp_real_params.analog_gain *
-                          pAdrcParams->com.u.proc.nxtExp->HdrExp[2].exp_real_params.digital_gain *
+                      pAdrcParams->com.u.proc.nxtExp->HdrExp[2].exp_real_params.cis_total_gain *
                           pAdrcParams->com.u.proc.nxtExp->HdrExp[2].exp_real_params.isp_dgain,
                       pAdrcParams->com.u.proc.nxtExp->HdrExp[2].exp_real_params.integration_time);
             LOGV_ATMO("%s: CurrFrame: sexp: %f-%f, mexp: %f-%f, lexp: %f-%f\n", __FUNCTION__,
-                      pAdrcParams->com.u.proc.curExp->HdrExp[0].exp_real_params.analog_gain *
-                          pAdrcParams->com.u.proc.curExp->HdrExp[0].exp_real_params.digital_gain *
+                      pAdrcParams->com.u.proc.curExp->HdrExp[0].exp_real_params.cis_total_gain *
                           pAdrcParams->com.u.proc.curExp->HdrExp[0].exp_real_params.isp_dgain,
                       pAdrcParams->com.u.proc.curExp->HdrExp[0].exp_real_params.integration_time,
-                      pAdrcParams->com.u.proc.curExp->HdrExp[1].exp_real_params.analog_gain *
-                          pAdrcParams->com.u.proc.curExp->HdrExp[1].exp_real_params.digital_gain *
+                      pAdrcParams->com.u.proc.curExp->HdrExp[1].exp_real_params.cis_total_gain *
                           pAdrcParams->com.u.proc.curExp->HdrExp[1].exp_real_params.isp_dgain,
                       pAdrcParams->com.u.proc.curExp->HdrExp[1].exp_real_params.integration_time,
-                      pAdrcParams->com.u.proc.curExp->HdrExp[2].exp_real_params.analog_gain *
-                          pAdrcParams->com.u.proc.curExp->HdrExp[2].exp_real_params.digital_gain *
+                      pAdrcParams->com.u.proc.curExp->HdrExp[2].exp_real_params.cis_total_gain *
                           pAdrcParams->com.u.proc.curExp->HdrExp[2].exp_real_params.isp_dgain,
                       pAdrcParams->com.u.proc.curExp->HdrExp[2].exp_real_params.integration_time);
         } else if (pAdrcCtx->FrameNumber == LINEAR_NUM) {

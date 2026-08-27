@@ -25,8 +25,10 @@
 #include "hwi_c/isp39/aiq_isp39ParamsSplitter.h"
 #elif defined(ISP_HW_V33)
 #include "hwi_c/isp33/aiq_isp33ParamsSplitter.h"
-#elif defined(ISP_HW_V35) || defined(ISP_HW_V351s)
+#elif defined(ISP_HW_V35)
 #include "hwi_c/isp35/aiq_isp35ParamsSplitter.h"
+#elif defined(ISP_HW_V351s)
+#include "hwi_c/isp351s/aiq_isp351sParamsSplitter.h"
 #endif
 
 //#define DEBUG
@@ -53,8 +55,10 @@ XCamReturn AiqIspParamsSplitter_init(AiqIspParamsSplitter_t* pSplit, int ispVer)
     pSplit->SplitIspParams         = Isp39SplitIspParams;
 #elif defined(ISP_HW_V33)
     pSplit->SplitIspParams         = Isp33SplitIspParams;
-#elif defined(ISP_HW_V35) || defined(ISP_HW_V351s)
+#elif defined(ISP_HW_V35)
     pSplit->SplitIspParams         = Isp35SplitIspParams;
+#elif defined(ISP_HW_V351s)
+    pSplit->SplitIspParams         = Isp351sSplitIspParams;
 #endif
 
     return XCAM_RETURN_NO_ERROR;
@@ -106,6 +110,20 @@ const Splitter_Rectangle_t* AiqIspParamsSplitter_GetRightIspRect(AiqIspParamsSpl
 
 int AiqIspParamsSplitter_GetIspUniteMode(AiqIspParamsSplitter_t* pSplit) {
     return pSplit->isp_unite_mode_;
+}
+
+XCamReturn AiqIspParamsSplitter_GetIspUniteSliteNum(AiqIspParamsSplitter_t* pSplit, uint8_t *h_num,
+                                                    uint8_t* v_num) {
+    *h_num = pSplit->isp_splite_h_num_;
+    *v_num = pSplit->isp_splite_v_num_;
+    return XCAM_RETURN_NO_ERROR;
+}
+
+XCamReturn AiqIspParamsSplitter_SetIspUniteSliteNum(AiqIspParamsSplitter_t* pSplit, uint8_t h_num,
+                                                    uint8_t v_num) {
+    pSplit->isp_splite_h_num_ = h_num;
+    pSplit->isp_splite_v_num_ = v_num;
+    return XCAM_RETURN_NO_ERROR;
 }
 
 XCamReturn AiqIspParamsSplitter_SetIspUniteMode(AiqIspParamsSplitter_t* pSplit, int mode) {

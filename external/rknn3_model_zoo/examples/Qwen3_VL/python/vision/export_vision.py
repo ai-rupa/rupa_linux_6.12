@@ -48,8 +48,9 @@ if __name__ == '__main__':
         os.makedirs(export_vision_dirname)
 
     patch_size = 16
-    if config.vision_config.patch_size is None:
+    if config.vision_config.patch_size is not None:
         patch_size = config.vision_config.patch_size
+    else:
         print(f"patch_size is None, use default value {patch_size}")
 
     # export vision model

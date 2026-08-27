@@ -53,6 +53,15 @@ func rkaiq_getStaticLibSrcs(name string, macros_map map[string]bool) []string {
         return srcs
     }
 
+    if (strings.Compare(name, "librkaiq_pdlibsony") == 0) {
+        flag0 := macros_map["RKAIQ_HAVE_PDAF"]
+        if flag0 {
+            srcs = append(srcs, "pdlibsony/PdafLibrary.c")
+            srcs = append(srcs, "pdlibsony/PdafMathFunc.c")
+        }
+        return srcs
+    }
+
     useNewstruct := macros_map["RKAIQ_NEWSTRUCT_TEST"]
     if useNewstruct {
         srcs = rkaiq_getNewStructStaticLibSrcs(name, macros_map)

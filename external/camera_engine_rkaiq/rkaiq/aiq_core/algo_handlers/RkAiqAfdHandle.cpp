@@ -228,19 +228,21 @@ XCamReturn RkAiqAfdHandleInt::genIspResult(RkAiqFullParams* params,
     XCamReturn ret                = XCAM_RETURN_NO_ERROR;
     RkAiqCore::RkAiqAlgosGroupShared_t* shared =
         (RkAiqCore::RkAiqAlgosGroupShared_t*)(getGroupShared());
+    RkAiqCore::RkAiqAlgosComShared_t* sharedCom = &mAiqCore->mAlogsComSharedParams;
     RkAiqAlgoProcResAfd* afd_com = (RkAiqAlgoProcResAfd*)mProcOutParam;
-    rk_aiq_isp_afd_params_t* afd_param = params->mAfdParams->data().ptr();
-    afd_param->result.enable = mAeProcRes.IsAutoAfd;
-    getScaleRatio(&afd_param->result.ratio);
-    cur_params->mAfdParams = params->mAfdParams;
+
+    bool afd_en = mAeProcRes.IsAutoAfd;
+    int afd_ratio = 0;
+    getScaleRatio(&afd_ratio);
     if (!afd_com) {
         LOGD_ANALYZER("no afd result");
         return XCAM_RETURN_NO_ERROR;
     }
-    if (mAfdSyncAly != afd_param->result.enable) {
-        mAfdSyncAly = afd_param->result.enable;
-        afd_param->is_update = true;
+
+    if (mAfdSyncAly != afd_en || sharedCom->init) {
+        mAfdSyncAly = afd_en;
         mAiqCore->setVicapScaleFlag(mAfdSyncAly);
+        mAiqCore->setVcpSclInfoCb(mAfdSyncAly, afd_ratio);
     }
 
     EXIT_ANALYZER_FUNCTION();

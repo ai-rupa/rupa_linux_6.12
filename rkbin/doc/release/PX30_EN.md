@@ -1,5 +1,31 @@
 # PX30 Release Note
 
+## px30_bl31_v1.37.elf
+
+| Date | File | Build commit | Severity |
+| ---- | :--- | ------------ | -------- |
+| 2026-06-24 | px30_bl31_v1.37.elf | be6660383 | important |
+
+### Fixed
+
+| Index | Severity | Update | Issue description | Issue source |
+| ----- | -------- | ------ | ----------------- | ------------ |
+| 1     | important | Fix DDR frequency scaling issues | DDR frequency scaling occasionally causes kernel panic problems | - |
+
+------
+
+## px30_bl31_v1.36.elf
+
+| Date | File | Build commit | Severity |
+| ---- | :--- | ------------ | -------- |
+| 2026-06-03 | px30_bl31_v1.36.elf | 9ce22f446 | important |
+
+### New
+
+1. Add check pd_vo power status.
+
+------
+
 ## px30_bl32_v2.21.bin
 
 | Date       | File                | Build Commit | Severity  |

@@ -53,6 +53,8 @@ public:
     const IspParamsSplitter::Rectangle& GetPicInfo() const;
     const IspParamsSplitter::Rectangle& GetLeftIspRect() const;
     const IspParamsSplitter::Rectangle& GetRightIspRect() const;
+    const IspParamsSplitter::Rectangle& GetBottomLeftIspRect() const;
+    const IspParamsSplitter::Rectangle& GetBottomRightIspRect() const;
 
     template <typename U>
     XCamReturn SplitIspParams(U* orig_isp_params, U* isp_params);

@@ -53,6 +53,7 @@ typedef struct ae_pfnAe_info_s
     float    LinePeriodsPerField; //get from sensor
     float    PixelClockFreqMHZ; //get from sensor
     float    PixelPeriodsPerLine; //get from sensor
+    rk_aiq_sensor_exp_offset_t ExpOffset; //get from sensor or IQ
 
     // 1) single hw stats
     aeStats_entityStats_t *pHwEnt0;
@@ -81,6 +82,7 @@ typedef struct ae_win_s {
 } ae_win_t;
 
 typedef struct ae_hist_s {
+    aeStats_histPix_mode_t hw_aeCfg_pix_mode;
     uint8_t hw_aeCfg_zone_wgt[AESTATS_ZONE_15x15_NUM];
 } ae_hist_t;
 

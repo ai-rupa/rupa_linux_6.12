@@ -114,6 +114,34 @@ XCamReturn AiqRawStreamCapUnit_setSwStreamInfo(AiqRawStreamCapUnit_t* pRawStrCap
 XCamReturn AiqRawStreamCapUnit_setSingleBufAsyncMode(AiqRawStreamCapUnit_t* pRawStrCapUnit, bool async);
 bool AiqRawStreamCapUnit_getStreamOnStatus(AiqRawStreamCapUnit_t* pRawStrCapUnit);
 
+/**
+ * @brief Set the Scl Mode
+ * @param pRawStrCapUnit The raw stream capture unit pointer
+ * @param scl_mode The scl mode enum value
+ * @return XCamReturn value
+ */
+XCamReturn AiqRawStreamCapUnit_setSclMode(AiqRawStreamCapUnit_t* pRawStrCapUnit, uint32_t scl_mode);
+
+/**
+ * @brief Set capture mode to RKMODULE_QUADBAYER_TO_DUAL_PIPE (QuadBayer to dual pipe)
+ * @param pRawStrCapUnit The raw stream capture unit pointer
+ * @return XCamReturn value
+ */
+XCamReturn AiqRawStreamCapUnit_setQuadBayerDualPipeMode(AiqRawStreamCapUnit_t* pRawStrCapUnit);
+
+/**
+ * @brief Queue a free buffer to driver
+ *
+ * This function retrieves a free buffer from the device buffer pool using AiqV4l2Device_getBuf
+ * and then queues it to the driver using AiqV4l2Device_qbuf.
+ *
+ * @param pRawStrCapUnit The raw stream capture unit pointer
+ * @param dev_index The device index (0, 1, or 2) to queue buffer for
+ * @return XCamReturn XCAM_RETURN_NO_ERROR on success, error code on failure
+ */
+XCamReturn AiqRawStreamCapUnit_queueFreeBuffer(AiqRawStreamCapUnit_t* pRawStrCapUnit,
+                                               int dev_index);
+
 #if RKAIQ_HAVE_DUMPSYS
 int AiqRawStreamCapUnit_dump(void* dumper, st_string* result, int argc, void* argv[]);
 #endif

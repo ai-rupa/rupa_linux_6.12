@@ -1,5 +1,6 @@
 #include "base/base.config"
 #include "chips/rk3399pro_npu_aarch64.config"
+#include "ota/update_engine.config"
 # BR2_PACKAGE_E2FSPROGS is reset to default
 BR2_PACKAGE_LIBUSB=y
 BR2_PACKAGE_LIBXML2=y

@@ -185,7 +185,7 @@ CamCalibDbV2Context_t *CamCalibDbJson2calib(const char *jsfile) {
     return NULL;
 }
 
-static void _print_product_info(CamCalibDbProductInfo_t* pProductInfo)
+static void _print_product_info(CalibDbProductInfo_t* pProductInfo)
 {
    LOGK("IQ product info:ChipName:%s,Author:%s,IQVer:%s,IQStructMark:%s(Exp:%s),date:%s",
         pProductInfo->chip_name,

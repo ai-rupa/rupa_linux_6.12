@@ -40,32 +40,34 @@
 #include "iq_parser_v2/cis_head.h"
 
 // #include "aiq_core/thumbnails.h"
+#include <dlfcn.h>
+#include <linux/dma-buf.h>
+#include <sys/ioctl.h>
+#include <sys/utsname.h>
+
 #include "RkAiqManager_c.h"
+#include "algos/aiisp/rk_aiisp.h"
 #include "c_base/aiq_list.h"
 #include "c_base/aiq_map.h"
 #include "c_base/aiq_pool.h"
 #include "common/code_to_pixel_format.h"
 #include "common/mediactl/mediactl-priv.h"
 #include "common/rk_aiq_types_priv_c.h"
+#include "hwi_c/aiq_AiRmsStreamProcUnit.h"
 #include "hwi_c/aiq_camHw.h"
 #include "hwi_c/aiq_cifSclStream.h"
+#include "hwi_c/aiq_fake_sensor.h"
 #include "hwi_c/aiq_ispParamsCvt.h"
 #include "hwi_c/aiq_ispParamsSplitter.h"
 #include "hwi_c/aiq_lensHw.h"
 #include "hwi_c/aiq_pdafStreamProcUnit.h"
 #include "hwi_c/aiq_rawStreamCapUnit.h"
 #include "hwi_c/aiq_rawStreamProcUnit.h"
-#include "hwi_c/aiq_AiRmsStreamProcUnit.h"
 #include "hwi_c/aiq_stream.h"
 #include "hwi_c/rawReprocess/aiq_btnrReproc.h"
-#include "algos/aiisp/rk_aiisp.h"
 #include "include/iq_parser_v2/RkAiqCalibDbV2Helper.h"
 #include "xcore/base/xcam_defs.h"
 #include "xcore_c/aiq_v4l2_device.h"
-#include <dlfcn.h>
-#include <linux/dma-buf.h>
-#include <sys/ioctl.h>
-#include <sys/utsname.h>
 
 #if RKAIQ_HAVE_DUMPSYS
 #include "aiq_CamHwBaseInfo.h"
@@ -101,6 +103,14 @@ typedef struct FakeCamNmWraps_s {
     struct FakeCamNmWraps_s* next;
 } FakeCamNmWraps_t;
 
+// Helper types and functions for vicap virtual sensor creation
+typedef struct {
+    rk_aiq_isp_t* isp_info;
+    const char* virtual_sensor_name;
+    int cam_id;
+    int vicap_output_path;
+} VicapVirtualSensorParams_t;
+
 static CamHwInfoWraps_t* g_mCamHwInfos = NULL;
 rk_aiq_isp_hw_info_t g_mIspHwInfos;
 static rk_aiq_cif_hw_info_t g_mCifHwInfos;
@@ -109,6 +119,7 @@ SnsFullInfoWraps_t* g_mSensorHwInfos        = NULL;
 static FakeCamNmWraps_t* g_mFakeCameraName  = NULL;
 bool g_mIsMultiIspMode               = false;
 static uint16_t g_mMultiIspExtendedPixel    = 0;
+
 // TODO: Sync 1608 sensor start streaming
 static AiqMutex_t g_sync_1608_mutex;
 static bool g_sync_1608_done = false;
@@ -125,8 +136,13 @@ static XCamReturn AiqCamHw_read_aiisp_result(AiqCamHwBase_t* pCamHw, rk_aiq_aiis
 static XCamReturn AiqCamHw_get_aiisp_bay3dbuf(AiqCamHwBase_t* pCamHw);
 static XCamReturn AiqCamHw_aiisp_processing(AiqCamHwBase_t* pCamHw, rk_aiq_aiisp_t* aiisp_evt);
 static XCamReturn SetLastAeExpToRttShared(AiqCamHwBase_t* pCamHw);
-static XCamReturn _setCifSclStartFlag(AiqCamHwBase_t* pCamHw, int ratio, bool mode);
 static XCamReturn AiqCamHw_set_sceneCisParams(AiqCamHwBase_t* pCamHw);
+static int AiqCamHw_getVicapOutputPath(const char* vicap_sd_path);
+
+static XCamReturn AiqCamHw_createVicapVirtualSensor(VicapVirtualSensorParams_t* params);
+static bool _createVicapVirtualSensorIfNeeded(void);
+static bool _shouldSkipSensorLink(rk_sensor_full_info_t* s_full_info, rk_aiq_isp_t* isp_info);
+static bool _isPreviewCaptureMode(const rk_sensor_full_info_t* s_info);
 
 // dumpsys
 static void AiqCamHwBase_initNotifier(AiqCamHwBase_t* pCamHw);
@@ -928,6 +944,18 @@ XCamReturn AiqCamHw_selectIqFile(const char* sns_ent_name, char* iqfile_name) {
     sensor_name = base_inf->sensor;
     strncpy(sensor_name_full, sensor_name, 32);
 
+    if (pSnsHwInfo->isPreviewCaptureMode) {
+        sensor_name_full[31] = '\0';
+        char* virtual_suffix = strstr(sensor_name_full, VICAP_VIRTUAL_SENSOR_SUFFIX);
+        if (virtual_suffix) {
+            *virtual_suffix = '\0';
+            LOGD_CAMHW_SUBM(ISP20HW_SUBM,
+                            "[PreviewCaptureMode] sensor_name contains '-virtual', "
+                            "stripped to: [%s], will use this for IQ file matching",
+                            sensor_name_full);
+        }
+    }
+
     module_name = base_inf->module;
     lens_name   = base_inf->lens;
     if (strlen(module_name) && strlen(lens_name)) {
@@ -1082,6 +1110,375 @@ static void _findAttachedSubdevs(struct media_device* device, uint32_t count,
             }
         }
     }
+}
+
+static void _setPreviewCaptureModeForAllSensors(void) {
+    SnsFullInfoWraps_t* iter = g_mSensorHwInfos;
+    for (; iter != NULL; iter = iter->next) {
+        iter->data.isPreviewCaptureMode = _isPreviewCaptureMode(&iter->data);
+    }
+}
+
+// Set vicap paths for both sensors and ISPs
+static void _updateVicapPathsForSensorsAndIsps(void) {
+    SnsFullInfoWraps_t* iter = g_mSensorHwInfos;
+    for (; iter != NULL; iter = iter->next) {
+        rk_sensor_full_info_t* s_full_info = &iter->data;
+
+        // Skip if already linked to ISP/serdes or no CIF info
+        if (s_full_info->linked_to_isp || s_full_info->linked_to_serdes || !s_full_info->cif_info)
+            continue;
+
+        // Find matching ISP and set vicap output path for non-virtual sensors
+        bool sensor_processed = false;
+        for (int i = 0; i < MAX_CAM_NUM && !sensor_processed; i++) {
+            rk_aiq_isp_t* isp_info = &g_mIspHwInfos.isp_info[i];
+            if (!isp_info->valid) continue;
+
+            for (int vicap_idx = 0; vicap_idx < MAX_ISP_LINKED_VICAP_CNT; vicap_idx++) {
+                if (strcmp(s_full_info->cif_info->model_str, isp_info->linked_vicap[vicap_idx]))
+                    continue;
+
+                LOGD_CAMHW_SUBM(ISP20HW_SUBM, "Processing sensor '%s' with ISP%d, vicap: %s",
+                                s_full_info->sensor_name, i, isp_info->linked_vicap[vicap_idx]);
+
+                bool is_virtual_sensor =
+                    (strstr(s_full_info->sensor_name, VICAP_VIRTUAL_SENSOR_SUFFIX) != NULL);
+                int new_path       = AiqCamHw_getVicapOutputPath(isp_info->linked_vicap_sd_path);
+                bool need_update   = false;
+                const char* reason = "";
+
+                LOGD_CAMHW_SUBM(
+                    ISP20HW_SUBM, "Sensor type: %s, preview-capture mode: %s, current path: %d",
+                    is_virtual_sensor ? "virtual" : "real",
+                    s_full_info->isPreviewCaptureMode ? "enabled" : "disabled", new_path);
+
+                if (s_full_info->isPreviewCaptureMode) {
+                    // Preview-capture mode: enforce path restrictions
+                    bool is_scl_path =
+                        (new_path >= VICAP_OUT_PATH_SCL0 && new_path <= VICAP_OUT_PATH_SCL2);
+                    bool is_full_path = (new_path >= VICAP_OUT_PATH_FULL_ID0 &&
+                                         new_path <= VICAP_OUT_PATH_FULL_ID3);
+
+                    if (is_virtual_sensor && is_full_path) {
+                        // Virtual sensors should not use FULL paths in preview-capture mode
+                        need_update = true;
+                        reason      = "virtual sensor using SCL path, need FULL path";
+                    } else if (!is_virtual_sensor && is_scl_path) {
+                        // Real sensors should not use SCL paths (reserved for virtual sensors)
+                        need_update = true;
+                        reason      = "real sensor using FULL path, need SCL path";
+                    } else {
+                        reason = "path not matched for preview-capture mode";
+                    }
+                } else {
+                    // Non-preview-capture mode: always update path
+                    need_update = true;
+                    reason      = "non-preview-capture mode, get fresh path";
+                }
+
+                if (need_update) {
+                    s_full_info->vicap_output_path = new_path;
+                    isp_info->vicap_isp_link_path  = new_path;
+                    LOGI_CAMHW_SUBM(
+                        ISP20HW_SUBM, "Updated vicap path for sensor '%s': %d -> %d (%s)",
+                        s_full_info->sensor_name, s_full_info->vicap_output_path, new_path, reason);
+                    sensor_processed = true;
+                } else {
+                    LOGD_CAMHW_SUBM(ISP20HW_SUBM, "Kept vicap path for sensor '%s': %d (%s)",
+                                    s_full_info->sensor_name, s_full_info->vicap_output_path,
+                                    reason);
+                }
+
+                break;
+            }
+        }
+    }
+}
+
+// Helper function to get connect_id from vicap subdev
+static int AiqCamHw_getVicapOutputPath(const char* vicap_sd_path) {
+    int connect_id = -1;
+
+    if (!vicap_sd_path || strlen(vicap_sd_path) == 0) return -1;
+
+    AiqV4l2SubDevice_t lvdsDev;
+    AiqV4l2SubDevice_init(&lvdsDev, vicap_sd_path);
+
+    if (AiqV4l2SubDevice_open(&lvdsDev, false) == XCAM_RETURN_NO_ERROR) {
+        if (xcam_device_ioctl(lvdsDev._v4l_base._fd, RKCIF_CMD_GET_CONNECT_ID, &connect_id) >= 0) {
+            LOGD_CAMHW_SUBM(SENSOR_SUBM, "Get connect_id %d from %s", connect_id, vicap_sd_path);
+        } else {
+            LOGE_CAMHW_SUBM(SENSOR_SUBM, "Failed to get connect_id from %s", vicap_sd_path);
+        }
+        AiqV4l2SubDevice_deinit(&lvdsDev);
+    }
+
+    return connect_id;
+}
+
+static bool _isPreviewCaptureMode(const rk_sensor_full_info_t* s_info) {
+    const char* target_vicap = s_info->cif_info ? s_info->cif_info->model_str : NULL;
+    if (!target_vicap) {
+        LOGD_CAMHW_SUBM(ISP20HW_SUBM, "Preview capture mode check: no target vicap for sensor %s",
+                        s_info->sensor_name);
+        return false;
+    }
+
+    LOGD_CAMHW_SUBM(ISP20HW_SUBM, "Checking preview capture mode for sensor %s, target vicap: %s",
+                    s_info->sensor_name, target_vicap);
+
+    int linked_isp_count = 0;
+    bool has_scl_path    = false;
+
+    // Check how many ISPs are connected to the same VICAP and if any has SCL path
+    for (int i = 0; i < MAX_CAM_NUM; i++) {
+        rk_aiq_isp_t* isp_info = &g_mIspHwInfos.isp_info[i];
+        if (!isp_info->valid) continue;
+
+        for (int vicap_idx = 0; vicap_idx < MAX_ISP_LINKED_VICAP_CNT; vicap_idx++) {
+            if (strcmp(target_vicap, isp_info->linked_vicap[vicap_idx]) == 0) {
+                linked_isp_count++;
+                LOGD_CAMHW_SUBM(ISP20HW_SUBM, "Found ISP %d linked to vicap %s, total count: %d", i,
+                                target_vicap, linked_isp_count);
+
+                // Check if this ISP has a SCL path - use sensor's vicap_output_path if available
+                int path = (s_info->vicap_output_path != 0)
+                               ? s_info->vicap_output_path
+                               : AiqCamHw_getVicapOutputPath(isp_info->linked_vicap_sd_path);
+                LOGD_CAMHW_SUBM(ISP20HW_SUBM, "ISP %d vicap output path: %d", i, path);
+
+                if (path >= VICAP_OUT_PATH_SCL0 && path <= VICAP_OUT_PATH_SCL2) {
+                    has_scl_path = true;
+                    LOGD_CAMHW_SUBM(ISP20HW_SUBM, "Found SCL path (%d) for ISP %d", path, i);
+                }
+
+                break;  // Found this ISP connected to target VICAP
+            }
+        }
+    }
+
+    bool result = (linked_isp_count > 1 && has_scl_path);
+    LOGI_CAMHW_SUBM(
+        ISP20HW_SUBM,
+        "Preview capture mode result for sensor %s: %s (linked_isp_count=%d, has_scl_path=%s)",
+        s_info->sensor_name, result ? "ENABLED" : "DISABLED", linked_isp_count,
+        has_scl_path ? "true" : "false");
+
+    // Preview-capture mode is enabled when multiple ISPs connect to same VICAP
+    // AND at least one of them has a SCL path
+    return result;
+}
+
+// Create vicap virtual sensor in preview-capture mode if needed
+static bool _createVicapVirtualSensorIfNeeded(void) {
+    // Check if any sensor has preview-capture mode enabled
+    SnsFullInfoWraps_t* iter = g_mSensorHwInfos;
+    bool has_preview_capture = false;
+    for (; iter != NULL; iter = iter->next) {
+        if (iter->data.isPreviewCaptureMode) {
+            has_preview_capture = true;
+            break;
+        }
+    }
+
+    if (!has_preview_capture) return false;
+
+    iter = g_mSensorHwInfos;
+    int i;
+
+    for (iter = g_mSensorHwInfos; iter != NULL; iter = iter->next) {
+        rk_sensor_full_info_t* s_full_info = &iter->data;
+        if (s_full_info->linked_to_isp || s_full_info->linked_to_serdes || !s_full_info->cif_info)
+            continue;
+
+        for (i = 0; i < MAX_CAM_NUM; i++) {
+            rk_aiq_isp_t* isp_info = &g_mIspHwInfos.isp_info[i];
+            for (int vicap_idx = 0; vicap_idx < MAX_ISP_LINKED_VICAP_CNT; vicap_idx++) {
+                if (!strcmp(s_full_info->cif_info->model_str, isp_info->linked_vicap[vicap_idx])) {
+                    int path = AiqCamHw_getVicapOutputPath(isp_info->linked_vicap_sd_path);
+                    if (path >= VICAP_OUT_PATH_FULL_ID0 && path <= VICAP_OUT_PATH_FULL_ID3) {
+                        /* Build virtual sensor name from real sensor:
+                         * e.g. "m00_b_os12d40 3-0036-1" → "m01_b_os12d40_virtual 3-0036-1"
+                         */
+                        int vcam_id                       = (i == 0) ? 1 : i;
+                        char vsns_name[DEV_PATH_LEN + 16] = {0};
+                        const char* space                 = strchr(s_full_info->sensor_name, ' ');
+                        if (space) {
+                            int prefix_len = (int)(space - s_full_info->sensor_name);
+                            snprintf(vsns_name, sizeof(vsns_name),
+                                     "%.*s" VICAP_VIRTUAL_SENSOR_SUFFIX "%s", prefix_len,
+                                     s_full_info->sensor_name, space);
+                        } else {
+                            snprintf(vsns_name, sizeof(vsns_name), "%s" VICAP_VIRTUAL_SENSOR_SUFFIX,
+                                     s_full_info->sensor_name);
+                        }
+                        /* Update module index to virtual cam_id: m00 → m01 */
+                        vsns_name[1] = '0' + vcam_id / 10;
+                        vsns_name[2] = '0' + vcam_id % 10;
+
+                        VicapVirtualSensorParams_t params = {
+                            .isp_info            = isp_info,
+                            .virtual_sensor_name = vsns_name,
+                            .cam_id              = vcam_id,
+                            .vicap_output_path   = path,
+                        };
+                        if (AiqCamHw_createVicapVirtualSensor(&params) == XCAM_RETURN_NO_ERROR) {
+                            LOGI_CAMHW_SUBM(SENSOR_SUBM,
+                                            "Created vicap virtual sensor for "
+                                            "camId %d, sensor %s, vicap_output_path %d",
+                                            params.cam_id, s_full_info->sensor_name, path);
+                            return true;  // Successfully created, can exit early
+                        } else {
+                            LOGE_CAMHW_SUBM(SENSOR_SUBM,
+                                            "Failed to create vicap virtual sensor for "
+                                            "camId %d, sensor %s, vicap_output_path %d",
+                                            params.cam_id, s_full_info->sensor_name, path);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return false;  // No virtual sensor was created
+}
+
+// Create vicap virtual sensor for ISP with specific connect_id
+static XCamReturn AiqCamHw_createVicapVirtualSensor(VicapVirtualSensorParams_t* params) {
+    if (!params || !params->isp_info || !params->virtual_sensor_name) {
+        return XCAM_RETURN_ERROR_PARAM;
+    }
+
+    rk_aiq_isp_t* isp_info = params->isp_info;
+    int i                  = params->cam_id;
+
+    CamHwInfoWraps_t* info_wrap = (CamHwInfoWraps_t*)aiq_mallocz(sizeof(CamHwInfoWraps_t));
+    SnsFullInfoWraps_t* s_full_info_wrap =
+        (SnsFullInfoWraps_t*)aiq_mallocz(sizeof(SnsFullInfoWraps_t));
+    rk_aiq_static_info_t* info      = &info_wrap->data;
+    rk_sensor_full_info_t* fullinfo = &s_full_info_wrap->data;
+
+    fullinfo->media_node_index = -1;
+    strcpy(fullinfo->device_name, params->virtual_sensor_name);
+    strcpy(fullinfo->sensor_name, params->virtual_sensor_name);
+    strcpy(s_full_info_wrap->key, fullinfo->sensor_name);
+    strcpy(info_wrap->key, fullinfo->sensor_name);
+    strcpy(fullinfo->parent_media_dev, "/dev/null");
+
+    // Copy module info from real sensor, override sensor name with chip part
+    // e.g. "m01_b_os12d40_virtual 3-0036-1" → extract "os12d40_virtual"
+    memcpy(&fullinfo->mod_info, &g_mSensorHwInfos->data.mod_info, sizeof(fullinfo->mod_info));
+    {
+        const char* chip_start = params->virtual_sensor_name + 6;  // skip "m01_b_"
+        const char* chip_end   = strchr(chip_start, ' ');
+        size_t chip_len        = chip_end ? (size_t)(chip_end - chip_start) : strlen(chip_start);
+        if (chip_len >= sizeof(fullinfo->mod_info.base.sensor))
+            chip_len = sizeof(fullinfo->mod_info.base.sensor) - 1;
+        memcpy(fullinfo->mod_info.base.sensor, chip_start, chip_len);
+        fullinfo->mod_info.base.sensor[chip_len] = '\0';
+    }
+
+    fullinfo->linked_to_isp = false;
+    // Assign a cif_info from existing sensors
+    fullinfo->cif_info             = g_mSensorHwInfos->data.cif_info;
+    fullinfo->isp_info             = isp_info;
+    fullinfo->dvp_itf              = g_mSensorHwInfos->data.dvp_itf;
+    fullinfo->linked_to_1608       = false;
+    fullinfo->vicap_output_path    = params->vicap_output_path;
+    fullinfo->isPreviewCaptureMode = true;
+
+    info->_is_1608_sensor                     = false;
+    info->sensor_info.support_fmt[0].hdr_mode = NO_HDR;
+    info->sensor_info.support_fmt[1].hdr_mode = HDR_X2;
+    info->sensor_info.support_fmt[2].hdr_mode = HDR_X3;
+    info->sensor_info.num                     = 3;
+    info->has_lens_vcm                        = false;
+    info->has_fl                              = false;
+    info->has_irc                             = false;
+    info->fl_strth_adj_sup                    = 0;
+    info->fl_ir_strth_adj_sup                 = 0;
+    info->is_multi_isp_mode                   = false;
+    info->multi_isp_extended_pixel            = 0;
+    info->sensor_info.phyId                   = i;
+
+    strcpy(info->sensor_info.sensor_name, fullinfo->sensor_name);
+
+    // Add to sensor list
+    SnsFullInfoWraps_t* pItem = g_mSensorHwInfos;
+    while (pItem->next) {
+        pItem = pItem->next;
+    }
+    pItem->next = s_full_info_wrap;
+
+    // Add to camera list
+    CamHwInfoWraps_t* pCamItem = g_mCamHwInfos;
+    while (pCamItem->next) {
+        pCamItem = pCamItem->next;
+    }
+    pCamItem->next = info_wrap;
+
+    LOGI_CAMHW_SUBM(
+        ISP20HW_SUBM, "camId %d: Created virtual sensor \"%s\" --> VICAP(%s) --> ISP(%s)", i,
+        fullinfo->sensor_name, fullinfo->cif_info->model_str, fullinfo->isp_info->driver);
+
+    return XCAM_RETURN_NO_ERROR;
+}
+
+// Check if sensor link should be skipped based on various conditions
+static bool _shouldSkipSensorLink(rk_sensor_full_info_t* s_full_info, rk_aiq_isp_t* isp_info) {
+    bool is_skip_link      = false;
+    bool is_virtual_sensor = strstr(s_full_info->sensor_name, VICAP_VIRTUAL_SENSOR_SUFFIX) != NULL;
+
+    LOGD_CAMHW_SUBM(ISP20HW_SUBM, "Checking skip link for sensor '%s' (%s) with ISP '%s'",
+                    s_full_info->sensor_name, is_virtual_sensor ? "virtual" : "real",
+                    isp_info->driver);
+
+    if (isp_info->linked_sensor) {
+        is_skip_link = true;
+        LOGD_CAMHW_SUBM(ISP20HW_SUBM, "Skip: ISP already has linked sensor");
+    }
+
+    /*
+     * In preview-capture mode, different path restrictions for virtual vs real sensors
+     */
+    if (s_full_info->isPreviewCaptureMode) {
+        LOGD_CAMHW_SUBM(ISP20HW_SUBM,
+                        "Preview-capture mode: checking path restrictions, current path: %d",
+                        isp_info->vicap_isp_link_path);
+
+        if (is_virtual_sensor) {
+            // Virtual sensors should skip if using SCL paths
+            if (isp_info->vicap_isp_link_path >= VICAP_OUT_PATH_SCL0 &&
+                isp_info->vicap_isp_link_path <= VICAP_OUT_PATH_SCL2) {
+                is_skip_link = true;
+                LOGD_CAMHW_SUBM(ISP20HW_SUBM,
+                                "Skip: Virtual sensor using SCL path (%d), should use FULL path",
+                                isp_info->vicap_isp_link_path);
+            } else {
+                LOGD_CAMHW_SUBM(ISP20HW_SUBM, "Allow: Virtual sensor path (%d) is acceptable",
+                                isp_info->vicap_isp_link_path);
+            }
+        } else {
+            // Real sensors should skip if using FULL paths (reserved for virtual sensors)
+            if (isp_info->vicap_isp_link_path >= VICAP_OUT_PATH_FULL_ID0 &&
+                isp_info->vicap_isp_link_path <= VICAP_OUT_PATH_FULL_ID3) {
+                is_skip_link = true;
+                LOGD_CAMHW_SUBM(ISP20HW_SUBM,
+                                "Skip: Real sensor using FULL path (%d), should use SCL path",
+                                s_full_info->vicap_output_path);
+            } else {
+                LOGD_CAMHW_SUBM(ISP20HW_SUBM, "Allow: Real sensor path (%d) is acceptable",
+                                s_full_info->vicap_output_path);
+            }
+        }
+    } else {
+        LOGD_CAMHW_SUBM(ISP20HW_SUBM, "Non-preview-capture mode: no path restrictions");
+    }
+
+    LOGD_CAMHW_SUBM(ISP20HW_SUBM, "Skip link decision for sensor '%s': %s",
+                    s_full_info->sensor_name, is_skip_link ? "SKIP" : "ALLOW");
+
+    return is_skip_link;
 }
 
 XCamReturn AiqCamHw_initCamHwInfos() {
@@ -1336,10 +1733,19 @@ media_unref:
             }
         }
 
+        /* Set preview-capture mode for all sensors based on ISP-VICAP topology */
+        _setPreviewCaptureModeForAllSensors();
+
+        /* Pre-scan: create vicap virtual sensor in preview-capture mode.
+         * Done before the main sensor-ISP linking to keep linking logic clean. */
+        _createVicapVirtualSensorIfNeeded();
+
+        /* Set vicap paths for both sensors and ISPs */
+        _updateVicapPathsForSensorsAndIsps();
+
         for (iter = g_mSensorHwInfos; iter != NULL; iter = iter->next) {
             rk_sensor_full_info_t* s_full_info = &iter->data;
-            LOGI_CAMHW_SUBM(ISP20HW_SUBM, "match the sensor_name(%s) media link\n",
-                            iter->key);
+            LOGI_CAMHW_SUBM(ISP20HW_SUBM, "match the sensor_name(%s) media link\n", iter->key);
 
             /*
              * The ISP and ISPP match links through the media device model
@@ -1383,15 +1789,33 @@ media_unref:
                 for (i = 0; i < MAX_CAM_NUM; i++) {
                     if (s_full_info->linked_to_serdes)
                         break;
+
                     rk_aiq_isp_t* isp_info = &g_mIspHwInfos.isp_info[i];
 
                     for (int vicap_idx = 0; vicap_idx < MAX_ISP_LINKED_VICAP_CNT; vicap_idx++) {
-                        LOGI_CAMHW_SUBM(ISP20HW_SUBM, "vicap %s, linked_vicap %s",
+                        LOGI_CAMHW_SUBM(ISP20HW_SUBM, "vicap %s, linked_vicap %s, isp %s",
                                         s_full_info->cif_info->model_str,
-                                        isp_info->linked_vicap[vicap_idx]);
+                                        isp_info->linked_vicap[vicap_idx], isp_info->driver);
                         if (strcmp(s_full_info->cif_info->model_str,
                                    isp_info->linked_vicap[vicap_idx]) == 0) {
-                            if (vicap_linked_to_isp_nums == 0) {
+                            if (vicap_linked_to_isp_nums == 0 ||
+                                s_full_info->isPreviewCaptureMode) {
+                                bool is_skip_link = false;
+
+                                if (s_full_info->isPreviewCaptureMode) {
+                                    is_skip_link = _shouldSkipSensorLink(s_full_info, isp_info);
+
+                                    if (is_skip_link) {
+                                        LOGW_CAMHW_SUBM(
+                                            ISP20HW_SUBM,
+                                            "Skip linking: sensor %s -> %s, vicap_output_path(%d) "
+                                            "isn't suitable for preview capture mode",
+                                            s_full_info->sensor_name, isp_info->driver,
+                                            s_full_info->vicap_output_path);
+                                        continue;
+                                    }
+                                }
+
                                 s_full_info->isp_info   = &g_mIspHwInfos.isp_info[i];
                                 CamHwInfoWraps_t* pItem = g_mCamHwInfos;
 
@@ -1406,23 +1830,25 @@ media_unref:
                                     pItem->data.multi_isp_extended_pixel = g_mMultiIspExtendedPixel;
                                     if (g_mIspHwInfos.ispp_info[i].valid)
                                         s_full_info->ispp_info = &g_mIspHwInfos.ispp_info[i];
-                                    LOGI_CAMHW_SUBM(ISP20HW_SUBM, "vicap link to isp(%d) to ispp(%d)\n",
-                                                    s_full_info->isp_info->model_idx,
-                                                    s_full_info->ispp_info
-                                                        ? s_full_info->ispp_info->model_idx
-                                                        : -1);
+                                    LOGI_CAMHW_SUBM(
+                                        ISP20HW_SUBM,
+                                        "camId %d, sensor(%s) --> vicap(%s) --> isp(%s)", i,
+                                        s_full_info->sensor_name, isp_info->linked_vicap[vicap_idx],
+                                        isp_info->driver);
                                     pItem->data.sensor_info.binded_strm_media_idx =
                                         s_full_info->ispp_info
                                             ? atoi(s_full_info->ispp_info->media_dev_path +
-                                                strlen("/dev/media"))
+                                                   strlen("/dev/media"))
                                             : -1;
-                                    LOGI_CAMHW_SUBM(
-                                        ISP20HW_SUBM, "sensor %s adapted to pp media %d:%s\n",
-                                        s_full_info->sensor_name,
-                                        pItem->data.sensor_info.binded_strm_media_idx,
-                                        s_full_info->ispp_info ? s_full_info->ispp_info->media_dev_path
-                                                            : "null");
+                                    LOGI_CAMHW_SUBM(ISP20HW_SUBM,
+                                                    "sensor %s adapted to pp media %d:%s\n",
+                                                    s_full_info->sensor_name,
+                                                    pItem->data.sensor_info.binded_strm_media_idx,
+                                                    s_full_info->ispp_info
+                                                        ? s_full_info->ispp_info->media_dev_path
+                                                        : "null");
                                     g_mIspHwInfos.isp_info[i].linked_sensor = true;
+                                    vicap_linked_to_isp_nums++;
                                 }
                             } else {
                                 int first_num = 0, second_num = 0;
@@ -1453,6 +1879,10 @@ media_unref:
                                     s_full_info_new->data.sensor_name[2]      = '0' + second_num;
                                     s_full_info_new->data.module_index_str[1] = '0' + first_num;
                                     s_full_info_new->data.module_index_str[2] = '0' + second_num;
+                                    // Get path for virtual sensor's ISP (may differ from real
+                                    // sensor's path)
+                                    s_full_info_new->data.vicap_output_path =
+                                        AiqCamHw_getVicapOutputPath(isp_info->linked_vicap_sd_path);
 
                                     strcpy(pItem_new->key, s_full_info_new->key);
                                     memcpy(&pItem_new->data, &pItem->data, sizeof(rk_aiq_static_info_t));
@@ -1465,11 +1895,13 @@ media_unref:
                                     pItem_new->data.multi_isp_extended_pixel = g_mMultiIspExtendedPixel;
                                     if (g_mIspHwInfos.ispp_info[i].valid)
                                         s_full_info_new->data.ispp_info = &g_mIspHwInfos.ispp_info[i];
-                                    LOGI_CAMHW_SUBM(ISP20HW_SUBM, "vicap link to isp(%d) to ispp(%d)\n",
-                                                        s_full_info->isp_info->model_idx,
-                                                        s_full_info->ispp_info
-                                                            ? s_full_info->ispp_info->model_idx
-                                                            : -1);
+                                    LOGI_CAMHW_SUBM(
+                                        ISP20HW_SUBM,
+                                        "camId %d, sensor(%s) --> vicap(%s) --> "
+                                        "isp(%s) in split sensor",
+                                        i, s_full_info_new->data.sensor_name,
+                                        s_full_info_new->data.isp_info->linked_vicap[vicap_idx],
+                                        s_full_info_new->data.isp_info->driver);
                                     pItem_new->data.sensor_info.binded_strm_media_idx =
                                         s_full_info->ispp_info
                                             ? atoi(s_full_info->ispp_info->media_dev_path +
@@ -1477,10 +1909,11 @@ media_unref:
                                             : -1;
                                     LOGI_CAMHW_SUBM(
                                         ISP20HW_SUBM, "sensor %s adapted to pp media %d:%s\n",
-                                        s_full_info->sensor_name,
+                                        s_full_info_new->data.sensor_name,
                                         pItem_new->data.sensor_info.binded_strm_media_idx,
-                                        s_full_info->ispp_info ? s_full_info->ispp_info->media_dev_path
-                                                            : "null");
+                                        s_full_info->ispp_info
+                                            ? s_full_info->ispp_info->media_dev_path
+                                            : "null");
                                     g_mIspHwInfos.isp_info[i].linked_sensor = true;
                                     if (!tempSensorHwInfos) {
                                         tempSensorHwInfos = s_full_info_new;
@@ -1495,9 +1928,10 @@ media_unref:
                                         pItem = pItem->next;
                                     }
                                     pItem->next = pItem_new;
+
+                                    vicap_linked_to_isp_nums++;
                                 }
                             }
-                            vicap_linked_to_isp_nums++;
                         }
                     }
                 }
@@ -1527,6 +1961,10 @@ media_unref:
                                 pItem->data.is_multi_isp_mode =
                                     tmp_sinfo->isp_info->is_multi_isp_mode;
                                 pItem->data.multi_isp_extended_pixel = g_mMultiIspExtendedPixel;
+                                // Get path for virtual sensor's ISP (may differ from real sensor's
+                                // path)
+                                tmp_sinfo->vicap_output_path = AiqCamHw_getVicapOutputPath(
+                                    tmp_sinfo->isp_info->linked_vicap_sd_path);
                             }
                         }
                     }
@@ -1537,17 +1975,30 @@ media_unref:
                 if (!s_full_info->isp_info)
                     continue;
 
-                LOGI_CAMHW_SUBM(ISP20HW_SUBM, "isp model_idx: %d, aiisp(%d) model_idx: %d\n",
-                                s_full_info->isp_info->model_idx, i,
-                                g_mAiispHwInfos.aiisp_info[i].model_idx);
+                LOGD_CAMHW_SUBM(
+                    ISP20HW_SUBM, "isp model_idx: %d, aiisp(%d) model_idx: %d, valid: %d",
+                    s_full_info->isp_info->model_idx, i, g_mAiispHwInfos.aiisp_info[i].model_idx,
+                    g_mAiispHwInfos.aiisp_info[i].valid);
+
+                bool is_capture_path = (s_full_info->isPreviewCaptureMode &&
+                                        s_full_info->vicap_output_path >= VICAP_OUT_PATH_FULL_ID0 &&
+                                        s_full_info->vicap_output_path <= VICAP_OUT_PATH_FULL_ID3);
+                LOGD_CAMHW_SUBM(ISP20HW_SUBM,
+                                "Checking AIISP link for sensor %s: is_capture_path=%d",
+                                s_full_info->sensor_name, is_capture_path);
 
                 if (g_mAiispHwInfos.aiisp_info[i].valid &&
-                        (s_full_info->isp_info->model_idx ==
-                         g_mAiispHwInfos.aiisp_info[i].model_idx)) {
+                    (s_full_info->isp_info->model_idx == g_mAiispHwInfos.aiisp_info[i].model_idx ||
+                     is_capture_path)) {
                     s_full_info->aiisp_info  = &g_mAiispHwInfos.aiisp_info[i];
                     LOGI_CAMHW_SUBM(ISP20HW_SUBM, "isp(%d) link to aiisp(%d)\n",
                                     s_full_info->isp_info->model_idx,
                                     g_mAiispHwInfos.aiisp_info[i].model_idx);
+
+                    LOGI_CAMHW_SUBM(ISP20HW_SUBM,
+                                    "camId %d, sensor(%s) --> vicap(%s) --> isp(%s) --> aiisp(%s)",
+                                    i, s_full_info->sensor_name, s_full_info->cif_info->model_str,
+                                    s_full_info->isp_info->driver, s_full_info->aiisp_info->driver);
                     break;
                 }
             }
@@ -1563,11 +2014,13 @@ media_unref:
         }
 
         // store new sensor into sensor map
-        iter = g_mSensorHwInfos;
-        while (iter->next) {
-            iter = iter->next;
+        if (g_mSensorHwInfos) {
+            iter = g_mSensorHwInfos;
+            while (iter->next) {
+                iter = iter->next;
+            }
+            iter->next = tempSensorHwInfos;
         }
-        iter->next = tempSensorHwInfos;
         LOGI_CAMHW_SUBM(ISP20HW_SUBM, "dump sensor link info:");
         for (iter = g_mSensorHwInfos; iter != NULL; iter = iter->next) {
             for (i = 0; i < MAX_ISP_LINKED_VICAP_CNT; i++) {
@@ -1588,36 +2041,6 @@ media_unref:
                     LOGI_CAMHW_SUBM(ISP20HW_SUBM, "      linked_vicap: %s",
                                     iter->data.isp_info->linked_vicap[i]);
                 }
-            }
-        }
-
-        int lvds_fd = -1;
-        int connect_id;
-        char lvdsPath[DEV_PATH_LEN];
-        AiqV4l2SubDevice_t lvdsDev;
-
-        for (iter = g_mSensorHwInfos; iter != NULL; iter = iter->next) {
-            //set connect id
-            if (!iter->data.isp_info)
-                continue;
-            strncpy(lvdsPath, iter->data.isp_info->linked_vicap_sd_path, sizeof(lvdsPath));
-            if (strlen(lvdsPath) > 0) {
-                AiqV4l2SubDevice_init(&lvdsDev, lvdsPath);
-                AiqV4l2SubDevice_open(&lvdsDev, false);
-                lvds_fd = lvdsDev._v4l_base._fd;
-                if (lvds_fd < 0) {
-                    LOGE_CAMHW_SUBM(SENSOR_SUBM, "failed to get lvds_fd, value is %d\n", lvds_fd);
-                    continue;
-                }
-
-                if (xcam_device_ioctl(lvds_fd, RKCIF_CMD_GET_CONNECT_ID, &connect_id) < 0) {
-                    LOGE_CAMHW_SUBM(SENSOR_SUBM, "failed to get stream connect id! lvds_fd is %d\n",
-                                    lvds_fd);
-                    AiqV4l2SubDevice_deinit(&lvdsDev);
-                    continue;
-                }
-                iter->data.connect_id = connect_id;
-                AiqV4l2SubDevice_deinit(&lvdsDev);
             }
         }
     }
@@ -1745,6 +2168,7 @@ const char* AiqCamHw_getBindedSnsEntNmByVd(const char* vd) {
             // check linked
             if ((strstr(s_full_info->sensor_name, "FakeCamera") == NULL) &&
                 (strstr(s_full_info->sensor_name, "_s_") == NULL) &&
+                !strstr(s_full_info->sensor_name, VICAP_VIRTUAL_SENSOR_SUFFIX) &&
                 !s_full_info->split) {
                 FILE* fp                    = NULL;
                 struct media_device* device = NULL;
@@ -1829,7 +2253,8 @@ static XCamReturn _poll_buffer_ready(void* ctx, AiqHwEvt_t* evt, int dev_index) 
                 LOGE_CAMHW_SUBM(ISP20HW_SUBM, "ds_fd mmap failed ds_fd is %d ds_size is %d", bay3dbuf.u.v33.ds_fd, bay3dbuf.u.v33.ds_size);
                 return XCAM_RETURN_ERROR_FAILED;
             }
-            LOGK_CAMHW_SUBM(ISP20HW_SUBM, "blc get bay3dbuf: ds_fd is %d ds_size is %d ds_address is 0x%x",
+            LOGD_CAMHW_SUBM(ISP20HW_SUBM,
+                            "blc get bay3dbuf: ds_fd is %d ds_size is %d ds_address is 0x%x",
                             bay3dbuf.u.v33.ds_fd, bay3dbuf.u.v33.ds_size, ds_address);
             blc_info->ds_fd = bay3dbuf.u.v33.ds_fd;
             blc_info->gain_fd = bay3dbuf.u.v33.gain_fd;
@@ -1846,7 +2271,8 @@ static XCamReturn _poll_buffer_ready(void* ctx, AiqHwEvt_t* evt, int dev_index) 
                 LOGE_CAMHW_SUBM(ISP20HW_SUBM, "ds_fd mmap failed ds_fd is %d ds_size is %d", bay3dbuf.u.v35.ds.buf_fd[0], bay3dbuf.u.v35.ds.buf_size);
                 return XCAM_RETURN_ERROR_FAILED;
             }
-            LOGK_CAMHW_SUBM(ISP20HW_SUBM, "blc get bay3dbuf: ds_fd is %d ds_size is %d ds_address is 0x%x",
+            LOGD_CAMHW_SUBM(ISP20HW_SUBM,
+                            "blc get bay3dbuf: ds_fd is %d ds_size is %d ds_address is 0x%x",
                             bay3dbuf.u.v35.ds.buf_fd[0], bay3dbuf.u.v35.ds.buf_size, ds_address);
             blc_info->ds_fd = bay3dbuf.u.v35.ds.buf_fd[0];
             blc_info->gain_fd = bay3dbuf.u.v35.gain.buf_fd[0];
@@ -1910,6 +2336,45 @@ static XCamReturn _poll_buffer_ready(void* ctx, AiqHwEvt_t* evt, int dev_index) 
         AiqHwMemcEvt_t *memc_evt = (AiqHwMemcEvt_t *)evt;
         AiqMemcManager_pushIirMsg(pCamHw->mMemcStream, memc_evt->isp_idxbuf.iir_index, evt->frame_id);
 #endif
+    } else if (evt->type == ISP_POLL_RX) {
+        AiqCamHwBase_t* pCamHw = (AiqCamHwBase_t*)ctx;
+        aiqMutex_lock(&pCamHw->_capture_trigger_mutex);
+        // T3: print per-stage and total elapsed for the frame that just completed
+        if (pCamHw->mCaptureTs.rd != pCamHw->mCaptureTs.wr) {
+            struct timespec _rx_ts;
+            clock_gettime(CLOCK_MONOTONIC, &_rx_ts);
+            int64_t t3 = XCAM_TIMESPEC_2_USEC(_rx_ts);
+            AiqCaptureFrameTs_t* f =
+                &pCamHw->mCaptureTs.queue[pCamHw->mCaptureTs.rd % CAPTURE_TS_QSIZE];
+            LOGI_CAMHW_SUBM(ISP20HW_SUBM,
+                            "cid[%d] fid[%d]: capture latency(us):"
+                            " qbuf->vicap=%lld, vicap->airms=%lld, airms->isp=%lld, total=%lld",
+                            pCamHw->mCamPhyId, evt->frame_id,
+                            (long long)(f->t1 ? f->t1 - f->t0 : -1LL),
+                            (long long)(f->t1 && f->t2 ? f->t2 - f->t1 : -1LL),
+                            (long long)(f->t2 ? t3 - f->t2 : -1LL), (long long)(t3 - f->t0));
+            pCamHw->mCaptureTs.rd++;
+        }
+        // Queue the next buffer if any remain (serialized fallback path)
+        if (pCamHw->mCaptureTrigger.frame_count > 0) {
+            XCamReturn ret = AiqRawStreamCapUnit_queueFreeBuffer(pCamHw->mRawCapUnit, 0);
+            if (ret == XCAM_RETURN_NO_ERROR) {
+                struct timespec _q_ts;
+                clock_gettime(CLOCK_MONOTONIC, &_q_ts);
+                pCamHw->mCaptureTs.queue[pCamHw->mCaptureTs.wr % CAPTURE_TS_QSIZE].t0 =
+                    XCAM_TIMESPEC_2_USEC(_q_ts);
+                pCamHw->mCaptureTs.wr++;
+                pCamHw->mCaptureTrigger.frame_count--;
+                LOGD_CAMHW_SUBM(ISP20HW_SUBM,
+                                "ISP_POLL_RX: queued free buffer, remaining frame_count=%d",
+                                pCamHw->mCaptureTrigger.frame_count);
+            } else {
+                LOGE_CAMHW_SUBM(ISP20HW_SUBM, "ISP_POLL_RX: queueFreeBuffer failed, ret=%d", ret);
+            }
+        }
+        aiqMutex_unlock(&pCamHw->_capture_trigger_mutex);
+
+        return XCAM_RETURN_NO_ERROR;
     }
 
     AiqCamHwBase_t* pCamHw = (AiqCamHwBase_t*)ctx;
@@ -1927,6 +2392,9 @@ static XCamReturn AiqCamHw_aibnr_init(AiqCamHwBase_t* pCamHw, AibnrManager_t* pA
 
     if (!pCamHw->mAiIspDev)
         return XCAM_RETURN_ERROR_FAILED;
+
+    if (pCamHw->mBtnrIirExtproc.inited)
+        LOGE_CAMHW("btnr iir extproc conflicts with aibnr, please disable btnr iir extproc first");
 
     pCamHw->mAibnr_cfg = *aibnr_cfg;
     pCamHw->mAibnrManager = pAibnrManager;
@@ -2215,6 +2683,113 @@ static XCamReturn AiqCamHw_aibnr_clrIqParam(AiqCamHwBase_t* pCamHw)
     }
 
     return ret;
+}
+
+static void _btnr_iir_extproc_init_ai_cfg(AiqCamHwBase_t* pCamHw,
+                                          struct isp35_isp_params_cfg* isp_params) {
+    if (!pCamHw->mBtnrIirExtproc.ai_cfg_need_init) return;
+
+    struct isp35_ai_cfg* ai_cfg = &isp_params->others.ai_cfg;
+    uint64_t mask               = ISP35_MODULE_AI;
+    isp_params->module_ens |= mask;
+    isp_params->module_en_update |= mask;
+    isp_params->module_cfg_update |= mask;
+    memset(ai_cfg, 0, sizeof(*ai_cfg));
+    pCamHw->mBtnrIirExtproc.ai_cfg_need_init = false;
+
+    if (pCamHw->mBtnrIirExtproc.start) {
+        XCamReturn ret = pCamHw->mBtnrIirExtproc.start(pCamHw);
+        if (ret != XCAM_RETURN_NO_ERROR) LOGE_CAMHW("start btnr_iir_extproc failed: %d\n", ret);
+    }
+}
+
+static XCamReturn AiqCamHw_btnr_iir_extproc_init(AiqCamHwBase_t* pCamHw,
+                                                 struct rkisp_aiisp_cfg* aibnr_cfg) {
+    XCamReturn ret = XCAM_RETURN_NO_ERROR;
+
+    if (!pCamHw->mAiIspCoreDev || !aibnr_cfg) return XCAM_RETURN_ERROR_FAILED;
+
+    pCamHw->mAibnr_cfg = *aibnr_cfg;
+    if (pCamHw->mAibnrBufPoolInit) {
+        LOGE_CAMHW("btnr iir extproc conflicts with aibnr, please disable aibnr first");
+        return XCAM_RETURN_ERROR_FAILED;
+    }
+
+    if (!pCamHw->mAibnrIspStream) {
+        pCamHw->mAibnrIspStream = (AiqAibnrIspStream_t*)aiq_mallocz(sizeof(AiqAibnrIspStream_t));
+        if (!pCamHw->mAibnrIspStream) return XCAM_RETURN_ERROR_MEM;
+
+        AiqAibnr_IspStream_init(pCamHw->mAibnrIspStream, (AiqV4l2Device_t*)pCamHw->mAiIspCoreDev,
+                                ISP_POLL_AIISP);
+        pCamHw->mAibnrIspStream->_base.setPollCallback(&pCamHw->mAibnrIspStream->_base,
+                                                       &pCamHw->mPollCb);
+    }
+
+    ret = pCamHw->mAibnrIspStream->set_aiisp_linecnt(pCamHw->mAibnrIspStream, pCamHw->mAibnr_cfg);
+    pCamHw->mBtnrIirExtproc.inited           = true;
+    pCamHw->mBtnrIirExtproc.ai_cfg_need_init = true;
+    return ret;
+}
+
+static XCamReturn AiqCamHw_btnr_iir_extproc_start(AiqCamHwBase_t* pCamHw) {
+    if (!pCamHw->mAibnrIspStream) return XCAM_RETURN_ERROR_FAILED;
+
+    AiqStream_t* stream = (AiqStream_t*)(pCamHw->mAibnrIspStream);
+
+    if (AiqV4l2Device_isActivated(stream->_dev)) return XCAM_RETURN_NO_ERROR;
+
+    stream->setCamPhyId(stream, pCamHw->mCamPhyId);
+    stream->start(stream);
+
+    return XCAM_RETURN_NO_ERROR;
+}
+
+static XCamReturn AiqCamHw_btnr_iir_extproc_stop(AiqCamHwBase_t* pCamHw) {
+    if (!pCamHw->mAibnrIspStream) return XCAM_RETURN_ERROR_FAILED;
+
+    if (!AiqV4l2Device_isActivated(pCamHw->mAibnrIspStream->_base._dev))
+        return XCAM_RETURN_NO_ERROR;
+
+    pCamHw->mAibnrIspStream->_base.stop(&pCamHw->mAibnrIspStream->_base);
+
+    return XCAM_RETURN_NO_ERROR;
+}
+
+static XCamReturn AiqCamHw_btnr_iir_extproc_deinit(AiqCamHwBase_t* pCamHw) {
+    pCamHw->mBtnrIirExtproc.inited = false;
+    if (pCamHw->mAibnrIspStream) {
+        AiqAibnr_IspStream_deinit(pCamHw->mAibnrIspStream);
+        aiq_free(pCamHw->mAibnrIspStream);
+        pCamHw->mAibnrIspStream = NULL;
+    }
+
+    return XCAM_RETURN_NO_ERROR;
+}
+
+static XCamReturn AiqCamHw_btnr_iir_extproc_setLinecnt(AiqCamHwBase_t* pCamHw,
+                                                       struct rkisp_aiisp_cfg* aibnr_cfg) {
+    XCamReturn ret = XCAM_RETURN_NO_ERROR;
+
+    if (!pCamHw->mAibnrIspStream || !aibnr_cfg) return XCAM_RETURN_ERROR_FAILED;
+
+    pCamHw->mAibnr_cfg = *aibnr_cfg;
+    ret = pCamHw->mAibnrIspStream->set_aiisp_linecnt(pCamHw->mAibnrIspStream, pCamHw->mAibnr_cfg);
+
+    return ret;
+}
+
+static XCamReturn AiqCamHw_btnr_iir_extproc_doIspBe(AiqCamHwBase_t* pCamHw,
+                                                    struct rkisp_aiisp_st* isp_in) {
+    if (pCamHw->mAibnrIspStream && pCamHw->_isp_stream_status != ISP_STREAM_STATUS_STREAM_OFF) {
+        return pCamHw->mAibnrIspStream->start_ispbe_hdl(pCamHw->mAibnrIspStream, isp_in);
+    }
+
+    return XCAM_RETURN_NO_ERROR;
+}
+
+static void AiqCamHw_btnr_iir_extproc_setIspBufInf(AiqCamHwBase_t* pCamHw,
+                                                   AiqCamHwBnrDrvBuf_t** p_bnrDrvBuf) {
+    if (p_bnrDrvBuf) *p_bnrDrvBuf = &pCamHw->_bnrDrvBuf;
 }
 
 static XCamReturn AiqCamHw_btnrWgtReproc_updateEn(AiqCamHwBase_t* pCamHw, bool en)
@@ -2538,9 +3113,12 @@ XCamReturn AiqCamHwBase_init(AiqCamHwBase_t* pCamHw, const char* sns_ent_name) {
     pCamHw->mIsListenStrmEvt       = true;
     pCamHw->_linked_to_serdes      = false;
     pCamHw->_not_skip_first        = true;
+    pCamHw->airms_wbgain_mode      = AIRMS_WBGAIN_APPLY_CIS;
+    memset(&pCamHw->mBtnrIirExtproc, 0, sizeof(pCamHw->mBtnrIirExtproc));
     aiqMutex_init(&pCamHw->_isp_params_cfg_mutex);
     aiqMutex_init(&pCamHw->_mem_mutex);
     aiqMutex_init(&pCamHw->_stop_cond_mutex);
+    aiqMutex_init(&pCamHw->_capture_trigger_mutex);
     aiqCond_init(&pCamHw->_sync_done_cond);
     pCamHw->prepare = AiqCamHw_prepare;
 
@@ -2616,13 +3194,46 @@ XCamReturn AiqCamHwBase_init(AiqCamHwBase_t* pCamHw, const char* sns_ent_name) {
 
     s_info = &pItem->data;
 
-    pCamHw->_mSensorDev = (AiqSensorHw_t*)aiq_mallocz(sizeof(AiqSensorHw_t));
-    if (!pCamHw->_mSensorDev) {
-        goto fail;
+    // Store preview capture mode in camera hardware context
+    pCamHw->isPreviewCaptureMode = s_info->isPreviewCaptureMode;
+
+    if (pCamHw->isPreviewCaptureMode) {
+        pCamHw->mVicapOutputPath = s_info->vicap_output_path;
+        if (strstr(sns_ent_name, VICAP_VIRTUAL_SENSOR_SUFFIX))
+            pCamHw->mIsVicapVirtualSensor = true;
+        else
+            pCamHw->mIsVicapVirtualSensor = false;
+
+        LOGK_CAMHW_SUBM(
+            ISP20HW_SUBM,
+            "Preview+Capture mode: sensor[%s] -> vicap[%s] -> isp[%s], vicap_output_path=%d",
+            sns_ent_name, s_info->isp_info->linked_vicap_sd_path, s_info->isp_info->driver,
+            pCamHw->mVicapOutputPath);
     }
-    AiqSensorHw_init(pCamHw->_mSensorDev, s_info->device_name, pCamHw->mCamPhyId);
-    AiqSensorHw_setCamHw(pCamHw->_mSensorDev, pCamHw);
-    pCamHw->_mSensorDev->open(pCamHw->_mSensorDev);
+
+    if (pCamHw->mIsVicapVirtualSensor) {
+        pCamHw->_mSensorDev = (AiqSensorHw_t*)aiq_mallocz(sizeof(AiqFakeSensorHw_t));
+        if (!pCamHw->_mSensorDev) {
+            return XCAM_RETURN_ERROR_MEM;
+        }
+        AiqFakeSensorHw_init((AiqFakeSensorHw_t*)pCamHw->_mSensorDev, s_info->device_name,
+                             pCamHw->mCamPhyId);
+        pCamHw->_mSensorDev->open(pCamHw->_mSensorDev);
+        AiqSensorHw_setPreviewPath(pCamHw->_mSensorDev, false);
+
+        LOGD_CAMHW_SUBM(ISP20HW_SUBM, "init fake sensor for virtual sensor: %s, camPhyId: %d",
+                        s_info->device_name, pCamHw->mCamPhyId);
+    } else {
+        pCamHw->_mSensorDev = (AiqSensorHw_t*)aiq_mallocz(sizeof(AiqSensorHw_t));
+        if (!pCamHw->_mSensorDev) {
+            goto fail;
+        }
+        AiqSensorHw_init(pCamHw->_mSensorDev, s_info->device_name, pCamHw->mCamPhyId);
+        AiqSensorHw_setCamHw(pCamHw->_mSensorDev, pCamHw);
+        pCamHw->_mSensorDev->open(pCamHw->_mSensorDev);
+        AiqSensorHw_setPreviewPath(pCamHw->_mSensorDev, pCamHw->isPreviewCaptureMode);
+    }
+
     // TODO: should be set before init
     AiqCamHw_setTbInfo(pCamHw, &pCamHw->mTbInfo);
     pCamHw->_mIspParamsCvt = (AiqIspParamsCvt_t*)aiq_mallocz(sizeof(AiqIspParamsCvt_t));
@@ -2708,7 +3319,7 @@ XCamReturn AiqCamHwBase_init(AiqCamHwBase_t* pCamHw, const char* sns_ent_name) {
     AiqV4l2Device_init(pCamHw->mIspParamsDev, s_info->isp_info->input_params_path);
     pCamHw->mIspParamsDev->open(pCamHw->mIspParamsDev, false);
 
-    if (strlen(s_info->module_lens_dev_name) > 0) {
+    if (strlen(s_info->module_lens_dev_name) > 0 && !pCamHw->mIsVicapVirtualSensor) {
         pCamHw->mLensDev = (AiqLensHw_t*)aiq_mallocz(sizeof(AiqLensHw_t));
         if (!pCamHw->mLensDev) {
             LOGE_CAMHW_SUBM(ISP20HW_SUBM, "%d: alloc fail !", __LINE__);
@@ -2729,7 +3340,7 @@ XCamReturn AiqCamHwBase_init(AiqCamHwBase_t* pCamHw, const char* sns_ent_name) {
     }
 #endif
 
-    if (strlen(s_info->module_ircut_dev_name) > 0) {
+    if (strlen(s_info->module_ircut_dev_name) > 0 && !pCamHw->mIsVicapVirtualSensor) {
         pCamHw->mIrcutDev = (AiqV4l2SubDevice_t*)aiq_mallocz(sizeof(AiqV4l2SubDevice_t));
         if (!pCamHw->mIrcutDev) {
             LOGE_CAMHW_SUBM(ISP20HW_SUBM, "%d: alloc fail !", __LINE__);
@@ -2740,11 +3351,13 @@ XCamReturn AiqCamHwBase_init(AiqCamHwBase_t* pCamHw, const char* sns_ent_name) {
         pCamHw->mIrcutDev->_v4l_base.open(&pCamHw->mIrcutDev->_v4l_base, false);
     }
 
-    if (pCamHw->_linked_to_serdes || pCamHw->_linked_to_multi_isp) {
+    if (pCamHw->_linked_to_serdes || pCamHw->_linked_to_multi_isp || pCamHw->isPreviewCaptureMode) {
         if (strlen(s_info->isp_info->linked_vicap_sd_path) > 0) {
             pCamHw->mVicapItfDev = (AiqV4l2SubDevice_t*)aiq_mallocz(sizeof(AiqV4l2SubDevice_t));
             AiqV4l2SubDevice_init((AiqV4l2SubDevice_t*)(pCamHw->mVicapItfDev),
                                   s_info->isp_info->linked_vicap_sd_path);
+            LOGD_CAMHW_SUBM(ISP20HW_SUBM, "linked to vicap, init vicap itf dev: %s",
+                            s_info->isp_info->linked_vicap_sd_path);
         } else {
             LOGW_CAMHW_SUBM(ISP20HW_SUBM, "mVicapItfDev is null! \n");
         }
@@ -2912,6 +3525,14 @@ XCamReturn AiqCamHwBase_init(AiqCamHwBase_t* pCamHw, const char* sns_ent_name) {
     pCamHw->btnrWgtReproc_updateEn = AiqCamHw_btnrWgtReproc_updateEn;
     pCamHw->mAibnrBufCnt.isp_fe    = AIBNR_IIR_BUF_CNT;
     pCamHw->mAibnrBufCnt.isp_be    = AIBNR_AIISP_BUF_CNT;
+
+    pCamHw->mBtnrIirExtproc.init         = AiqCamHw_btnr_iir_extproc_init;
+    pCamHw->mBtnrIirExtproc.start        = AiqCamHw_btnr_iir_extproc_start;
+    pCamHw->mBtnrIirExtproc.stop         = AiqCamHw_btnr_iir_extproc_stop;
+    pCamHw->mBtnrIirExtproc.deinit       = AiqCamHw_btnr_iir_extproc_deinit;
+    pCamHw->mBtnrIirExtproc.setLinecnt   = AiqCamHw_btnr_iir_extproc_setLinecnt;
+    pCamHw->mBtnrIirExtproc.doIspBe      = AiqCamHw_btnr_iir_extproc_doIspBe;
+    pCamHw->mBtnrIirExtproc.setIspBufInf = AiqCamHw_btnr_iir_extproc_setIspBufInf;
 #endif
 
     //AIYNR
@@ -2967,13 +3588,19 @@ XCamReturn AiqCamHwBase_init(AiqCamHwBase_t* pCamHw, const char* sns_ent_name) {
     pCamHw->mPollCb.poll_buffer_ready = _poll_buffer_ready;
     pCamHw->mPollCb.poll_event_ready  = NULL;
 
+    // In preview+capture mode, set poll callback on RawStreamProcUnit
+    // so that the client can receive ISP_POLL_RX events
+    if (pCamHw->isPreviewCaptureMode && pCamHw->mIsVicapVirtualSensor && pCamHw->mRawProcUnit) {
+        AiqRawStreamProcUnit_setPollCallback(pCamHw->mRawProcUnit, &pCamHw->mPollCb);
+    }
+
     pCamHw->mFpnStreamUnit = NULL;
 
 #if RKAIQ_HAVE_FPNSW
     // fpn
     pCamHw->mFpnStreamUnit = (AiqFpnSwStreamProcUnit_t*)aiq_mallocz(sizeof(AiqFpnSwStreamProcUnit_t));
     if (pCamHw->mFpnStreamUnit) {
-        AiqFpnSwStreamProcUnit_init(pCamHw->mFpnStreamUnit, pCamHw->_mSensorDev);
+        AiqFpnSwStreamProcUnit_init(pCamHw->mFpnStreamUnit);
         AiqFpnSwStreamProcUnit_setCamPhyId(pCamHw->mFpnStreamUnit, pCamHw->mCamPhyId);
     }
 #endif
@@ -3011,6 +3638,9 @@ fail:
 
 void AiqCamHwBase_deinit(AiqCamHwBase_t* pCamHw) {
     ENTER_CAMHW_FUNCTION();
+
+    if (pCamHw->mBtnrIirExtproc.inited && pCamHw->mBtnrIirExtproc.deinit)
+        pCamHw->mBtnrIirExtproc.deinit(pCamHw);
 
     if (pCamHw->mIspSofStream) {
         AiqSofEvtStream_deinit(pCamHw->mIspSofStream);
@@ -3171,7 +3801,11 @@ void AiqCamHwBase_deinit(AiqCamHwBase_t* pCamHw) {
         pCamHw->mVicapItfDev = NULL;
     }
     if (pCamHw->_mSensorDev) {
-        AiqSensorHw_deinit(pCamHw->_mSensorDev);
+        if (pCamHw->mIsVicapVirtualSensor) {
+            AiqFakeSensorHw_deinit((AiqFakeSensorHw_t*)pCamHw->_mSensorDev);
+        } else {
+            AiqSensorHw_deinit(pCamHw->_mSensorDev);
+        }
         aiq_free(pCamHw->_mSensorDev);
         pCamHw->_mSensorDev = NULL;
     }
@@ -3184,6 +3818,7 @@ void AiqCamHwBase_deinit(AiqCamHwBase_t* pCamHw) {
         pCamHw->mEffectIspParamsPool = NULL;
     }
 
+    aiqMutex_deInit(&pCamHw->_capture_trigger_mutex);
     aiqMutex_deInit(&pCamHw->_stop_cond_mutex);
     aiqMutex_deInit(&pCamHw->_mem_mutex);
     aiqMutex_deInit(&pCamHw->_isp_params_cfg_mutex);
@@ -3249,7 +3884,8 @@ static XCamReturn _setupPipelineFmtCif(AiqCamHwBase_t* pCamHw,
     int tx_word_align_mode = CSI_LVDS_MEM_COMPACT;
     int rx_word_align_mode = CSI_MEM_COMPACT;
 
-    multi_isp_align = g_mIsMultiIspMode && !!(((sns_sd_sel.r.width / 2 - RKMOUDLE_UNITE_EXTEND_PIXEL) * bpp / 8) & 0xf);
+    multi_isp_align = (g_mIsMultiIspMode && !!((((sns_sd_sel.r.width / 2) - RKMOUDLE_UNITE_EXTEND_PIXEL) * bpp / 8) & 0xf)) &&
+                      (pCamHw->mParamsSplitter && AiqIspParamsSplitter_GetIspUniteMode(pCamHw->mParamsSplitter) != RK_AIQ_ISP_UNITE_MODE_NORMAL);
     if (multi_isp_align) {
         // for multi isp, need to align to 16 bytes
         tx_word_align_mode = CSI_LVDS_MEM_WORD_HIGH_ALIGN;
@@ -3282,7 +3918,14 @@ static XCamReturn _setupPipelineFmtCif(AiqCamHwBase_t* pCamHw,
     }
 #endif
 
-    if ((algo_need_align || multi_isp_align) && !pCamHw->mNoReadBack) {
+    if (!pCamHw->mNoReadBack) {
+        // VICAP does not support high-alignment mode on the scaler path
+        if (pCamHw->isPreviewCaptureMode && pCamHw->mVicapOutputPath >= VICAP_OUT_PATH_SCL0 &&
+            pCamHw->mVicapOutputPath <= VICAP_OUT_PATH_SCL2) {
+            tx_word_align_mode = CSI_LVDS_MEM_WORD_LOW_ALIGN;
+            rx_word_align_mode = CSI_MEM_WORD_LITTLE_ALIGN;
+        }
+
         ret = AiqRawStreamCapUnit_set_csi_mem_word_align_mode(pCamHw->mRawCapUnit, tx_word_align_mode);
         if (ret < 0) {
             LOGE_CAMHW_SUBM(ISP20HW_SUBM, "tx set csi_mem_word_align_mode %d failed!\n", tx_word_align_mode);
@@ -3388,12 +4031,12 @@ static XCamReturn _setupPipelineFmtCif(AiqCamHwBase_t* pCamHw,
         return ret;
     }
 
+    LOGD_CAMHW_SUBM(ISP20HW_SUBM, "isp src fmt info: fmt 0x%x, %dx%d !", isp_src_fmt.format.code,
+                    isp_src_fmt.format.width, isp_src_fmt.format.height);
+
     // for send bytes_perline to driver
     if (pCamHw->_airms_en)
         AiqRawStreamProcUnit_set_rx_format2(pCamHw->mRawProcUnit, &sns_sd_sel, sns_v4l_pix_fmt);
-
-    LOGD_CAMHW_SUBM(ISP20HW_SUBM, "isp src fmt info: fmt 0x%x, %dx%d !", isp_src_fmt.format.code,
-                    isp_src_fmt.format.width, isp_src_fmt.format.height);
 
     return ret;
 }
@@ -3591,6 +4234,35 @@ static XCamReturn _setupPipelineFmt(AiqCamHwBase_t* pCamHw) {
                     sns_sd_sel.r.width, sns_sd_sel.r.height, sns_sd_fmt.format.width,
                     sns_sd_fmt.format.height, sns_sd_sel.r.left, sns_sd_sel.r.top);
 
+    if (pCamHw->isPreviewCaptureMode) {
+        ret = AiqRawStreamCapUnit_setQuadBayerDualPipeMode(pCamHw->mRawCapUnit);
+        if (ret >= 0) {
+            LOGD_CAMHW_SUBM(ISP20HW_SUBM,
+                            "set raw cap unit to quad bayer dual pipe mode for preview capture");
+        } else {
+            LOGE_CAMHW_SUBM(
+                ISP20HW_SUBM,
+                "set raw cap unit to quad bayer dual pipe mode for preview capture failed");
+        }
+
+        if (pCamHw->mVicapOutputPath >= VICAP_OUT_PATH_SCL0 &&
+            pCamHw->mVicapOutputPath <= VICAP_OUT_PATH_SCL2) {
+            ret = AiqRawStreamCapUnit_setSclMode(pCamHw->mRawCapUnit, RKCIF_SCL_MODE_BINNING);
+            if (ret >= 0) {
+                LOGD_CAMHW_SUBM(SENSOR_SUBM,
+                                "cam%d SCL binning mode: resolution %dx%d -> preview %dx%d",
+                                pCamHw->mCamPhyId, sns_sd_sel.r.width, sns_sd_sel.r.height,
+                                sns_sd_sel.r.width / 2, sns_sd_sel.r.height / 2);
+
+                sns_sd_sel.r.width  = sns_sd_sel.r.width / 2;
+                sns_sd_sel.r.height = sns_sd_sel.r.height / 2;
+            } else {
+                LOGE_CAMHW_SUBM(ISP20HW_SUBM,
+                                "set raw cap unit to scl binning mode for preview capture failed");
+            }
+        }
+    }
+
     if (pCamHw->_linked_to_isp)
         ret = _setupPipelineFmtIsp(pCamHw, &sns_sd_sel, &sns_sd_fmt, sns_v4l_pix_fmt);
     else
@@ -3746,6 +4418,13 @@ static XCamReturn _setExpDelayInfo(AiqCamHwBase_t* pCamHw, int mode) {
             ? pCamHw->_cur_calib_infos.sensor.CISExpUpdate.Linear.dcg_update
             : -1);
         pCamHw->_exp_delay = timeDelay > gainDelay ? timeDelay : gainDelay;
+
+        if (pCamHw->mIsVicapVirtualSensor) {
+            int exp_delay = 2;
+
+            sensorHw->set_exp_delay_info(sensorHw, exp_delay, exp_delay, exp_delay);
+            pCamHw->_exp_delay = exp_delay;
+        }
     }
 
     EXIT_CAMHW_FUNCTION();
@@ -3952,12 +4631,21 @@ void AiqCamHw_setCalib(AiqCamHwBase_t* pCamHw, const CamCalibDbV2Context_t* cali
         pCamHw->_cur_calib_infos.mfnr.motion_detect_en = false;
     }
 
+#ifndef USE_NEWSTRUCT
     aec = (CalibDb_Aec_ParaV2_t*)CALIBDBV2_GET_MODULE_PTR((void*)(pCamHw->mCalibDbV2), ae_calib);
     if (aec) {
         pCamHw->_cur_calib_infos.aec.IrisType = aec->IrisCtrl.IrisType;
     } else {
         pCamHw->_cur_calib_infos.aec.IrisType = IRISV2_DC_TYPE;
     }
+#else
+    ae_param_t* pAeCalib = (ae_param_t*)CALIBDBV2_GET_MODULE_PTR((void*)(pCamHw->mCalibDbV2), ae_calib);
+    if (pAeCalib) {
+        pCamHw->_cur_calib_infos.aec.IrisType = (CalibDb_IrisTypeV2_t)pAeCalib->irisCtrl.sw_aeT_iris_type;
+    } else {
+        pCamHw->_cur_calib_infos.aec.IrisType = IRISV2_DC_TYPE;
+    }
+#endif
 
 #if RKAIQ_HAVE_AF_V31
     CalibDbV2_AFV31_t* af_v31 =
@@ -4171,6 +4859,13 @@ static XCamReturn _init_bay3dbuf(AiqCamHwBase_t* pCamHw, void* isp_params) {
         pCamHw->_bnrDrvBuf._bay3dbuf.u.v35.vpsl.buf_cnt       = AIYNR_VPSL_BUF_CNT;
         //pCamHw->_bnrDrvBuf._bay3dbuf.u.v35.aiisp.buf_cnt      = AIYNR_AIISP_BUF_CNT;
         pCamHw->_bnrDrvBuf._bay3dbuf.u.v35.y_src.buf_cnt      = AIYNR_YSRC_BUF_CNT;
+    } else if (pCamHw->mBtnrIirExtproc.inited) {
+        pCamHw->_bnrDrvBuf._bay3dbuf.u.v35.iir_rw_fmt         = 2;
+        pCamHw->_bnrDrvBuf._bay3dbuf.iir.buf_cnt              = AIBNR_GAIN_BUF_CNT;
+        pCamHw->_bnrDrvBuf._bay3dbuf.u.v35.gain.buf_cnt       = AIBNR_GAIN_BUF_CNT;
+        pCamHw->_bnrDrvBuf._bay3dbuf.u.v35.aipre_gain.buf_cnt = 0;
+        pCamHw->_bnrDrvBuf._bay3dbuf.u.v35.vpsl.buf_cnt       = 0;
+        pCamHw->_bnrDrvBuf._bay3dbuf.u.v35.aiisp.buf_cnt      = AIBNR_AIISP_BUF_CNT;
     } else {
         pCamHw->use_aiisp = false;
     }
@@ -4282,6 +4977,44 @@ static XCamReturn _init_bay3dbuf(AiqCamHwBase_t* pCamHw, void* isp_params) {
             AiqBtnrDsReproc_setBtnrWgtBuf(pCamHw->mBtnrDsReproc, pCamHw->_bnrDrvBuf.wgt_address, pCamHw->_bnrDrvBuf._bay3dbuf.u.v35.wgt.buf_size, pCamHw->_bnrDrvBuf._bay3dbuf.u.v35.wgt.buf_fd);
         }
     }
+
+    if (pCamHw->mBtnrIirExtproc.inited) {
+        for (i = 0; i < pCamHw->_bnrDrvBuf._bay3dbuf.iir.buf_cnt; i++) {
+            int iir_fd   = pCamHw->_bnrDrvBuf._bay3dbuf.iir.buf_fd[i];
+            int iir_size = pCamHw->_bnrDrvBuf._bay3dbuf.iir.buf_size;
+            pCamHw->_bnrDrvBuf.iir_address[i] =
+                (char*)mmap(NULL, iir_size, PROT_READ | PROT_WRITE, MAP_SHARED, iir_fd, 0);
+            if (MAP_FAILED == pCamHw->_bnrDrvBuf.iir_address[i]) {
+                LOGE_CAMHW_SUBM(ISP20HW_SUBM, "iir_fd mmap failed");
+                return XCAM_RETURN_ERROR_FAILED;
+            }
+            LOGD_CAMHW_SUBM(ISP20HW_SUBM, "buf[%d]: iir_fd %d, iir_size %d", i, iir_fd, iir_size);
+        }
+        for (i = 0; i < pCamHw->_bnrDrvBuf._bay3dbuf.u.v35.gain.buf_cnt; i++) {
+            int gain_fd   = pCamHw->_bnrDrvBuf._bay3dbuf.u.v35.gain.buf_fd[i];
+            int gain_size = pCamHw->_bnrDrvBuf._bay3dbuf.u.v35.gain.buf_size;
+            pCamHw->_bnrDrvBuf.gain_address[i] =
+                (char*)mmap(NULL, gain_size, PROT_READ | PROT_WRITE, MAP_SHARED, gain_fd, 0);
+            if (MAP_FAILED == pCamHw->_bnrDrvBuf.gain_address[i]) {
+                LOGE_CAMHW_SUBM(ISP20HW_SUBM, "gain_fd mmap failed");
+                return XCAM_RETURN_ERROR_FAILED;
+            }
+            LOGD_CAMHW_SUBM(ISP20HW_SUBM, "buf[%d]: gain_fd %d, gain_size %d", i, gain_fd,
+                            gain_size);
+        }
+        for (i = 0; i < pCamHw->_bnrDrvBuf._bay3dbuf.u.v35.aiisp.buf_cnt; i++) {
+            int aiisp_fd   = pCamHw->_bnrDrvBuf._bay3dbuf.u.v35.aiisp.buf_fd[i];
+            int aiisp_size = pCamHw->_bnrDrvBuf._bay3dbuf.u.v35.aiisp.buf_size;
+            pCamHw->_bnrDrvBuf.aiisp_address[i] =
+                (char*)mmap(NULL, aiisp_size, PROT_READ | PROT_WRITE, MAP_SHARED, aiisp_fd, 0);
+            if (MAP_FAILED == pCamHw->_bnrDrvBuf.aiisp_address[i]) {
+                LOGE_CAMHW_SUBM(ISP20HW_SUBM, "aiisp_fd mmap failed");
+                return XCAM_RETURN_ERROR_FAILED;
+            }
+            LOGD_CAMHW_SUBM(ISP20HW_SUBM, "buf[%d]: aiisp_fd %d, aiisp_size %d", i, aiisp_fd,
+                            aiisp_size);
+        }
+    }
 #endif
 #if defined(ISP_HW_V39)
     for (i = 0; i < pCamHw->_bnrDrvBuf._bay3dbuf.u.v39.gain.buf_cnt; i++) {
@@ -4345,6 +5078,9 @@ static void _deinit_bay3dbuf(AiqCamHwBase_t* pCamHw) {
 #if defined(RKAIQ_HAVE_AIBNR) || defined(RKAIQ_HAVE_AIYNR)
     for(i = 0; i < pCamHw->_bnrDrvBuf._bay3dbuf.u.v35.gain.buf_cnt; i++) {
         close(pCamHw->_bnrDrvBuf._bay3dbuf.u.v35.gain.buf_fd[i]);
+        if (pCamHw->_bnrDrvBuf.gain_address[i])
+            munmap(pCamHw->_bnrDrvBuf.gain_address[i],
+                   pCamHw->_bnrDrvBuf._bay3dbuf.u.v35.gain.buf_size);
     }
     for(i = 0; i < pCamHw->_bnrDrvBuf._bay3dbuf.u.v35.aipre_gain.buf_cnt; i++) {
         close(pCamHw->_bnrDrvBuf._bay3dbuf.u.v35.aipre_gain.buf_fd[i]);
@@ -4354,6 +5090,9 @@ static void _deinit_bay3dbuf(AiqCamHwBase_t* pCamHw) {
     }
     for(i = 0; i < pCamHw->_bnrDrvBuf._bay3dbuf.u.v35.aiisp.buf_cnt; i++) {
         close(pCamHw->_bnrDrvBuf._bay3dbuf.u.v35.aiisp.buf_fd[i]);
+        if (pCamHw->_bnrDrvBuf.aiisp_address[i])
+            munmap(pCamHw->_bnrDrvBuf.aiisp_address[i],
+                   pCamHw->_bnrDrvBuf._bay3dbuf.u.v35.aiisp.buf_size);
     }
     for(i = 0; i < pCamHw->_bnrDrvBuf._bay3dbuf.u.v35.y_src.buf_cnt; i++) {
         close(pCamHw->_bnrDrvBuf._bay3dbuf.u.v35.y_src.buf_fd[i]);
@@ -4402,6 +5141,10 @@ XCamReturn AiqCamHw_prepare(AiqCamHwBase_t* pCamHw, uint32_t width, uint32_t hei
 
     XCAM_ASSERT(pCamHw->mCalibDbV2);
 
+    // Preview-Capture mode can only work in linear mode (RK_AIQ_WORKING_MODE_NORMAL)
+    // HDR mode is not supported in this dual-pipeline configuration
+    if (pCamHw->isPreviewCaptureMode) XCAM_ASSERT(mode == RK_AIQ_WORKING_MODE_NORMAL);
+
     pCamHw->_hdr_mode = mode;
     AiqIspParamsCvt_set_working_mode(pCamHw->_mIspParamsCvt, pCamHw->_hdr_mode);
 
@@ -4417,12 +5160,12 @@ XCamReturn AiqCamHw_prepare(AiqCamHwBase_t* pCamHw, uint32_t width, uint32_t hei
 
     s_info    = &pItem->data;
     isp_index = s_info->isp_info->logic_id;
-    LOGI_CAMHW_SUBM(ISP20HW_SUBM, "sensor_name(%s) is linked to isp_index(%d)", pCamHw->sns_name,
-                    isp_index);
+    LOGI_CAMHW_SUBM(ISP20HW_SUBM, "sensor_name(%s) is linked to isp_index(%d)-(%s)",
+                    pCamHw->sns_name, isp_index, s_info->isp_info->driver);
 
     if ((pCamHw->_hdr_mode > 0 && pCamHw->mIsOnlineByWorkingMode) ||
-            (!pCamHw->_linked_to_isp && !pCamHw->mVicapIspPhyLinkSupported) ||
-            (s_info->linked_to_serdes || s_info->split)) {
+        (!pCamHw->_linked_to_isp && !pCamHw->mVicapIspPhyLinkSupported) ||
+        (s_info->linked_to_serdes || s_info->split) || pCamHw->isPreviewCaptureMode) {
         LOGI_CAMHW_SUBM(ISP20HW_SUBM, "use read back mode!");
         pCamHw->mNoReadBack = false;
     }
@@ -4500,7 +5243,7 @@ XCamReturn AiqCamHw_prepare(AiqCamHwBase_t* pCamHw, uint32_t width, uint32_t hei
             pCamHw->mIspSofStream = (AiqSofEvtStream_t*)aiq_mallocz(sizeof(AiqSofEvtStream_t));
             AiqSofEvtStream_init(pCamHw->mIspSofStream, &pCamHw->mIspCoreDev->_v4l_base,
                                  ISP_POLL_SOF, pCamHw->_linked_to_1608);
-        } else if (pCamHw->_linked_to_serdes || s_info->split) {
+        } else if (pCamHw->_linked_to_serdes || s_info->split || pCamHw->isPreviewCaptureMode) {
             pCamHw->mIspSofStream = (AiqSofEvtStream_t*)aiq_mallocz(sizeof(AiqSofEvtStream_t));
             AiqSofEvtStream_init(pCamHw->mIspSofStream, &pCamHw->mVicapItfDev->_v4l_base,
                                  ISP_POLL_SOF, pCamHw->_linked_to_1608);
@@ -4564,8 +5307,42 @@ XCamReturn AiqCamHw_prepare(AiqCamHwBase_t* pCamHw, uint32_t width, uint32_t hei
 #endif
     //_init_bay3dbuf(pCamHw);
 
+    if (pCamHw->mIsVicapVirtualSensor) {
+        AiqFakeSensorHw_t* fakeSensorHw = (AiqFakeSensorHw_t*)(pCamHw->_mSensorDev);
+        rk_aiq_raw_prop_t prop          = {0};
+
+        struct v4l2_format tx_fmt;
+        AiqV4l2Device_t* v4l2_dev = AiqRawStreamCapUnit_get_tx_device(pCamHw->mRawCapUnit, 0);
+        if (v4l2_dev) {
+            errno = 0;
+            ret   = v4l2_dev->get_format(v4l2_dev, &tx_fmt);
+            if (ret) {
+                LOGW_CAMHW_SUBM(ISP20HW_SUBM, "get tx format error(%s) from %s!", strerror(errno),
+                                AiqV4l2Device_getDevName(v4l2_dev));
+            } else {
+                LOGD_CAMHW_SUBM(ISP20HW_SUBM, "Get pixelformat: 0x%x, wxh: %dx%d from \"%s\"",
+                                tx_fmt.fmt.pix.pixelformat, tx_fmt.fmt.pix.width,
+                                tx_fmt.fmt.pix.height, AiqV4l2Device_getDevName(v4l2_dev));
+
+                prop.format       = v4l2_format_to_rk_format(tx_fmt.fmt.pix.pixelformat);
+                prop.frame_width  = tx_fmt.fmt.pix.width;
+                prop.frame_height = tx_fmt.fmt.pix.height;
+            }
+        }
+
+        ret = fakeSensorHw->prepare((AiqSensorHw_t*)fakeSensorHw, &prop);
+        if (ret) {
+            LOGW_CAMHW_SUBM(ISP20HW_SUBM, "fake sensor prepare error !");
+            return ret;
+        } else {
+            LOGK_CAMHW_SUBM(ISP20HW_SUBM, "fake sensor prepare success !");
+        }
+    }
+
 #ifdef RKAIQ_HAVE_AIRMS
     airms_api_attrib_t *airms_attrib = (airms_api_attrib_t*)(CALIBDBV2_GET_MODULE_PTR((void*)(pCamHw->mCalibDbV2), airms));
+    pCamHw->airms_wbgain_mode = airms_attrib->stAuto.sta.sw_aiRmsCfg_wbgainApply_mode;
+    bool cpu_wbgain_apply     = pCamHw->airms_wbgain_mode == AIRMS_WBGAIN_APPLY_CPU;
 
     pCamHw->_airms_en = airms_attrib->en;
     strcpy(pCamHw->airms_model_file, airms_attrib->stAuto.sta.model_path.sw_aiRmsCfg_model_file);
@@ -4595,10 +5372,32 @@ XCamReturn AiqCamHw_prepare(AiqCamHwBase_t* pCamHw, uint32_t width, uint32_t hei
         AiqRawStreamCapUnit_setSensorCategory(pCamHw->mRawCapUnit, false);
         AiqRawStreamProcUnit_setSensorCategory(pCamHw->mRawProcUnit, false);
 
-        AiqRawStreamCapUnit_setTxBufferCnt(pCamHw->mRawCapUnit, AIRMS_VIPCAP_TX_BUF_NUM);
+        // Check if buffer count is configured by user
+        int i            = 0;
+        uint16_t buf_num = 0;
+        for (; i < pCamHw->mDevBufCntMap_size; i++) {
+            const char* devName = pCamHw->mDevBufCntMap[i]._devName;
+            if (strstr(devName, "rkraw_tx") || strstr(devName, "rkraw_rx") ||
+                strstr(devName, "stream_cif_mipi_id") || strstr(devName, "rkisp_rawwr"))
+                break;
+        }
+
+        if (i < pCamHw->mDevBufCntMap_size) buf_num = pCamHw->mDevBufCntMap[i]._bufCnts;
+
+        if (buf_num == 0) {
+            buf_num = AIRMS_VIPCAP_TX_BUF_NUM;
+            if (pCamHw->mIsVicapVirtualSensor) buf_num = AIRMS_VIPCAP_TX_CAPTURE_BUF_NUM;
+        }
+
+        AiqRawStreamCapUnit_setTxBufferCnt(pCamHw->mRawCapUnit, buf_num);
+        AiqRawStreamProcUnit_setRxBufferCnt(pCamHw->mRawProcUnit, buf_num);
+
         AiqRawStreamCapUnit_set_devices(pCamHw->mRawCapUnit, pCamHw->mIspCoreDev, pCamHw,
                                         NULL, pCamHw->mAiRmsProcUnit);
         AiqAiRmsStreamProcUnit_set_devices(pCamHw->mAiRmsProcUnit, pCamHw->mRawProcUnit);
+        AiqAiRmsStreamProcUnit_setCpuAwbGainEn(pCamHw->mAiRmsProcUnit, cpu_wbgain_apply);
+        LOGI_AIRMS("%s: sw_aiRmsCfg_wbgainApply_mode %d (cpu_awb_gain_en %d)", __func__,
+                   pCamHw->airms_wbgain_mode, cpu_wbgain_apply);
     }
 #endif
 
@@ -4619,7 +5418,7 @@ XCamReturn AiqCamHw_prepare(AiqCamHwBase_t* pCamHw, uint32_t width, uint32_t hei
         return ret;
     }
 
-    {
+    if (!pCamHw->mIsVicapVirtualSensor) {
         uint32_t snsExpMode;
         calibdb_cis_hdr_t* cis_hdr =
             (calibdb_cis_hdr_t*)(CALIBDBV2_GET_MODULE_PTR((void*)pCamHw->mCalibDbV2, CisHdr));
@@ -4637,7 +5436,7 @@ XCamReturn AiqCamHw_prepare(AiqCamHwBase_t* pCamHw, uint32_t width, uint32_t hei
         }
     }
 
-    if (!pCamHw->mTbInfo.is_fastboot) {
+    if (!pCamHw->mTbInfo.is_fastboot && !pCamHw->mIsVicapVirtualSensor) {
         if (pCamHw->mIsGroupMode) {
             ret = sensorHw->set_sync_mode(
                       sensorHw, pCamHw->mIsMain ? INTERNAL_MASTER_MODE : EXTERNAL_MASTER_MODE);
@@ -4655,9 +5454,11 @@ XCamReturn AiqCamHw_prepare(AiqCamHwBase_t* pCamHw, uint32_t width, uint32_t hei
     }
 
     _setExpDelayInfo(pCamHw, mode);
-    _setLensVcmModInfo(pCamHw, &s_info->mod_info);
-    xcam_mem_clear(pCamHw->_lens_des);
-    if (pCamHw->mLensDev) AiqLensHw_getLensModeData(pCamHw->mLensDev, &pCamHw->_lens_des);
+    if (!pCamHw->mIsVicapVirtualSensor) {
+        _setLensVcmModInfo(pCamHw, &s_info->mod_info);
+        xcam_mem_clear(pCamHw->_lens_des);
+        if (pCamHw->mLensDev) AiqLensHw_getLensModeData(pCamHw->mLensDev, &pCamHw->_lens_des);
+    }
 
     if (!pCamHw->use_rkrawstream) {
         ret = _setupPipelineFmt(pCamHw);
@@ -4672,6 +5473,14 @@ XCamReturn AiqCamHw_prepare(AiqCamHwBase_t* pCamHw, uint32_t width, uint32_t hei
     ret               = pCamHw->mIspCoreDev->getFormat(pCamHw->mIspCoreDev, &isp_src_fmt);
 #if defined(RKAIQ_HAVE_MULTIISP)
     if (ret == XCAM_RETURN_NO_ERROR && s_info->isp_info->is_multi_isp_mode) {
+        struct rkisp_unite_info unite_info;
+        memset(&unite_info, 0, sizeof(unite_info));
+        int unite_ioctl_ok =
+            pCamHw->mIspCoreDev->_v4l_base.io_control(&pCamHw->mIspCoreDev->_v4l_base,
+                RKISP_CMD_GET_UNITE_INFO, &unite_info) == 0;
+        if (unite_ioctl_ok && (unite_info.h_div == 0 || unite_info.v_div == 0))
+            unite_ioctl_ok = 0;
+
         uint16_t extended_pixel = g_mMultiIspExtendedPixel;
         uint32_t width          = isp_src_fmt.format.width;
         uint32_t height         = isp_src_fmt.format.height;
@@ -4683,43 +5492,102 @@ XCamReturn AiqCamHw_prepare(AiqCamHwBase_t* pCamHw, uint32_t width, uint32_t hei
 
         struct rkisp_isp_info isp_act_info;
         memset(&isp_act_info, 0, sizeof(isp_act_info));
-        if (pCamHw->mIspCoreDev->_v4l_base.io_control(&pCamHw->mIspCoreDev->_v4l_base,
-                RKISP_CMD_GET_ISP_INFO, &isp_act_info) != 0) {
-            LOGE_CAMHW("%s:%d can't get act isp info", __FUNCTION__, __LINE__);
-        }
 
-        if (isp_act_info.act_width  == width / 2 + extended_pixel &&
-                isp_act_info.act_height == height / 2 + extended_pixel) {
-            AiqIspParamsSplitter_SetIspUniteMode(pCamHw->mParamsSplitter, RK_AIQ_ISP_UNITE_MODE_FOUR_GRID);
-            ASSIGN_POINT(split_rectangle, 0, 0, width, height);
-            AiqIspParamsSplitter_SetPicInfo(pCamHw->mParamsSplitter, &split_rectangle);
-            ASSIGN_POINT(split_rectangle, 0, 0, width / 2 + extended_pixel,
-                         height / 2 + extended_pixel);
-            AiqIspParamsSplitter_SetLeftIspRect(pCamHw->mParamsSplitter, &split_rectangle);
-            ASSIGN_POINT(split_rectangle, width / 2 - extended_pixel, 0, width / 2 + extended_pixel,
-                         height / 2 + extended_pixel);
-            AiqIspParamsSplitter_SetLeftIspRect(pCamHw->mParamsSplitter, &split_rectangle);
-            AiqIspParamsSplitter_SetRightIspRect(pCamHw->mParamsSplitter, &split_rectangle);
-            ASSIGN_POINT(split_rectangle, 0, height / 2 - extended_pixel, width / 2 + extended_pixel,
-                         height / 2 + extended_pixel);
-            AiqIspParamsSplitter_SetBottomLeftIspRect(pCamHw->mParamsSplitter, &split_rectangle);
-            ASSIGN_POINT(split_rectangle, width / 2 - extended_pixel, height / 2 - extended_pixel,
-                         width / 2 + extended_pixel, height / 2 + extended_pixel);
-            AiqIspParamsSplitter_SetBottomRightIspRect(pCamHw->mParamsSplitter, &split_rectangle);
-        } else if (isp_act_info.act_width  == width / 2 + extended_pixel &&
-                   isp_act_info.act_height == height) {
-            AiqIspParamsSplitter_SetIspUniteMode(pCamHw->mParamsSplitter, RK_AIQ_ISP_UNITE_MODE_TWO_GRID);
-            ASSIGN_POINT(split_rectangle, 0, 0, width, height);
-            AiqIspParamsSplitter_SetPicInfo(pCamHw->mParamsSplitter, &split_rectangle);
-            ASSIGN_POINT(split_rectangle, 0, 0, width / 2 + extended_pixel, height);
-            AiqIspParamsSplitter_SetLeftIspRect(pCamHw->mParamsSplitter, &split_rectangle);
-            ASSIGN_POINT(split_rectangle, width / 2 - extended_pixel, 0, width / 2 + extended_pixel,
-                         height);
-            AiqIspParamsSplitter_SetRightIspRect(pCamHw->mParamsSplitter, &split_rectangle);
+        AiqIspParamsSplitter_SetIspUniteMode(pCamHw->mParamsSplitter, RK_AIQ_ISP_UNITE_MODE_NORMAL);
+        ASSIGN_POINT(split_rectangle, 0, 0, width, height);
+        AiqIspParamsSplitter_SetPicInfo(pCamHw->mParamsSplitter, &split_rectangle);
+
+        if (unite_ioctl_ok) {
+            pCamHw->mParamsSplitter->isp_splite_h_num_ = unite_info.h_div;
+            pCamHw->mParamsSplitter->isp_splite_v_num_ = unite_info.v_div;
+            for (int i = 0; i < unite_info.v_div; i++) {
+                for (int j = 0; j < unite_info.h_div; j++) {
+                    struct rkisp_unite_window *ori_win = &unite_info.win[i * unite_info.h_div + j];
+                    pCamHw->mParamsSplitter->isp_splite_rect_[i][j].w = ori_win->act_width;
+                    pCamHw->mParamsSplitter->isp_splite_rect_[i][j].h = ori_win->act_height;
+                    if (i > 0) {
+                        int last_win_idx = (i - 1) * unite_info.h_div + j;
+                        pCamHw->mParamsSplitter->isp_splite_rect_[i][j].y = pCamHw->mParamsSplitter->isp_splite_rect_[i - 1][j].y + pCamHw->mParamsSplitter->isp_splite_rect_[i - 1][j].h -
+                            unite_info.win[last_win_idx].down_extend - ori_win->up_extend;
+                    }
+                    if (j > 0) {
+                        int last_win_idx = i * unite_info.h_div + j - 1;
+                        pCamHw->mParamsSplitter->isp_splite_rect_[i][j].x = pCamHw->mParamsSplitter->isp_splite_rect_[i][j - 1].x + pCamHw->mParamsSplitter->isp_splite_rect_[i][j - 1].w -
+                            unite_info.win[last_win_idx].right_extend - ori_win->left_extend;
+                    }
+                }
+            }
+
+            if (unite_info.h_div == 3 && unite_info.v_div == 3) {
+                pCamHw->mParamsSplitter->isp_unite_mode_ = RK_AIQ_ISP_UNITE_MODE_3X3;
+                AiqIspParamsSplitter_SetLeftIspRect(pCamHw->mParamsSplitter, &pCamHw->mParamsSplitter->isp_splite_rect_[0][0]);
+                AiqIspParamsSplitter_SetRightIspRect(pCamHw->mParamsSplitter, &pCamHw->mParamsSplitter->isp_splite_rect_[0][2]);
+            } else if (unite_info.h_div == 2 && unite_info.v_div == 2) {
+                pCamHw->mParamsSplitter->isp_unite_mode_ = RK_AIQ_ISP_UNITE_MODE_2X2;
+                AiqIspParamsSplitter_SetLeftIspRect(pCamHw->mParamsSplitter, &pCamHw->mParamsSplitter->isp_splite_rect_[0][0]);
+                AiqIspParamsSplitter_SetRightIspRect(pCamHw->mParamsSplitter, &pCamHw->mParamsSplitter->isp_splite_rect_[0][1]);
+                AiqIspParamsSplitter_SetBottomLeftIspRect(pCamHw->mParamsSplitter, &pCamHw->mParamsSplitter->isp_splite_rect_[1][0]);
+                AiqIspParamsSplitter_SetBottomRightIspRect(pCamHw->mParamsSplitter, &pCamHw->mParamsSplitter->isp_splite_rect_[1][1]);
+            } else if (unite_info.h_div == 2 && unite_info.v_div == 1) {
+                pCamHw->mParamsSplitter->isp_unite_mode_ = RK_AIQ_ISP_UNITE_MODE_1X2;
+                AiqIspParamsSplitter_SetLeftIspRect(pCamHw->mParamsSplitter, &pCamHw->mParamsSplitter->isp_splite_rect_[0][0]);
+                AiqIspParamsSplitter_SetRightIspRect(pCamHw->mParamsSplitter, &pCamHw->mParamsSplitter->isp_splite_rect_[0][1]);
+            } else {
+                pCamHw->mParamsSplitter->isp_unite_mode_ = RK_AIQ_ISP_UNITE_MODE_NORMAL;
+            }
         } else {
-            AiqIspParamsSplitter_SetIspUniteMode(pCamHw->mParamsSplitter, RK_AIQ_ISP_UNITE_MODE_NORMAL);
-            ASSIGN_POINT(split_rectangle, 0, 0, width, height);
-            AiqIspParamsSplitter_SetPicInfo(pCamHw->mParamsSplitter, &split_rectangle);
+            LOGW_CAMHW("%s:%d RKISP_CMD_GET_UNITE_INFO unavailable or empty, fallback to "
+                       "RKISP_CMD_GET_ISP_INFO",
+                       __FUNCTION__, __LINE__);
+            if (pCamHw->mIspCoreDev->_v4l_base.io_control(&pCamHw->mIspCoreDev->_v4l_base,
+                    RKISP_CMD_GET_ISP_INFO, &isp_act_info) != 0) {
+                LOGE_CAMHW("%s:%d can't get act isp info", __FUNCTION__, __LINE__);
+            }
+
+            if (isp_act_info.act_width == width / 2 + extended_pixel &&
+                isp_act_info.act_height == height / 2 + extended_pixel) {
+                pCamHw->mParamsSplitter->isp_unite_mode_ = RK_AIQ_ISP_UNITE_MODE_FOUR_GRID;
+                pCamHw->mParamsSplitter->isp_splite_h_num_ = 2;
+                pCamHw->mParamsSplitter->isp_splite_v_num_ = 2;
+                ASSIGN_POINT(pCamHw->mParamsSplitter->isp_splite_rect_[0][0], 0, 0,
+                    width / 2 + extended_pixel, height / 2 + extended_pixel);
+                ASSIGN_POINT(pCamHw->mParamsSplitter->isp_splite_rect_[0][1], width / 2 - extended_pixel, 0,
+                    width / 2 + extended_pixel, height / 2 + extended_pixel);
+                ASSIGN_POINT(pCamHw->mParamsSplitter->isp_splite_rect_[1][0], 0, height / 2 - extended_pixel,
+                    width / 2 + extended_pixel, height / 2 + extended_pixel);
+                ASSIGN_POINT(pCamHw->mParamsSplitter->isp_splite_rect_[1][1], width / 2 - extended_pixel,
+                    height / 2 - extended_pixel, width / 2 + extended_pixel, height / 2 + extended_pixel);
+                AiqIspParamsSplitter_SetLeftIspRect(pCamHw->mParamsSplitter,
+                    &pCamHw->mParamsSplitter->isp_splite_rect_[0][0]);
+                AiqIspParamsSplitter_SetRightIspRect(pCamHw->mParamsSplitter,
+                    &pCamHw->mParamsSplitter->isp_splite_rect_[0][1]);
+                AiqIspParamsSplitter_SetBottomLeftIspRect(pCamHw->mParamsSplitter,
+                    &pCamHw->mParamsSplitter->isp_splite_rect_[1][0]);
+                AiqIspParamsSplitter_SetBottomRightIspRect(pCamHw->mParamsSplitter,
+                    &pCamHw->mParamsSplitter->isp_splite_rect_[1][1]);
+            } else if (isp_act_info.act_width == width / 2 + extended_pixel &&
+                       isp_act_info.act_height == height) {
+                pCamHw->mParamsSplitter->isp_unite_mode_ = RK_AIQ_ISP_UNITE_MODE_TWO_GRID;
+                pCamHw->mParamsSplitter->isp_splite_h_num_ = 2;
+                pCamHw->mParamsSplitter->isp_splite_v_num_ = 1;
+                ASSIGN_POINT(pCamHw->mParamsSplitter->isp_splite_rect_[0][0], 0, 0,
+                    width / 2 + extended_pixel, height);
+                ASSIGN_POINT(pCamHw->mParamsSplitter->isp_splite_rect_[0][1], width / 2 - extended_pixel, 0,
+                    width / 2 + extended_pixel, height);
+                AiqIspParamsSplitter_SetLeftIspRect(pCamHw->mParamsSplitter,
+                    &pCamHw->mParamsSplitter->isp_splite_rect_[0][0]);
+                AiqIspParamsSplitter_SetRightIspRect(pCamHw->mParamsSplitter,
+                    &pCamHw->mParamsSplitter->isp_splite_rect_[0][1]);
+            } else {
+                pCamHw->mParamsSplitter->isp_unite_mode_ = RK_AIQ_ISP_UNITE_MODE_NORMAL;
+                pCamHw->mParamsSplitter->isp_splite_h_num_ = 1;
+                pCamHw->mParamsSplitter->isp_splite_v_num_ = 1;
+                ASSIGN_POINT(pCamHw->mParamsSplitter->isp_splite_rect_[0][0], 0, 0, width, height);
+                AiqIspParamsSplitter_SetLeftIspRect(pCamHw->mParamsSplitter,
+                    &pCamHw->mParamsSplitter->isp_splite_rect_[0][0]);
+                AiqIspParamsSplitter_SetRightIspRect(pCamHw->mParamsSplitter,
+                    &pCamHw->mParamsSplitter->isp_splite_rect_[0][0]);
+            }
         }
 
         {
@@ -4729,7 +5597,7 @@ XCamReturn AiqCamHw_prepare(AiqCamHwBase_t* pCamHw, uint32_t width, uint32_t hei
                 AiqIspParamsSplitter_GetLeftIspRect(pCamHw->mParamsSplitter);
             const Splitter_Rectangle_t* r =
                 AiqIspParamsSplitter_GetRightIspRect(pCamHw->mParamsSplitter);
-            LOGK_ANALYZER(
+            LOGK_CAMHW(
                 "Set Multi-ISP Mode ParamSplitter:\n"
                 " Unite mode: %d\n"
                 " Extended Pixel%d\n"
@@ -4929,6 +5797,12 @@ XCamReturn AiqCamHw_prepare(AiqCamHwBase_t* pCamHw, uint32_t width, uint32_t hei
 #endif
 #endif
 
+#if RKAIQ_HAVE_FPNSW
+    if (pCamHw->mFpnStreamUnit) {
+        AiqFpnSwStreamProcUnit_prepare(pCamHw->mFpnStreamUnit, pCamHw->_mSensorDev);
+    }
+#endif
+
 #if RKAIQ_HAVE_MEMC
     if (pCamHw->mMemcStream) {
         rk_aiq_exposure_sensor_descriptor sensor_des;
@@ -4939,7 +5813,6 @@ XCamReturn AiqCamHw_prepare(AiqCamHwBase_t* pCamHw, uint32_t width, uint32_t hei
 
     if (pCamHw->mCifScaleStream) {
         AiqCifSclStream_set_working_mode(pCamHw->mCifScaleStream, mode);
-        AiqCifSclStream_prepare(pCamHw->mCifScaleStream);
     }
 
 #ifdef ISP_HW_V35
@@ -4985,11 +5858,20 @@ static XCamReturn _hdr_mipi_prepare_mode(AiqCamHwBase_t* pCamHw, int mode) {
             }
             ret = AiqRawStreamProcUnit_prepare(pCamHw->mRawProcUnit, MIPI_STREAM_IDX_0);
 #if RKAIQ_HAVE_AIRMS
-            if (pCamHw->_airms_en)
-                ret = AiqAiRmsStreamProcUnit_prepare(pCamHw->mAiRmsProcUnit,
-                                                     pCamHw->_mIspParamsCvt->sensor_output_width,
-                                                     pCamHw->_mIspParamsCvt->sensor_output_height,
-                                                     pCamHw->airms_model_file);
+            if (pCamHw->_airms_en) {
+                uint32_t inbuf_num  = AIRMS_INBUF_NUM;
+                uint32_t outbuf_num = AIRMS_OUTBUF_NUM;
+                if (pCamHw->mIsVicapVirtualSensor) {
+                    // only 1 input and 1 output for virtual sensor, to reduce memory consumption
+                    inbuf_num  = AIRMS_VIPCAP_TX_CAPTURE_BUF_NUM;
+                    outbuf_num = AIRMS_VIPCAP_TX_CAPTURE_BUF_NUM;
+                }
+
+                ret = AiqAiRmsStreamProcUnit_prepare(
+                    pCamHw->mAiRmsProcUnit, pCamHw->_mIspParamsCvt->sensor_output_width,
+                    pCamHw->_mIspParamsCvt->sensor_output_height, pCamHw->airms_model_file,
+                    inbuf_num, outbuf_num);
+            }
 #endif
         } else if (new_mode == RK_AIQ_WORKING_MODE_ISP_HDR2) {
             if (!pCamHw->_linked_to_1608) {
@@ -5077,7 +5959,6 @@ static XCamReturn _hdr_mipi_start_mode(AiqCamHwBase_t* pCamHw, int mode) {
             aiqMutex_unlock(&g_sync_1608_mutex);
         }
     }
-    if (pCamHw->mCifScaleStream) AiqCifSclStream_start(pCamHw->mCifScaleStream);
     LOGD_CAMHW_SUBM(ISP20HW_SUBM, "%s exit", __FUNCTION__);
     return ret;
 }
@@ -5198,6 +6079,12 @@ XCamReturn AiqCamHw_start(AiqCamHwBase_t* pCamHw) {
         AiqPdafStreamProcUnit_start(pCamHw->mPdafStreamUnit);
     }
 #endif
+
+    if (pCamHw->mBtnrIirExtproc.inited && pCamHw->mBtnrIirExtproc.start) {
+        ret = pCamHw->mBtnrIirExtproc.start(pCamHw);
+        if (ret != XCAM_RETURN_NO_ERROR) LOGE_CAMHW("start btnr_iir_extproc failed: %d\n", ret);
+    }
+
     sensorHw->start(sensorHw, true);
     if (lensHw) lensHw->start(lensHw, false);
     pCamHw->_is_exit = false;
@@ -5214,6 +6101,12 @@ XCamReturn AiqCamHw_stop(AiqCamHwBase_t* pCamHw) {
     XCamReturn ret = XCAM_RETURN_NO_ERROR;
 
     if (pCamHw->_state == CAM_HW_STATE_STOPPED) return ret;
+
+    if (pCamHw->mBtnrIirExtproc.inited && pCamHw->mBtnrIirExtproc.stop) {
+        ret = pCamHw->mBtnrIirExtproc.stop(pCamHw);
+        if (ret != XCAM_RETURN_NO_ERROR)
+            LOGE_CAMHW_SUBM(ISP20HW_SUBM, "stop btnr_iir_extproc failed: %d\n", ret);
+    }
 
     if (pCamHw->mIspStatsStream)
         pCamHw->mIspStatsStream->_base.stop(&pCamHw->mIspStatsStream->_base);
@@ -5314,66 +6207,6 @@ void AiqCamHw_clean(AiqCamHwBase_t* pCamHw)
     aiqMap_reset(pCamHw->_effecting_ispparam_map);
     aiqPool_reset(pCamHw->mEffectIspParamsPool);
     AiqSensorHw_clean(pCamHw->_mSensorDev);
-}
-
-#if RKAIQ_HAVE_PDAF
-static XCamReturn _showOtpPdafData(struct rkmodule_pdaf_inf* otp_pdaf) {
-    unsigned int gainmap_w, gainmap_h;
-    unsigned int dccmap_w, dccmap_h;
-    char print_buf[256];
-    unsigned int i, j;
-
-    if (otp_pdaf->flag) {
-        gainmap_w = otp_pdaf->gainmap_width;
-        gainmap_h = otp_pdaf->gainmap_height;
-        dccmap_w  = otp_pdaf->dccmap_width;
-        dccmap_h  = otp_pdaf->dccmap_height;
-        LOGI_CAMHW_SUBM(ISP20HW_SUBM, "[RKPDAFOTPParam]");
-        LOGI_CAMHW_SUBM(ISP20HW_SUBM, "flag=%d;", otp_pdaf->flag);
-        LOGI_CAMHW_SUBM(ISP20HW_SUBM, "gainmap_width=%d;", gainmap_w);
-        LOGI_CAMHW_SUBM(ISP20HW_SUBM, "gainmap_height=%d;", gainmap_h);
-        LOGI_CAMHW_SUBM(ISP20HW_SUBM, "gainmap_table=");
-        for (i = 0; i < gainmap_h; i++) {
-            memset(print_buf, 0, sizeof(print_buf));
-            for (j = 0; j < gainmap_w; j++) {
-                sprintf(print_buf + strlen(print_buf), "%d ", otp_pdaf->gainmap[i * gainmap_w + j]);
-            }
-            LOGI_CAMHW_SUBM(ISP20HW_SUBM, "%s", print_buf);
-        }
-
-        LOGI_CAMHW_SUBM(ISP20HW_SUBM, "dcc_mode=%d;", otp_pdaf->dcc_mode);
-        LOGI_CAMHW_SUBM(ISP20HW_SUBM, "dcc_dir=%d;", otp_pdaf->dcc_dir);
-        LOGI_CAMHW_SUBM(ISP20HW_SUBM, "dccmap_width=%d;", otp_pdaf->dccmap_width);
-        LOGI_CAMHW_SUBM(ISP20HW_SUBM, "dccmap_height=%d;", otp_pdaf->dccmap_height);
-        LOGI_CAMHW_SUBM(ISP20HW_SUBM, "dccmap_table=");
-        for (i = 0; i < dccmap_h; i++) {
-            memset(print_buf, 0, sizeof(print_buf));
-            for (j = 0; j < dccmap_w; j++) {
-                sprintf(print_buf + strlen(print_buf), "%d ", otp_pdaf->dccmap[i * dccmap_w + j]);
-            }
-            LOGI_CAMHW_SUBM(ISP20HW_SUBM, "%s", print_buf);
-        }
-    }
-
-    return XCAM_RETURN_NO_ERROR;
-}
-#endif
-static XCamReturn _showOtpAfData(struct rkmodule_af_inf* af_inf) {
-    unsigned int i;
-
-    if (af_inf->flag) {
-        LOGI_CAMHW_SUBM(ISP20HW_SUBM, "[RKAFOTPParam]");
-        LOGI_CAMHW_SUBM(ISP20HW_SUBM, "flag=%d;", af_inf->flag);
-        LOGI_CAMHW_SUBM(ISP20HW_SUBM, "dir_cnt=%d;", af_inf->dir_cnt);
-
-        for (i = 0; i < af_inf->dir_cnt; i++) {
-            LOGI_CAMHW_SUBM(ISP20HW_SUBM, "af_inf=%d;", af_inf->af_otp[i].vcm_dir);
-            LOGI_CAMHW_SUBM(ISP20HW_SUBM, "af_macro=%d;", af_inf->af_otp[i].vcm_start);
-            LOGI_CAMHW_SUBM(ISP20HW_SUBM, "af_macro=%d;", af_inf->af_otp[i].vcm_end);
-        }
-    }
-
-    return XCAM_RETURN_NO_ERROR;
 }
 
 XCamReturn AiqCamHw_getSensorModeData(AiqCamHwBase_t* pCamHw, const char* sns_ent_name,
@@ -5506,7 +6339,6 @@ XCamReturn AiqCamHw_getSensorModeData(AiqCamHwBase_t* pCamHw, const char* sns_en
 
         if (minfo->af.flag) {
             sns_des->otp_af = &minfo->af;
-            _showOtpAfData(sns_des->otp_af);
         } else {
             sns_des->otp_af = NULL;
         }
@@ -5514,7 +6346,6 @@ XCamReturn AiqCamHw_getSensorModeData(AiqCamHwBase_t* pCamHw, const char* sns_en
         if (minfo->pdaf.flag) {
 #if RKAIQ_HAVE_PDAF
             sns_des->otp_pdaf = &minfo->pdaf;
-            _showOtpPdafData(sns_des->otp_pdaf);
         } else {
 #endif
             sns_des->otp_pdaf = NULL;
@@ -6494,6 +7325,8 @@ XCamReturn AiqCamHw_handleIspRstList(AiqCamHwBase_t* pCamHw, AiqList_t* pList) {
                     buf_cnt = 2;
                 } else if (isp_unite == RK_AIQ_ISP_UNITE_MODE_FOUR_GRID) {
                     buf_cnt = 4;
+                } else if (isp_unite == RK_AIQ_ISP_UNITE_MODE_3X3) {
+                    buf_cnt = 9;
                 } else {
                     buf_cnt = 1;
                 }
@@ -6591,8 +7424,12 @@ XCamReturn AiqCamHw_handleIspRst(AiqCamHwBase_t* pCamHw, aiq_params_base_t* resu
     return ret;
 }
 
-static XCamReturn _setCifSclStartFlag(AiqCamHwBase_t* pCamHw, int ratio, bool mode) {
+XCamReturn AiqCamHw_setCifSclStartFlag(AiqCamHwBase_t* pCamHw, int ratio, bool mode) {
     XCamReturn ret = XCAM_RETURN_NO_ERROR;
+
+    if (!pCamHw->mCifScaleStream) {
+        return ret;
+    }
 
     if (mode == AiqCifSclStream_getIsActive(pCamHw->mCifScaleStream)) {
         return ret;
@@ -6620,6 +7457,12 @@ static XCamReturn _dispatchResult(AiqCamHwBase_t* pCamHw, aiq_params_base_t* par
     LOG1("%s enter, msg type(0x%x)", __FUNCTION__, params->type);
     switch (params->type) {
     case RESULT_TYPE_EXPOSURE_PARAM: {
+        /*
+         * For vicap virtual sensor: exposure is driven externally via
+         * rk_aiq_uapi2_sysctl_set3AMeta(), so skip the auto-dispatch path here.
+         */
+        if (pCamHw->mIsVicapVirtualSensor) break;
+
         AiqAecExpInfoWrapper_t* exp = (AiqAecExpInfoWrapper_t*)(params->_data);
         ret                         = AiqCamHw_setExposureParams(pCamHw, exp);
         if (ret)
@@ -6646,7 +7489,7 @@ static XCamReturn _dispatchResult(AiqCamHwBase_t* pCamHw, aiq_params_base_t* par
         if (pCamHw->mCifScaleStream) {
             bool enable = afd->enable;
             int ratio   = afd->ratio;
-            _setCifSclStartFlag(pCamHw, ratio, enable);
+            AiqCamHw_setCifSclStartFlag(pCamHw, ratio, enable);
         }
         break;
     }
@@ -6885,7 +7728,7 @@ retry:
         int buf_index      = AiqV4l2Buffer_getBuf(pV4l2Buf)->index;
         bool isMultiIsp    = g_mIsMultiIspMode;
         bool extened_pixel = g_mMultiIspExtendedPixel;
-        ispUniteMode       = AiqCamHw_getIspUniteMode(pCamHw);
+        ispUniteMode       = pCamHw->mParamsSplitter ? AiqIspParamsSplitter_GetIspUniteMode(pCamHw->mParamsSplitter) : 0;
 
 #if defined(ISP_HW_V39) || defined(ISP_HW_V35) || defined(ISP_HW_V33) || defined(ISP_HW_V351s)
         if (expParam)
@@ -6894,10 +7737,15 @@ retry:
         isp_params->module_en_update  = 0;
         isp_params->module_cfg_update = 0;
         isp_params->module_ens = 0;
-        XCamReturn ret_b =
-            AiqIspParamsCvt_merge_isp_results(pCamHw->_mIspParamsCvt, ready_results, isp_params,
-                                              !!(g_mIsMultiIspMode && ispUniteMode), pCamHw->use_aiisp,
-                                              pCamHw->_airms_en, pCamHw->_aiynr_en);
+        bool airms_en = pCamHw->_airms_en && (pCamHw->airms_wbgain_mode == AIRMS_WBGAIN_APPLY_CIS ||
+                                              pCamHw->airms_wbgain_mode == AIRMS_WBGAIN_APPLY_CPU);
+        if (pCamHw->isPreviewCaptureMode) {
+            airms_en = true;
+        }
+
+        XCamReturn ret_b = AiqIspParamsCvt_merge_isp_results(
+            pCamHw->_mIspParamsCvt, ready_results, isp_params,
+            !!(g_mIsMultiIspMode && ispUniteMode), pCamHw->use_aiisp, airms_en, pCamHw->_aiynr_en);
         if (ret_b != XCAM_RETURN_NO_ERROR)
             LOGE_CAMHW_SUBM(ISP20HW_SUBM, "ISP parameter translation error\n");
 
@@ -7012,7 +7860,8 @@ retry:
 
         if (pCamHw->updateEffParams) {
 #if defined(RKAIQ_HAVE_MULTIISP) && (defined(ISP_HW_V30) || defined(ISP_HW_V32) || \
-                defined(ISP_HW_V32_LITE) || defined(ISP_HW_V39) || defined(ISP_HW_V33) || defined(ISP_HW_V35))
+                defined(ISP_HW_V32_LITE) || defined(ISP_HW_V39) || defined(ISP_HW_V33) || defined(ISP_HW_V35)) || \
+                defined(ISP_HW_V351s)
             if (g_mIsMultiIspMode)
                 pCamHw->updateEffParams(pCamHw, isp_params, &ori_params);
             else
@@ -7071,6 +7920,8 @@ retry:
                 AibnrManager_updateParams(pCamHw->mAibnrManager, isp_aibnr_param, frameId);
             }
         }
+
+        _btnr_iir_extproc_init_ai_cfg(pCamHw, isp_params);
 #endif
 
 #if RKAIQ_HAVE_AIYNR
@@ -8108,6 +8959,10 @@ XCamReturn AiqCamHw_setUserOtpInfo(AiqCamHwBase_t* pCamHw, rk_aiq_user_otp_info_
 
     pCamHw->_mIspParamsCvt->mCommonCvtInfo.otp_awb = otp_info->otp_awb;
     pCamHw->_mIspParamsCvt->mCommonCvtInfo.otp_lsc = otp_info->otp_lsc;
+    if (otp_info->otp_lsc.flag)
+        pCamHw->_mIspParamsCvt->mCommonCvtInfo.otp_lsc.flag |= USER_OTP_UPDATE_FLAG_MASK;
+    pCamHw->_mIspParamsCvt->mCommonCvtInfo.otp_af = otp_info->otp_af;
+    pCamHw->_mIspParamsCvt->mCommonCvtInfo.otp_pdaf = otp_info->otp_pdaf;
 
     return XCAM_RETURN_NO_ERROR;
 }
@@ -8214,12 +9069,22 @@ static XCamReturn SetLastAeExpToRttShared(AiqCamHwBase_t* pCamHw) {
     return ret;
 }
 
-RkAiqIspUniteMode
-AiqCamHw_getIspUniteMode(AiqCamHwBase_t* pCamHw) {
-    if (pCamHw->mParamsSplitter)
-        return AiqIspParamsSplitter_GetIspUniteMode(pCamHw->mParamsSplitter);
+XCamReturn
+AiqCamHw_getIspUniteInfo(AiqCamHwBase_t* pCamHw, RkAiqIspUniteInfo_t* info) {
+    if (!info) return XCAM_RETURN_ERROR_PARAM;
 
-    return RK_AIQ_ISP_UNITE_MODE_NORMAL;
+    if (pCamHw->mParamsSplitter) {
+        AiqIspParamsSplitter_GetIspUniteSliteNum(pCamHw->mParamsSplitter, &info->h_num, &info->v_num);
+        info->mode = AiqIspParamsSplitter_GetIspUniteMode(pCamHw->mParamsSplitter);
+        memcpy(info->isp_rect, pCamHw->mParamsSplitter->isp_splite_rect_, sizeof(info->isp_rect));
+    } else {
+        info->mode = RK_AIQ_ISP_UNITE_MODE_NORMAL;
+        info->h_num = 1;
+        info->v_num = 1;
+        memset(info->isp_rect, 0, sizeof(info->isp_rect));
+    }
+
+    return XCAM_RETURN_NO_ERROR;
 }
 
 XCamReturn
@@ -8315,6 +9180,8 @@ XCamReturn
 AiqCamHw_setSnsOtpInfo(AiqCamHwBase_t* pCamHw,
                        struct rkmodule_awb_inf * otp_awb,
                        struct rkmodule_lsc_inf * otp_lsc,
+                       struct rkmodule_af_inf * otp_af,
+                       struct rkmodule_pdaf_inf * otp_pdaf,
                        rk_aiq_user_otp_info_t* user_otp)
 {
     if (user_otp->otp_awb.flag == 0) {
@@ -8329,6 +9196,20 @@ AiqCamHw_setSnsOtpInfo(AiqCamHwBase_t* pCamHw,
             pCamHw->_mIspParamsCvt->mCommonCvtInfo.otp_lsc.flag = 0;
         } else {
             pCamHw->_mIspParamsCvt->mCommonCvtInfo.otp_lsc = *otp_lsc;
+        }
+    }
+    if (user_otp->otp_af.flag == 0) {
+        if (otp_af == NULL) {
+            pCamHw->_mIspParamsCvt->mCommonCvtInfo.otp_af.flag = 0;
+        } else {
+            pCamHw->_mIspParamsCvt->mCommonCvtInfo.otp_af = *otp_af;
+        }
+    }
+    if (user_otp->otp_pdaf.flag == 0) {
+        if (otp_pdaf == NULL) {
+            pCamHw->_mIspParamsCvt->mCommonCvtInfo.otp_pdaf.flag = 0;
+        } else {
+            pCamHw->_mIspParamsCvt->mCommonCvtInfo.otp_pdaf = *otp_pdaf;
         }
     }
     return XCAM_RETURN_NO_ERROR;
@@ -8400,7 +9281,7 @@ AiqCamHw_getAiqReadbackOn(AiqCamHwBase_t* pCamHw)
 
     s_info = &pItem->data;
 
-    bool aiq_read_back_on = false;
+    bool aiq_read_back_on = !pCamHw->mNoReadBack;
     if ((pCamHw->_hdr_mode > 0 && pCamHw->mIsOnlineByWorkingMode) ||
         (!pCamHw->_linked_to_isp && !pCamHw->mVicapIspPhyLinkSupported) ||
         (s_info->linked_to_serdes || s_info->split)) {
@@ -8426,6 +9307,18 @@ AiqCamHw_getAiqReadbackOn(AiqCamHwBase_t* pCamHw)
         }
     }
 #endif
+
+#if RKAIQ_HAVE_AIRMS
+    if (pCamHw->_airms_en) {
+        aiq_read_back_on = true;
+        LOGI_CAMHW_SUBM(ISP20HW_SUBM, "airms force use read back mode!");
+    }
+#endif
+
+    if (pCamHw->isPreviewCaptureMode) {
+        aiq_read_back_on = true;
+        LOGI_CAMHW_SUBM(ISP20HW_SUBM, "preview capture mode force use read back mode!");
+    }
 
     return aiq_read_back_on;
 
@@ -8691,7 +9584,7 @@ static XCamReturn AiqCamHw_set_sceneCisParams(AiqCamHwBase_t* pCamHw) {
     calibdb_cis_cmps_out_t* cis_cmpsout =
         (calibdb_cis_cmps_out_t*)(CALIBDBV2_GET_MODULE_PTR((void*)pCamHw->mCalibDbV2, CisCmpsOut));
     if (cis_cmpsout) {
-        // ret = mSensor->set_cmpsOut(mSensor, cis_cmpsout);
+        ret = mSensor->set_cmpsOut(mSensor, cis_cmpsout);
         if (ret != XCAM_RETURN_NO_ERROR)
             LOGE_CAMHW_SUBM(ISP20HW_SUBM, "Failed to set CIS cmpsout, ret: %d", ret);
     }
@@ -8737,6 +9630,81 @@ XCamReturn AiqCamHw_getAiBnrBufCnt(AiqCamHwBase_t* pCamHw,
 #else
     return XCAM_RETURN_ERROR_FAILED;
 #endif
+}
+
+XCamReturn AiqCamHw_triggerCapture(AiqCamHwBase_t* pCamHw,
+                                   const rk_aiq_capture_trigger_t* trigger) {
+    XCamReturn ret = XCAM_RETURN_NO_ERROR;
+
+    if (!pCamHw || !trigger) {
+        LOGE_CAMHW_SUBM(ISP20HW_SUBM, "invalid params");
+        return XCAM_RETURN_ERROR_PARAM;
+    }
+
+    if (!pCamHw->mRawCapUnit) {
+        LOGE_CAMHW_SUBM(ISP20HW_SUBM, "mRawCapUnit is NULL");
+        return XCAM_RETURN_ERROR_FAILED;
+    }
+
+    if (!pCamHw->isPreviewCaptureMode || !pCamHw->mIsVicapVirtualSensor) {
+        LOGE_CAMHW_SUBM(
+            ISP20HW_SUBM,
+            "trigger capture is only supported in preview capture mode with vicap virtual sensor");
+        return XCAM_RETURN_ERROR_FAILED;
+    }
+
+    aiqMutex_lock(&pCamHw->_capture_trigger_mutex);
+    // If a capture is already in progress, just append to the pending count.
+    // The ISP_POLL_RX handler will continue draining by calling queueFreeBuffer.
+    if (pCamHw->mCaptureTrigger.frame_count > 0) {
+        pCamHw->mCaptureTrigger.frame_count += trigger->frame_count;
+        LOGI_CAMHW_SUBM(
+            ISP20HW_SUBM,
+            "triggerCapture: capture in progress, appended %d frames, total remaining=%d",
+            trigger->frame_count, pCamHw->mCaptureTrigger.frame_count);
+        aiqMutex_unlock(&pCamHw->_capture_trigger_mutex);
+        return XCAM_RETURN_NO_ERROR;
+    }
+
+    // Save the trigger parameters
+    pCamHw->mCaptureTrigger = *trigger;
+
+    LOGI_CAMHW_SUBM(ISP20HW_SUBM, "triggerCapture: frame_count=%d",
+                    pCamHw->mCaptureTrigger.frame_count);
+
+    // Queue all buffers upfront; each gets its own T0 timestamp pushed into the FIFO.
+    int queued_cnt = 0;
+    while (pCamHw->mCaptureTrigger.frame_count > 0) {
+        ret = AiqRawStreamCapUnit_queueFreeBuffer(pCamHw->mRawCapUnit, 0);
+        if (ret != XCAM_RETURN_NO_ERROR) {
+            LOGW_CAMHW_SUBM(ISP20HW_SUBM, "queueFreeBuffer failed, ret=%d", ret);
+            break;
+        }
+        struct timespec _q_ts;
+        clock_gettime(CLOCK_MONOTONIC, &_q_ts);
+        pCamHw->mCaptureTs.queue[pCamHw->mCaptureTs.wr % CAPTURE_TS_QSIZE].t0 =
+            XCAM_TIMESPEC_2_USEC(_q_ts);
+        pCamHw->mCaptureTs.wr++;
+        queued_cnt++;
+        pCamHw->mCaptureTrigger.frame_count--;
+        LOGD_CAMHW_SUBM(ISP20HW_SUBM, "trigger frame queued, remaining=%d",
+                        pCamHw->mCaptureTrigger.frame_count);
+    }
+
+    aiqMutex_unlock(&pCamHw->_capture_trigger_mutex);
+
+    // If at least one buffer was queued successfully, treat as success
+    if (queued_cnt > 0) ret = XCAM_RETURN_NO_ERROR;
+
+    LOGI_CAMHW_SUBM(ISP20HW_SUBM, "triggerCapture done, queued=%d, remaining=%d", queued_cnt,
+                    pCamHw->mCaptureTrigger.frame_count);
+
+    return ret;
+}
+
+bool AiqCamHw_isVicapVirtualSensor(AiqCamHwBase_t* pCamHw) {
+    if (!pCamHw) return false;
+    return pCamHw->mIsVicapVirtualSensor;
 }
 
 XCAM_END_DECLARE

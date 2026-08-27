@@ -1,0 +1,10 @@
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -28,6 +28,7 @@ if (LV_DRV_USE_OPENGL)
+ endif()
+ if (LV_DRV_USE_DRM)
+     add_definitions(-DUSE_DRM=1)
++    add_definitions(-D_GNU_SOURCE)
+ endif()
+ if (LV_DRV_USE_RGA)
+     add_definitions(-DUSE_RGA=1)

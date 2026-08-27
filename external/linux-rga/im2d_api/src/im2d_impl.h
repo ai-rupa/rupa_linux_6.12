@@ -84,8 +84,8 @@ int rga_version_table_check_minimum_range(struct rga_version_t version,
                                           const rga_version_bind_table_entry_t *table,
                                           int table_size, int index);
 
-bool rga_is_buffer_valid(rga_buffer_t buf);
-bool rga_is_rect_valid(im_rect rect);
+bool rga_is_buffer_valid(const rga_buffer_t *buf);
+bool rga_is_rect_valid(const im_rect *rect);
 void empty_structure(rga_buffer_t *src, rga_buffer_t *dst, rga_buffer_t *pat,
                      im_rect *srect, im_rect *drect, im_rect *prect, im_opt_t *opt);
 static inline void rga_apply_rect(rga_buffer_t *image, im_rect *rect) {

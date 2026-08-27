@@ -1,0 +1,54 @@
+From 7cf2c98ae1d9ee02595e6ec3eb4d332410d17b62 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Wed, 26 Jul 2023 10:01:33 +0800
+Subject: [PATCH 63/98] compositor: Allow lowering wl_output version via env
+
+Add WL_OUTPUT_VERSION environment variable to override wl_output
+protocol version, enabling workaround for older clients that require
+lower versions.
+
+See:
+https://bugs.chromium.org/p/chromium/issues/detail?id=1279574
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ libweston/compositor.c | 15 ++++++++++++++-
+ 1 file changed, 14 insertions(+), 1 deletion(-)
+
+diff --git a/libweston/compositor.c b/libweston/compositor.c
+index a459e74e..be9e81a2 100644
+--- a/libweston/compositor.c
++++ b/libweston/compositor.c
+@@ -6403,6 +6403,8 @@ static void
+ weston_head_add_global(struct weston_head *head)
+ {
+ 	struct weston_head *tmp_head;
++	int version = 4;
++	const char *buf;
+ 
+ 	/* Avoid multiple globals to maintain a single panel and background */
+ 	wl_list_for_each(tmp_head, &head->output->head_list, output_link) {
+@@ -6410,8 +6412,19 @@ weston_head_add_global(struct weston_head *head)
+ 			return;
+ 	}
+ 
++
++	/* HACK: Allow lowering wl_output version for compatibility with old
++	 * clients. Set WL_OUTPUT_VERSION environment variable to override
++	 * the default version 4.
++	 * See:
++	 * https://bugs.chromium.org/p/chromium/issues/detail?id=1279574
++	 */
++	buf = getenv("WL_OUTPUT_VERSION");
++	if (buf && buf[0])
++		version = atoi(buf);
++
+ 	head->global = wl_global_create(head->compositor->wl_display,
+-					&wl_output_interface, 4,
++					&wl_output_interface, version,
+ 					head, bind_output);
+ }
+ 
+-- 
+2.39.5
+

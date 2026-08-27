@@ -231,6 +231,7 @@ typedef enum {
   RKADK_REC_TYPE_LAPSE, /* time lapse record, record a frame by an fixed time
                            interval */
   RKADK_REC_TYPE_AOV_LAPSE, /* low power time lapse record */
+  RKADK_REC_TYPE_SINGLE, /* single record: record one file of record_time then stop */
   RKADK_REC_TYPE_BUTT,
 } RKADK_MUXER_REC_TYPE_E;
 

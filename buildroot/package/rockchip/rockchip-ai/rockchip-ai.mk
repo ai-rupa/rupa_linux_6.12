@@ -9,7 +9,17 @@ ROCKCHIP_AI_SITE = $(TOPDIR)/../app/rkai
 ROCKCHIP_AI_SITE_METHOD = local
 ROCKCHIP_AI_INSTALL_STAGING = YES
 ROCKCHIP_AI_INSTALL_TARGET = YES
-ROCKCHIP_AI_DEPENDENCIES = host-pkgconf host-cmake rknn-llm rknpu2 opencv4
+ROCKCHIP_AI_DEPENDENCIES = host-pkgconf host-cmake opencv4
+
+# RV1126B uses rkllm backend
+ifeq ($(BR2_PACKAGE_RV1126B),y)
+    ROCKCHIP_AI_DEPENDENCIES += rknn-llm rknpu2
+endif
+
+# RK3572 uses rknn3 backend
+ifeq ($(BR2_PACKAGE_RK3572),y)
+    ROCKCHIP_AI_DEPENDENCIES += rknn3-runtime
+endif
 ROCKCHIP_AI_LICENSE = ROCKCHIP
 ROCKCHIP_AI_LICENSE_FILES = LICENSE
 
@@ -32,7 +42,8 @@ define ROCKCHIP_AI_CONFIGURE_CMDS
         -DCMAKE_CXX_COMPILER="$(TARGET_CXX)" \
         -DCMAKE_BUILD_TYPE=$(ROCKCHIP_AI_BUILD_TYPE) \
         -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
-        -DCMAKE_INSTALL_PREFIX=/usr
+        -DCMAKE_INSTALL_PREFIX=/usr \
+        -DRKAI_WS_ROOT=$(TOPDIR)/..
 endef
 
 define ROCKCHIP_AI_BUILD_CMDS
@@ -52,6 +63,14 @@ endef
 
 ifeq ($(BR2_PACKAGE_RV1126B), y)
     ROCKCHIP_AI_CONFIGURE_CMDS += -DROCKCHIP_AI_CHIP=rv1126b
+    # RV1126B uses rkllm backend (default, no rknn3)
+    ROCKCHIP_AI_CONFIGURE_CMDS += -DRKAI_LLM_WITH_RKNN3=OFF
+endif
+
+ifeq ($(BR2_PACKAGE_RK3572), y)
+    ROCKCHIP_AI_CONFIGURE_CMDS += -DROCKCHIP_AI_CHIP=rk3572
+    # RK3572 uses rknn3 backend
+    ROCKCHIP_AI_CONFIGURE_CMDS += -DRKAI_LLM_WITH_RKNN3=ON
 endif
 
 $(eval $(generic-package))

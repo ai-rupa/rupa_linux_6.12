@@ -55,6 +55,7 @@ static const char* j2s_invalid_target_names[] = {
     "cis_hdr",
     "cis_qbcRmsc",
     "cis_cmpsOut",
+    "cis_wb",
     NULL /* Array terminator */
     // clang-format on
 };
@@ -445,7 +446,15 @@ int j2s_struct_size(j2s_ctx *ctx, int struct_index) {
     child_size = child->elem_size;
   }
 
-  return child_size + child->offset;
+  int size = child_size + child->offset;
+
+  /* Account for trailing alignment padding.
+   * On 64-bit, struct size is rounded up to max member alignment (typically 8).
+   * Without this, float a[3] (12 bytes) misses 4 bytes of trailing padding. */
+  int alignment = (int)sizeof(void *);
+  size = (size + alignment - 1) & ~(alignment - 1);
+
+  return size;
 }
 
 const char *j2s_type_name(j2s_type type) {

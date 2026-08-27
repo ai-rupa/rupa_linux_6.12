@@ -27,6 +27,8 @@
 
 RKAIQ_BEGIN_DECLARE
 
+typedef XCamReturn (*rk_aiq_extproc_dispatch_cb)(void* dispatch_ctx, AiqHwEvt_t* hwres);
+
 typedef enum aiq_state_e {
     AIQ_STATE_INVALID,
     AIQ_STATE_INITED,
@@ -72,6 +74,7 @@ typedef struct AiqManager_s {
     GlobalParamsManager_t mGlobalParamsManager;
     /* aiq_params_base_t* */
     AiqList_t* mParamsList;
+    AiqMutex_t mParamsListMutex;
 #if RKAIQ_HAVE_AIBNR
     AibnrManager_t mAibnrManager;
 #endif
@@ -86,6 +89,10 @@ typedef struct AiqManager_s {
 
     rk_aiq_isp_hdr_mode_t mHdrMergeMode;
     rk_aiq_sensor_hdr_line_mode_t mCisHdrMode;
+
+    // external processing context
+    void* mExtProcCtx;
+    rk_aiq_extproc_dispatch_cb mExtProcBtnrIirCb;
 
 #if RKAIQ_HAVE_DUMPSYS
     int (*dump_mods)(void* self, st_string* result, int argc, void* argv[]);

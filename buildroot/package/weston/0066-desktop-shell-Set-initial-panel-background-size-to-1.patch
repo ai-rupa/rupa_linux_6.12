@@ -1,0 +1,46 @@
+From ec899f37f772e85c1f6f15341a39afddfaba2ff6 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Sun, 4 Feb 2024 15:18:21 +0800
+Subject: [PATCH 66/98] desktop-shell: Set initial panel/background size to 1x1
+ as minimum
+
+Set initial size to 1x1 to prevent first configured size from becoming
+permanent minimum, allowing panel and background windows to resize freely.
+
+See:
+https://gitlab.freedesktop.org/wayland/weston/-/issues/782
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ clients/desktop-shell.c | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/clients/desktop-shell.c b/clients/desktop-shell.c
+index 4cb054db..3bd880e5 100644
+--- a/clients/desktop-shell.c
++++ b/clients/desktop-shell.c
+@@ -706,6 +706,10 @@ panel_create(struct desktop *desktop, struct output *output)
+ 	panel->owner = output;
+ 	panel->base.configure = panel_configure;
+ 	panel->window = window_create_custom(desktop->display);
++
++	/* Set the initial size to 1×1 as the minimum size */
++	window_schedule_resize(panel->window, 1, 1);
++
+ 	panel->widget = window_add_widget(panel->window, panel);
+ 	wl_list_init(&panel->launcher_list);
+ 
+@@ -1273,6 +1277,10 @@ background_create(struct desktop *desktop, struct output *output)
+ 	background->owner = output;
+ 	background->base.configure = background_configure;
+ 	background->window = window_create_custom(desktop->display);
++
++	/* Set the initial size to 1×1 as the minimum size */
++	window_schedule_resize(background->window, 1, 1);
++
+ 	background->widget = window_add_widget(background->window, background);
+ 	window_set_user_data(background->window, background);
+ 	widget_set_redraw_handler(background->widget, background_draw);
+-- 
+2.39.5
+

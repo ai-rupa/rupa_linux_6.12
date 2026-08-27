@@ -11,6 +11,9 @@ PROFTPD_LICENSE_FILES = COPYING
 PROFTPD_CPE_ID_VENDOR = proftpd
 PROFTPD_SELINUX_MODULES = ftp
 
+# 0001-CVE-2026-42167.patch
+PROFTPD_IGNORE_CVES += CVE-2026-42167
+
 PROFTPD_CONF_ENV = \
 	ac_cv_func_setpgrp_void=yes \
 	ac_cv_func_setgrent_void=yes
@@ -26,6 +29,14 @@ PROFTPD_CONF_OPTS = \
 	--enable-shadow \
 	--with-gnu-ld \
 	--without-openssl-cmdline
+
+# source code contains a number of variables named 'bool', which
+# conflicts with the C23 keyword. Fixed upstream in 1.3.9 with
+# https://github.com/proftpd/proftpd/commit/61be7eb14f200b97804a3cfa85fed51661067c62
+# so can be dropped when bumping to that
+ifeq ($(BR2_TOOLCHAIN_GCC_AT_LEAST_15),y)
+PROFTPD_CONF_ENV += CFLAGS="$(TARGET_CFLAGS) -std=gnu18"
+endif
 
 ifeq ($(BR2_PACKAGE_LIBIDN2),y)
 PROFTPD_DEPENDENCIES += libidn2

@@ -17,4 +17,5 @@
 #include "tools/test.config"
 #include "network/chromium.config"
 #include "gui/weston.config"
+#include "ota/update_engine.config"
 # BR2_PACKAGE_ROCKCHIP_RGA is not set

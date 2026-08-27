@@ -474,6 +474,7 @@ typedef enum conv_speed_mode_e {
     conv_speed_mode_auto,
 }conv_speed_mode_t;
 
+
 typedef struct awb_convSpeed_s {
     /* M4_GENERIC_DESC(
         M4_ALIAS(conv_speed_mode),
@@ -666,6 +667,7 @@ typedef struct awb_convSpeed_s {
         M4_NOTES(The speed-up rate config based on max wbgain diff,\n
         only effect when wbgain is closed to target.\nFreq of use: high))  */
     awb_speedup_cfg_t gainDiff2Rate;
+
 } awb_convSpeed_t;
 
 typedef struct awb_remosaic_s {
@@ -2135,6 +2137,19 @@ typedef struct awb_smartRun_cfg_s {
         M4_NOTES(T\n
         Freq of use: high))  */
     float wbGainHwDiff_th[CALD_AWB_LV_NUM_MAX];
+    /* M4_GENERIC_DESC(
+        M4_ALIAS(afFocuspos_th),
+        M4_TYPE(f32),
+        M4_SIZE_EX(1,16),
+        M4_RANGE_EX(0,1),
+        M4_DEFAULT(0.5),
+        M4_DIGIT_EX(4),
+        M4_HIDE_EX(0),
+        M4_RO(0),
+        M4_ORDER(0),
+        M4_NOTES(T\n
+        Freq of use: high))  */
+    float afFocuspos_th[CALD_AWB_LV_NUM_MAX];
 } awb_smartRun_cfg_t;
 
 typedef struct awb_smartRun_s {
@@ -2149,6 +2164,17 @@ typedef struct awb_smartRun_s {
         M4_NOTES(\n
         Freq of use: high))  */
     bool  tolerance_en;
+     /* M4_GENERIC_DESC(
+        M4_ALIAS(afinfo_en),
+        M4_TYPE(bool),
+        M4_SIZE_EX(1,1),
+        M4_DEFAULT(0),
+        M4_HIDE_EX(0),
+        M4_RO(0),
+        M4_ORDER(0),
+        M4_NOTES(\n
+        Freq of use: high))  */
+    bool  afinfo_en;
     /* M4_GENERIC_DESC(
         M4_ALIAS(cfg),
         M4_TYPE(struct),
@@ -2159,6 +2185,7 @@ typedef struct awb_smartRun_s {
         M4_NOTES(\n
         Freq of use: high))  */
     awb_smartRun_cfg_t cfg;
+
 } awb_smartRun_t;
 
 

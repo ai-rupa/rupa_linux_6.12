@@ -15,5 +15,6 @@
 #include "tools/common.config"
 #include "tools/test.config"
 #include "gui/weston.config"
+#include "ota/update_engine.config"
 BR2_TARGET_GENERIC_HOSTNAME="rk3358_64"
 BR2_TARGET_GENERIC_ISSUE="Welcome to RK3358 Buildroot"

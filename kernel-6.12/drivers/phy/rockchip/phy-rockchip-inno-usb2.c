@@ -633,11 +633,9 @@ static int rockchip_usb2phy_extcon_register(struct rockchip_usb2phy *rphy)
 
 	if (of_property_read_bool(node, "extcon")) {
 		edev = extcon_get_edev_by_phandle(rphy->dev, 0);
-		if (IS_ERR(edev)) {
-			if (PTR_ERR(edev) != -EPROBE_DEFER)
-				dev_err(rphy->dev, "Invalid or missing extcon\n");
-			return PTR_ERR(edev);
-		}
+		if (IS_ERR(edev))
+			return dev_err_probe(rphy->dev, PTR_ERR(edev),
+					     "invalid or missing extcon\n");
 	} else {
 		/* Initialize extcon device */
 		edev = devm_extcon_dev_allocate(rphy->dev,
@@ -647,10 +645,9 @@ static int rockchip_usb2phy_extcon_register(struct rockchip_usb2phy *rphy)
 			return -ENOMEM;
 
 		ret = devm_extcon_dev_register(rphy->dev, edev);
-		if (ret) {
-			dev_err(rphy->dev, "failed to register extcon device\n");
-			return ret;
-		}
+		if (ret)
+			return dev_err_probe(rphy->dev, ret,
+					     "failed to register extcon device\n");
 
 		rphy->edev_self = true;
 	}
@@ -1075,6 +1072,7 @@ static int rockchip_usb2phy_set_mode(struct phy *phy,
 	case PHY_MODE_USB_DEVICE:
 		/* Disable VBUS supply */
 		rockchip_set_vbus_power(rport, false);
+		extcon_set_state(rphy->edev, EXTCON_USB_HOST, false);
 		extcon_set_state_sync(rphy->edev, EXTCON_USB_VBUS_EN, false);
 		/* For vbus always on, set EXTCON_USB to true. */
 		if (rport->vbus_always_on)
@@ -1482,6 +1480,14 @@ static void rockchip_run_chg_detect_machine(struct rockchip_usb2phy_port *rport)
 	bool is_dcd, tmout, vout;
 	unsigned long delay;
 
+	/* Skip charger detection in DRD host mode to avoid false detection. */
+	if (extcon_get_state(rphy->edev, EXTCON_USB_HOST) > 0) {
+		rphy->chg_state = USB_CHG_STATE_UNDEFINED;
+		rphy->chg_type = POWER_SUPPLY_TYPE_UNKNOWN;
+		dev_dbg(&rport->phy->dev, "host mode active, skip charger detection\n");
+		return;
+	}
+
 	dev_dbg(&rport->phy->dev, "chg detection work state = %d\n",
 		rphy->chg_state);
 
@@ -1842,6 +1848,10 @@ static irqreturn_t rockchip_usb2phy_id_irq(int irq, void *data)
 	if (property_enabled(rphy->grf, &rport->port_cfg->idfall_det_st)) {
 		property_enable(rphy->grf, &rport->port_cfg->idfall_det_clr,
 				true);
+
+		if (!property_enabled(rphy->grf, &rport->port_cfg->idfall_det_en))
+			goto out;
+
 		/*
 		 * if id fall det, switch to host if ID Detector pin is floating
 		 * or iddig status is low.
@@ -1852,6 +1862,10 @@ static irqreturn_t rockchip_usb2phy_id_irq(int irq, void *data)
 	} else if (property_enabled(rphy->grf, &rport->port_cfg->idrise_det_st)) {
 		property_enable(rphy->grf, &rport->port_cfg->idrise_det_clr,
 				true);
+
+		if (!property_enabled(rphy->grf, &rport->port_cfg->idrise_det_en))
+			goto out;
+
 		cable_vbus_state = false;
 	}
 
@@ -1863,6 +1877,7 @@ static irqreturn_t rockchip_usb2phy_id_irq(int irq, void *data)
 
 	rockchip_set_vbus_power(rport, cable_vbus_state);
 
+out:
 	mutex_unlock(&rport->mutex);
 
 	return IRQ_HANDLED;
@@ -2598,8 +2613,7 @@ static int rockchip_usb2phy_probe(struct platform_device *pdev)
 
 		phy = devm_phy_create(dev, child_np, &rockchip_usb2phy_ops);
 		if (IS_ERR(phy)) {
-			dev_err_probe(dev, PTR_ERR(phy), "failed to create phy\n");
-			ret = PTR_ERR(phy);
+			ret = dev_err_probe(dev, PTR_ERR(phy), "failed to create phy\n");
 			goto put_child;
 		}
 
@@ -2655,8 +2669,7 @@ next_child:
 						"rockchip_usb2phy",
 						rphy);
 		if (ret) {
-			dev_err(rphy->dev,
-				"failed to request usb2 phy irq handle\n");
+			dev_err_probe(rphy->dev, ret, "failed to request usb2phy irq handle\n");
 			goto put_child;
 		}
 	}

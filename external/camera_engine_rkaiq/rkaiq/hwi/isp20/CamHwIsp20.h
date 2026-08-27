@@ -137,6 +137,7 @@ public:
     RkAiqIspUniteMode getIspUniteMode() override {
         return mIspUniteMode;
     };
+    XCamReturn getIspUniteInfo(RkAiqIspUniteInfo_t& info) override;
 
     static rk_aiq_static_info_t* getStaticCamHwInfo(const char* sns_ent_name, uint16_t index = 0);
     static rk_aiq_static_info_t* getStaticCamHwInfoByPhyId(const char* sns_ent_name, uint16_t index = 0);
@@ -169,8 +170,6 @@ public:
     //should be called after prepare
     XCamReturn get_stream_format(rkaiq_stream_type_t type, struct v4l2_format &format);
     XCamReturn get_sp_resolution(int &width, int &height, int &aligned_w, int &aligned_h) override;
-    XCamReturn showOtpPdafData(struct rkmodule_pdaf_inf *otp_pdaf);
-    XCamReturn showOtpAfData(struct rkmodule_af_inf *otp_af);
 #if RKAIQ_HAVE_PDAF
     bool get_pdaf_support() override;
     PdafSensorType_t get_pdaf_type() override;

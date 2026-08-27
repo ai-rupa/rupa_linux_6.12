@@ -86,6 +86,11 @@ static MPI_VPSS_CTX_S uvc_get_vpss_ctx(UVC_MPI_CFG uvcCfg,
       vpssCtx.stVpssCfg.stVpssChnAttr[chn].u32Depth =
           uvcCfg.vpss_cfg[chnType].buf_cnt;
       break;
+    case V4L2_PIX_FMT_BGR24:
+      outFormat = RK_FMT_BGR888;
+      vpssCtx.stVpssCfg.stVpssChnAttr[chn].u32Depth =
+          uvcCfg.vpss_cfg[chnType].buf_cnt;
+      break;
     case V4L2_PIX_FMT_MJPEG:
     case V4L2_PIX_FMT_H264:
     case V4L2_PIX_FMT_HEVC:
@@ -116,7 +121,7 @@ static MPI_VPSS_CTX_S uvc_get_vpss_ctx(UVC_MPI_CFG uvcCfg,
   vpssCtx.stChnCtx = uvc_get_vpss_chn_ctx(uvcCfg, chnType);
   vpssCtx.stVpssCfg.stGrpVpssAttr.u32MaxW = 4096;
   vpssCtx.stVpssCfg.stGrpVpssAttr.u32MaxH = 4096;
-  vpssCtx.stVpssCfg.stGrpVpssAttr.enPixelFormat = outFormat;
+  vpssCtx.stVpssCfg.stGrpVpssAttr.enPixelFormat = uvcCfg.vi_cfg[chnType].format;
   vpssCtx.stVpssCfg.stGrpVpssAttr.stFrameRate.s32SrcFrameRate =
       uvcCfg.vpss_cfg[chnType].fps_in;
   vpssCtx.stVpssCfg.stGrpVpssAttr.stFrameRate.s32DstFrameRate =

@@ -1,4 +1,4 @@
-From bb95a22fa3ad606dc5a7285f323422a25a9bc3aa Mon Sep 17 00:00:00 2001
+From 04265001db007000ffe75ae5d697e9da98c15d87 Mon Sep 17 00:00:00 2001
 From: Jeffy Chen <jeffy.chen@rock-chips.com>
 Date: Mon, 1 Apr 2024 16:24:09 +0800
 Subject: [PATCH 2/4] render: egl: Fallback to gbm device fd
@@ -9,7 +9,7 @@ Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
  1 file changed, 4 insertions(+)
 
 diff --git a/render/egl.c b/render/egl.c
-index 6f3e9c8ca..b886aad51 100644
+index 8673aca..d8690aa 100644
 --- a/render/egl.c
 +++ b/render/egl.c
 @@ -992,6 +992,10 @@ static char *get_render_name(const char *name) {

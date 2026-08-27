@@ -171,7 +171,7 @@ void creat_file_test()
     int i = 0;
     pthread_t tid[MAX_CH];
     for (i = 0; i < MAX_CH; i++) {
-        pthread_create(&tid[i], NULL, creat_file_thread, i);
+        pthread_create(&tid[i], NULL, creat_file_thread, (void *)(long)i);
     }
     while (!quit) {
         sleep(1);

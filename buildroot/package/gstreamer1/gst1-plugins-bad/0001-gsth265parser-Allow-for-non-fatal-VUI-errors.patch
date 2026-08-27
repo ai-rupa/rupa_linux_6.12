@@ -1,7 +1,7 @@
-From 5c757d8a143a7d9e836719e25dc21fa7b14691b9 Mon Sep 17 00:00:00 2001
+From be236bdf732f91123add48fe58a8187c8b03dcc6 Mon Sep 17 00:00:00 2001
 From: Jeffy Chen <jeffy.chen@rock-chips.com>
 Date: Tue, 29 Jul 2025 16:08:30 +0800
-Subject: [PATCH 01/43] gsth265parser: Allow for non-fatal VUI errors
+Subject: [PATCH 01/41] gsth265parser: Allow for non-fatal VUI errors
 
 Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
 ---
@@ -9,10 +9,10 @@ Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
  1 file changed, 16 insertions(+), 5 deletions(-)
 
 diff --git a/gst-libs/gst/codecparsers/gsth265parser.c b/gst-libs/gst/codecparsers/gsth265parser.c
-index 2a6e243..1eaea42 100644
+index 1b87956..b2b0615 100644
 --- a/gst-libs/gst/codecparsers/gsth265parser.c
 +++ b/gst-libs/gst/codecparsers/gsth265parser.c
-@@ -591,11 +591,22 @@ gst_h265_parse_vui_parameters (GstH265SPS * sps, NalReader * nr)
+@@ -593,11 +593,22 @@ gst_h265_parse_vui_parameters (GstH265SPS * sps, NalReader * nr)
      READ_UINT8 (nr, vui->tiles_fixed_structure_flag, 1);
      READ_UINT8 (nr, vui->motion_vectors_over_pic_boundaries_flag, 1);
      READ_UINT8 (nr, vui->restricted_ref_pic_lists_flag, 1);

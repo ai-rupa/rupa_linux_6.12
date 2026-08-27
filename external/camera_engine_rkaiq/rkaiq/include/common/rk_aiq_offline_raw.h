@@ -17,7 +17,7 @@
 #define PLATFORM_TAG        0xFF0B
 #define END_TAG             0x00FF
 
-#define START_TAG_VERSION   0x0201
+#define START_TAG_VERSION   0x0202
 
 #define TAG_BYTE_LEN        (2)
 #define BLOCK_BYTE_LEN      (4)
@@ -84,7 +84,10 @@ typedef struct rk_aiq_frame_info_s
 
     float isp_dgain[3];
 
-    uint8_t reserve[248];
+    float lin_cis_total_gain;
+    float hdr_cis_total_gain[3];
+
+    uint8_t reserve[232];
 }__attribute__ ((packed)) rk_aiq_frame_info_t;
 
 #endif

@@ -275,13 +275,13 @@
  * - fix TMO,dehaze bugs
  * - isp driver v0.1.9
  * v1.0x23.0
- * - calib db: v1.4.2 magic code: 1089142 
+ * - calib db: v1.4.2 magic code: 1089142
  * - update rkisp2x_tuner v1.0x3.0
  * - isp driver v1.0x2.0
  * - uAPI changes
  *   - add rk_aiq_uapi_sysctl_setCrop/rk_aiq_uapi_sysctl_getCrop
  *   - add rk_aiq_uapi_sysctl_preInit
- * - fix ldch/fec memleak of aiq v1.3.0 
+ * - fix ldch/fec memleak of aiq v1.3.0
  * - Open merge and tmo when mode is linear
  * - rk_aiq_uapi_sysctl_preInit
  * v1.0x23.1
@@ -313,10 +313,10 @@
  * - fix aie gray_mode error of v1.023.3
  * - gen_mesh: v3.0.2
  * v1.0x45.1
- * - calib db: v1.4.4 magic code: 1123951 
+ * - calib db: v1.4.4 magic code: 1123951
  * - isp driver v1.0x4.1
  * - support socket IPC for toolserver
- * - support 3dnr motion detection and process 
+ * - support 3dnr motion detection and process
  * v1.0x45.2
  * - isp driver v1.0x4.1
  * - fix stable bugs of 3ndr motion detection
@@ -701,16 +701,16 @@
  * v5.0x1.2-rc5
  * - optimize cpu usage
  * - modify blc and sharp api attribs
- * 
+ *
  * v5.0x1.3
- * - optimize cpu usage extreamly 
+ * - optimize cpu usage extreamly
  * - kernel depandency: MUST contain this patch:
  *   https://10.10.10.29/c/rk/kernel/+/191593
  *   media: rockchip: isp: distinguish buf done or subscribed event for param
  *   poll
  *
  *   Change-Id: I9b366a9f47ce24783651c93512125dca7c49917f
- * 
+ *
  * v5.0x1.3-rc1
  * - multi isp: isp32 support 4k
  * - ldch: support multi isp mode
@@ -719,12 +719,12 @@
  * - kernel depandency: isp32 use 4k need this patch:
  *   https://10.10.10.29/c/rk/kernel/+/184947
  *   media: rockchip: isp: support unite mode for isp32
- * 
+ *
  *   Change-Id: Iae10911ee0f199210c7913d3e99dd85ec4642f81
- * 
+ *
  * v5.0x1.3-rc2
  * - optimize ae stats usage
- * - ccm/lsc/dehaze: fix interpolation bugs 
+ * - ccm/lsc/dehaze: fix interpolation bugs
  * - support 2 cam's online tuning for Android
  * - add default manual settings for algo's API getAtrrib
  * - fix tool online tuning bug that params in page sysctl may be overwitten by
@@ -733,7 +733,7 @@
  * - update kernel headers to match the ISP version v2.3.0
  * v5.0x4.0
  * - update kernel headers to match the ISP version v2.4.0
- * - support single frame mode 
+ * - support single frame mode
  * - optimize TB procedure
  * - support j2s4b on device
  * - support AI nr
@@ -840,10 +840,10 @@
  * - fix ldc memleak
  * - isp33 support post aiisp
  * v6.0x8.1
- * - classify and rename isp33 iq files 
- * - isp33 support auto blc 
- * - fix memleak for isp33/isp39 camgroup mode 
- * - support dumpsys 
+ * - classify and rename isp33 iq files
+ * - isp33 support auto blc
+ * - fix memleak for isp33/isp39 camgroup mode
+ * - support dumpsys
  * v6.0x8.2
  * - update isp33 iq files
  * - fix isp33 4k bugs: image is split to left-right obviously
@@ -851,7 +851,7 @@
  *     https://10.10.10.29/c/rk/kernel/+/237217
  * - fix isp33/isp39 switch scene bugs: wrong ie/csm/blc
  * - fix ae bugs: weight/stats may not be updated sometime
- * - improve dumpcam 
+ * - improve dumpcam
  * v6.0x9.0
  * - set exposure info to isp driver
  *   - should updated with isp driver:
@@ -859,14 +859,14 @@
  * - tuning tool of ae and awb support api path
  * - improve dumpcam
  * v6.0x30.0
- * - support isp35 
+ * - support isp35
  * v6.0x30.1
  * - support AMTD algo
  * - isp35 iq: modify ainr to aibnr
  * v6.0x30.2
- * - isp35 iq: modify sharp 
+ * - isp35 iq: modify sharp
  * v6.0x30.3
- * - isp35 iq: modify awb, aibnr 
+ * - isp35 iq: modify awb, aibnr
  * v6.0x30.4
  * - FEC: release v4.0.3.2
  * - pdaf: update to v0.1.f
@@ -893,7 +893,7 @@
  *   - https://10.10.10.29/c/rk/kernel/+/262660/3
  * v6.0x31.0
  * - Support btnr2, aiYnr, btnr memc, scene_cis
- * - isp driver should be v3.1.0 
+ * - isp driver should be v3.1.0
  * v6.0x32.0
  * - iq: modify af,btnr attrib
  * - isp driver should be v3.2.0
@@ -909,32 +909,37 @@
  * - Add API rk_aiq_uapi2_judgeNeedRawPipeCtrl
  * v6.0x32.3
  * - support rk3572
+ * v6.0x33.0
+ * - rv1126b support 8k
+ * - Ispfec: add 360 degree rotation mode
+ * - rv1126b support remosaic preview-capture mode
+ * - add iq struct version
  */
 
-#define RK_AIQ_VERSION_REAL_V "v6.0x32.3"
-#define RK_AIQ_RELEASE_DATE "2026-02-10"
+#define RK_AIQ_VERSION_REAL_V "v6.0x33.0"
+#define RK_AIQ_RELEASE_DATE "2026-04-17"
 
 /* IQ structure version definitions for different ISP versions */
 #if defined(ISP_HW_V351s)
-#define IQ_STRUCT_MARK "1.0.0"
+#define IQ_STRUCT_MARK "1.4.1"
 #define CHIP_NAME "RK3572"
 #elif defined(ISP_HW_V33)
-#define IQ_STRUCT_MARK "1.0.0"
+#define IQ_STRUCT_MARK "1.3.1"
 #define CHIP_NAME "RV1103B"
 #elif defined(ISP_HW_V35)
-#define IQ_STRUCT_MARK "1.0.0"
+#define IQ_STRUCT_MARK "1.5.1"
 #define CHIP_NAME "RV1126B"
 #elif defined(ISP_HW_V39)
-#define IQ_STRUCT_MARK "1.0.0"
+#define IQ_STRUCT_MARK "1.4.1"
 #define CHIP_NAME "RK3576"
 #elif defined(ISP_HW_V30)
-#define IQ_STRUCT_MARK "1.0.0"
+#define IQ_STRUCT_MARK "1.2.1"
 #define CHIP_NAME "RK3588"
 #elif defined(ISP_HW_V21)
-#define IQ_STRUCT_MARK "1.0.0"
+#define IQ_STRUCT_MARK "1.2.1"
 #define CHIP_NAME "RK356X"
 #elif defined(ISP_HW_V32) || defined(ISP_HW_V32_LITE)
-#define IQ_STRUCT_MARK "1.0.0"
+#define IQ_STRUCT_MARK "1.2.1"
 #define CHIP_NAME "RV1106"
 #else
 #define IQ_STRUCT_MARK "unknown"

@@ -26,7 +26,7 @@ XCamReturn AdegammaInit(AdegammaHandle_t** para, CamCalibDbV2Context_t* calib)
 {
     LOG1_ADEGAMMA("ENTER: %s \n", __func__);
     XCamReturn ret = XCAM_RETURN_NO_ERROR;
-    AdegammaHandle_t* handle = (AdegammaHandle_t*)calloc(sizeof(AdegammaHandle_t), 1);
+    AdegammaHandle_t* handle = (AdegammaHandle_t*)calloc(1, sizeof(AdegammaHandle_t));
     if (NULL == handle)
         return XCAM_RETURN_ERROR_MEM;
 

@@ -226,6 +226,8 @@ struct rockchip_hdmi_chip_data {
 	int	ddc_en_reg;
 	bool	split_mode;
 	const struct rockchip_hdmi_chip_ops *ops;
+	const char * const *dclk_names;
+	int	dclk_count;
 };
 
 enum hdmi_vrr_state {
@@ -263,6 +265,7 @@ struct rockchip_dw_hdmi_qp {
 	struct clk *phyref_clk;
 	struct clk *hdmitx_ref;
 	struct clk *link_clk;
+	struct clk **dclk;
 	struct dw_hdmi_qp *hdmi_qp;
 
 	struct phy *phy;
@@ -301,7 +304,7 @@ struct rockchip_dw_hdmi_qp {
 	struct drm_property *hdr_panel_dovi_vsdb;
 	struct drm_property *vsif_data;
 	struct drm_property *hdr10_plus_vsdb;
-	struct drm_property *gaming_vrr_enable;
+	struct drm_property *tfrsync_vrr_enable;
 	struct drm_property *next_tfr;
 	struct drm_property *fva_factor_m1;
 	struct drm_property *hdmi_vrr_cap;
@@ -324,7 +327,7 @@ struct rockchip_dw_hdmi_qp {
 	unsigned int quant_range_val;
 	unsigned int phy_bus_width;
 	unsigned int enable_allm;
-	unsigned int enable_gaming_vrr;
+	unsigned int enable_tfrsync_vrr;
 	u8 next_tfr_val;
 	u8 fva_factor_m1_val;
 	enum hdmi_vrr_state vrr_state;
@@ -1293,8 +1296,8 @@ static irqreturn_t rk3588_hdmi_thread(int irq, void *dev_id)
 
 static int rockchip_hdmi_set_qms_next_tfr(struct rockchip_dw_hdmi_qp *hdmi, u64 val)
 {
-	if (val && hdmi->enable_gaming_vrr) {
-		DRM_WARN("vrr-gaming is enabled, can't set next_tfr\n");
+	if (val && hdmi->enable_tfrsync_vrr) {
+		DRM_WARN("tfrsync-vrr is enabled, can't set next_tfr\n");
 		return 0;
 	}
 
@@ -1543,6 +1546,7 @@ static int rockchip_hdmi_parse_dt(struct rockchip_dw_hdmi_qp *hdmi)
 	struct display_timing timing;
 	struct videomode vm;
 	struct clk *hdmi_clk;
+	int i;
 
 	hdmi->regmap = syscon_regmap_lookup_by_phandle(np, "rockchip,grf");
 	if (IS_ERR(hdmi->regmap)) {
@@ -1614,6 +1618,27 @@ static int rockchip_hdmi_parse_dt(struct rockchip_dw_hdmi_qp *hdmi)
 		dev_err_probe(hdmi->dev, PTR_ERR(hdmi->link_clk),
 			      "failed to get link_clk clock\n");
 		return PTR_ERR(hdmi->link_clk);
+	}
+
+	if (hdmi->chip_data->dclk_names) {
+		const char * const *names = hdmi->chip_data->dclk_names;
+		int dclk_count = hdmi->chip_data->dclk_count;
+
+		hdmi->dclk = devm_kcalloc(hdmi->dev, dclk_count,
+					  sizeof(*hdmi->dclk), GFP_KERNEL);
+		if (!hdmi->dclk)
+			return -ENOMEM;
+
+		for (i = 0; i < dclk_count; i++) {
+			const char *name = names[i];
+
+			hdmi->dclk[i] = devm_clk_get_optional(hdmi->dev, name);
+			if (IS_ERR(hdmi->dclk[i])) {
+				dev_err_probe(hdmi->dev, PTR_ERR(hdmi->dclk[i]),
+					      "failed to get %s clock\n", name);
+				return PTR_ERR(hdmi->dclk[i]);
+			}
+		}
 	}
 
 	hdmi->enable_gpio = devm_gpiod_get_optional(hdmi->dev, "enable", GPIOD_ASIS);
@@ -1816,6 +1841,30 @@ static int dw_hdmi_rockchip_encoder_loader_protect(struct rockchip_drm_sub_dev *
 	}
 
 	return 0;
+}
+
+static void dw_hdmi_rockchip_vrr_enable(struct rockchip_drm_sub_dev *sub_dev,
+					struct drm_crtc_state *crtc_state)
+{
+	struct rockchip_dw_hdmi_qp *hdmi =
+		container_of(sub_dev, struct rockchip_dw_hdmi_qp, sub_dev);
+	struct rockchip_crtc_state *s = to_rockchip_crtc_state(crtc_state);
+
+	if (crtc_state->vrr_enabled && hdmi->next_tfr_val) {
+		DRM_WARN("qms-vrr is enabled, can't set gaming vrr\n");
+		return;
+	}
+
+	dw_hdmi_qp_set_gaming_vrr_enable(hdmi->hdmi_qp, crtc_state->vrr_enabled);
+
+	if (crtc_state->vrr_enabled) {
+		s->vrr_mode = ROCKCHIP_VRR_VFP_MODE;
+		s->max_refresh_rate = hdmi->vrr_cap.gaming_vrr_rate_max;
+		s->min_refresh_rate = hdmi->vrr_cap.gaming_vrr_rate_min;
+	} else {
+		s->max_refresh_rate = 0;
+		s->min_refresh_rate = 0;
+	}
 }
 
 static void rk3572_set_link_mode(struct rockchip_dw_hdmi_qp *hdmi)
@@ -2382,6 +2431,20 @@ dw_hdmi_rockchip_select_output(struct drm_connector_state *conn_state,
 		rockchip_hdmi_colorspace_to_color_encoding(conn_state->colorspace,
 							   hdmi->edid_colorimetry, vic);
 
+	if (hdmi->vsif_data_ptr) {
+		u8 *vsif_byte = (u8 *)hdmi->vsif_data_ptr->data;
+
+		/*
+		 * When a dovi source device transmits dovi video operating in
+		 * source-led processing, it must set AVI Infoframe (Version 2 or 3)
+		 * Data Byte 2 C1,C0 = 0b11, and Data Byte 3 EC2, EC1, EC0 = 0b110,
+		 * indicating use of either ITU-R BT.2020 RGB' or ITU-R BT.2020 YCbCr
+		 * colorimetry. Even if BT.2020 support is not declared in EDID.
+		 */
+		if (vsif_byte[6] == 0x00 && vsif_byte[5] == 0xd0 && vsif_byte[4] == 0x46)
+			hdmi->colorimetry = DRM_COLOR_YCBCR_BT2020;
+	}
+
 	*enc_out_encoding = rockchip_hdmi_color_encoding_to_colorspace(hdmi->colorimetry);
 	if ((conn_state->connector->hdr_sink_metadata.hdmi_type1.eotf & BIT(*eotf) &&
 	     *eotf > HDMI_EOTF_TRADITIONAL_GAMMA_SDR) &&
@@ -2569,12 +2632,12 @@ static void rockchip_hdmi_qms_vrr_state(struct rockchip_dw_hdmi_qp *hdmi,
 	case VRR_GOTO_ENABLE:
 	case VRR_RATE_CHANGED:
 		vcstate->hdmi_vrr.m_const = 0;
-		vcstate->vrr_type = ROCKCHIP_VRR_VFP_MODE;
+		vcstate->vrr_mode = ROCKCHIP_VRR_VFP_MODE;
 		queue_work(hdmi->workqueue, &hdmi->qms_vrr_work);
 		break;
 	case VRR_GOTO_DISABLE:
 		vcstate->hdmi_vrr.m_const = 0;
-		vcstate->vrr_type = 0;
+		vcstate->vrr_mode = ROCKCHIP_VRR_VFP_MODE;
 		vcstate->hdmi_vrr.next_tfr_val = hdmi->brr_tfr;
 		vcstate->hdmi_vrr.refresh_rate_ready_to_change = true;
 		queue_work(hdmi->workqueue, &hdmi->qms_vrr_work);
@@ -2643,11 +2706,15 @@ secondary:
 		s->min_refresh_rate = 0;
 	}
 
-	if (hdmi->enable_gaming_vrr) {
-		s->vrr_type = ROCKCHIP_VRR_VFP_MODE;
+	if (hdmi->enable_tfrsync_vrr) {
+		s->vrr_mode = ROCKCHIP_VRR_VFP_MODE;
 		s->max_refresh_rate = hdmi->vrr_cap.gaming_vrr_rate_max;
 		s->min_refresh_rate = hdmi->vrr_cap.gaming_vrr_rate_min;
 		s->hdmi_vrr.refresh_rate_ready_to_change = true;
+	} else if (crtc_state->vrr_enabled) {
+		s->vrr_mode = ROCKCHIP_VRR_VFP_MODE;
+		s->max_refresh_rate = hdmi->vrr_cap.gaming_vrr_rate_max;
+		s->min_refresh_rate = hdmi->vrr_cap.gaming_vrr_rate_min;
 	}
 
 	s->hdmi_vrr.fva_factor_m1_val = hdmi->fva_factor_m1_val;
@@ -2961,7 +3028,6 @@ dw_hdmi_rockchip_get_edid_hdmi21_info(void *data, const struct edid *edid,
 {
 	struct rockchip_dw_hdmi_qp *hdmi = (struct rockchip_dw_hdmi_qp *)data;
 	struct drm_property *property = hdmi->hdmi_vrr_cap;
-	struct drm_property_blob *blob = hdmi->hdmi_vrr_cap_ptr;
 	size_t size = sizeof(struct hdmi_vrr_capacity);
 	int ret;
 
@@ -2977,8 +3043,11 @@ dw_hdmi_rockchip_get_edid_hdmi21_info(void *data, const struct edid *edid,
 
 	dw_hdmi_rockchip_get_vrr_range(hdmi);
 
-	ret = drm_property_replace_global_blob(connector->dev, &blob, size, &hdmi->vrr_cap,
+	ret = drm_property_replace_global_blob(connector->dev, &hdmi->hdmi_vrr_cap_ptr,
+					       size, &hdmi->vrr_cap,
 					       &connector->base, property);
+
+	drm_connector_set_vrr_capable_property(connector, !!hdmi->vrr_cap.gaming_vrr_rate_max);
 
 	return ret;
 }
@@ -3079,26 +3148,30 @@ static int dw_hdmi_rockchip_get_vp_id(struct drm_crtc_state *crtc_state)
 static int dw_hdmi_dclk_set(void *data, bool enable, int vp_id)
 {
 	struct rockchip_dw_hdmi_qp *hdmi = (struct rockchip_dw_hdmi_qp *)data;
-	char clk_name[16];
 	struct clk *dclk;
 	int ret;
 
-	snprintf(clk_name, sizeof(clk_name), "dclk_vp%d", vp_id);
+	if (!hdmi->chip_data->dclk_names)
+		return 0;
 
-	dclk = devm_clk_get_optional(hdmi->dev, clk_name);
-	if (IS_ERR(dclk)) {
-		DRM_DEV_ERROR(hdmi->dev, "failed to get %s\n", clk_name);
-		return PTR_ERR(dclk);
-	} else if (!dclk) {
-		DRM_DEV_ERROR(hdmi->dev, "failed to get %s\n", clk_name);
+	if (!hdmi->dclk || vp_id < 0 || vp_id >= hdmi->chip_data->dclk_count) {
+		DRM_DEV_ERROR(hdmi->dev, "invalid vp_id: %d (dclk not initialized)\n", vp_id);
+		return -EINVAL;
+	}
+
+	dclk = hdmi->dclk[vp_id];
+	if (!dclk) {
+		DRM_DEV_ERROR(hdmi->dev, "dclk_vp%d is not available\n", vp_id);
 		return -ENOENT;
 	}
 
 	if (enable) {
 		ret = clk_prepare_enable(dclk);
-		if (ret < 0)
+		if (ret < 0) {
 			DRM_DEV_ERROR(hdmi->dev, "failed to enable dclk for video port%d - %d\n",
 				      vp_id, ret);
+			return ret;
+		}
 	} else {
 		clk_disable_unprepare(dclk);
 	}
@@ -3575,15 +3648,14 @@ dw_hdmi_rockchip_get_hdrvivid_vsdb(void *data, const struct edid *edid,
 	struct rockchip_dw_hdmi_qp *hdmi = (struct rockchip_dw_hdmi_qp *)data;
 	u8 *sink_data = hdmi->hdrvivid_vsvdb;
 	struct drm_property *property = hdmi->hdrvivid_vsdb;
-	struct drm_property_blob *blob = hdmi->hdrvivid_vsdb_ptr;
 
 	if (!edid || !connector)
 		return -ENOMEM;
 
 	rockchip_drm_parse_hdrvivid(sink_data, edid, ext_block_num);
 
-	ret = drm_property_replace_hdmi_blob(connector->dev, &blob, 28, sink_data,
-					     &connector->base, property);
+	ret = drm_property_replace_hdmi_blob(connector->dev, &hdmi->hdrvivid_vsdb_ptr, 28,
+					     sink_data, &connector->base, property);
 
 	return ret;
 }
@@ -3645,17 +3717,7 @@ static const struct drm_prop_enum_list output_type_cap_list[] = {
 	{ 1, "HDMI" },
 };
 
-static const struct drm_prop_enum_list allm_enable_list[] = {
-	{ 0, "disable" },
-	{ 1, "enable" },
-};
-
-static const struct drm_prop_enum_list dynamic_hdr_enable_list[] = {
-	{ 0, "disable" },
-	{ 1, "enable" },
-};
-
-static const struct drm_prop_enum_list gaming_vrr_enable_list[] = {
+static const struct drm_prop_enum_list generic_enable_list[] = {
 	{ 0, "disable" },
 	{ 1, "enable" },
 };
@@ -3753,8 +3815,9 @@ static void dw_hdmi_rockchip_attach_properties(struct drm_connector *connector, 
 					   hdmi->hdmi21_data.allm_supported);
 	}
 
-	prop = drm_property_create_enum(connector->dev, 0, "allm_enable", allm_enable_list,
-					ARRAY_SIZE(allm_enable_list));
+	prop = drm_property_create_enum(connector->dev, 0, "allm_enable",
+					generic_enable_list,
+					ARRAY_SIZE(generic_enable_list));
 	if (prop) {
 		hdmi->allm_enable = prop;
 		drm_object_attach_property(&connector->base, prop, 0);
@@ -3768,12 +3831,15 @@ static void dw_hdmi_rockchip_attach_properties(struct drm_connector *connector, 
 		drm_object_attach_property(&connector->base, prop, 0);
 	}
 
+	/*
+	 * To interface with user space, the name of gaming_vrr_enable
+	 * will not be changed for the time being.
+	 */
 	prop = drm_property_create_enum(connector->dev, 0,
-					"gaming_vrr_enable",
-					gaming_vrr_enable_list,
-					ARRAY_SIZE(gaming_vrr_enable_list));
+					"gaming_vrr_enable", generic_enable_list,
+					ARRAY_SIZE(generic_enable_list));
 	if (prop) {
-		hdmi->gaming_vrr_enable = prop;
+		hdmi->tfrsync_vrr_enable = prop;
 		drm_object_attach_property(&connector->base, prop, 0);
 	}
 
@@ -3810,9 +3876,8 @@ static void dw_hdmi_rockchip_attach_properties(struct drm_connector *connector, 
 	}
 
 	prop = drm_property_create_enum(connector->dev, 0,
-					"dynamic_hdr_enable",
-					dynamic_hdr_enable_list,
-					ARRAY_SIZE(dynamic_hdr_enable_list));
+					"dynamic_hdr_enable", generic_enable_list,
+					ARRAY_SIZE(generic_enable_list));
 	if (prop) {
 		hdmi->dynamic_hdr_enable = prop;
 		drm_object_attach_property(&connector->base, prop, 0);
@@ -3883,6 +3948,8 @@ static void dw_hdmi_rockchip_attach_properties(struct drm_connector *connector, 
 		drm_object_attach_property(&connector->base, prop, 0);
 	}
 	drm_object_attach_property(&connector->base, private->mode_info_prop, 0);
+
+	drm_connector_attach_vrr_capable_property(connector);
 }
 
 static void dw_hdmi_rockchip_destroy_properties(struct drm_connector *connector, void *data)
@@ -3961,9 +4028,9 @@ static void dw_hdmi_rockchip_destroy_properties(struct drm_connector *connector,
 		hdmi->hdr10_plus_vsdb = NULL;
 	}
 
-	if (hdmi->gaming_vrr_enable) {
-		drm_property_destroy(connector->dev, hdmi->gaming_vrr_enable);
-		hdmi->gaming_vrr_enable = NULL;
+	if (hdmi->tfrsync_vrr_enable) {
+		drm_property_destroy(connector->dev, hdmi->tfrsync_vrr_enable);
+		hdmi->tfrsync_vrr_enable = NULL;
 	}
 
 	if (hdmi->next_tfr) {
@@ -4054,14 +4121,14 @@ dw_hdmi_rockchip_set_property(struct drm_connector *connector, struct drm_connec
 	} else if (property == hdmi->dynamic_hdr_enable) {
 		hdmi->dynamic_hdr_en = val;
 		return 0;
-	} else if (property == hdmi->gaming_vrr_enable) {
+	} else if (property == hdmi->tfrsync_vrr_enable) {
 		if (val && hdmi->next_tfr_val) {
-			DRM_WARN("vrr-qms is enabled, can't set gaming vrr\n");
+			DRM_WARN("qms-vrr is enabled, can't set tfrsync-vrr\n");
 			return 0;
 		}
 
-		hdmi->enable_gaming_vrr = val;
-		dw_hdmi_qp_set_gaming_vrr_enable(hdmi->hdmi_qp, hdmi->enable_gaming_vrr);
+		hdmi->enable_tfrsync_vrr = val;
+		dw_hdmi_qp_set_gaming_vrr_enable(hdmi->hdmi_qp, hdmi->enable_tfrsync_vrr);
 		return 0;
 	} else if (property == hdmi->next_tfr) {
 		return rockchip_hdmi_set_qms_next_tfr(hdmi, val);
@@ -4157,8 +4224,8 @@ static int dw_hdmi_rockchip_get_property(struct drm_connector *connector,
 	} else if (property == hdmi->hdr10_plus_vsdb) {
 		*val = (hdmi->hdr10_plus_vsdb_ptr) ? hdmi->hdr10_plus_vsdb_ptr->base.id : 0;
 		return 0;
-	} else if (property == hdmi->gaming_vrr_enable) {
-		*val = hdmi->enable_gaming_vrr;
+	} else if (property == hdmi->tfrsync_vrr_enable) {
+		*val = hdmi->enable_tfrsync_vrr;
 		return 0;
 	} else if (property == hdmi->next_tfr) {
 		*val = hdmi->next_tfr_val;
@@ -4243,6 +4310,15 @@ static int dw_hdmi_encoder_late_register(struct drm_encoder *encoder)
 	dw_hdmi_qp_register_audio(hdmi->hdmi_qp);
 	dw_hdmi_qp_register_cec(hdmi->hdmi_qp);
 	dw_hdmi_qp_register_hdcp(hdmi->hdmi_qp);
+	/*
+	 * The HDMI PHY driver clears the debugfs node registered by the PHY
+	 * framework during probe so that the HDMI controller can pass its
+	 * HDMI debugfs directory (/sys/kernel/debug/dri/0/hdmiX/) to the
+	 * PHY driver via phy->debugfs.
+	 */
+	if (!hdmi->phy->debugfs)
+		hdmi->phy->debugfs = dw_hdmi_qp_register_debugfs(hdmi->hdmi_qp);
+	dw_hdmi_qp_phy_init(hdmi->hdmi_qp);
 
 	return 0;
 }
@@ -4260,14 +4336,21 @@ static void dw_hdmi_qp_rockchip_phy_disable(struct dw_hdmi_qp *dw_hdmi, void *da
 		phy_power_off(hdmi->phy);
 }
 
-static int dw_hdmi_qp_rockchip_genphy_init(struct dw_hdmi_qp *dw_hdmi, void *data,
-					   struct drm_display_mode *mode)
+static int dw_hdmi_qp_rockchip_phy_enable(struct dw_hdmi_qp *dw_hdmi, void *data,
+					  struct drm_display_mode *mode)
 {
 	struct rockchip_dw_hdmi_qp *hdmi = (struct rockchip_dw_hdmi_qp *)data;
 
 	dw_hdmi_qp_rockchip_phy_disable(dw_hdmi, data);
 
 	return phy_power_on(hdmi->phy);
+}
+
+static int dw_hdmi_qp_rockchip_phy_init(void *data)
+{
+	struct rockchip_dw_hdmi_qp *hdmi = (struct rockchip_dw_hdmi_qp *)data;
+
+	return phy_init(hdmi->phy);
 }
 
 static
@@ -4601,7 +4684,8 @@ dw_hdmi_qp_rockchip_phy_set_ffe(struct dw_hdmi_qp *dw_hdmi, void *data, u8 ffe_l
 }
 
 static const struct dw_hdmi_qp_phy_ops rk3538_hdmi_phy_ops = {
-	.init		= dw_hdmi_qp_rockchip_genphy_init,
+	.init		= dw_hdmi_qp_rockchip_phy_init,
+	.enable		= dw_hdmi_qp_rockchip_phy_enable,
 	.disable	= dw_hdmi_qp_rockchip_phy_disable,
 	.read_hpd	= dw_hdmi_rk3538_read_hpd,
 	.setup_hpd	= dw_hdmi_rk3538_setup_hpd,
@@ -4616,9 +4700,13 @@ static const struct rockchip_hdmi_chip_ops rk3538_hdmi_chip_ops = {
 	.set_hdcp2_enable = rk3538_set_hdcp2_enable,
 };
 
+static const char * const rk3538_dclk_names[] = { "dclk_vp0" };
+
 struct rockchip_hdmi_chip_data rk3538_hdmi_chip_data = {
 	.ddc_en_reg = RK3538_VO_GRF_HDMI_SWITCH,
 	.ops = &rk3538_hdmi_chip_ops,
+	.dclk_names = rk3538_dclk_names,
+	.dclk_count = ARRAY_SIZE(rk3538_dclk_names),
 };
 
 static const struct dw_hdmi_plat_data rk3538_hdmi_drv_data = {
@@ -4635,7 +4723,8 @@ static const struct dw_hdmi_plat_data rk3538_hdmi_drv_data = {
 };
 
 static const struct dw_hdmi_qp_phy_ops rk3576_hdmi_phy_ops = {
-	.init		= dw_hdmi_qp_rockchip_genphy_init,
+	.init		= dw_hdmi_qp_rockchip_phy_init,
+	.enable		= dw_hdmi_qp_rockchip_phy_enable,
 	.disable	= dw_hdmi_qp_rockchip_phy_disable,
 	.read_hpd	= dw_hdmi_rk3576_read_hpd,
 	.setup_hpd	= dw_hdmi_rk3576_setup_hpd,
@@ -4655,9 +4744,13 @@ static const struct rockchip_hdmi_chip_ops rk3576_hdmi_chip_ops = {
 	.set_emp_bypass_enable = rk3576_set_emp_bypass_enable,
 };
 
+static const char * const rk3576_dclk_names[] = { "dclk_vp0", "dclk_vp1", "dclk_vp2" };
+
 struct rockchip_hdmi_chip_data rk3576_hdmi_chip_data = {
 	.ddc_en_reg = RK3576_VO0_GRF_SOC_CON14,
 	.ops = &rk3576_hdmi_chip_ops,
+	.dclk_names = rk3576_dclk_names,
+	.dclk_count = ARRAY_SIZE(rk3576_dclk_names),
 };
 
 static const struct dw_hdmi_plat_data rk3576_hdmi_drv_data = {
@@ -4672,7 +4765,8 @@ static const struct dw_hdmi_plat_data rk3576_hdmi_drv_data = {
 };
 
 static const struct dw_hdmi_qp_phy_ops rk3572_hdmi_phy_ops = {
-	.init		= dw_hdmi_qp_rockchip_genphy_init,
+	.init		= dw_hdmi_qp_rockchip_phy_init,
+	.enable		= dw_hdmi_qp_rockchip_phy_enable,
 	.disable	= dw_hdmi_qp_rockchip_phy_disable,
 	.read_hpd	= dw_hdmi_rk3572_read_hpd,
 	.setup_hpd	= dw_hdmi_rk3572_setup_hpd,
@@ -4692,9 +4786,13 @@ static const struct rockchip_hdmi_chip_ops rk3572_hdmi_chip_ops = {
 	.set_emp_bypass_enable = rk3572_set_emp_bypass_enable,
 };
 
+static const char * const rk3572_dclk_names[] = { "dclk_vp0", "dclk_vp1" };
+
 struct rockchip_hdmi_chip_data rk3572_hdmi_chip_data = {
 	.ddc_en_reg = RK3572_VO0_GRF_SOC_CON12,
 	.ops = &rk3572_hdmi_chip_ops,
+	.dclk_names = rk3572_dclk_names,
+	.dclk_count = ARRAY_SIZE(rk3572_dclk_names),
 };
 
 static const struct dw_hdmi_plat_data rk3572_hdmi_drv_data = {
@@ -4710,7 +4808,8 @@ static const struct dw_hdmi_plat_data rk3572_hdmi_drv_data = {
 };
 
 static const struct dw_hdmi_qp_phy_ops rk3588_hdmi_phy_ops = {
-	.init		= dw_hdmi_qp_rockchip_genphy_init,
+	.init		= dw_hdmi_qp_rockchip_phy_init,
+	.enable		= dw_hdmi_qp_rockchip_phy_enable,
 	.disable	= dw_hdmi_qp_rockchip_phy_disable,
 	.read_hpd	= dw_hdmi_rk3588_read_hpd,
 	.setup_hpd	= dw_hdmi_rk3588_setup_hpd,
@@ -4729,10 +4828,16 @@ static const struct rockchip_hdmi_chip_ops rk3588_hdmi_chip_ops = {
 	.set_hdcp2_enable = rk3588_set_hdcp2_enable,
 };
 
+static const char * const rk3588_dclk_names[] = {
+	"dclk_vp0", "dclk_vp1", "dclk_vp2", "dclk_vp3"
+};
+
 struct rockchip_hdmi_chip_data rk3588_hdmi_chip_data = {
 	.ddc_en_reg = RK3588_GRF_VO1_CON3,
 	.split_mode = true,
 	.ops = &rk3588_hdmi_chip_ops,
+	.dclk_names = rk3588_dclk_names,
+	.dclk_count = ARRAY_SIZE(rk3588_dclk_names),
 };
 
 static const struct dw_hdmi_plat_data rk3588_hdmi_drv_data = {
@@ -4929,17 +5034,18 @@ static int dw_hdmi_qp_rockchip_bind(struct device *dev, struct device *master,
 
 		hdmi->sub_dev.connector = connector;
 		hdmi->sub_dev.of_node = dev->of_node;
-		rockchip_drm_register_sub_dev(&hdmi->sub_dev);
+		devm_rockchip_drm_register_sub_dev(dev, &hdmi->sub_dev);
 	} else if (plat_data->connector) {
 		hdmi->sub_dev.connector = plat_data->connector;
 		hdmi->sub_dev.loader_protect = dw_hdmi_rockchip_encoder_loader_protect;
+		hdmi->sub_dev.vrr_enable = dw_hdmi_rockchip_vrr_enable;
 		if (secondary && (device_property_read_bool(secondary->dev, "split-mode") ||
 				  device_property_read_bool(secondary->dev, "rockchip,split-mode")))
 			hdmi->sub_dev.of_node = secondary->dev->of_node;
 		else
 			hdmi->sub_dev.of_node = hdmi->dev->of_node;
 
-		rockchip_drm_register_sub_dev(&hdmi->sub_dev);
+		devm_rockchip_drm_register_sub_dev(dev, &hdmi->sub_dev);
 	}
 
 	if (plat_data->split_mode && secondary) {
@@ -4959,7 +5065,7 @@ err_conn:
 	if (plat_data->connector) {
 		hdmi->sub_dev.connector = plat_data->connector;
 		hdmi->sub_dev.of_node = dev->of_node;
-		rockchip_drm_register_sub_dev(&hdmi->sub_dev);
+		devm_rockchip_drm_register_sub_dev(dev, &hdmi->sub_dev);
 	}
 
 	return ret;
@@ -4973,9 +5079,6 @@ static void dw_hdmi_qp_rockchip_unbind(struct device *dev, struct device *master
 	cancel_work_sync(&hdmi->qms_vrr_work);
 	flush_workqueue(hdmi->workqueue);
 	destroy_workqueue(hdmi->workqueue);
-
-	if (hdmi->sub_dev.connector)
-		rockchip_drm_unregister_sub_dev(&hdmi->sub_dev);
 
 	dw_hdmi_qp_unbind(hdmi->hdmi_qp);
 

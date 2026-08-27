@@ -1,4 +1,4 @@
-From c95ea072a79f6e6afd7b265e31c6d891680dbfc1 Mon Sep 17 00:00:00 2001
+From 4c74b442b2f6c47527b87dcd74fda614ff467aa0 Mon Sep 17 00:00:00 2001
 From: Jeffy Chen <jeffy.chen@rock-chips.com>
 Date: Fri, 28 Apr 2023 17:09:54 +0800
 Subject: [PATCH 14/21] xvimagesink: Allow disabling decorations

@@ -2457,7 +2457,7 @@ MPP_RET hal_h265d_vdpu38x_deinit(void *hal)
         }
     }
     vdpu38x_rcb_calc_deinit((Vdpu38xRcbCtx *)reg_ctx->rcb_ctx);
-    hal_dbg_deinit(reg_ctx->dbg_ctx);
+    hal_dbg_deinit(&reg_ctx->dbg_ctx);
 
     for (i = 0; i < loop; i++)
         MPP_FREE(reg_ctx->g_buf[i].hw_regs);
@@ -2696,7 +2696,6 @@ RK_S32 hal_h265d_vdpu38x_output_pps_packet(void *hal, void *dxva, RK_U32 *scanli
     {
         void *pps_ptr = mpp_buffer_get_ptr(reg_ctx->bufs) + reg_ctx->spspps_offset;
         RK_U64 *pps_packet = reg_ctx->pps_buf;
-
         if (NULL == pps_ptr) {
             mpp_err("hal: pps_data get ptr failed\n");
             return MPP_ERR_NOMEM;
@@ -2912,32 +2911,38 @@ RK_S32 hal_h265d_vdpu38x_output_pps_packet(void *hal, void *dxva, RK_U32 *scanli
              soc_type == ROCKCHIP_SOC_RK3572 ||
              soc_type == ROCKCHIP_SOC_RK3539) &&
             dxva_ctx->pp.rps_update_flag) {
-            Short_SPS_RPS_HEVC *cur_st_rps_ptr = &dxva_ctx->pp.cur_st_rps;
+            Short_SPS_RPS_HEVC *st_rps_ptr = NULL;
+
+            st_rps_ptr = (dxva_ctx->pp.cur_st_rps.ref_idx_plus1 == 0) ?
+                         &dxva_ctx->pp.cur_st_rps :
+                         &dxva_ctx->pp.sps_st_rps[dxva_ctx->pp.cur_st_rps.ref_idx_plus1 - 1];
 
             for (i = 0; i < 32; i ++) {
                 mpp_put_bits(&bp, dxva_ctx->pp.sps_lt_rps[i].lt_ref_pic_poc_lsb, 16);
                 mpp_put_bits(&bp, dxva_ctx->pp.sps_lt_rps[i].used_by_curr_pic_lt_flag, 1);
             }
 
-            mpp_put_bits(&bp, cur_st_rps_ptr->num_negative_pics, 4);
-            mpp_put_bits(&bp, cur_st_rps_ptr->num_positive_pics, 4);
+            mpp_put_bits(&bp, st_rps_ptr->num_negative_pics, 4);
+            mpp_put_bits(&bp, st_rps_ptr->num_positive_pics, 4);
 
-            for (i = 0; i <  cur_st_rps_ptr->num_negative_pics; i++) {
-                mpp_put_bits(&bp, cur_st_rps_ptr->delta_poc_s0[i], 16);
-                mpp_put_bits(&bp, cur_st_rps_ptr->s0_used_flag[i], 1);
+            for (i = 0; i <  st_rps_ptr->num_negative_pics; i++) {
+                mpp_put_bits(&bp, st_rps_ptr->delta_poc_s0[i], 16);
+                mpp_put_bits(&bp, st_rps_ptr->s0_used_flag[i], 1);
             }
 
-            for (i = 0; i <  cur_st_rps_ptr->num_positive_pics; i++) {
-                mpp_put_bits(&bp, cur_st_rps_ptr->delta_poc_s1[i], 16);
-                mpp_put_bits(&bp, cur_st_rps_ptr->s1_used_flag[i], 1);
+            for (i = 0; i <  st_rps_ptr->num_positive_pics; i++) {
+                mpp_put_bits(&bp, st_rps_ptr->delta_poc_s1[i], 16);
+                mpp_put_bits(&bp, st_rps_ptr->s1_used_flag[i], 1);
             }
 
-            for ( i = cur_st_rps_ptr->num_negative_pics + cur_st_rps_ptr->num_positive_pics; i < 15; i++) {
+            for ( i = st_rps_ptr->num_negative_pics + st_rps_ptr->num_positive_pics; i < 15; i++) {
                 mpp_put_bits(&bp, 0, 16);
                 mpp_put_bits(&bp, 0, 1);
             }
         }
         mpp_put_align(&bp, 64, 0);//128
+        hal_dbg_dump_data(reg_ctx->dbg_ctx, "global_cfg.dat", reg_ctx->pps_buf,
+                          reg_ctx->pps_buf_sz * 8, 128, 0, "w+");
         memcpy(pps_ptr, reg_ctx->pps_buf, reg_ctx->pps_buf_sz);
     } /* --- end spspps data ------*/
 
@@ -2958,9 +2963,6 @@ RK_S32 hal_h265d_vdpu38x_output_pps_packet(void *hal, void *dxva, RK_U32 *scanli
         *scanlist_addr = reg_ctx->bufs_fd;
         mpp_dev_set_reg_offset(reg_ctx->cfg->dev, 132, addr + reg_ctx->sclst_offset);
     }
-
-    hal_dbg_dump_data(reg_ctx->dbg_ctx, "global_cfg.dat", reg_ctx->pps_buf,
-                      reg_ctx->pps_buf_sz * 8, 128, 0, "w+");
 
     return 0;
 }

@@ -42,6 +42,7 @@ subdirs = [
 cc_prebuilt_library_static {
     name: "libgenMeshLib",
     vendor: true,
+    check_elf_files: false,
     arch: {
         arm: {
             srcs: ["common/gen_mesh/android/genMesh_static_32bit/libgenMeshLib.a"],
@@ -61,13 +62,14 @@ cc_library_headers {
 cc_prebuilt_library_static {
     name: "libautoblc",
     vendor: true,
+    check_elf_files: false,
 
     arch: {
         arm: {
-            srcs: ["modules/blc_algo/isp35/arm/libautoblc.a"]
+            srcs: ["modules/blc_algo/isp35/android/arm/libautoblc.a"]
         },
         arm64: {
-            srcs: ["modules/blc_algo/isp35/aarch64/libautoblc.a"]
+            srcs: ["modules/blc_algo/isp35/android/aarch64/libautoblc.a"]
         }
     },
 

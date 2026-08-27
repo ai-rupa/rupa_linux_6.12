@@ -1235,15 +1235,15 @@ static MPP_RET mpp_enc_control_set_ref_cfg(MppEncImpl *enc, void *param)
     MppEncRefCfg src = (MppEncRefCfg)param;
     MppEncRefCfg dst = enc->cfg->ref_cfg;
 
-    if (NULL == src)
-        src = mpp_enc_ref_default();
-
     if (NULL == dst) {
         mpp_enc_ref_cfg_init(&dst);
         enc->cfg->ref_cfg = dst;
     }
 
-    ret = mpp_enc_ref_cfg_copy(dst, src);
+    if (NULL == src)
+        ret = mpp_enc_ref_cfg_reset(dst);
+    else
+        ret = mpp_enc_ref_cfg_copy(dst, src);
     if (ret) {
         mpp_err_f("failed to copy ref cfg ret %d\n", ret);
     }
@@ -1547,7 +1547,7 @@ static void set_rc_cfg(RcCfg *cfg, MppEncCfgSet *cfg_set)
 {
     MppEncRcCfg *rc = &cfg_set->rc;
     MppEncPrepCfg *prep = &cfg_set->prep;
-    MppEncRefCfgImpl *ref = (MppEncRefCfgImpl *)cfg_set->ref_cfg;
+    MppEncRefCfgImpl *ref = (MppEncRefCfgImpl *)kmpp_obj_to_entry(cfg_set->ref_cfg);
     MppEncCpbInfo *info = &ref->cpb_info;
     MppCodingType coding = cfg_set->base.coding;
 
@@ -2396,6 +2396,17 @@ static MPP_RET try_get_enc_task(MppEncImpl *enc, EncAsyncTaskInfo *task, EncAsyn
             reset_hal_enc_task(hal_task);
             ret = MPP_NOK;
             goto TASK_DONE;
+        }
+
+        if (mpp_frame_has_meta(enc->frame)) {
+            MppMeta meta = mpp_frame_get_meta(enc->frame);
+            rk_s32 idr_req = 0;
+
+            if (meta) {
+                mpp_meta_get_s32(meta, KEY_INPUT_IDR_REQ, &idr_req);
+                if (idr_req)
+                    enc->frm_cfg.force_flag |= ENC_FORCE_IDR;
+            }
         }
 
         status->frm_pkt_rdy = 1;
@@ -3260,6 +3271,17 @@ static MPP_RET try_get_async_task(MppEncImpl *enc, EncAsyncWait *wait)
             hal_task->flags.drop_by_fps = 1;
             ret = MPP_OK;
             goto TASK_DONE;
+        }
+
+        if (mpp_frame_has_meta(frame)) {
+            MppMeta meta = mpp_frame_get_meta(frame);
+            rk_s32 idr_req = 0;
+
+            if (meta) {
+                mpp_meta_get_s32(meta, KEY_INPUT_IDR_REQ, &idr_req);
+                if (idr_req)
+                    enc->frm_cfg.force_flag |= ENC_FORCE_IDR;
+            }
         }
 
         status->frm_pkt_rdy = 1;

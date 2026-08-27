@@ -1,0 +1,42 @@
+From ec3ca95428a2cfdd49a4b8fdd29daefd16e75064 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Mon, 19 Apr 2021 09:40:10 +0800
+Subject: [PATCH 72/98] HACK: gl-renderer: Bind to output context before
+ texture upload
+
+Bind to a valid output context before uploading texture data to avoid
+random hangs during hotplug events on Mali GPUs.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ libweston/renderer-gl/gl-renderer.c | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/libweston/renderer-gl/gl-renderer.c b/libweston/renderer-gl/gl-renderer.c
+index 8d3c8959..e78154e2 100644
+--- a/libweston/renderer-gl/gl-renderer.c
++++ b/libweston/renderer-gl/gl-renderer.c
+@@ -3348,6 +3348,7 @@ gl_renderer_repaint_output(struct weston_output *output,
+ static void
+ gl_renderer_flush_damage(struct weston_paint_node *pnode)
+ {
++	struct weston_output *output = pnode->output;
+ 	struct weston_surface *surface = pnode->surface;
+ 	struct gl_renderer *gr = get_renderer(surface->compositor);
+ 	const struct weston_testsuite_quirks *quirks =
+@@ -3373,6 +3374,12 @@ gl_renderer_flush_damage(struct weston_paint_node *pnode)
+ 	if (!buffer->shm_buffer)
+ 		return;
+ 
++	/* HACK: Ensure a valid context is bound for texture uploads.
++	 * Without this, Mali GPUs may hang during hotplug events when
++	 * uploading texture data without a proper context. */
++	if (output)
++		use_output(output);
++
+ 	if (!pixman_region32_not_empty(&gb->texture_damage) &&
+ 	    !gb->needs_full_upload)
+ 		goto done;
+-- 
+2.39.5
+

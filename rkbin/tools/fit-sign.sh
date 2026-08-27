@@ -518,6 +518,8 @@ function unpack_loader_uboot()
 	rm -rf ${UNPACK_LOADER}/ && mkdir -p ${UNPACK_LOADER}/
 	${TOOL_BOOT_MERGER} unpack -i ${LOADER_NAME} -o ${UNPACK_LOADER}/
 
+	BUILD=`grep 'BUILD:' ${SIGN_CONFIG}`
+
 	# csum spl
 	FlashBoot=`find ${UNPACK_LOADER}/ -name '*FlashBoot*bin' | head -n 1`
 	SIZE=`grep 'spl_size=' ${SIGN_CONFIG} | awk -F "=" '{print $2}'`
@@ -542,7 +544,6 @@ function unpack_loader_uboot()
 	# csum uboot
 	CSUM1=`grep 'uboot_sha256sum=' ${SIGN_CONFIG} | awk -F "=" '{print $2}'`
 	CSUM2=`sha256sum ${UNPACK_UBOOT}/uboot | awk '{ print $1 }'`
-	BUILD=`grep 'BUILD:' ${SIGN_CONFIG}`
 	if [ "${CSUM1}" != "${CSUM2}" ]; then
 		echo "ERROR: SHA256 checksum is not match:"
 		echo "    ${CSUM1}: uboot in ${ARG_SRC_DIR}/uboot.img"

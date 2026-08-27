@@ -1,7 +1,7 @@
-From 9eed1ba0fcbcd737f2308632b4cbe5191d3825b9 Mon Sep 17 00:00:00 2001
+From 1d17d11998d3e99196f6a4e32dd3e32c88ebbb72 Mon Sep 17 00:00:00 2001
 From: Jeffy Chen <jeffy.chen@rock-chips.com>
 Date: Fri, 5 Mar 2021 10:15:51 +0800
-Subject: [PATCH 14/43] waylandsink: Support window layer property
+Subject: [PATCH 14/41] waylandsink: Support window layer property
 
 Support setting top|normal|bottom window layer.
 
@@ -10,25 +10,25 @@ gst-launch-1.0 videotestsrc ! waylandsink layer=top
 
 Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
 ---
- ext/wayland/gstwaylandsink.c       | 52 ++++++++++++++++++++++++++++--
+ ext/wayland/gstwaylandsink.c       | 49 +++++++++++++++++++++++++++++-
  ext/wayland/gstwaylandsink.h       |  1 +
- gst-libs/gst/wayland/gstwlwindow.c | 40 ++++++++++++++++++++++-
- gst-libs/gst/wayland/gstwlwindow.h | 15 +++++++--
- 4 files changed, 103 insertions(+), 5 deletions(-)
+ gst-libs/gst/wayland/gstwlwindow.c | 45 +++++++++++++++++++++++++--
+ gst-libs/gst/wayland/gstwlwindow.h | 19 +++++++++---
+ 4 files changed, 106 insertions(+), 8 deletions(-)
 
 diff --git a/ext/wayland/gstwaylandsink.c b/ext/wayland/gstwaylandsink.c
-index 1dd4c9c..93ad0a5 100644
+index 2dddb96..e65c207 100644
 --- a/ext/wayland/gstwaylandsink.c
 +++ b/ext/wayland/gstwaylandsink.c
-@@ -63,6 +63,7 @@ enum
-   PROP_FULLSCREEN,
+@@ -66,6 +66,7 @@ enum
    PROP_ROTATE_METHOD,
    PROP_DRM_DEVICE,
+   PROP_FORCE_ASPECT_RATIO,
 +  PROP_LAYER,
    PROP_LAST
  };
  
-@@ -112,6 +113,24 @@ G_DEFINE_TYPE_WITH_CODE (GstWaylandSink, gst_wayland_sink, GST_TYPE_VIDEO_SINK,
+@@ -115,6 +116,24 @@ G_DEFINE_TYPE_WITH_CODE (GstWaylandSink, gst_wayland_sink, GST_TYPE_VIDEO_SINK,
  GST_ELEMENT_REGISTER_DEFINE (waylandsink, "waylandsink", GST_RANK_MARGINAL,
      GST_TYPE_WAYLAND_SINK);
  
@@ -53,9 +53,9 @@ index 1dd4c9c..93ad0a5 100644
  static void
  gst_wayland_sink_class_init (GstWaylandSinkClass * klass)
  {
-@@ -184,6 +203,11 @@ gst_wayland_sink_class_init (GstWaylandSinkClass * klass)
-           NULL,
-           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT_ONLY));
+@@ -211,6 +230,11 @@ gst_wayland_sink_class_init (GstWaylandSinkClass * klass)
+           G_PARAM_READWRITE | GST_PARAM_MUTABLE_PLAYING |
+           G_PARAM_STATIC_STRINGS));
  
 +  g_object_class_install_property (gobject_class, PROP_LAYER,
 +      g_param_spec_enum ("layer", "Window layer",
@@ -65,17 +65,16 @@ index 1dd4c9c..93ad0a5 100644
  
   /**
    * waylandsink:render-rectangle:
-@@ -201,6 +225,8 @@ gst_wayland_sink_init (GstWaylandSink * self)
- {
+@@ -232,6 +256,7 @@ gst_wayland_sink_init (GstWaylandSink * self)
    g_mutex_init (&self->display_lock);
    g_mutex_init (&self->render_lock);
-+
+   self->force_aspect_ratio = TRUE;
 +  self->layer = GST_WL_WINDOW_LAYER_NORMAL;
  }
  
- static void
-@@ -252,6 +278,18 @@ gst_wayland_sink_set_rotate_method (GstWaylandSink * self,
-   GST_OBJECT_UNLOCK (self);
+ /* must be called with the OBJECT_LOCK */
+@@ -308,6 +333,18 @@ gst_wayland_sink_set_force_aspect_ratio (GstWaylandSink * self,
+   }
  }
  
 +static void
@@ -93,8 +92,8 @@ index 1dd4c9c..93ad0a5 100644
  static void
  gst_wayland_sink_get_property (GObject * object,
      guint prop_id, GValue * value, GParamSpec * pspec)
-@@ -279,6 +317,11 @@ gst_wayland_sink_get_property (GObject * object,
-       g_value_set_string (value, self->drm_device);
+@@ -345,6 +382,11 @@ gst_wayland_sink_get_property (GObject * object,
+       g_value_set_boolean (value, self->force_aspect_ratio);
        GST_OBJECT_UNLOCK (self);
        break;
 +    case PROP_LAYER:
@@ -105,8 +104,8 @@ index 1dd4c9c..93ad0a5 100644
      default:
        G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
        break;
-@@ -313,6 +356,11 @@ gst_wayland_sink_set_property (GObject * object,
-       self->drm_device = g_value_dup_string (value);
+@@ -392,6 +434,11 @@ gst_wayland_sink_set_property (GObject * object,
+           g_value_get_boolean (value));
        GST_OBJECT_UNLOCK (self);
        break;
 +    case PROP_LAYER:
@@ -117,34 +116,32 @@ index 1dd4c9c..93ad0a5 100644
      default:
        if (!gst_video_overlay_set_property (object, PROP_LAST, prop_id, value))
          G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
-@@ -861,8 +909,8 @@ gst_wayland_sink_show_frame (GstVideoSink * vsink, GstBuffer * buffer)
-     if (!self->window) {
+@@ -1031,7 +1078,7 @@ gst_wayland_sink_show_frame (GstVideoSink * vsink, GstBuffer * buffer)
        /* if we were not provided a window, create one ourselves */
-       self->window = gst_wl_window_new_toplevel (self->display,
--          &self->video_info, self->fullscreen, &self->render_lock,
--          &self->render_rectangle);
-+          &self->video_info, self->fullscreen, self->layer,
-+          &self->render_lock, &self->render_rectangle);
+       self->window = gst_wl_window_new_toplevel_full (self->display,
+           &self->render_info, self->fullscreen, self->fullscreen_output,
+-          &self->render_lock, &self->render_rectangle);
++          self->layer, &self->render_lock, &self->render_rectangle);
        g_signal_connect_object (self->window, "closed",
            G_CALLBACK (on_window_closed), self, 0);
        gst_wl_window_set_rotate_method (self->window,
 diff --git a/ext/wayland/gstwaylandsink.h b/ext/wayland/gstwaylandsink.h
-index abba263..db6b953 100644
+index 64136bb..0d626b4 100644
 --- a/ext/wayland/gstwaylandsink.h
 +++ b/ext/wayland/gstwaylandsink.h
-@@ -57,6 +57,7 @@ struct _GstWaylandSink
-   GstVideoInfoDmaDrm drm_info;
+@@ -63,6 +63,7 @@ struct _GstWaylandSink
    gboolean fullscreen;
+   gchar *fullscreen_output;
    GstCaps *caps;
 +  GstWlWindowLayer layer;
  
    gchar *display_name;
  
 diff --git a/gst-libs/gst/wayland/gstwlwindow.c b/gst-libs/gst/wayland/gstwlwindow.c
-index f543e76..032ff96 100644
+index 1a032dc..db62c67 100644
 --- a/gst-libs/gst/wayland/gstwlwindow.c
 +++ b/gst-libs/gst/wayland/gstwlwindow.c
-@@ -281,6 +281,43 @@ gst_wl_window_new_internal (GstWlDisplay * display, GMutex * render_lock)
+@@ -327,6 +327,43 @@ gst_wl_window_new_internal (GstWlDisplay * display, GMutex * render_lock)
    return self;
  }
  
@@ -185,10 +182,28 @@ index f543e76..032ff96 100644
 +  gst_wl_window_set_config (self, s);
 +}
 +
- void
- gst_wl_window_ensure_fullscreen (GstWlWindow * self, gboolean fullscreen)
+ /**
+  * gst_wl_window_ensure_fullscreen_for_output:
+  * @self: A #GstWlWindow
+@@ -391,7 +428,8 @@ gst_wl_window_ensure_fullscreen (GstWlWindow * self, gboolean fullscreen)
+ GstWlWindow *
+ gst_wl_window_new_toplevel_full (GstWlDisplay * display,
+     const GstVideoInfo * info, gboolean fullscreen, const gchar * output_name,
+-    GMutex * render_lock, GstVideoRectangle * render_rectangle)
++    GstWlWindowLayer layer, GMutex * render_lock,
++    GstVideoRectangle * render_rectangle)
  {
-@@ -298,7 +335,7 @@ gst_wl_window_ensure_fullscreen (GstWlWindow * self, gboolean fullscreen)
+   GstWlWindow *self;
+   GstWlWindowPrivate *priv;
+@@ -432,6 +470,7 @@ gst_wl_window_new_toplevel_full (GstWlDisplay * display,
+     }
+ 
+     gst_wl_window_ensure_fullscreen_for_output (self, fullscreen, output_name);
++    gst_wl_window_ensure_layer (self, layer);
+ 
+     /* Finally, commit the xdg_surface state as toplevel */
+     priv->configured = FALSE;
+@@ -502,11 +541,11 @@ error:
  
  GstWlWindow *
  gst_wl_window_new_toplevel (GstWlDisplay * display, const GstVideoInfo * info,
@@ -196,22 +211,19 @@ index f543e76..032ff96 100644
 +    gboolean fullscreen, GstWlWindowLayer layer, GMutex * render_lock,
      GstVideoRectangle * render_rectangle)
  {
-   GstWlWindow *self;
-@@ -340,6 +377,7 @@ gst_wl_window_new_toplevel (GstWlDisplay * display, const GstVideoInfo * info,
-     }
+   return gst_wl_window_new_toplevel_full (display, info, fullscreen, NULL,
+-      render_lock, render_rectangle);
++      layer, render_lock, render_rectangle);
+ }
  
-     gst_wl_window_ensure_fullscreen (self, fullscreen);
-+    gst_wl_window_ensure_layer (self, layer);
- 
-     /* Finally, commit the xdg_surface state as toplevel */
-     priv->configured = FALSE;
+ GstWlWindow *
 diff --git a/gst-libs/gst/wayland/gstwlwindow.h b/gst-libs/gst/wayland/gstwlwindow.h
-index c4e8fc0..65f3c4f 100644
+index 13e1c0d..5f3d62c 100644
 --- a/gst-libs/gst/wayland/gstwlwindow.h
 +++ b/gst-libs/gst/wayland/gstwlwindow.h
-@@ -30,19 +30,30 @@ G_BEGIN_DECLS
+@@ -30,11 +30,22 @@ G_BEGIN_DECLS
  GST_WL_API
- G_DECLARE_FINAL_TYPE (GstWlWindow, gst_wl_window, GST, WL_WINDOW, GObject);
+ G_DECLARE_FINAL_TYPE (GstWlWindow, gst_wl_window, GST, WL_WINDOW, GstObject);
  
 +typedef enum
 +{
@@ -222,7 +234,7 @@ index c4e8fc0..65f3c4f 100644
 +
  struct _GstWlWindow
  {
-   GObject parent_instance;
+   GstObject parent_instance;
  };
  
 +GST_WL_API
@@ -230,14 +242,22 @@ index c4e8fc0..65f3c4f 100644
 +        GstWlWindowLayer layer);
 +
  GST_WL_API
- void gst_wl_window_ensure_fullscreen (GstWlWindow * self,
-         gboolean fullscreen);
+ void gst_wl_window_ensure_fullscreen (GstWlWindow * self, gboolean fullscreen);
+ 
+@@ -44,13 +55,13 @@ void gst_wl_window_ensure_fullscreen_for_output (GstWlWindow * self,
  
  GST_WL_API
  GstWlWindow *gst_wl_window_new_toplevel (GstWlDisplay * display,
 -        const GstVideoInfo * info, gboolean fullscreen, GMutex * render_lock,
 -        GstVideoRectangle * render_rectangle);
 +        const GstVideoInfo * info, gboolean fullscreen, GstWlWindowLayer layer,
++        GMutex * render_lock, GstVideoRectangle * render_rectangle);
+ 
+ GST_WL_API
+ GstWlWindow * gst_wl_window_new_toplevel_full (GstWlDisplay * display, const GstVideoInfo * info,
+-        gboolean fullscreen,  const gchar * output_name, GMutex * render_lock,
+-        GstVideoRectangle * render_rectangle);
++        gboolean fullscreen,  const gchar * output_name, GstWlWindowLayer layer,
 +        GMutex * render_lock, GstVideoRectangle * render_rectangle);
  
  GST_WL_API

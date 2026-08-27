@@ -172,6 +172,12 @@ RK_S32 test_tde_read_file(const char *path,  void *pu8Data, RK_U32 u32ImgSize) {
     }
     if (pFile) {
         u32ReadSize = fread(pu8Data, 1, u32ImgSize, pFile);
+        if (u32ReadSize != u32ImgSize) {
+            RK_LOGE("read file %s failed, expected %u, got %u.", path, u32ImgSize, u32ReadSize);
+            fclose(pFile);
+            return RK_FAILURE;
+        }
+
         fflush(pFile);
         fclose(pFile);
     }
@@ -259,7 +265,6 @@ RK_S32 test_tde_add_task(TEST_TDE_CTX_S *ctx, TDE_HANDLE hHandle,
     RK_U32 u32FillData = ctx->s32Color;
     RK_S32 s32Operation = ctx->s32Operation;
     RK_U32 u32BlendCmd = ctx->u32BlendCmd;
-    RK_S32 s32SrcCompressMode = ctx->s32SrcCompressMode;
     TDE_OPT_S stOpt;
     memset(&stOpt, 0, sizeof(TDE_OPT_S));
 
@@ -322,7 +327,6 @@ RK_S32 test_tde_add_task(TEST_TDE_CTX_S *ctx, TDE_HANDLE hHandle,
 RK_S32 test_tde_load_src_file(TEST_TDE_CTX_S *ctx, MB_BLK *pstSrcBlk) {
     RK_S32 s32Ret          = RK_SUCCESS;
     RK_U32 u32SrcSize      = 0;
-    FILE  *file            = RK_NULL;
     void  *pSrcData        = RK_NULL;
     MB_BLK srcBlk;
 
@@ -359,7 +363,6 @@ RK_S32 test_tde_load_src_file(TEST_TDE_CTX_S *ctx, MB_BLK *pstSrcBlk) {
 RK_S32 test_tde_load_dst_file(TEST_TDE_CTX_S *ctx, MB_BLK *pstDstBlk) {
     RK_S32 s32Ret          = RK_SUCCESS;
     RK_U32 u32DstSize      = 0;
-    FILE  *file            = RK_NULL;
     void  *pDstData        = RK_NULL;
     MB_BLK dstBlk;
 

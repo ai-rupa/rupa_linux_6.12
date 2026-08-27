@@ -92,6 +92,8 @@ typedef struct {
   RKADK_S32 s32VpssChn;
 
   RKADK_THUMB_PARAM_S *pstThumbParam;       /* only for ts/flv */
+
+  int timeout;      /* ms */
 } RKADK_THUMB_ATTR_S;
 
 typedef RKADK_THUMB_ATTR_S RKADK_FRAME_ATTR_S;

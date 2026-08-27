@@ -1,5 +1,5 @@
 project(RK_PCBA)
-cmake_minimum_required(VERSION 2.8)
+cmake_minimum_required(VERSION 3.5)
 
 message(${PROJECT_SOURCE_DIR})
 message(${PROJECT_BINARY_DIR})

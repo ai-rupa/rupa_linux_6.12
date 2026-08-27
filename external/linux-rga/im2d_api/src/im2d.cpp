@@ -124,7 +124,7 @@ IM_API const char* imStrError_t(IM_STATUS status) {
             break;
 
         default :
-            return "unkown status";
+            return "unknown status";
     }
 
     snprintf(error_str, IM_ERR_MSG_LEN, "%s: %s", ptr, g_rga_err_str);
@@ -513,7 +513,7 @@ IM_API const char* querystring(int name) {
         "ROP ",
         "quantize ",
         "src1_r2y_csc ",
-        "dst_full_csc ",
+        "dst_full_csc_v1 ",
         "FBC_mode ",
         "blend_in_YUV ",
         "BT.2020 ",
@@ -522,6 +522,10 @@ IM_API const char* querystring(int name) {
         "early_interruption ",
         "alpha_bit_map ",
         "gauss ",
+        "secure_access ",
+        "CFA ",
+        "dst_full_csc_v2 ",
+        "dst_full_csc_v3 ",
     };
     const char *performance[] = {
         "unknown",
@@ -756,8 +760,8 @@ IM_API const char* querystring(int name) {
                     out << feature[IM_RGA_SUPPORT_FEATURE_QUANTIZE_INDEX];
                 if(rga_info->feature & IM_RGA_SUPPORT_FEATURE_SRC1_R2Y_CSC)
                     out << feature[IM_RGA_SUPPORT_FEATURE_SRC1_R2Y_CSC_INDEX];
-                if(rga_info->feature & IM_RGA_SUPPORT_FEATURE_DST_FULL_CSC)
-                    out << feature[IM_RGA_SUPPORT_FEATURE_DST_FULL_CSC_INDEX];
+                if(rga_info->feature & IM_RGA_SUPPORT_FEATURE_DST_FULL_CSC_V1)
+                    out << feature[IM_RGA_SUPPORT_FEATURE_DST_FULL_CSC_V1_INDEX];
                 if(rga_info->feature & IM_RGA_SUPPORT_FEATURE_FBC)
                     out << feature[IM_RGA_SUPPORT_FEATURE_FBC_INDEX];
                 if(rga_info->feature & IM_RGA_SUPPORT_FEATURE_BLEND_YUV)
@@ -774,6 +778,14 @@ IM_API const char* querystring(int name) {
                     out << feature[IM_RGA_SUPPORT_FEATURE_ALPHA_BIT_MAP_INDEX];
                 if(rga_info->feature & IM_RGA_SUPPORT_FEATURE_GAUSS)
                     out << feature[IM_RGA_SUPPORT_FEATURE_GAUSS_INDEX];
+                if(rga_info->feature & IM_RGA_SUPPORT_FEATURE_SECURE)
+                    out << feature[IM_RGA_SUPPORT_FEATURE_SECURE_INDEX];
+                if(rga_info->feature & IM_RGA_SUPPORT_FEATURE_CFA)
+                    out << feature[IM_RGA_SUPPORT_FEATURE_CFA_INDEX];
+                if(rga_info->feature & IM_RGA_SUPPORT_FEATURE_DST_FULL_CSC_V2)
+                    out << feature[IM_RGA_SUPPORT_FEATURE_DST_FULL_CSC_V2_INDEX];
+                if(rga_info->feature & IM_RGA_SUPPORT_FEATURE_DST_FULL_CSC_V3)
+                    out << feature[IM_RGA_SUPPORT_FEATURE_DST_FULL_CSC_V3_INDEX];
                 out << endl;
                 break;
 
@@ -1483,6 +1495,7 @@ IM_API IM_STATUS imcfa(rga_buffer_t src, rga_buffer_t dst, rga_buffer_t src1, rg
 
     usage |= IM_CFA;
 
+    opt.version = RGA_CURRENT_API_VERSION;
     memcpy(&opt.cfa_config, cfa_config, sizeof(im_cfa_t));
     opt.cfa_config.src1_handle = src1.handle;
     opt.cfa_config.dst1_handle = dst1.handle;
@@ -1514,7 +1527,7 @@ IM_API IM_STATUS imcfa(rga_buffer_t src, rga_buffer_t dst, rga_buffer_t BCSH_tab
     if (job_handle <= 0)
         return IM_STATUS_FAILED;
 
-    if (rga_is_buffer_valid(BCSH_table)) {
+    if (rga_is_buffer_valid(&BCSH_table)) {
         ret = rga_task_submit(job_handle, BCSH_table, img, img, rect, rect, rect, -1, NULL, NULL, IM_UPDATE_LUT);
         if (ret != IM_STATUS_SUCCESS) {
             imcancelJob(job_handle);
@@ -1522,6 +1535,7 @@ IM_API IM_STATUS imcfa(rga_buffer_t src, rga_buffer_t dst, rga_buffer_t BCSH_tab
         }
     }
 
+    opt.version = RGA_CURRENT_API_VERSION;
     memcpy(&opt.cfa_config, cfa_config, sizeof(im_cfa_t));
     opt.cfa_config.src1_handle = pre_comps.handle;
     opt.cfa_config.dst1_handle = next_comps.handle;

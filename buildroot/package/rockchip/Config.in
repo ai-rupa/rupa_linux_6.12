@@ -3,6 +3,11 @@ menuconfig BR2_PACKAGE_ROCKCHIP
 	select BR2_PACKAGE_WESTON_DEFAULT_PIXMAN \
 		if BR2_PACKAGE_WESTON && !BR2_PACKAGE_ROCKCHIP_HAS_GPU
 
+# Let Rockchip packages be searchable/selectable even before enabling
+# "Rockchip Platform" in menuconfig. Individual packages can select
+# BR2_PACKAGE_ROCKCHIP if they need the platform menu enabled.
+source "package/rockchip/rockchip-ai/Config.in"
+
 if BR2_PACKAGE_ROCKCHIP
 
 config BR2_PACKAGE_ROCKCHIP_HAS_GPU
@@ -218,6 +223,8 @@ menu "Rockchip BSP packages"
 	source "package/rockchip/recovery/Config.in"
 	source "package/rockchip/rkadk/Config.in"
 	source "package/rockchip/rknn-llm/Config.in"
+	source "package/rockchip/rknn3-runtime/Config.in"
+	source "package/rockchip/rknn3-test/Config.in"
 	source "package/rockchip/rknnstream/Config.in"
 	source "package/rockchip/rknpu/Config.in"
 	source "package/rockchip/rknpu2/Config.in"
@@ -228,7 +235,6 @@ menu "Rockchip BSP packages"
 	source "package/rockchip/rkupdate/Config.in"
 	source "package/rockchip/rkwifibt/Config.in"
 	source "package/rockchip/rkwifibt-app/Config.in"
-	source "package/rockchip/rockchip-ai/Config.in"
 	source "package/rockchip/rockchip-alsa-config/Config.in"
 	source "package/rockchip/rockchip-erpc/Config.in"
 	source "package/rockchip/rockchip-mali/Config.in"

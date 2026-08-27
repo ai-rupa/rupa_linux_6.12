@@ -2,7 +2,7 @@ Prebuilt tools (static linked)
 ==============================
 
 Prebuilt from Rockchip buildroot 2025 SDK with kernel 6.1:
-1615bae616 busybox: Fix spurious auth failures when USE_BB_SHADOW is enabled
+705cc29581 package/memtester: update to support rv1126b
 
 Using rockchip_tools_{arm32,arm64,riscv64}_defconfig.
 

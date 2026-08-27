@@ -35,6 +35,7 @@
 #include "RkIspFecVersion.h"
 #include "param.h"
 #include "rk_ispfec_api.h"
+#include "rk_ispfec_videobuf.h"
 #include <vector>
 
 #ifdef __cplusplus
@@ -244,6 +245,20 @@ _configure(rk_ispfec_ctx_t* ctx, rk_ispfec_cfg_t* cfg)
             rkfec_dbg(3, rkfec_debug, "correct level changed from %d to %d",
                       ctx->_cfg.u.mesh_online.correct_level, cfg->u.mesh_online.correct_level);
 
+#ifdef RKFEC_HW_V20
+            ret = rk_ispfec_api_vb_sync_start(cfg->mesh_info.dmaFd, 1);
+            if (ret) rkfec_err("_configure: DMA sync(pre-write) failed: %s", strerror(errno));
+#else
+            ret = rk_ispfec_api_vb_sync_start(cfg->mesh_xint.dmaFd, 1);
+            if (ret) rkfec_err("_configure: DMA sync(pre-write) mesh_xint failed: %s", strerror(errno));
+            ret = rk_ispfec_api_vb_sync_start(cfg->mesh_xfra.dmaFd, 1);
+            if (ret) rkfec_err("_configure: DMA sync(pre-write) mesh_xfra failed: %s", strerror(errno));
+            ret = rk_ispfec_api_vb_sync_start(cfg->mesh_yint.dmaFd, 1);
+            if (ret) rkfec_err("_configure: DMA sync(pre-write) mesh_yint failed: %s", strerror(errno));
+            ret = rk_ispfec_api_vb_sync_start(cfg->mesh_yfra.dmaFd, 1);
+            if (ret) rkfec_err("_configure: DMA sync(pre-write) mesh_yfra failed: %s", strerror(errno));
+#endif
+
             if (cfg->working_mode == RK_ISPFEC_DISTORTION_CORRECTION_MODE)
                 ret = ctx->_fecGenMesh->genMesh(cfg->u.mesh_online.correct_level);
             else
@@ -253,6 +268,20 @@ _configure(rk_ispfec_ctx_t* ctx, rk_ispfec_cfg_t* cfg)
                 rkfec_err("Failed to genMesh RkIspFecGenMesh");
                 goto err;
             }
+
+#ifdef RKFEC_HW_V20
+            ret = rk_ispfec_api_vb_sync_end(cfg->mesh_info.dmaFd, 1);
+            if (ret) rkfec_err("_configure: DMA sync(post-write) failed: %s", strerror(errno));
+#else
+            ret = rk_ispfec_api_vb_sync_end(cfg->mesh_xint.dmaFd, 1);
+            if (ret) rkfec_err("_configure: DMA sync(post-write) mesh_xint failed: %s", strerror(errno));
+            ret = rk_ispfec_api_vb_sync_end(cfg->mesh_xfra.dmaFd, 1);
+            if (ret) rkfec_err("_configure: DMA sync(post-write) mesh_xfra failed: %s", strerror(errno));
+            ret = rk_ispfec_api_vb_sync_end(cfg->mesh_yint.dmaFd, 1);
+            if (ret) rkfec_err("_configure: DMA sync(post-write) mesh_yint failed: %s", strerror(errno));
+            ret = rk_ispfec_api_vb_sync_end(cfg->mesh_yfra.dmaFd, 1);
+            if (ret) rkfec_err("_configure: DMA sync(post-write) mesh_yfra failed: %s", strerror(errno));
+#endif
         }
 #endif
     } else if (cfg->mesh_upd_mode == RK_ISPFEC_UPDATE_MESH_FROM_FILE) {
@@ -264,46 +293,67 @@ _configure(rk_ispfec_ctx_t* ctx, rk_ispfec_cfg_t* cfg)
 #ifdef RKFEC_HW_V20
         snprintf(mesh_file, MESH_FILE_MAX_LEN, "%s/%s", cfg->u.mesh_file_path,
                  cfg->mesh_info.mesh_file);
+        ret = rk_ispfec_api_vb_sync_start(cfg->mesh_info.dmaFd, 1);
+        if (ret) rkfec_err("_configure: DMA sync(pre-write) failed: %s", strerror(errno));
         ret = _load_mesh(mesh_file, cfg->mesh_info.vir_addr, cfg->mesh_info.size);
         if (ret) {
             rkfec_err("load mesh error!");
             goto err;
         }
+        ret = rk_ispfec_api_vb_sync_end(cfg->mesh_info.dmaFd, 1);
+        if (ret) rkfec_err("_configure: DMA sync(post-write) failed: %s", strerror(errno));
 #else
         // load mesh_xint
         snprintf(mesh_file, MESH_FILE_MAX_LEN, "%s/%s", cfg->u.mesh_file_path,
                  cfg->mesh_xint.mesh_file);
+        ret = rk_ispfec_api_vb_sync_start(cfg->mesh_xint.dmaFd, 1);
+        if (ret) rkfec_err("_configure: DMA sync(pre-write) mesh_xint failed: %s", strerror(errno));
         ret = _load_mesh(mesh_file, cfg->mesh_xint.vir_addr, cfg->mesh_xint.size);
         if (ret) {
             rkfec_err("load mesh_xint error!");
             goto err;
         }
+        ret = rk_ispfec_api_vb_sync_end(cfg->mesh_xint.dmaFd, 1);
+        if (ret) rkfec_err("_configure: DMA sync(post-write) mesh_xint failed: %s", strerror(errno));
+
         // load mesh_xfra
         snprintf(mesh_file, MESH_FILE_MAX_LEN, "%s/%s", cfg->u.mesh_file_path,
                  cfg->mesh_xfra.mesh_file);
+        ret = rk_ispfec_api_vb_sync_start(cfg->mesh_xfra.dmaFd, 1);
+        if (ret) rkfec_err("_configure: DMA sync(pre-write) mesh_xfra failed: %s", strerror(errno));
         ret = _load_mesh(mesh_file, cfg->mesh_xfra.vir_addr, cfg->mesh_xfra.size);
         if (ret) {
             rkfec_err("load mesh_xfra error!");
             goto err;
         }
+        ret = rk_ispfec_api_vb_sync_end(cfg->mesh_xfra.dmaFd, 1);
+        if (ret) rkfec_err("_configure: DMA sync(post-write) mesh_xfra failed: %s", strerror(errno));
 
         // load mesh_yint
         snprintf(mesh_file, MESH_FILE_MAX_LEN, "%s/%s", cfg->u.mesh_file_path,
                  cfg->mesh_yint.mesh_file);
+        ret = rk_ispfec_api_vb_sync_start(cfg->mesh_yint.dmaFd, 1);
+        if (ret) rkfec_err("_configure: DMA sync(pre-write) mesh_yint failed: %s", strerror(errno));
         ret = _load_mesh(mesh_file, cfg->mesh_yint.vir_addr, cfg->mesh_yint.size);
         if (ret) {
             rkfec_err("load mesh_yint error!");
             goto err;
         }
+        ret = rk_ispfec_api_vb_sync_end(cfg->mesh_yint.dmaFd, 1);
+        if (ret) rkfec_err("_configure: DMA sync(post-write) mesh_yint failed: %s", strerror(errno));
 
         // load mesh_yfra
         snprintf(mesh_file, MESH_FILE_MAX_LEN, "%s/%s", cfg->u.mesh_file_path,
                  cfg->mesh_yfra.mesh_file);
+        ret = rk_ispfec_api_vb_sync_start(cfg->mesh_yfra.dmaFd, 1);
+        if (ret) rkfec_err("_configure: DMA sync(pre-write) mesh_yfra failed: %s", strerror(errno));
         ret = _load_mesh(mesh_file, cfg->mesh_yfra.vir_addr, cfg->mesh_yfra.size);
         if (ret) {
             rkfec_err("load mesh_yfra error!");
             goto err;
         }
+        ret = rk_ispfec_api_vb_sync_end(cfg->mesh_yfra.dmaFd, 1);
+        if (ret) rkfec_err("_configure: DMA sync(post-write) mesh_yfra failed: %s", strerror(errno));
 #endif
     }
 
@@ -1013,15 +1063,43 @@ static int _update_mesh_config(rk_ispfec_ctx_t* ctx, rk_ispfec_mesh_config_t* co
             // Copy online generation parameters
             if (ctx->_fecGenMesh) {
                 // Generate new mesh data
+#ifdef RKFEC_HW_V20
+                ret = rk_ispfec_api_vb_sync_start(ctx->_cfg.mesh_info.dmaFd, 1);
+                if (ret) rkfec_err("set_mesh_config: DMA sync(pre-write) failed: %s", strerror(errno));
+#else
+                ret = rk_ispfec_api_vb_sync_start(ctx->_cfg.mesh_xint.dmaFd, 1);
+                if (ret) rkfec_err("set_mesh_config: DMA sync(pre-write) mesh_xint failed: %s", strerror(errno));
+                ret = rk_ispfec_api_vb_sync_start(ctx->_cfg.mesh_xfra.dmaFd, 1);
+                if (ret) rkfec_err("set_mesh_config: DMA sync(pre-write) mesh_xfra failed: %s", strerror(errno));
+                ret = rk_ispfec_api_vb_sync_start(ctx->_cfg.mesh_yint.dmaFd, 1);
+                if (ret) rkfec_err("set_mesh_config: DMA sync(pre-write) mesh_yint failed: %s", strerror(errno));
+                ret = rk_ispfec_api_vb_sync_start(ctx->_cfg.mesh_yfra.dmaFd, 1);
+                if (ret) rkfec_err("set_mesh_config: DMA sync(pre-write) mesh_yfra failed: %s", strerror(errno));
+#endif
+
                 if (ctx->_cfg.working_mode == RK_ISPFEC_DISTORTION_CORRECTION_MODE)
                     ret = ctx->_fecGenMesh->genMesh(config->params.online_cfg.correct_level);
                 else
                     ret = ctx->_fecGenMesh->genMesh(config->params.online_cfg.rotation_info.rotation_angle);
-                
+
                 if (ret < 0) {
                     rkfec_err("Mesh generation failed: %d", ret);
                     return ret;
                 }
+
+#ifdef RKFEC_HW_V20
+                ret = rk_ispfec_api_vb_sync_end(ctx->_cfg.mesh_info.dmaFd, 1);
+                if (ret) rkfec_err("set_mesh_config: DMA sync(post-write) failed: %s", strerror(errno));
+#else
+                ret = rk_ispfec_api_vb_sync_end(ctx->_cfg.mesh_xint.dmaFd, 1);
+                if (ret) rkfec_err("set_mesh_config: DMA sync(post-write) mesh_xint failed: %s", strerror(errno));
+                ret = rk_ispfec_api_vb_sync_end(ctx->_cfg.mesh_xfra.dmaFd, 1);
+                if (ret) rkfec_err("set_mesh_config: DMA sync(post-write) mesh_xfra failed: %s", strerror(errno));
+                ret = rk_ispfec_api_vb_sync_end(ctx->_cfg.mesh_yint.dmaFd, 1);
+                if (ret) rkfec_err("set_mesh_config: DMA sync(post-write) mesh_yint failed: %s", strerror(errno));
+                ret = rk_ispfec_api_vb_sync_end(ctx->_cfg.mesh_yfra.dmaFd, 1);
+                if (ret) rkfec_err("set_mesh_config: DMA sync(post-write) mesh_yfra failed: %s", strerror(errno));
+#endif
 
                 memcpy(&ctx->_cfg.u.mesh_online, &config->params.online_cfg,
                        sizeof(gen_mesh_online_info_t));
@@ -1047,11 +1125,15 @@ static int _update_mesh_config(rk_ispfec_ctx_t* ctx, rk_ispfec_mesh_config_t* co
             strncpy(ctx->_cfg.mesh_info.mesh_file, base_name,
                     sizeof(ctx->_cfg.mesh_info.mesh_file));
 
+            ret = rk_ispfec_api_vb_sync_start(ctx->_cfg.mesh_info.dmaFd, 1);
+            if (ret) rkfec_err("set_mesh_config: DMA sync(pre-write) failed: %s", strerror(errno));
             if ((ret = _load_mesh(config->params.file_cfg.mesh_path, ctx->_cfg.mesh_info.vir_addr,
                                   ctx->_cfg.mesh_info.size))) {
                 rkfec_err("V20 mesh load failed: %s", config->params.file_cfg.mesh_path);
                 return ret;
             }
+            ret = rk_ispfec_api_vb_sync_end(ctx->_cfg.mesh_info.dmaFd, 1);
+            if (ret) rkfec_err("set_mesh_config: DMA sync(post-write) failed: %s", strerror(errno));
 
 #else
             // Load four component files for non-V20
@@ -1065,7 +1147,12 @@ static int _update_mesh_config(rk_ispfec_ctx_t* ctx, rk_ispfec_mesh_config_t* co
                 strncpy(ctx->_cfg.u.mesh_file_path, dir_name, sizeof(ctx->_cfg.u.mesh_file_path));
                 strncpy(mesh_info.mesh_file, base_name, sizeof(mesh_info.mesh_file));
 
-                return _load_mesh(full_path, mesh_info.vir_addr, mesh_info.size);
+                int sync_ret = rk_ispfec_api_vb_sync_start(mesh_info.dmaFd, 1);
+                if (sync_ret) rkfec_err("set_mesh_config: DMA sync(pre-write) failed: %s", strerror(errno));
+                int load_ret = _load_mesh(full_path, mesh_info.vir_addr, mesh_info.size);
+                sync_ret = rk_ispfec_api_vb_sync_end(mesh_info.dmaFd, 1);
+                if (sync_ret) rkfec_err("set_mesh_config: DMA sync(post-write) failed: %s", strerror(errno));
+                return load_ret;
             };
 
             // Process X integer mesh
@@ -1104,8 +1191,12 @@ static int _update_mesh_config(rk_ispfec_ctx_t* ctx, rk_ispfec_mesh_config_t* co
                     size_t copy_size =
                         std::min(ctx->_cfg.mesh_info.size,
                                  static_cast<int>(config->params.buffer_cfg.mesh.size));
+                    ret = rk_ispfec_api_vb_sync_start(ctx->_cfg.mesh_info.dmaFd, 1);
+                    if (ret) rkfec_err("set_mesh_config: DMA sync(pre-write) failed: %s", strerror(errno));
                     memcpy(ctx->_cfg.mesh_info.vir_addr, config->params.buffer_cfg.mesh.vir_addr,
                            copy_size);
+                    ret = rk_ispfec_api_vb_sync_end(ctx->_cfg.mesh_info.dmaFd, 1);
+                    if (ret) rkfec_err("set_mesh_config: DMA sync(post-write) failed: %s", strerror(errno));
                     rkfec_dbg(3, rkfec_debug, "Copied %zu bytes to V20 buffer", copy_size);
                 } else {
                     rkfec_err("Invalid buffer addresses for copy");
@@ -1124,7 +1215,11 @@ static int _update_mesh_config(rk_ispfec_ctx_t* ctx, rk_ispfec_mesh_config_t* co
                 if (src.need_copy) {
                     if (dst.vir_addr && src.vir_addr) {
                         size_t copy_size = std::min(dst.size, static_cast<int>(src.size));
+                        int sync_ret = rk_ispfec_api_vb_sync_start(dst.dmaFd, 1);
+                        if (sync_ret) rkfec_err("set_mesh_config: DMA sync(pre-write) failed: %s", strerror(errno));
                         memcpy(dst.vir_addr, src.vir_addr, copy_size);
+                        sync_ret = rk_ispfec_api_vb_sync_end(dst.dmaFd, 1);
+                        if (sync_ret) rkfec_err("set_mesh_config: DMA sync(post-write) failed: %s", strerror(errno));
                         rkfec_dbg(3, rkfec_debug, "Copied %zu bytes to component buffer",
                                   copy_size);
                     } else {

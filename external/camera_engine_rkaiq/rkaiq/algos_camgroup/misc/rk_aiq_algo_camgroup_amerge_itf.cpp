@@ -189,20 +189,14 @@ static XCamReturn AmergeProcess(const RkAiqAlgoCom* inparams, RkAiqAlgoResCom* o
             pAmergeGrpCtx->NextData.CtrlData.ExpoData.SGain =
                 pAmergeGrpParams->camgroupParmasArray[0]
                     ->aec._effAecExpInfo.HdrExp[0]
-                    .exp_real_params.analog_gain *
-                pAmergeGrpParams->camgroupParmasArray[0]
-                    ->aec._effAecExpInfo.HdrExp[0]
-                    .exp_real_params.digital_gain *
+                    .exp_real_params.cis_total_gain *
                 pAmergeGrpParams->camgroupParmasArray[0]
                     ->aec._effAecExpInfo.HdrExp[0]
                     .exp_real_params.isp_dgain;
             pAmergeGrpCtx->NextData.CtrlData.ExpoData.MGain =
                 pAmergeGrpParams->camgroupParmasArray[0]
                     ->aec._effAecExpInfo.HdrExp[1]
-                    .exp_real_params.analog_gain *
-                pAmergeGrpParams->camgroupParmasArray[0]
-                    ->aec._effAecExpInfo.HdrExp[1]
-                    .exp_real_params.digital_gain *
+                    .exp_real_params.cis_total_gain *
                 pAmergeGrpParams->camgroupParmasArray[0]
                     ->aec._effAecExpInfo.HdrExp[1]
                     .exp_real_params.isp_dgain;
@@ -224,10 +218,7 @@ static XCamReturn AmergeProcess(const RkAiqAlgoCom* inparams, RkAiqAlgoResCom* o
             pAmergeGrpCtx->NextData.CtrlData.ExpoData.LExpo =
                 pAmergeGrpParams->camgroupParmasArray[0]
                     ->aec._effAecExpInfo.HdrExp[2]
-                    .exp_real_params.analog_gain *
-                pAmergeGrpParams->camgroupParmasArray[0]
-                    ->aec._effAecExpInfo.HdrExp[2]
-                    .exp_real_params.digital_gain *
+                    .exp_real_params.cis_total_gain *
                 pAmergeGrpParams->camgroupParmasArray[0]
                     ->aec._effAecExpInfo.HdrExp[2]
                     .exp_real_params.isp_dgain *
@@ -250,10 +241,7 @@ static XCamReturn AmergeProcess(const RkAiqAlgoCom* inparams, RkAiqAlgoResCom* o
                         .exp_real_params.integration_time,
                     pAmergeGrpParams->camgroupParmasArray[0]
                             ->aec._effAecExpInfo.HdrExp[2]
-                            .exp_real_params.analog_gain *
-                        pAmergeGrpParams->camgroupParmasArray[0]
-                            ->aec._effAecExpInfo.HdrExp[2]
-                            .exp_real_params.digital_gain *
+                            .exp_real_params.cis_total_gain *
                         pAmergeGrpParams->camgroupParmasArray[0]
                             ->aec._effAecExpInfo.HdrExp[2]
                             .exp_real_params.isp_dgain,

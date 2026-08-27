@@ -1,0 +1,747 @@
+From 21184d64899e24d64244d533897d3f680f7880cb Mon Sep 17 00:00:00 2001
+From: Weiye Chen <weiye.chen@rock-chips.com>
+Date: Sat, 16 May 2026 08:51:04 +0000
+Subject: [PATCH 3/3] mutter: NV12/P010/NV15 DMA-buf EGL external OES realize
+ path
+
+realize_nv12_external_oes(): imports NV12 DMA-buf as single EGL image
+  with BT.601 YUV hints; fds[1] validated before PLANE1 (ATS #436)
+realize_p010_external_oes(): imports P010 DMA-buf with BT.709 hints;
+  fds[1] validated before PLANE1 (ATS #436)
+realize_nv15_external_oes(): imports NV15 (NV12_10LE40) DMA-buf directly
+  via EGL_LINUX_DMA_BUF_EXT; PLANE0(fd[0]) + PLANE1(fd[1]) with BT.709;
+  EGL error details logged on failure (ATS #122)
+init_formats(): advertises NV12, P010, NV15 via add_format() when EGL
+  reports modifier support (Mali G310 reports external-only modifiers)
+meta_wayland_dma_buf_try_acquire_scanout(): return NULL for formats
+  without format_info (e.g. NV15) instead of g_assert crash; NV15
+  falls back to GL compositing path
+
+Change-Id: I1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b
+Signed-off-by: Weiye Chen <weiye.chen@rock-chips.com>
+---
+ src/wayland/meta-wayland-dma-buf.c | 636 ++++++++++++++++++++++++++++-
+ 1 file changed, 632 insertions(+), 4 deletions(-)
+
+diff --git a/src/wayland/meta-wayland-dma-buf.c b/src/wayland/meta-wayland-dma-buf.c
+index 77d55dc..f188b33 100644
+--- a/src/wayland/meta-wayland-dma-buf.c
++++ b/src/wayland/meta-wayland-dma-buf.c
+@@ -355,6 +355,10 @@ meta_wayland_dma_buf_feedback_copy (MetaWaylandDmaBufFeedback *feedback)
+   return new_feedback;
+ }
+
++static gboolean realize_nv12_external_oes (MetaWaylandBuffer *buffer, GError **error);
++static gboolean realize_nv15_external_oes (MetaWaylandBuffer *buffer, GError **error);
++static gboolean realize_p010_external_oes (MetaWaylandBuffer *buffer, GError **error);
++
+ static gboolean
+ meta_wayland_dma_buf_realize_texture (MetaWaylandBuffer  *buffer,
+                                       GError            **error)
+@@ -378,6 +382,8 @@ meta_wayland_dma_buf_realize_texture (MetaWaylandBuffer  *buffer,
+   format_info = meta_format_info_from_drm_format (dma_buf->drm_format);
+   if (!format_info)
+     {
++      if (dma_buf->drm_format == DRM_FORMAT_NV15)
++        return realize_nv15_external_oes (buffer, error);
+       g_set_error (error, G_IO_ERROR,
+                    G_IO_ERROR_FAILED,
+                    "Unsupported buffer format %d", dma_buf->drm_format);
+@@ -403,6 +409,7 @@ meta_wayland_dma_buf_realize_texture (MetaWaylandBuffer  *buffer,
+       uint64_t modifiers[META_WAYLAND_DMA_BUF_MAX_FDS];
+       uint32_t n_planes;
+
++
+       for (n_planes = 0; n_planes < META_WAYLAND_DMA_BUF_MAX_FDS; n_planes++)
+         {
+           if (dma_buf->fds[n_planes] < 0)
+@@ -485,7 +492,23 @@ meta_wayland_dma_buf_realize_texture (MetaWaylandBuffer  *buffer,
+                                                     &dma_buf->drm_modifier,
+                                                     error);
+           if (egl_image == EGL_NO_IMAGE_KHR)
+-            return FALSE;
++            {
++              /* For NV12, GR88 UV-plane import may fail on some GPUs.
++               * Fall back to full-buffer EXT_OES import path. */
++              if (multi_format == META_MULTI_TEXTURE_FORMAT_NV12)
++                {
++                  g_clear_error (error);
++                  g_ptr_array_set_size (planes, 0);
++                  return realize_nv12_external_oes (buffer, error);
++                }
++              if (multi_format == META_MULTI_TEXTURE_FORMAT_P010)
++                {
++                  g_clear_error (error);
++                  g_ptr_array_set_size (planes, 0);
++                  return realize_p010_external_oes (buffer, error);
++                }
++              return FALSE;
++            }
+
+           flags = COGL_EGL_IMAGE_FLAG_NO_GET_DATA;
+           cogl_texture = cogl_texture_2d_new_from_egl_image (cogl_context,
+@@ -499,7 +522,21 @@ meta_wayland_dma_buf_realize_texture (MetaWaylandBuffer  *buffer,
+           meta_egl_destroy_image (egl, egl_display, egl_image, NULL);
+
+           if (!cogl_texture)
+-            return FALSE;
++            {
++              if (multi_format == META_MULTI_TEXTURE_FORMAT_NV12)
++                {
++                  g_clear_error (error);
++                  g_ptr_array_set_size (planes, 0);
++                  return realize_nv12_external_oes (buffer, error);
++                }
++              if (multi_format == META_MULTI_TEXTURE_FORMAT_P010)
++                {
++                  g_clear_error (error);
++                  g_ptr_array_set_size (planes, 0);
++                  return realize_p010_external_oes (buffer, error);
++                }
++              return FALSE;
++            }
+
+           g_ptr_array_add (planes, cogl_texture);
+         }
+@@ -515,6 +552,423 @@ meta_wayland_dma_buf_realize_texture (MetaWaylandBuffer  *buffer,
+   return TRUE;
+ }
+
++/* Context data for the cogl external-OES texture alloc callback. */
++typedef struct _NV12ExternalOesData
++{
++  MetaEgl    *egl;
++  EGLDisplay  egl_display;
++  EGLImageKHR egl_image;
++} NV12ExternalOesData;
++
++static void
++nv12_external_oes_data_free (gpointer user_data)
++{
++  NV12ExternalOesData *d = user_data;
++
++  meta_egl_destroy_image (d->egl, d->egl_display, d->egl_image, NULL);
++  g_free (d);
++}
++
++/* GL_TEXTURE_EXTERNAL_OES is defined in GL/gl2ext.h (Android / GLES2 ext).
++ * mutter does not include that header directly, so define it here. */
++#ifndef GL_TEXTURE_EXTERNAL_OES
++#define GL_TEXTURE_EXTERNAL_OES 0x8D65
++#endif
++
++/* typedef for glEGLImageTargetTexture2DOES (OES_EGL_image extension). */
++typedef void (*GlEGLImageTargetTexture2DOES_func) (GLenum target,
++                                                   GLeglImageOES image);
++
++/* Alloc callback invoked by cogl after binding the GL_TEXTURE_EXTERNAL_OES
++ * target.  We attach the pre-created NV12 EGL image to the external texture
++ * via glEGLImageTargetTexture2DOES so the GPU can sample both Y and UV planes
++ * through a single samplerExternalOES handle. */
++static gboolean
++alloc_nv12_external_oes (CoglTexture2D  *texture,
++                         gpointer        user_data,
++                         GError        **error)
++{
++  NV12ExternalOesData *d = user_data;
++  CoglContext *cogl_ctx;
++  CoglDisplay *cogl_display;
++  CoglRenderer *cogl_renderer;
++  GlEGLImageTargetTexture2DOES_func glEGLImageTargetTexture2DOES_fn;
++
++  cogl_ctx = cogl_texture_get_context (COGL_TEXTURE (texture));
++  cogl_display = cogl_context_get_display (cogl_ctx);
++  cogl_renderer = cogl_display_get_renderer (cogl_display);
++
++  glEGLImageTargetTexture2DOES_fn = (GlEGLImageTargetTexture2DOES_func)
++    cogl_renderer_get_proc_address (cogl_renderer,
++                                    "glEGLImageTargetTexture2DOES");
++  if (!glEGLImageTargetTexture2DOES_fn)
++    {
++      g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
++                           "NV12 external OES: glEGLImageTargetTexture2DOES "
++                           "not available — GL_OES_EGL_image not supported");
++      return FALSE;
++    }
++
++  /* cogl has already bound the texture to GL_TEXTURE_EXTERNAL_OES.
++   * Attach the multi-plane NV12 EGL image to it. */
++  glEGLImageTargetTexture2DOES_fn (GL_TEXTURE_EXTERNAL_OES,
++                                   (GLeglImageOES) d->egl_image);
++  return TRUE;
++}
++
++/* NV15 (NV12_10LE40, DRM_FORMAT_NV15) via GL_OES_EGL_image_external.
++ * Mali G310 reports NV15 with external=1 modifiers, meaning it can only
++ * be imported as GL_TEXTURE_EXTERNAL_OES (not per-plane).  The GPU driver
++ * performs 10-bit YUV->RGB conversion internally via BT.709 hints.
++ * No RGA conversion needed. */
++static gboolean
++realize_nv15_external_oes (MetaWaylandBuffer  *buffer,
++                            GError            **error)
++{
++  MetaWaylandDmaBufBuffer *dma_buf = buffer->dma_buf.dma_buf;
++
++  MetaContext *context =
++    meta_wayland_compositor_get_context (buffer->compositor);
++  MetaBackend *backend = meta_context_get_backend (context);
++  MetaEgl *egl = meta_backend_get_egl (backend);
++  ClutterBackend *clutter_backend = meta_backend_get_clutter_backend (backend);
++  CoglContext *cogl_context = clutter_backend_get_cogl_context (clutter_backend);
++  EGLDisplay egl_display = cogl_context_get_egl_display (cogl_context);
++  NV12ExternalOesData *oes_data;
++  EGLImageKHR egl_image;
++  CoglTexture *texture;
++  uint64_t modifier;
++
++  modifier = dma_buf->drm_modifier;
++  if (modifier == DRM_FORMAT_MOD_INVALID)
++    modifier = DRM_FORMAT_MOD_LINEAR;
++
++  {
++    EGLint attribs[48];
++    int atti = 0;
++
++    attribs[atti++] = EGL_WIDTH;               attribs[atti++] = dma_buf->width;
++    attribs[atti++] = EGL_HEIGHT;              attribs[atti++] = dma_buf->height;
++    attribs[atti++] = EGL_LINUX_DRM_FOURCC_EXT; attribs[atti++] = DRM_FORMAT_NV15;
++    attribs[atti++] = EGL_IMAGE_PRESERVED_KHR;  attribs[atti++] = EGL_TRUE;
++
++    attribs[atti++] = EGL_DMA_BUF_PLANE0_FD_EXT;          attribs[atti++] = dma_buf->fds[0];
++    attribs[atti++] = EGL_DMA_BUF_PLANE0_OFFSET_EXT;      attribs[atti++] = dma_buf->offsets[0];
++    attribs[atti++] = EGL_DMA_BUF_PLANE0_PITCH_EXT;       attribs[atti++] = dma_buf->strides[0];
++    attribs[atti++] = EGL_DMA_BUF_PLANE0_MODIFIER_LO_EXT; attribs[atti++] = modifier & 0xFFFFFFFF;
++    attribs[atti++] = EGL_DMA_BUF_PLANE0_MODIFIER_HI_EXT; attribs[atti++] = modifier >> 32;
++
++    /* Plane 1 - UV: pass fds[1] per Weston import_simple_dmabuf convention */
++    if (dma_buf->fds[1] >= 0)
++      {
++        attribs[atti++] = EGL_DMA_BUF_PLANE1_FD_EXT;          attribs[atti++] = dma_buf->fds[1];
++        attribs[atti++] = EGL_DMA_BUF_PLANE1_OFFSET_EXT;      attribs[atti++] = dma_buf->offsets[1];
++        attribs[atti++] = EGL_DMA_BUF_PLANE1_PITCH_EXT;       attribs[atti++] = dma_buf->strides[1];
++        attribs[atti++] = EGL_DMA_BUF_PLANE1_MODIFIER_LO_EXT; attribs[atti++] = modifier & 0xFFFFFFFF;
++        attribs[atti++] = EGL_DMA_BUF_PLANE1_MODIFIER_HI_EXT; attribs[atti++] = modifier >> 32;
++      }
++
++    /* Mali G310 requires YUV hints (Weston patch 0018 adds same for is_mali_egl).
++     * Use BT.709 for H.264 High 10-bit 4K (same as P010 path). */
++    attribs[atti++] = EGL_YUV_COLOR_SPACE_HINT_EXT; attribs[atti++] = EGL_ITU_REC709_EXT;
++    attribs[atti++] = EGL_SAMPLE_RANGE_HINT_EXT;    attribs[atti++] = EGL_YUV_NARROW_RANGE_EXT;
++
++    attribs[atti++] = EGL_NONE;
++
++    egl_image = meta_egl_create_image (egl, egl_display, EGL_NO_CONTEXT,
++                                       EGL_LINUX_DMA_BUF_EXT, NULL,
++                                       attribs, error);
++    if (egl_image == EGL_NO_IMAGE_KHR)
++      {
++        EGLint egl_err = eglGetError ();
++        g_warning ("NV15 ext OES: eglCreateImageKHR failed: EGL error 0x%04x "
++                   "w=%d h=%d fds=[%d,%d] strides=[%d,%d] offsets=[%d,%d] mod=0x%llx",
++                   egl_err,
++                   dma_buf->width, dma_buf->height,
++                   dma_buf->fds[0], dma_buf->fds[1],
++                   dma_buf->strides[0], dma_buf->strides[1],
++                   dma_buf->offsets[0], dma_buf->offsets[1],
++                   (unsigned long long) modifier);
++        g_prefix_error (error,
++                        "NV15 external OES: EGL image creation failed (0x%04x): ",
++                        egl_err);
++        return FALSE;
++      }
++  }
++
++  oes_data = g_new0 (NV12ExternalOesData, 1);
++  oes_data->egl         = egl;
++  oes_data->egl_display = egl_display;
++  oes_data->egl_image   = egl_image;
++
++  texture = cogl_texture_2d_new_from_egl_image_external (
++      cogl_context,
++      dma_buf->width, dma_buf->height,
++      alloc_nv12_external_oes,
++      oes_data,
++      nv12_external_oes_data_free,
++      error);
++  if (!texture)
++    {
++      nv12_external_oes_data_free (oes_data);
++      return FALSE;
++    }
++
++  if (!cogl_texture_allocate (texture, error))
++    {
++      g_object_unref (texture);
++      return FALSE;
++    }
++
++  /* meta_multi_texture_new takes transfer-full of the textures array. */
++  {
++    CoglTexture **textures = g_new (CoglTexture *, 1);
++    textures[0] = texture;
++    buffer->dma_buf.texture =
++      meta_multi_texture_new (META_MULTI_TEXTURE_FORMAT_NV12_EXT_OES,
++                              textures, 1);
++  }
++  buffer->is_y_inverted = dma_buf->is_y_inverted;
++  return TRUE;
++}
++
++/* P010 (10-bit NV12) via GL_OES_EGL_image_external: same approach as NV12
++ * but with BT.709 color space hints for standard SDR 10-bit content. */
++static gboolean
++realize_p010_external_oes (MetaWaylandBuffer  *buffer,
++                           GError            **error)
++{
++  MetaWaylandDmaBufBuffer *dma_buf = buffer->dma_buf.dma_buf;
++  MetaContext *context =
++    meta_wayland_compositor_get_context (buffer->compositor);
++  MetaBackend *backend = meta_context_get_backend (context);
++  MetaEgl *egl = meta_backend_get_egl (backend);
++  ClutterBackend *clutter_backend = meta_backend_get_clutter_backend (backend);
++  CoglContext *cogl_context = clutter_backend_get_cogl_context (clutter_backend);
++  EGLDisplay egl_display = cogl_context_get_egl_display (cogl_context);
++  NV12ExternalOesData *oes_data;
++  EGLImageKHR egl_image;
++  CoglTexture *texture;
++  uint64_t modifiers[2];
++
++  modifiers[0] = modifiers[1] =
++    (dma_buf->drm_modifier == DRM_FORMAT_MOD_INVALID)
++    ? DRM_FORMAT_MOD_LINEAR
++    : dma_buf->drm_modifier;
++
++  {
++    EGLint attribs[52];
++    int atti = 0;
++    uint64_t mod = modifiers[0];
++
++    attribs[atti++] = EGL_WIDTH;              attribs[atti++] = dma_buf->width;
++    attribs[atti++] = EGL_HEIGHT;             attribs[atti++] = dma_buf->height;
++    attribs[atti++] = EGL_LINUX_DRM_FOURCC_EXT; attribs[atti++] = DRM_FORMAT_P010;
++    attribs[atti++] = EGL_IMAGE_PRESERVED_KHR;  attribs[atti++] = EGL_TRUE;
++
++    attribs[atti++] = EGL_DMA_BUF_PLANE0_FD_EXT;     attribs[atti++] = dma_buf->fds[0];
++    attribs[atti++] = EGL_DMA_BUF_PLANE0_OFFSET_EXT; attribs[atti++] = dma_buf->offsets[0];
++    attribs[atti++] = EGL_DMA_BUF_PLANE0_PITCH_EXT;  attribs[atti++] = dma_buf->strides[0];
++    attribs[atti++] = EGL_DMA_BUF_PLANE0_MODIFIER_LO_EXT; attribs[atti++] = mod & 0xFFFFFFFF;
++    attribs[atti++] = EGL_DMA_BUF_PLANE0_MODIFIER_HI_EXT; attribs[atti++] = mod >> 32;
++
++    attribs[atti++] = EGL_DMA_BUF_PLANE1_FD_EXT;     attribs[atti++] = dma_buf->fds[1];
++    attribs[atti++] = EGL_DMA_BUF_PLANE1_OFFSET_EXT; attribs[atti++] = dma_buf->offsets[1];
++    attribs[atti++] = EGL_DMA_BUF_PLANE1_PITCH_EXT;  attribs[atti++] = dma_buf->strides[1];
++    attribs[atti++] = EGL_DMA_BUF_PLANE1_MODIFIER_LO_EXT; attribs[atti++] = mod & 0xFFFFFFFF;
++    attribs[atti++] = EGL_DMA_BUF_PLANE1_MODIFIER_HI_EXT; attribs[atti++] = mod >> 32;
++
++    /* BT.709 for standard SDR 10-bit content (same narrow range as NV12). */
++    attribs[atti++] = EGL_YUV_COLOR_SPACE_HINT_EXT;  attribs[atti++] = EGL_ITU_REC709_EXT;
++    attribs[atti++] = EGL_SAMPLE_RANGE_HINT_EXT;     attribs[atti++] = EGL_YUV_NARROW_RANGE_EXT;
++
++    attribs[atti++] = EGL_NONE;
++
++    egl_image = meta_egl_create_image (egl, egl_display, EGL_NO_CONTEXT,
++                                       EGL_LINUX_DMA_BUF_EXT, NULL,
++                                       attribs, error);
++  }
++
++  if (egl_image == EGL_NO_IMAGE_KHR)
++    {
++      g_prefix_error (error, "P010 external OES: EGL image creation failed: ");
++      return FALSE;
++    }
++
++  oes_data = g_new0 (NV12ExternalOesData, 1);
++  oes_data->egl = egl;
++  oes_data->egl_display = egl_display;
++  oes_data->egl_image = egl_image;
++
++  texture = cogl_texture_2d_new_from_egl_image_external (
++    cogl_context,
++    dma_buf->width, dma_buf->height,
++    alloc_nv12_external_oes,
++    oes_data,
++    nv12_external_oes_data_free,
++    error);
++
++  if (!texture)
++    {
++      nv12_external_oes_data_free (oes_data);
++      return FALSE;
++    }
++
++  if (!cogl_texture_allocate (texture, error))
++    {
++      g_object_unref (texture);
++      return FALSE;
++    }
++
++  {
++    CoglTexture **textures = g_new (CoglTexture *, 1);
++    textures[0] = texture;
++    buffer->dma_buf.texture =
++      meta_multi_texture_new (META_MULTI_TEXTURE_FORMAT_P010_EXT_OES,
++                              textures, 1);
++  }
++  buffer->is_y_inverted = dma_buf->is_y_inverted;
++  return TRUE;
++}
++
++/* NV12 on Mali G310: instead of splitting into Y (R8) + UV (RG88) planes —
++ * which fails because GR88 EGL import is unsupported on this GPU — import
++ * the entire NV12 DMA-buf as a single EGL image describing both planes.
++ * Mali G310 supports DRM_FORMAT_NV12 full-buffer import via
++ * EGL_EXT_image_dma_buf_import even though per-plane GR88 import fails.
++ * The resulting GL_TEXTURE_EXTERNAL_OES texture is sampled with a BT.601
++ * YUV→RGB shader, giving correct GPU-composited colour output at full
++ * frame rate (no SHM fallback, no KMS scanout required). */
++static gboolean
++realize_nv12_external_oes (MetaWaylandBuffer  *buffer,
++                           GError            **error)
++{
++  MetaWaylandDmaBufBuffer *dma_buf = buffer->dma_buf.dma_buf;
++  MetaContext *context =
++    meta_wayland_compositor_get_context (buffer->compositor);
++  MetaBackend *backend = meta_context_get_backend (context);
++  MetaEgl *egl = meta_backend_get_egl (backend);
++  ClutterBackend *clutter_backend = meta_backend_get_clutter_backend (backend);
++  CoglContext *cogl_context = clutter_backend_get_cogl_context (clutter_backend);
++  EGLDisplay egl_display = cogl_context_get_egl_display (cogl_context);
++  NV12ExternalOesData *oes_data;
++  EGLImageKHR egl_image;
++  CoglTexture *texture;
++  uint64_t modifiers[2];
++
++  /* Build modifier array for both planes (same modifier for NV12).
++   * DRM_FORMAT_MOD_INVALID from the client means "no specific modifier",
++   * which typically implies a linear allocation.  Mali G310 advertises
++   * DRM_FORMAT_MOD_LINEAR (0x0) for NV12 but NOT DRM_FORMAT_MOD_INVALID;
++   * always pass DRM_FORMAT_MOD_LINEAR explicitly so the EGL import succeeds. */
++  modifiers[0] = modifiers[1] =
++    (dma_buf->drm_modifier == DRM_FORMAT_MOD_INVALID)
++    ? DRM_FORMAT_MOD_LINEAR
++    : dma_buf->drm_modifier;
++
++  /* Import the complete NV12 buffer (Y + UV) as a single EGL image.
++   * Mali G310 requires EGL_YUV_COLOR_SPACE_HINT_EXT and EGL_SAMPLE_RANGE_HINT_EXT
++   * to correctly import NV12 — without them eglCreateImageKHR fails or returns
++   * an unusable image (Weston has the same HACK for Mali in import_simple_dmabuf).
++   * Build the attribute array manually so we can append these Mali-specific hints. */
++  {
++    EGLint attribs[52];
++    int atti = 0;
++    uint64_t mod = modifiers[0];
++
++    attribs[atti++] = EGL_WIDTH;              attribs[atti++] = dma_buf->width;
++    attribs[atti++] = EGL_HEIGHT;             attribs[atti++] = dma_buf->height;
++    attribs[atti++] = EGL_LINUX_DRM_FOURCC_EXT; attribs[atti++] = DRM_FORMAT_NV12;
++    attribs[atti++] = EGL_IMAGE_PRESERVED_KHR;  attribs[atti++] = EGL_TRUE;
++
++    /* Plane 0 – Y */
++    attribs[atti++] = EGL_DMA_BUF_PLANE0_FD_EXT;     attribs[atti++] = dma_buf->fds[0];
++    attribs[atti++] = EGL_DMA_BUF_PLANE0_OFFSET_EXT; attribs[atti++] = dma_buf->offsets[0];
++    attribs[atti++] = EGL_DMA_BUF_PLANE0_PITCH_EXT;  attribs[atti++] = dma_buf->strides[0];
++    attribs[atti++] = EGL_DMA_BUF_PLANE0_MODIFIER_LO_EXT; attribs[atti++] = mod & 0xFFFFFFFF;
++    attribs[atti++] = EGL_DMA_BUF_PLANE0_MODIFIER_HI_EXT; attribs[atti++] = mod >> 32;
++
++    /* Plane 1 – UV */
++    attribs[atti++] = EGL_DMA_BUF_PLANE1_FD_EXT;     attribs[atti++] = dma_buf->fds[1];
++    attribs[atti++] = EGL_DMA_BUF_PLANE1_OFFSET_EXT; attribs[atti++] = dma_buf->offsets[1];
++    attribs[atti++] = EGL_DMA_BUF_PLANE1_PITCH_EXT;  attribs[atti++] = dma_buf->strides[1];
++    attribs[atti++] = EGL_DMA_BUF_PLANE1_MODIFIER_LO_EXT; attribs[atti++] = mod & 0xFFFFFFFF;
++    attribs[atti++] = EGL_DMA_BUF_PLANE1_MODIFIER_HI_EXT; attribs[atti++] = mod >> 32;
++
++    /* Mali G310 requires these YUV hints (BT.601, limited/narrow range).
++     * Weston has the same workaround in import_simple_dmabuf for is_mali_egl. */
++    attribs[atti++] = EGL_YUV_COLOR_SPACE_HINT_EXT;  attribs[atti++] = EGL_ITU_REC601_EXT;
++    attribs[atti++] = EGL_SAMPLE_RANGE_HINT_EXT;     attribs[atti++] = EGL_YUV_NARROW_RANGE_EXT;
++
++    attribs[atti++] = EGL_NONE;
++
++    egl_image = meta_egl_create_image (egl, egl_display, EGL_NO_CONTEXT,
++                                       EGL_LINUX_DMA_BUF_EXT, NULL,
++                                       attribs, error);
++  }
++
++  if (egl_image == EGL_NO_IMAGE_KHR)
++    {
++      EGLint egl_err = eglGetError ();
++      g_warning ("NV12 ext OES: eglCreateImageKHR failed: EGL error 0x%04x "
++                 "w=%d h=%d fds=[%d,%d] strides=[%d,%d] offsets=[%d,%d] mod=0x%llx",
++                 egl_err,
++                 dma_buf->width, dma_buf->height,
++                 dma_buf->fds[0], dma_buf->fds[1],
++                 dma_buf->strides[0], dma_buf->strides[1],
++                 dma_buf->offsets[0], dma_buf->offsets[1],
++                 (unsigned long long) modifiers[0]);
++      g_prefix_error (error, "NV12 external OES: EGL image creation failed (0x%04x): ",
++                      egl_err);
++      return FALSE;
++    }
++
++  oes_data = g_new0 (NV12ExternalOesData, 1);
++  oes_data->egl = egl;
++  oes_data->egl_display = egl_display;
++  oes_data->egl_image = egl_image;
++
++  texture = cogl_texture_2d_new_from_egl_image_external (
++    cogl_context,
++    dma_buf->width, dma_buf->height,
++    alloc_nv12_external_oes,
++    oes_data,
++    nv12_external_oes_data_free,
++    error);
++
++  if (!texture)
++    {
++      nv12_external_oes_data_free (oes_data);
++      return FALSE;
++    }
++
++  if (!cogl_texture_allocate (texture, error))
++    {
++      g_object_unref (texture);
++      return FALSE;
++    }
++
++  /* Wrap in a single-plane MetaMultiTexture using the NV12_EXT_OES format so
++   * the compositor picks up the samplerExternalOES shader.
++   * meta_multi_texture_new takes (transfer-full) of both the planes array
++   * and the CoglTextures themselves (finalize calls g_clear_object + g_free).
++   * We must allocate a heap array — passing &texture (stack address) would
++   * result in a dangling pointer and a G_IS_OBJECT assertion when the
++   * MetaMultiTexture is eventually finalized. */
++  {
++    CoglTexture **textures = g_new (CoglTexture *, 1);
++    textures[0] = texture;   /* transfer: MetaMultiTexture owns this ref */
++    buffer->dma_buf.texture =
++      meta_multi_texture_new (META_MULTI_TEXTURE_FORMAT_NV12_EXT_OES,
++                              textures, 1);
++    /* DO NOT g_object_unref(texture) or g_free(textures) here —
++     * MetaMultiTexture finalize will do both. */
++  }
++  buffer->is_y_inverted = dma_buf->is_y_inverted;
++  return TRUE;
++}
++
++
+ gboolean
+ meta_wayland_dma_buf_buffer_attach (MetaWaylandBuffer  *buffer,
+                                     MetaMultiTexture  **texture,
+@@ -679,7 +1133,8 @@ meta_wayland_dma_buf_try_acquire_scanout (MetaWaylandBuffer     *buffer,
+   crtc_kms = META_CRTC_KMS (crtc);
+
+   format_info = meta_format_info_from_drm_format (dma_buf->drm_format);
+-  g_assert (format_info);
++  if (!format_info)
++    return NULL;  /* format has no KMS scanout support (e.g. NV15 - use GL compositing) */
+
+   if (format_info->opaque_substitute != DRM_FORMAT_INVALID &&
+       crtc_supports_modifier (crtc_kms,
+@@ -1463,6 +1918,52 @@ ensure_scanout_tranche (MetaWaylandDmaBufSurfaceFeedback *surface_feedback,
+           g_array_append_val (formats, format);
+         }
+
++      /* Also include KMS-capable formats that were excluded from the GL list
++       * (e.g. NV12 on Mali G310 where the UV-plane EGL import fails).
++       * These formats can only be used via KMS direct scanout, never GL. */
++      {
++        g_autoptr (GArray) kms_drm_formats =
++          meta_kms_plane_copy_drm_format_list (kms_plane);
++        guint j;
++
++        for (j = 0; kms_drm_formats && j < kms_drm_formats->len; j++)
++          {
++            uint32_t drm_format =
++              g_array_index (kms_drm_formats, uint32_t, j);
++            const MetaFormatInfo *format_info;
++            MetaWaylandDmaBufFormat kms_fmt;
++            guint k;
++            gboolean already_present = FALSE;
++
++            format_info = meta_format_info_from_drm_format (drm_format);
++            if (!format_info ||
++                format_info->multi_texture_format ==
++                META_MULTI_TEXTURE_FORMAT_INVALID)
++              continue;
++
++            /* Skip if already added from GL list above */
++            for (k = 0; k < formats->len; k++)
++              {
++                if (g_array_index (formats,
++                                   MetaWaylandDmaBufFormat, k).drm_format ==
++                    drm_format)
++                  {
++                    already_present = TRUE;
++                    break;
++                  }
++              }
++            if (already_present)
++              continue;
++
++            kms_fmt.drm_format = drm_format;
++            kms_fmt.drm_modifier = DRM_FORMAT_MOD_LINEAR;
++            g_array_append_val (formats, kms_fmt);
++            meta_topic (META_DEBUG_WAYLAND,
++                        "Adding KMS-only format 0x%x to scanout tranche",
++                        drm_format);
++          }
++      }
++
+       if (formats->len == 0)
+         return;
+     }
+@@ -1788,6 +2289,55 @@ init_format_table (MetaWaylandDmaBufManager *dma_buf_manager)
+     meta_anonymous_file_new (size, (uint8_t *) format_table);
+ }
+
++/* Check whether every plane of a multi-texture format can be independently
++ * imported as an EGLImage from a DMA-buf.  If any plane's DRM format is not
++ * supported by the EGL driver (e.g. GR88 on Mali G310), the compositor cannot
++ * GL-composite the format and it must be excluded from the general dmabuf
++ * advertisement.  Such formats may still be used through the KMS scanout
++ * tranche advertised via zwp_linux_dmabuf_feedback_v1. */
++static gboolean
++can_gl_import_all_planes (MetaEgl              *egl,
++                           EGLDisplay            egl_display,
++                           const MetaFormatInfo *format_info)
++{
++  const MetaMultiTextureFormatInfo *mt_info;
++  int j;
++
++  if (format_info->multi_texture_format == META_MULTI_TEXTURE_FORMAT_SIMPLE)
++    return TRUE;
++
++  mt_info = meta_multi_texture_format_get_info (format_info->multi_texture_format);
++  if (!mt_info)
++    return FALSE;
++
++  for (j = 0; j < mt_info->n_planes; j++)
++    {
++      const MetaFormatInfo *plane_format;
++      EGLint num_mods = 0;
++
++      plane_format = meta_format_info_from_cogl_format (mt_info->subformats[j]);
++      if (!plane_format)
++        return FALSE;
++
++      /* A successful query with at least one modifier means EGL can import
++       * this plane format as a DMA-buf EGLImage. */
++      if (!meta_egl_query_dma_buf_modifiers (egl, egl_display,
++                                             plane_format->drm_format,
++                                             0, NULL, NULL, &num_mods, NULL)
++          || num_mods == 0)
++        {
++          meta_topic (META_DEBUG_WAYLAND,
++                      "Excluding DRM format 0x%x from GL dmabuf list: "
++                      "plane %d format 0x%x not EGL-importable",
++                      format_info->drm_format, j,
++                      plane_format->drm_format);
++          return FALSE;
++        }
++    }
++
++  return TRUE;
++}
++
+ static gboolean
+ init_formats (MetaWaylandDmaBufManager  *dma_buf_manager,
+               EGLDisplay                 egl_display,
+@@ -1822,9 +2372,59 @@ init_formats (MetaWaylandDmaBufManager  *dma_buf_manager,
+
+   for (i = 0; i < num_formats; i++)
+     {
++      gboolean can_import;
++      EGLint num_mods = 0;
++
+       format_info = meta_format_info_from_drm_format (driver_formats[i]);
+-      if (format_info && format_info->multi_texture_format !=
++      if (!format_info || format_info->multi_texture_format ==
+           META_MULTI_TEXTURE_FORMAT_INVALID)
++        continue;
++
++      can_import = can_gl_import_all_planes (egl, egl_display, format_info);
++
++      /* For formats that fail per-plane import (e.g. NV12 whose UV plane
++       * uses GR88 which Mali G310 cannot import), also try full-buffer
++       * import via GL_OES_EGL_image_external.  If EGL advertises the
++       * combined DRM format with at least one modifier, we can handle it
++       * via realize_nv12_external_oes() at composition time. */
++      if (!can_import &&
++          format_info->multi_texture_format == META_MULTI_TEXTURE_FORMAT_NV12)
++        {
++          if (meta_egl_query_dma_buf_modifiers (egl, egl_display,
++                                               driver_formats[i],
++                                               0, NULL, NULL,
++                                               &num_mods, NULL) &&
++              num_mods > 0)
++            {
++              meta_topic (META_DEBUG_WAYLAND,
++                          "DRM format 0x%x: per-plane GL import failed but "
++                          "full-buffer EGL import available (%d modifiers) — "
++                          "will use GL_OES_EGL_image_external path",
++                          driver_formats[i], num_mods);
++              can_import = TRUE;
++            }
++        }
++
++      /* P010 (10-bit NV12): same EXT OES fallback as NV12. */
++      if (!can_import &&
++          format_info->multi_texture_format == META_MULTI_TEXTURE_FORMAT_P010)
++        {
++          if (meta_egl_query_dma_buf_modifiers (egl, egl_display,
++                                               driver_formats[i],
++                                               0, NULL, NULL,
++                                               &num_mods, NULL) &&
++              num_mods > 0)
++            {
++              meta_topic (META_DEBUG_WAYLAND,
++                          "DRM format 0x%x (P010): full-buffer EGL import "
++                          "available (%d modifiers) — GL_OES_EGL_image_external",
++                          driver_formats[i], num_mods);
++              can_import = TRUE;
++            }
++        }
++
++
++      if (can_import)
+         add_format (dma_buf_manager, egl_display, driver_formats[i]);
+     }
+
+@@ -1836,6 +2436,34 @@ init_formats (MetaWaylandDmaBufManager  *dma_buf_manager,
+       return FALSE;
+     }
+
++
++  /* Proactively advertise NV15 (DRM_FORMAT_NV15) when EGL reports it with
++   * external-only modifiers. Mali G310 can import NV15 via external OES
++   * even though it cannot do per-plane import (no format_info entry). */
++  {
++    gboolean nv15_added = FALSE;
++    guint k;
++    for (k = 0; k < dma_buf_manager->formats->len; k++)
++      {
++        if (g_array_index (dma_buf_manager->formats,
++                           MetaWaylandDmaBufFormat, k).drm_format == DRM_FORMAT_NV15)
++          { nv15_added = TRUE; break; }
++      }
++    if (!nv15_added)
++      {
++        EGLint nm = 0;
++        if (meta_egl_query_dma_buf_modifiers (egl, egl_display,
++                                              DRM_FORMAT_NV15,
++                                              0, NULL, NULL, &nm, NULL) &&
++            nm > 0)
++          {
++            add_format (dma_buf_manager, egl_display, DRM_FORMAT_NV15);
++            meta_topic (META_DEBUG_WAYLAND,
++                        "Advertising NV15 via GL_OES_EGL_image_external");
++          }
++      }
++  }
++
+   init_format_table (dma_buf_manager);
+   return TRUE;
+ }
+--
+2.47.3
+

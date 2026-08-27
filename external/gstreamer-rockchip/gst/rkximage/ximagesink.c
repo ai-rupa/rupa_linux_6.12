@@ -1233,6 +1233,8 @@ gst_x_image_sink_ximage_put (GstRkXImageSink * ximagesink, GstBuffer * buf)
   }
 
   gst_video_sink_center_rect (src, dst, &result, TRUE);
+  if (!self->keep_aspect)
+    result = dst;
 
   result.x += ximagesink->render_rect.x;
   result.y += ximagesink->render_rect.y;

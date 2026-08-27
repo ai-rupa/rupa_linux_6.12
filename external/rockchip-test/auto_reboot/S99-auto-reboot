@@ -8,7 +8,7 @@ case "$1" in
 		fi
 		if [ -e "/userdata/rockchip-test/auto_reboot.sh" ]; then
 			echo "start auto-reboot"
-			source /userdata/rockchip-test/auto_reboot.sh `cat /userdata/rockchip-test/reboot_total_cnt`&
+			/rockchip-test/auto_reboot/auto_reboot.sh --loops $(cat /userdata/rockchip-test/reboot_total_cnt) &
 		fi
 
 		;;

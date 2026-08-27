@@ -495,6 +495,10 @@ void rk_aiq_lsc21_params_cvt(void* attr, isp_params_t* isp_params, common_cvt_in
             memcpy(cvtinfo->otplsc_res.y_size_tbl, pFix->y_size_tbl, sizeof(pFix->y_size_tbl));
             cvtinfo->otplsc_res.flag = false;
         }
+        if (cvtinfo->otp_lsc.flag & USER_OTP_UPDATE_FLAG_MASK) {
+            cvtinfo->otplsc_res.flag = false;
+            cvtinfo->otp_lsc.flag &= ~USER_OTP_UPDATE_FLAG_MASK;
+        }
     }
 
     if (cvtinfo->otp_lsc.flag && !cvtinfo->otplsc_res.flag) {

@@ -123,6 +123,9 @@ struct AiqSensorHw_s {
     AiqPool_t* _expParamsPool;
     /* AiqSensorExpInfo_t* */
     AiqMap_t* _pending_spilt_map;
+    /* AiqSensorExpInfo_t* */
+    AiqSensorExpInfo_t* _pending_exp_array[4];
+    int _pending_exp_count;
     AiqSensorExpInfo_t* _last_exp_time;
     AiqSensorExpInfo_t* _last_exp_gain;
     AiqSensorExpInfo_t* _last_dcg_gain_mode;
@@ -158,6 +161,9 @@ struct AiqSensorHw_s {
 
     int mVicapExpFd;
     struct rkmodule_pdaf_win_cfg_t last_pdaf_win;
+
+    // preview path in preview-capture mode (SCL channel)
+    bool mIsPreviewPath;
 
     // export api
     XCamReturn (*setExposureParams)(AiqSensorHw_t* pBaseSns, AiqAecExpInfoWrapper_t* expPar);
@@ -221,6 +227,10 @@ int AiqSensorHw_getBuiltInHdrSingleBit(
 
 #define AiqSensorHw_getUserVts(pSnsHw) \
     pSnsHw->userVts
+
+#define AiqSensorHw_setPreviewPath(pSnsHw, enable) (pSnsHw)->mIsPreviewPath = (enable)
+
+#define AiqSensorHw_isPreviewPath(pSnsHw) (pSnsHw)->mIsPreviewPath
 
 RKAIQ_END_DECLARE
 

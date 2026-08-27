@@ -10,6 +10,8 @@ RKADK_SITE_METHOD = local
 
 RKADK_INSTALL_STAGING = YES
 
+RKADK_CONF_OPTS += -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+
 define RKADK_LINK_GIT
     rm -rf $(@D)/.git
     ln -s $(SRCDIR)/.git $(@D)/

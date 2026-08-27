@@ -97,7 +97,7 @@ int main() {
     src_img = wrapbuffer_handle(src_handle, src_width, src_height, src_format);
     dst_img = wrapbuffer_handle(dst_handle, dst_width, dst_height, dst_format);
 
-    imsetColorSpace(&src_img, IM_RGB_FULL);
+    imsetColorSpace(&src_img, IM_RGB_FULL_RANGE);
     imsetColorSpace(&dst_img, IM_YUV_BT709_LIMIT_RANGE);
 
     ret = imcheck(src_img, dst_img, {}, {});

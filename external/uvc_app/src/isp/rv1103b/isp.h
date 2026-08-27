@@ -111,6 +111,9 @@ int rk_isp_af_focus_out(int cam_id);
 int rk_isp_af_focus_once(int cam_id);
 int rk_isp_asd_set_face_win(int cam_id, FaceInfo *face_info);
 
+// ctrl raw stream
+bool rk_isp_need_raw_pipe_ctrl(int cam_id);
+
 #ifdef __cplusplus
 }
 #endif

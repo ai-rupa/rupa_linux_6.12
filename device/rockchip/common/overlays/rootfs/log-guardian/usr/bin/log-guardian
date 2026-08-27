@@ -1,14 +1,15 @@
 #!/bin/sh -e
 #
-# Truncate log files when no space left on device
+# Truncate log files when disk space is low
 #
 # Usage:
-# log-guardian [OPTION...]
-#   --interval=<time[s|m|h|d]>
-#   --reserved-log-size=<size[K|M|G]>
-#   --min-avail-size=<size[K|M|G]>
-#   --log-dirs=<path1,path2,...>
-#   --quit
+#   log-guardian [OPTIONS]
+#     --interval=<time[s|m|h|d]>  Check interval (default: 60s)
+#     --reserved-log-size=<size[K|M|G]>  Max rotated log size (default: 10M)
+#     --min-avail-size=<size[K|M|G]>  Minimum free space threshold (default: 100M)
+#     --log-dirs=<path1,path2,...>  Directories to monitor (default: /var/log/,/tmp/)
+#     --quit  Stop the guardian
+#
 
 PID_FILE=/var/run/log-guardian.pid
 
@@ -18,21 +19,25 @@ MIN_AVAIL_SIZE="100M"
 LOG_DIRS="/var/log/,/tmp/"
 
 log() {
-	if which logger >/dev/null; then
-		logger -t log-guardian $@
+	if command -v logger >/dev/null 2>&1; then
+		logger -t log-guardian "$@"
 	fi
 	echo "log-guardian: $@"
 }
 
-PID=$(cat $PID_FILE 2>/dev/null || true)
-if [ "$PID" ]; then
-	log "Stopping log-guardian ($PID)..."
-	rm -f "$PID_FILE"
-	kill -$PID 2>/dev/null || true
-	kill -9 -$PID 2>/dev/null || true
-fi
+# Ensure all tmpfs filesystems are mounted
+mount -a -t tmpfs 2>/dev/null || true
 
-for opt in $@; do
+# Stop existing guardian process group
+PID=$(cat $PID_FILE 2>/dev/null || true)
+if [ -n "$PID" ]; then
+	log "Stopping existing log-guardian (PID: $PID)..."
+	kill -TERM -- -"$PID" 2>/dev/null || true
+	kill -9 -- -"$PID" 2>/dev/null || true
+fi
+rm -f "$PID_FILE"
+
+for opt in "$@"; do
 	case "$opt" in
 		--interval=*) INTERVAL="${opt#--interval=}" ;;
 		--reserved-log-size=*)
@@ -46,50 +51,60 @@ for opt in $@; do
 	esac
 done
 
-case "$RESERVED_LOG_SIZE" in
-	*K) RESERVED_LOG_SIZE=$(( ${RESERVED_LOG_SIZE%K} * 1024)) ;;
-	*M) RESERVED_LOG_SIZE=$(( ${RESERVED_LOG_SIZE%M} * 1024 * 1024)) ;;
-	*G) RESERVED_LOG_SIZE=$(( ${RESERVED_LOG_SIZE%G} * 1024 * 1024 * 1024)) ;;
-esac
+# Convert human-readable sizes to bytes
+convert_to_bytes() {
+	case "$1" in
+		*K) echo $(( ${1%K} * 1024 )) ;;
+		*M) echo $(( ${1%M} * 1024 * 1024 )) ;;
+		*G) echo $(( ${1%G} * 1024 * 1024 * 1024 )) ;;
+		*)  echo "$1" ;;  # Assume bytes if no unit
+	esac
+}
+RESERVED_LOG_BYTE=$(convert_to_bytes "$RESERVED_LOG_SIZE")
+MIN_AVAIL_BYTE=$(convert_to_bytes "$MIN_AVAIL_SIZE")
 
-case "$MIN_AVAIL_SIZE" in
-	*K) MIN_AVAIL_SIZE=$(( ${MIN_AVAIL_SIZE%K} * 1024)) ;;
-	*M) MIN_AVAIL_SIZE=$(( ${MIN_AVAIL_SIZE%M} * 1024 * 1024)) ;;
-	*G) MIN_AVAIL_SIZE=$(( ${MIN_AVAIL_SIZE%G} * 1024 * 1024 * 1024)) ;;
-esac
+# Convert interval to seconds
+convert_interval_to_seconds() {
+	case "$1" in
+		*s) echo "${1%s}" ;;
+		*m) echo $(( ${1%m} * 60 )) ;;
+		*h) echo $(( ${1%h} * 3600 )) ;;
+		*d) echo $(( ${1%d} * 86400 )) ;;
+		*)  echo "$1" ;;  # Assume seconds
+	esac
+}
+INTERVAL_SEC=$(convert_interval_to_seconds "$INTERVAL")
 
 total_size() {
-	echo $(($(df "$1" -k | tail -n 1 | awk '{print $2}') * 1024))
+	df -k "$1" 2>/dev/null | tail -n 1 | awk '{print $2 * 1024}'
 }
 
 avail_size() {
-	echo $(($(df "$1" -k | tail -n 1 | awk '{print $4}') * 1024))
+	df -k "$1" 2>/dev/null | tail -n 1 | awk '{print $4 * 1024}'
 }
 
 is_full() {
-	[ "$(avail_size "$1")" -lt "$MIN_AVAIL_SIZE" ]
+	[ "$(avail_size "$1")" -lt "$MIN_AVAIL_BYTE" ]
 }
 
 collect_files() {
-	find "$1" -type f ${2:+-size +$2} | xargs -r ls -dS
+	find "$1" -type f -size "+${2:-0}c" 2>/dev/null | xargs -r ls -dS
 }
 
 rotate_file() {
 	FILE="$1"
-
-	NEW_SIZE="$(avail_size "$FILE")"
-	if [ "$NEW_SIZE" -gt "$RESERVED_LOG_SIZE" ]; then
-		NEW_SIZE="$RESERVED_LOG_SIZE"
-	fi
+	AVAIL=$(avail_size "$FILE")
+	NEW_SIZE=$(( AVAIL < RESERVED_LOG_BYTE ? AVAIL : RESERVED_LOG_BYTE ))
 	[ "$NEW_SIZE" -gt 0 ] || return 0
 
-	SIZE="$(du -b "$FILE" | cut -f 1)"
+	SIZE=$(du -b "$FILE" 2>/dev/null | cut -f1 || echo 0)
 
 	log "Rotating \"$FILE\"($SIZE) to \"$FILE.1\"($NEW_SIZE)..."
 
 	SKIP="$(( ($SIZE - $NEW_SIZE) / 1024 ))"
-	dd if="$FILE" of="$FILE.1" skip="$SKIP" bs=1024 >/dev/null 2>&1 || true
-	truncate -s 0 "$FILE"
+	dd if="$FILE" of="$FILE.1" skip="$SKIP" bs=1024 status=none \
+		>/dev/null 2>&1 || true
+	truncate -s 0 "$FILE" 2>/dev/null || true
 }
 
 process_dir() {
@@ -98,15 +113,16 @@ process_dir() {
 	log "Processing \"$LOG_DIR\"..."
 
 	# 1/ Try to remove backup logs
-	for suffix in "~" $(find "$LOG_DIR" -type f -name "*.*" | \
-		grep -oE "[0-9]+$|[0-9]+.gz$" | sort -rh | uniq); do
+	for suffix in "~" $(find "$LOG_DIR" -type f -name "*.[0-9]" \
+		-o -name "*.[0-9].gz" | grep -oE "[0-9]+$|[0-9]+.gz$" | \
+		sort -rh | uniq); do
 		log "Removing \"*.$suffix\"..."
 		find "$LOG_DIR" -type f -name "*.$suffix" -exec rm {} +
 		is_full "$LOG_DIR" || return 0
 	done
 
 	# 2/ Try to rotate logs
-	for f in $(collect_files "$LOG_DIR" "${RESERVED_LOG_SIZE}c"); do
+	for f in $(collect_files "$LOG_DIR" "${RESERVED_LOG_BYTE}c"); do
 		rotate_file "$f"
 		is_full "$LOG_DIR" || return 0
 	done
@@ -114,49 +130,55 @@ process_dir() {
 	# 3/ Try to truncate logs
 	for f in $(collect_files "$LOG_DIR" 0); do
 		log "Truncating \"$f\"..."
-		truncate -s 0 "$f"
+		truncate -s 0 "$f" 2>/dev/null || true
 		is_full "$LOG_DIR" || return 0
 	done
 
-	# Should not reach here!
-	log "Unable to get more free space for \"$LOG_DIR\"..."
+	log "ERROR: Unable to free space in '$LOG_DIR'"
 	return 1
 }
 
 LOG_DIRS="$(echo "$LOG_DIRS" | tr ',' ' ')"
 for dir in $LOG_DIRS; do
 	if [ ! -d "$dir" ]; then
-		log "[WARN] Not a dir: \"$dir\""
-	elif [ "$(total_size "$dir")" -le "$MIN_AVAIL_SIZE" ]; then
-		log "[WARN] No enough space for \"$dir\"!"
+		log "Warning: Not a directory: $dir"
+	elif [ "$(total_size "$dir")" -le "$MIN_AVAIL_BYTE" ]; then
+		log "Warning: Insufficient total space for $dir"
 	fi
 done
 
 [ "$LOG_DIRS" ] || exit 0
 
-log "Guarding logs in: \"$LOG_DIRS\"..."
+log "Starting log guardian for: $LOG_DIRS"
+log "Check interval: $INTERVAL ($INTERVAL_SEC seconds)"
+log "Reserved log size: $RESERVED_LOG_BYTE bytes"
+log "Minimum free space: $MIN_AVAIL_BYTE bytes"
 
+# Turn on job control to be the process group leader
+set -m
 {
-	trap 'rm -f "$PID_FILE"' EXIT QUIT TERM INT
-	echo $$ > $PID_FILE
+	trap 'rm -f "$PID_FILE"; exit 0' EXIT QUIT TERM INT
 
 	while true; do
 		for dir in $LOG_DIRS; do
 			[ -d "$dir" ] || continue
 			is_full "$dir" || continue
-			[ "$(total_size "$dir")" -gt "$MIN_AVAIL_SIZE" ] || \
+			[ "$(total_size "$dir")" -gt "$MIN_AVAIL_BYTE" ] || \
 				continue
 
-			log "[WARN] \"$dir\" is almost full:"
+			log "Warning: Directory nearly full: $dir"
 			log "$(df -h "$dir" | head -n 1)"
 			log "$(df -h "$dir" | tail -n 1)"
 
 			process_dir "$dir" || continue
 
-			log "Now \"$dir\" is:"
+			log "Space recovered for $dir:"
 			log "$(df -h "$dir" | head -n 1)"
 			log "$(df -h "$dir" | tail -n 1)"
 		done
-		sleep $INTERVAL
+
+		sleep $INTERVAL_SEC
 	done
 }&
+# Store the process group id
+echo $! > "$PID_FILE"

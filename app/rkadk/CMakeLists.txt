@@ -60,6 +60,10 @@ if(OS_LINUX)
 	add_definitions(-DOS_LINUX)
 endif()
 
+if(RKMUXER_MEDIA_SERVER)
+        add_definitions(-DRKMUXER_MEDIA_SERVER)
+endif()
+
 add_definitions(-Wall -Wshadow -ffast-math -Wignored-qualifiers -Werror-implicit-function-declaration -D_GNU_SOURCE)
 
 add_subdirectory(src)

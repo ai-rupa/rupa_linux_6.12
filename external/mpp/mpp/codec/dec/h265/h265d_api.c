@@ -265,9 +265,22 @@ MPP_RET h265d_sync(void *ctx, RK_S32 frame_id)
 
 MPP_RET h265d_control(void *ctx, MpiCmd cmd, void *param)
 {
-    (void) ctx;
-    (void) cmd;
-    (void) param;
+    H265dCtx *p = (H265dCtx *)ctx;
+
+    switch (cmd) {
+    case MPP_DEC_SET_FRAME_INFO : {
+        MppFrame frame = (MppFrame) param;
+
+        if (!frame)
+            break;
+
+        if (!mpp_frame_get_ver_stride(frame))
+            mpp_frame_set_ver_stride(frame, p->coded_height);
+    } break;
+    default:
+        break;
+    }
+
     return MPP_OK;
 }
 
@@ -306,8 +319,6 @@ MPP_RET h265d_callback(void *ctx, void *err_info)
         s->ps_need_upate = 0;
         s->rps_need_upate = 0;
     }
-
-    (void) err_info;
 
     return MPP_OK;
 }

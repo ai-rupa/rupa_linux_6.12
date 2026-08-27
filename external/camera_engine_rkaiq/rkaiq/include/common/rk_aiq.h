@@ -21,6 +21,8 @@
 #include "xcore/base/xcam_common.h"
 #include "common/rk_aiq_types.h"
 
+#define VICAP_VIRTUAL_SENSOR_SUFFIX "-virtual"
+
 XCAM_BEGIN_DECLARE
 
 //typedef struct rk_aiq_static_metas_s {

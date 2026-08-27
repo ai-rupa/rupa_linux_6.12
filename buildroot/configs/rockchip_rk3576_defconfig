@@ -22,3 +22,4 @@
 #include "network/chromium.config"
 #include "ai/npu2.config"
 #include "gui/weston.config"
+#include "ota/update_engine.config"

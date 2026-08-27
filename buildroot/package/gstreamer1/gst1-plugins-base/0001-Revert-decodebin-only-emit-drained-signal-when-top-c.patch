@@ -1,4 +1,4 @@
-From bd0935f2c3f96e15300e4b4100b2559213a5638d Mon Sep 17 00:00:00 2001
+From 590e9a9d04b2319d88dad00885caa116fcd1226f Mon Sep 17 00:00:00 2001
 From: Jeffy Chen <jeffy.chen@rock-chips.com>
 Date: Thu, 28 Apr 2022 17:31:28 +0800
 Subject: [PATCH 01/21] Revert "decodebin: only emit 'drained' signal when top
@@ -15,10 +15,10 @@ Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/gst/playback/gstdecodebin2.c b/gst/playback/gstdecodebin2.c
-index d201a91..f25a7d5 100644
+index 6069dc6..8339f80 100644
 --- a/gst/playback/gstdecodebin2.c
 +++ b/gst/playback/gstdecodebin2.c
-@@ -4261,7 +4261,7 @@ beach:
+@@ -4263,7 +4263,7 @@ beach:
  
    *drained = chain->drained;
  

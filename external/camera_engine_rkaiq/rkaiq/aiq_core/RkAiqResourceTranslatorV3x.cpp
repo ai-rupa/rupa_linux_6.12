@@ -37,7 +37,13 @@ RkAiqResourceTranslatorV3x::RkAiqResourceTranslatorV3x() : mIsMultiIsp(false) {
     memset(&pic_rect_, 0, sizeof(RkAiqResourceTranslatorV3x::Rectangle));
     memset(&left_isp_rect_, 0, sizeof(RkAiqResourceTranslatorV3x::Rectangle));
     memset(&right_isp_rect_, 0, sizeof(RkAiqResourceTranslatorV3x::Rectangle));
+    memset(&bottom_left_isp_rect_, 0, sizeof(RkAiqResourceTranslatorV3x::Rectangle));
+    memset(&bottom_right_isp_rect_, 0, sizeof(RkAiqResourceTranslatorV3x::Rectangle));
     mIspUniteMode = RK_AIQ_ISP_UNITE_MODE_NORMAL;
+    memset(&mIspUniteInfo, 0, sizeof(mIspUniteInfo));
+    mIspUniteInfo.mode  = RK_AIQ_ISP_UNITE_MODE_NORMAL;
+    mIspUniteInfo.h_num = 1;
+    mIspUniteInfo.v_num = 1;
 }
 
 RkAiqResourceTranslatorV3x& RkAiqResourceTranslatorV3x::SetMultiIspMode(bool isMultiIsp) {
@@ -110,6 +116,17 @@ bool RkAiqResourceTranslatorV3x::IsMultiIspMode() const {
 
 RkAiqIspUniteMode RkAiqResourceTranslatorV3x::GetIspUniteMode() {
     return mIspUniteMode;
+}
+
+RkAiqResourceTranslatorV3x&
+RkAiqResourceTranslatorV3x::SetIspUniteInfo(const RkAiqIspUniteInfo_t& unite_info) {
+    mIspUniteInfo = unite_info;
+    return *this;
+}
+
+const RkAiqIspUniteInfo_t&
+RkAiqResourceTranslatorV3x::GetIspUniteInfo() const {
+    return mIspUniteInfo;
 }
 
 RkAiqResourceTranslatorV3x::Rectangle RkAiqResourceTranslatorV3x::GetPicInfo() {
@@ -520,6 +537,8 @@ void MergeAecHistBinStats(
                 merge_stats[tmp] += left_stats[i] + right_stats[i];
             }
             break;
+        default:
+            break;
         }
 
     } else {
@@ -540,6 +559,8 @@ void MergeAecHistBinStats(
             for(int i = 0; i < ISP3X_HIST_BIN_N_MAX; i++) {
                 merge_stats[i] += left_stats[i] + right_stats[i];
             }
+            break;
+        default:
             break;
         }
     }
@@ -700,6 +721,8 @@ void MergeAwbHistBinStats(
 
         }
         break;
+    default:
+        break;
     }
 }
 
@@ -789,6 +812,8 @@ void MergeAwbExcWpStats(
             merge_stats[i].BgainValue = left_stats->ro_sum_b_exc[i] + right_stats->ro_sum_b_exc[i];
             merge_stats[i].WpNo = left_stats->ro_wp_nm_exc[i] + right_stats->ro_sum_b_exc[i];
         }
+        break;
+    default:
         break;
     }
 }

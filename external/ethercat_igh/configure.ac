@@ -1310,6 +1310,8 @@ AC_CONFIG_FILES([
         examples/dc_rtai/Kbuild
         examples/dc_rtai/Makefile
         examples/dc_user/Makefile
+        examples/ecat_loopback_jitter/Kbuild
+        examples/ecat_loopback_jitter/Makefile
         examples/mini/Kbuild
         examples/mini/Makefile
         examples/rtai/Kbuild

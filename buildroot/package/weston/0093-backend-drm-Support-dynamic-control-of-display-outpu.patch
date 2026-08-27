@@ -1,0 +1,1030 @@
+From 5ccdd73a6eeaff167c114b26230eded640bfcf3d Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Fri, 3 Jul 2020 12:37:37 +0800
+Subject: [PATCH 93/98] backend-drm: Support dynamic control of display outputs
+
+Use a config file to set output configurations.
+
+The default config file is "/tmp/.weston_drm.conf". This can be
+overridden using the "WESTON_DRM_CONFIG" environment variable.
+
+The supported config formats are "output:<output name>:<config>". For example:
+echo "output:eDP-1:freeze" >> /tmp/.weston_drm.conf
+echo "output:all:rotate90" >> /tmp/.weston_drm.conf
+echo "output:all:rect=<100,20,1636,2068>" >> /tmp/.weston_drm.conf
+echo "output:HDMI-A-1:mode=800x600" >> /tmp/.weston_drm.conf
+echo "output:HDMI-A-1:pos=100,200" >> /tmp/.weston_drm.conf
+echo "output:HDMI-A-1:size=1920x1080" >> /tmp/.weston_drm.conf
+echo "output:HDMI-A-1:prefer" >> /tmp/.weston_drm.conf
+echo "output:HDMI-A-1:primary" >> /tmp/.weston_drm.conf
+echo "output:HDMI-A-1:down-scale=0.5" >> /tmp/.weston_drm.conf
+echo "output:HDMI-A-1:input=*" >> /tmp/.weston_drm.conf
+echo "output:HDMI-A-1:input=" >> /tmp/.weston_drm.conf
+echo "output:HDMI-A-1:input=event6" >> /tmp/.weston_drm.conf
+echo "output:HDMI-A-1:input=goodix*" >> /tmp/.weston_drm.conf
+echo "output:HDMI-A-1:input=goodix-ts" >> /tmp/.weston_drm.conf
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ desktop-shell/shell.c                 |  37 +++-
+ frontend/main.c                       |  18 ++
+ include/libweston/libweston.h         |  24 +++
+ libweston/backend-drm/drm-internal.h  |  21 ++
+ libweston/backend-drm/drm.c           | 294 +++++++++++++++++++++++++-
+ libweston/backend-drm/modes.c         |   5 +-
+ libweston/backend-drm/state-propose.c |   5 +-
+ libweston/compositor.c                |  59 +++++-
+ libweston/libinput-seat.c             |  46 ++++
+ libweston/libweston-internal.h        |   7 +
+ libweston/pixman-renderer.c           |  29 +++
+ libweston/renderer-gl/gl-renderer.c   |   8 +
+ libweston/shell-utils/shell-utils.c   |  17 +-
+ 13 files changed, 546 insertions(+), 24 deletions(-)
+
+diff --git a/desktop-shell/shell.c b/desktop-shell/shell.c
+index d1e5349a..d1ce71db 100644
+--- a/desktop-shell/shell.c
++++ b/desktop-shell/shell.c
+@@ -797,6 +797,12 @@ touch_move_grab_motion(struct weston_touch_grab *grab,
+ 	if (!shsurf || !shsurf->desktop_surface || !move->active)
+ 		return;
+ 
++	/* Ignore the pinned output when dragging windows. */
++	if (shsurf->view && shsurf->view->pinned_output) {
++		free(shsurf->view->pinned_output);
++		shsurf->view->pinned_output = NULL;
++	}
++
+ 	pos = weston_coord_global_add(grab->touch->grab_pos, move->delta);
+ 	pos.c = weston_coord_truncate(pos.c);
+ 	weston_view_set_position(shsurf->view, pos);
+@@ -933,6 +939,12 @@ move_grab_motion(struct weston_pointer_grab *grab,
+ 	if (!shsurf || !shsurf->desktop_surface)
+ 		return;
+ 
++	/* Ignore the pinned output when dragging windows. */
++	if (shsurf->view && shsurf->view->pinned_output) {
++		free(shsurf->view->pinned_output);
++		shsurf->view->pinned_output = NULL;
++	}
++
+ 	pos = constrain_position(move);
+ 	weston_view_set_position(shsurf->view, pos);
+ }
+@@ -1058,6 +1070,12 @@ tablet_tool_move_grab_motion(struct weston_tablet_tool_grab *grab,
+ 	if (!shsurf)
+ 		return;
+ 
++	/* Ignore the pinned output when dragging windows. */
++	if (shsurf->view && shsurf->view->pinned_output) {
++		free(shsurf->view->pinned_output);
++		shsurf->view->pinned_output = NULL;
++	}
++
+ 	pos.c.x += wl_fixed_to_double(move->dx);
+ 	pos.c.y += wl_fixed_to_double(move->dy);
+ 	weston_view_set_position(shsurf->view, pos);
+@@ -3982,6 +4000,7 @@ weston_view_set_initial_position(struct weston_view *view,
+ 	int32_t x, y;
+ 	struct weston_output *output, *target_output = NULL;
+ 	struct shell_output *shoutput;
++	struct weston_output *preferred_output = NULL;
+ 	struct weston_seat *seat;
+ 	pixman_rectangle32_t area;
+ 	struct weston_coord_global pos;
+@@ -4020,13 +4039,17 @@ weston_view_set_initial_position(struct weston_view *view,
+ 		}
+ 	}
+ 
+-	wl_list_for_each(output, &compositor->output_list, link) {
+-		if (weston_output_contains_coord(output, pos)) {
++	wl_list_for_each_reverse(output, &compositor->output_list, link) {
++		if (weston_output_contains_coord(output, pos))
+ 			target_output = output;
+-			break;
+-		}
++
++		if (weston_output_preferred(output))
++			preferred_output = output;
+ 	}
+ 
++	if (preferred_output)
++		target_output = preferred_output;
++
+ 	if (!target_output) {
+ 		pos.c = weston_coord(10 + random() % 400,
+ 				     10 + random() % 400);
+@@ -4495,6 +4518,12 @@ shell_reposition_view_on_output_change(struct weston_view *view)
+ 	if (!visible) {
+ 		struct weston_coord_global pos;
+ 
++		if (ec->pin_output && view->pinned_output)
++			return;
++
++		if (shsurf->state.fullscreen || shsurf->state.maximized)
++			return;
++
+ 		first_output = container_of(ec->output_list.next,
+ 					    struct weston_output, link);
+ 
+diff --git a/frontend/main.c b/frontend/main.c
+index cf041a6a..efdcb722 100644
+--- a/frontend/main.c
++++ b/frontend/main.c
+@@ -3033,6 +3033,20 @@ drm_backend_output_configure(struct weston_output *output,
+ 	}
+ 	free(s);
+ 
++	weston_config_section_get_string(section, "pos", &s, NULL);
++	if (s) {
++		if (sscanf(s, "%lf,%lf", &output->pos.c.x, &output->pos.c.y) == 2)
++			output->fixed_position = true;
++		free(s);
++	}
++
++	weston_config_section_get_string(section, "size", &s, NULL);
++	if (s) {
++		if (sscanf(s, "%dx%d", &output->width, &output->height) == 2)
++			output->fixed_size = true;
++		free(s);
++	}
++
+ 	if (api->set_mode(output, mode, modeline) < 0) {
+ 		weston_log("Cannot configure output \"%s\" using weston_drm_output_api.\n",
+ 			   output->name);
+@@ -5563,6 +5577,10 @@ wet_main(int argc, char *argv[], const struct weston_testsuite_data *test_data)
+ 				WESTON_OUTPUT_MIRROR_STRETCH;
+ 	}
+ 
++	buf = getenv("WESTON_OUTPUT_PIN");
++	if (buf && buf[0] == '1')
++		wet.compositor->pin_output = true;
++
+ 	protocol_scope =
+ 		weston_log_ctx_add_log_scope(log_ctx, "proto",
+ 					     "Wayland protocol dump for all clients.\n",
+diff --git a/include/libweston/libweston.h b/include/libweston/libweston.h
+index 1b11aa5c..0ffa0c14 100644
+--- a/include/libweston/libweston.h
++++ b/include/libweston/libweston.h
+@@ -34,6 +34,7 @@ extern "C" {
+ 
+ #include <stdbool.h>
+ #include <stdint.h>
++#include <string.h>
+ #include <time.h>
+ #include <pixman.h>
+ #include <xkbcommon/xkbcommon.h>
+@@ -606,6 +607,14 @@ struct weston_output {
+ 
+ 	/* Output is ready but waiting for first desktop surface */
+ 	bool lazy_ready;
++
++	/* Display freeze */
++	bool freezing;
++
++	bool fixed_position;
++	bool fixed_size;
++
++	double down_scale;
+ };
+ 
+ enum weston_pointer_motion_mask {
+@@ -1616,6 +1625,8 @@ struct weston_compositor {
+ 	bool hide_cursor;
+ 
+ 	int cursor_size;
++
++	bool pin_output;
+ };
+ 
+ struct weston_solid_buffer_values {
+@@ -1836,6 +1847,9 @@ struct weston_view {
+ 	struct weston_output *output;
+ 	struct wl_listener output_destroy_listener;
+ 
++	/* Pinned to this output. */
++	char *pinned_output;
++
+ 	/*
+ 	 * A bitfield of outputs this view intersects - though it may not be
+ 	 * visible on them.
+@@ -2956,4 +2970,14 @@ weston_output_set_primary(struct weston_output *output);
+ }
+ #endif
+ 
++static inline bool
++weston_output_preferred(struct weston_output *output) {
++	const char *preferred_output = getenv("WESTON_OUTPUT_PREFERRED");
++
++	if (!output || output->destroying || !preferred_output)
++		return false;
++
++	return !strcmp(output->name, preferred_output);
++}
++
+ #endif
+diff --git a/libweston/backend-drm/drm-internal.h b/libweston/backend-drm/drm-internal.h
+index 348dcfee..616a3904 100644
+--- a/libweston/backend-drm/drm-internal.h
++++ b/libweston/backend-drm/drm-internal.h
+@@ -132,6 +132,9 @@
+ /* Minimum interval between hotplug update requests (ms) to avoid glitches */
+ #define DRM_HOTPLUG_DEBOUNCE_MS	1000
+ 
++#define WESTON_DRM_CONFIG_FILE	"/tmp/.weston_drm.conf"
++#define DRM_CONFIG_UPDATE_MS	100
++
+ /**
+  * Represents the values of an enum-type KMS property
+  */
+@@ -303,6 +306,11 @@ struct drm_backend {
+ 
+ 	/* Master mode flag, controls CRTC management */
+ 	bool master;
++
++	struct wl_listener output_create_listener;
++
++	struct wl_event_source *config_timer;
++	struct stat config_stat;
+ };
+ 
+ struct drm_mode {
+@@ -703,6 +711,12 @@ struct drm_output {
+ 
+ 	/* Dummy framebuffer for initial mode set */
+ 	struct drm_fb *fb_dummy;
++
++	bool offscreen;
++
++	pixman_box32_t plane_bounds;
++
++	uint32_t original_transform;
+ };
+ 
+ void
+@@ -861,6 +875,13 @@ drm_mode_list_destroy(struct drm_device *device, struct wl_list *mode_list);
+ void
+ drm_output_print_modes(struct drm_output *output);
+ 
++struct drm_mode *
++drm_output_choose_initial_mode(struct drm_device *device,
++			       struct drm_output *output,
++			       enum weston_drm_backend_output_mode mode,
++			       const char *modeline,
++			       const drmModeModeInfo *current_mode);
++
+ int
+ drm_output_set_mode(struct weston_output *base,
+ 		    enum weston_drm_backend_output_mode mode,
+diff --git a/libweston/backend-drm/drm.c b/libweston/backend-drm/drm.c
+index 038a5bc7..9723d8c0 100644
+--- a/libweston/backend-drm/drm.c
++++ b/libweston/backend-drm/drm.c
+@@ -40,6 +40,7 @@
+ #include <linux/vt.h>
+ #include <assert.h>
+ #include <sys/mman.h>
++#include <sys/stat.h>
+ #include <time.h>
+ #include <poll.h>
+ 
+@@ -73,6 +74,8 @@
+ 
+ static const char default_seat[] = "seat0";
+ 
++static int config_timer_handler(void *data);
++
+ void
+ drm_device_recovery_schedule(struct drm_device *device)
+ {
+@@ -570,6 +573,8 @@ drm_output_render(struct drm_output_state *state)
+ 	pixman_region32_t damage, scanout_damage;
+ 	pixman_box32_t *rects;
+ 	int n_rects;
++	int sw, sh, dx, dy, dw, dh;
++	bool scaling;
+ 
+ 	scanout_state = drm_output_state_get_plane(state, scanout_plane);
+ 	weston_assert_ptr_null(c, scanout_state->fb);
+@@ -606,19 +611,41 @@ drm_output_render(struct drm_output_state *state)
+ 		goto out;
+ 	}
+ 
++	sw = fb->width * output->base.down_scale;
++	sh = fb->height * output->base.down_scale;
++
++	dx = output->plane_bounds.x1;
++	dy = output->plane_bounds.y1;
++	dw = output->plane_bounds.x2 - output->plane_bounds.x1;
++	dh = output->plane_bounds.y2 - output->plane_bounds.y1;
++
++	if (!dw || !dh) {
++		mode = to_drm_mode(output->base.current_mode);
++		dw = mode->mode_info.hdisplay;
++		dh = mode->mode_info.vdisplay;
++	}
++
++	scaling = sw != dw || sh != dh;
++
++	if (scaling && !output->scanout_handle->plane->can_scale) {
++		weston_log("Failed to scale the framebuffer\n");
++		drm_fb_unref(fb);
++		drm_plane_state_put_back(scanout_state);
++		goto out;
++	}
++
+ 	scanout_state->fb = fb;
+ 	scanout_state->handle = output->scanout_handle;
+ 
+ 	scanout_state->src_x = 0;
+ 	scanout_state->src_y = 0;
+-	scanout_state->src_w = fb->width << 16;
+-	scanout_state->src_h = fb->height << 16;
++	scanout_state->src_w = sw << 16;
++	scanout_state->src_h = sh << 16;
+ 
+-	mode = to_drm_mode(output->base.current_mode);
+-	scanout_state->dest_x = 0;
+-	scanout_state->dest_y = 0;
+-	scanout_state->dest_w = mode->mode_info.hdisplay;
+-	scanout_state->dest_h = mode->mode_info.vdisplay;
++	scanout_state->dest_x = dx;
++	scanout_state->dest_y = dy;
++	scanout_state->dest_w = dw;
++	scanout_state->dest_h = dh;
+ 
+ 	scanout_state->zpos = scanout_plane->zpos_min;
+ 
+@@ -936,6 +963,7 @@ drm_output_repaint(struct weston_output *output_base)
+ 	 * valid output state here. */
+ 	state = drm_pending_state_get_output(pending_state, output);
+ 	weston_assert_ptr_not_null(compositor, state);
++	state->dpms = output->offscreen ? WESTON_DPMS_OFF : WESTON_DPMS_ON;
+ 
+ 	if (output->cursor_handle) {
+ 		cursor_plane = output->cursor_handle->plane;
+@@ -3111,6 +3139,8 @@ drm_output_enable(struct weston_output *base)
+ 	output->base.set_dpms = drm_set_dpms;
+ 	output->base.switch_mode = drm_output_switch_mode;
+ 
++	output->original_transform = output->base.transform;
++
+ 	if (device->atomic_modeset)
+ 		weston_output_update_capture_info(base,
+ 						  WESTON_OUTPUT_CAPTURE_SOURCE_WRITEBACK,
+@@ -4265,6 +4295,7 @@ drm_shutdown(struct weston_backend *backend)
+ 	udev_input_destroy(&b->input);
+ 
+ 	wl_event_source_remove(b->hotplug_update_timer);
++	wl_event_source_remove(b->config_timer);
+ 	wl_event_source_remove(b->udev_drm_source);
+ 	wl_event_source_remove(b->perf_page_flips_stats.pageflip_timer_counter);
+ 
+@@ -4729,6 +4760,17 @@ next:
+ 	free(tokenize);
+ }
+ 
++static void
++output_create_notify(struct wl_listener *listener, void *data)
++{
++	struct drm_backend *b = container_of(listener, struct drm_backend,
++					     output_create_listener);
++
++	/* Force reload config */
++	memset(&b->config_stat, 0, sizeof(b->config_stat));
++	config_timer_handler(b);
++}
++
+ static const struct weston_drm_output_api api = {
+ 	drm_output_set_mode,
+ 	drm_output_set_gbm_format,
+@@ -4737,6 +4779,237 @@ static const struct weston_drm_output_api api = {
+ 	drm_output_set_content_type,
+ };
+ 
++static void
++drm_output_rotate(struct drm_output *output, int rotate)
++{
++	uint32_t transform = output->original_transform;
++
++	/* A hacky way to rotate the output transform */
++	transform = (transform / 4) * 4 + (transform + rotate) % 4;
++
++	if (output->base.transform == transform)
++		return;
++
++	weston_output_set_transform(&output->base, transform);
++	weston_output_damage(&output->base);
++}
++
++static void
++drm_output_modeset(struct drm_output *output, const char *modeline)
++{
++	struct drm_backend *b = to_drm_backend(output->base.compositor);
++	struct drm_head *head =
++		to_drm_head(weston_output_get_first_head(&output->base));
++	struct drm_mode *mode;
++
++	/* Unable to switch mode, let's retry later */
++	if (output->page_flip_pending || output->atomic_complete_pending) {
++		memset(&b->config_stat, 0, sizeof(b->config_stat));
++		return;
++	}
++
++	mode = drm_output_choose_initial_mode(b->drm, output,
++					      WESTON_DRM_BACKEND_OUTPUT_PREFERRED,
++					      modeline,
++					      &head->inherited_mode);
++
++	weston_output_mode_set_native(&output->base, &mode->base,
++				      output->base.current_scale);
++	weston_output_damage(&output->base);
++
++	mode = to_drm_mode(output->base.current_mode);
++
++	weston_log("Output %s changed to %dx%d@%d for mode(%s)\n",
++		   output->base.name,
++		   mode->mode_info.hdisplay, mode->mode_info.vdisplay,
++		   mode->mode_info.vrefresh,
++		   modeline);
++}
++
++static void
++drm_output_set_size(struct drm_output *output, const int w, const int h)
++{
++	struct weston_mode *mode;
++
++	if (output->base.fixed_size &&
++	    output->base.current_mode->width == w &&
++	    output->base.current_mode->height == h)
++		return;
++
++	wl_list_for_each(mode, &output->base.mode_list, link) {
++		mode->width = w;
++		mode->height = h;
++	}
++
++	output->base.fixed_size = true;
++
++	weston_output_set_transform(&output->base, output->base.transform);
++
++	drm_output_print_modes(output);
++
++	drm_output_apply_mode(output);
++}
++
++static void
++config_handle_output(struct drm_backend *b, const char *name,
++		     const char *config)
++{
++	struct weston_output *base_output;
++	struct weston_head *base_head;
++	struct drm_output *output;
++	struct drm_head *head;
++	bool is_all = !strcmp(name, "all");
++
++	if (!is_all) {
++		if (!strcmp(config, "primary")) {
++			setenv("WESTON_DRM_PRIMARY", name, 1);
++			weston_compositor_schedule_heads_changed(b->compositor);
++			return;
++		} else if (!strcmp(config, "prefer")) {
++			setenv("WESTON_OUTPUT_PREFERRED", name, 1);
++			return;
++		} else if (!strncmp(config, "input=", strlen("input="))) {
++			weston_input_bind_output(b->compositor,
++						 name,
++						 config + strlen("input="));
++			return;
++		}
++	}
++
++	wl_list_for_each(base_head, &b->compositor->head_list, compositor_link) {
++		head = to_drm_head(base_head);
++		if (!head || (!is_all && strcmp(name, base_head->name)))
++			continue;
++
++		base_output = base_head->output;
++		if (!base_output)
++			continue;
++
++		output = to_drm_output(base_output);
++		if (!strncmp(config, "rotate", strlen("rotate"))) {
++			int rotate = atoi(config + strlen("rotate")) / 90;
++			drm_output_rotate(output, rotate);
++		} else if (!strncmp(config, "mode=", strlen("mode="))) {
++			drm_output_modeset(output, config + strlen("mode="));
++		} else if (!strcmp(config, "freeze")) {
++			output->base.freezing = true;
++		} else if (!strcmp(config, "offscreen")) {
++			output->offscreen = true;
++			if (!output->is_virtual)
++				weston_output_power_off(base_output);
++		} else if (!strcmp(config, "off")) {
++			output->base.freezing = true;
++			output->offscreen = true;
++			if (!output->is_virtual)
++				weston_output_power_off(base_output);
++		} else if (!strcmp(config, "unfreeze") ||
++			   !strcmp(config, "on")) {
++			output->base.freezing = false;
++			output->offscreen = false;
++			if (!output->is_virtual)
++				weston_output_power_on(base_output);
++		} else if (!strncmp(config, "down-scale=",
++				    strlen("down-scale="))) {
++			double down_scale =
++				atof(config + strlen("down-scale="));
++			/* Rockchip hw constraint: max 8x scaling */
++			if (down_scale == base_output->down_scale ||
++			    down_scale < 0.125 || down_scale > 1)
++				continue;
++
++			base_output->down_scale = down_scale;
++			weston_output_damage(base_output);
++		} else if (!strncmp(config, "size=", strlen("size="))) {
++			int w, h;
++
++			if (sscanf(config, "size=%dx%d", &w, &h) != 2)
++				continue;
++
++			drm_output_set_size(output, w, h);
++		} else if (!strncmp(config, "pos=", strlen("pos="))) {
++			struct weston_coord_global pos;
++			int x, y;
++
++			if (sscanf(config, "pos=%d,%d", &x, &y) != 2)
++				continue;
++
++			pos.c = weston_coord(x, y);
++			weston_output_move(base_output, pos);
++			base_output->fixed_position = true;
++
++			weston_compositor_reflow_outputs(b->compositor);
++		} else if (!strncmp(config, "rect=", strlen("rect="))) {
++			int x1, y1, x2, y2, ret;
++
++			ret = sscanf(config, "rect=<%d,%d,%d,%d>",
++				     &x1, &y1, &x2, &y2);
++			if (ret != 4)
++				continue;
++
++			output->plane_bounds.x1 = x1;
++			output->plane_bounds.y1 = y1;
++			output->plane_bounds.x2 = x2;
++			output->plane_bounds.y2 = y2;
++			weston_output_schedule_repaint(base_output);
++		}
++	}
++}
++
++static int
++config_timer_handler(void *data)
++{
++#define MAX_CONF_LEN 512
++#define _STR(x) #x
++#define STR(x) _STR(x)
++
++	struct drm_backend *b = data;
++	struct stat st, *old_st = &b->config_stat;
++	char type[MAX_CONF_LEN], key[MAX_CONF_LEN], value[MAX_CONF_LEN];
++	const char *config_file;
++	FILE *conf_fp;
++
++	wl_event_source_timer_update(b->config_timer, DRM_CONFIG_UPDATE_MS);
++
++	config_file = getenv("WESTON_DRM_CONFIG");
++	if (!config_file)
++		config_file = WESTON_DRM_CONFIG_FILE;
++
++	if (stat(config_file, &st) < 0)
++		return 0;
++
++	if (st.st_ino == old_st->st_ino && st.st_size == old_st->st_size &&
++	    st.st_mtime && st.st_mtime == old_st->st_mtime) {
++#ifdef __USE_XOPEN2K8
++		if (st.st_mtim.tv_nsec == old_st->st_mtim.tv_nsec)
++			return 0;
++#else
++		if (st.st_mtimensec == old_st->st_mtimensec)
++			return 0;
++#endif
++	}
++
++	conf_fp = fopen(config_file, "r");
++	if (!conf_fp)
++		return 0;
++
++	*old_st = st;
++
++	/**
++	 * Parse configs, formatted as <type>:<key>:<value>
++	 * For example: "output:all:rotate90"
++	 */
++	while (3 == fscanf(conf_fp,
++			   "%" STR(MAX_CONF_LEN) "[^:]:"
++			   "%" STR(MAX_CONF_LEN) "[^:]:"
++			   "%" STR(MAX_CONF_LEN) "[^\n]%*c", type, key, value)) {
++		if (!strcmp(type, "output"))
++			config_handle_output(b, key, value);
++	}
++
++	fclose(conf_fp);
++	return 0;
++}
++
+ static struct drm_backend *
+ drm_backend_create(struct weston_compositor *compositor,
+ 		   struct weston_drm_backend_config *config)
+@@ -4924,6 +5197,10 @@ drm_backend_create(struct weston_compositor *compositor,
+ 		goto err_udev_monitor;
+ 	}
+ 
++	b->output_create_listener.notify = output_create_notify;
++	wl_signal_add(&b->compositor->output_created_signal,
++		      &b->output_create_listener);
++
+ 	weston_compositor_add_debug_binding(compositor, KEY_O,
+ 					    planes_binding, b);
+ 	weston_compositor_add_debug_binding(compositor, KEY_C,
+@@ -4986,6 +5263,9 @@ drm_backend_create(struct weston_compositor *compositor,
+ 	b->hotplug_update_timer =
+ 		wl_event_loop_add_timer(loop, hotplug_update_handler, b);
+ 
++	b->config_timer =
++		wl_event_loop_add_timer(loop, config_timer_handler, b);
++
+ 	return b;
+ 
+ err_udev_monitor:
+diff --git a/libweston/backend-drm/modes.c b/libweston/backend-drm/modes.c
+index ee91f360..02ab3433 100644
+--- a/libweston/backend-drm/modes.c
++++ b/libweston/backend-drm/modes.c
+@@ -537,6 +537,9 @@ drm_output_add_mode(struct drm_output *output, const drmModeModeInfo *info)
+ 	if (b->virtual_width && b->virtual_height) {
+ 		mode->base.width = b->virtual_width;
+ 		mode->base.height = b->virtual_height;
++	} else if (output->base.fixed_size) {
++		mode->base.width = output->base.width;
++		mode->base.height = output->base.height;
+ 	}
+ 
+ 	mode->base.refresh = drm_refresh_rate_mHz(info);
+@@ -756,7 +759,7 @@ update_head_from_connector(struct drm_head *head)
+  * @param current_mode Mode currently being displayed on this output
+  * @returns A mode from the output's mode list, or NULL if none available
+  */
+-static struct drm_mode *
++struct drm_mode *
+ drm_output_choose_initial_mode(struct drm_device *device,
+ 			       struct drm_output *output,
+ 			       enum weston_drm_backend_output_mode mode,
+diff --git a/libweston/backend-drm/state-propose.c b/libweston/backend-drm/state-propose.c
+index dc1fd080..8f13a363 100644
+--- a/libweston/backend-drm/state-propose.c
++++ b/libweston/backend-drm/state-propose.c
+@@ -1622,7 +1622,10 @@ drm_assign_planes(struct weston_output *output_base)
+ 	assert(state);
+ 	assert(state->planes_enabled == !output_base->disable_planes);
+ 
+-	output->force_rebuild_state = false;
++	/* HACK: Force-disable state reuse (new native logic crashes in many
++	 * scenarios)
++	 */
++	output->force_rebuild_state = true;
+ 
+ 	drm_debug(b, "\t[repaint] Using %s composition\n",
+ 		  drm_propose_state_mode_to_string(mode));
+diff --git a/libweston/compositor.c b/libweston/compositor.c
+index e5355bad..812dd3c3 100644
+--- a/libweston/compositor.c
++++ b/libweston/compositor.c
+@@ -1580,6 +1580,7 @@ get_view_layer(struct weston_view *view)
+ static void
+ weston_surface_assign_output(struct weston_surface *es)
+ {
++	struct weston_compositor *ec = es->compositor;
+ 	struct weston_output *new_output;
+ 	struct weston_view *view;
+ 	pixman_region32_t region;
+@@ -1647,10 +1648,11 @@ weston_surface_assign_output(struct weston_surface *es)
+ 			continue;
+ 		}
+ 
+-		/* All else being equal, prefer the primary backend */
+-		if (area == max && new_output &&
+-		    view->output->backend == es->compositor->primary_backend) {
+-			new_output = view->output;
++		/* All else being equal, prefer the preferred or primary backend */
++		if (area == max && new_output) {
++			if (weston_output_preferred(view->output) ||
++			    view->output->backend == ec->primary_backend)
++				new_output = view->output;
+ 		}
+ 	}
+ 	pixman_region32_fini(&region);
+@@ -1751,6 +1753,18 @@ weston_view_assign_output(struct weston_view *ev)
+ 
+ 		mask |= 1u << output->id;
+ 
++		/* Pin view to output if compositor-wide pinning is enabled. */
++		if (ec->pin_output && ev->pinned_output) {
++			/* Only assign to matching output. */
++			if (!strcmp(output->name, ev->pinned_output)) {
++				new_output = output;
++				break;
++			}
++
++			/* Ignore other outputs */
++			continue;
++		}
++
+ 		/* Regardless of what we have now, even if it's off, a turned
+ 		 * off output is not better.
+ 		 */
+@@ -1766,14 +1780,25 @@ weston_view_assign_output(struct weston_view *ev)
+ 			continue;
+ 		}
+ 
+-		/* All else being equal, prefer the primary backend */
+-		if (new_output && new_output_area == area &&
+-		    output->backend == ec->primary_backend) {
+-			new_output = output;
++		/* All else being equal, prefer the preferred or primary backend */
++		if (new_output && new_output_area == area) {
++			if (weston_output_preferred(output) ||
++			    output->backend == ec->primary_backend)
++				new_output = output;
+ 		}
+ 	}
+ 	pixman_region32_fini(&region);
+ 
++	if (ec->pin_output) {
++		/* Pin view to new output */
++		if (!ev->pinned_output && new_output)
++			ev->pinned_output = strdup(new_output->name);
++
++		/* Don't show pinned view on other outputs */
++		if (ev->pinned_output && !new_output)
++			mask = 0;
++	}
++
+ out:
+ 	weston_view_set_output_mask(ev, mask);
+ 	weston_view_set_output(ev, new_output);
+@@ -2755,6 +2780,10 @@ weston_view_destroy(struct weston_view *view)
+ 	wl_list_remove(&view->surface_link);
+ 
+ 	free(view->internal_name);
++
++	if (view->pinned_output)
++		free(view->pinned_output);
++
+ 	free(view);
+ }
+ 
+@@ -4291,6 +4320,9 @@ weston_output_should_freeze(struct weston_output *output)
+ 	struct timespec now;
+ 	bool has_desktop_surface = false;
+ 
++	if (output->freezing)
++		return true;
++
+ 	weston_compositor_read_presentation_clock(output->compositor, &now);
+ 
+ 	wl_list_for_each(pnode, &output->paint_node_z_order_list,
+@@ -6669,7 +6701,7 @@ weston_compositor_call_heads_changed(void *data)
+  * \ingroup compositor
+  * \internal
+  */
+-static void
++WL_EXPORT void
+ weston_compositor_schedule_heads_changed(struct weston_compositor *compositor)
+ {
+ 	struct wl_event_loop *loop;
+@@ -7506,7 +7538,8 @@ weston_compositor_reflow_outputs(struct weston_compositor *compositor)
+ 	wl_list_for_each(output, &compositor->output_list, link) {
+ 		struct weston_coord_global pos;
+ 
+-		if (output->destroying || output->mirror_of)
++		if (output->destroying || output->mirror_of ||
++		    output->fixed_position)
+ 			continue;
+ 
+ 		pos.c = weston_coord(next_x, next_y);
+@@ -8370,6 +8403,10 @@ weston_output_set_transform(struct weston_output *output,
+ 
+ 	weston_compositor_reflow_outputs(output->compositor);
+ 
++	/* Notify clients of the change for output size */
++	wl_signal_emit(&output->compositor->output_resized_signal,
++		       output);
++
+ 	/* Notify clients of the change for output transform. */
+ 	wl_list_for_each(head, &output->head_list, output_link) {
+ 		wl_resource_for_each(resource, &head->resource_list) {
+@@ -8685,6 +8722,8 @@ weston_output_init(struct weston_output *output,
+ 	/* Can't use -1 on uint32_t and 0 is valid enum value */
+ 	output->transform = UINT32_MAX;
+ 
++	output->down_scale = 1.0f;
++
+ 	pixman_region32_init(&output->region);
+ 	wl_list_init(&output->mode_list);
+ 
+diff --git a/libweston/libinput-seat.c b/libweston/libinput-seat.c
+index 8a48adaf..8aa50449 100644
+--- a/libweston/libinput-seat.c
++++ b/libweston/libinput-seat.c
+@@ -554,3 +554,49 @@ udev_seat_get_named(struct udev_input *input, const char *seat_name)
+ 
+ 	return udev_seat_create(input, seat_name);
+ }
++
++/* Bind input devices to output based on pattern matching. */
++void
++weston_input_bind_output(struct weston_compositor *compositor, const char *output_name, const char *match)
++{
++	struct evdev_device *device;
++	struct udev_seat *seat;
++	const char *sysname, *name;
++	int len = strlen(match);
++	int clear = !len;
++
++	/* Handle pattern match */
++	if (len && match[len - 1] == '*')
++		len--;
++
++	wl_list_for_each(seat, &compositor->seat_list, base.link) {
++		wl_list_for_each(device, &seat->devices_list, link) {
++			if (clear) {
++				/* Clear all bound input devices */
++				if (!device->output_name ||
++				    strcmp(device->output_name, output_name))
++					continue;
++
++				free(device->output_name);
++				device->output_name = NULL;
++				continue;
++			}
++
++			sysname = libinput_device_get_sysname(device->device);
++			name = libinput_device_get_name(device->device);
++
++			if (!len || !strncmp(name, match, len) ||
++			    !strncmp(sysname, match, len)) {
++				if (device->output_name) {
++					free(device->output_name);
++					device->output_name = NULL;
++				}
++
++				if (output_name)
++					device->output_name = strdup(output_name);
++			}
++		}
++
++		udev_seat_update_output(seat);
++	}
++}
+diff --git a/libweston/libweston-internal.h b/libweston/libweston-internal.h
+index 65f754c2..62e981ec 100644
+--- a/libweston/libweston-internal.h
++++ b/libweston/libweston-internal.h
+@@ -309,6 +309,9 @@ touch_calibrator_mode_changed(struct weston_compositor *compositor);
+ int
+ noop_renderer_init(struct weston_compositor *ec);
+ 
++void
++weston_compositor_schedule_heads_changed(struct weston_compositor *compositor);
++
+ void
+ weston_compositor_add_head(struct weston_compositor *compositor,
+ 			   struct weston_head *head);
+@@ -386,6 +389,10 @@ weston_compositor_xkb_destroy(struct weston_compositor *ec);
+ int
+ weston_input_init(struct weston_compositor *compositor);
+ 
++void
++weston_input_bind_output(struct weston_compositor *compositor,
++			 const char *output_name, const char *match);
++
+ /* weston_output */
+ 
+ void
+diff --git a/libweston/pixman-renderer.c b/libweston/pixman-renderer.c
+index a1a20e81..4611f6e0 100644
+--- a/libweston/pixman-renderer.c
++++ b/libweston/pixman-renderer.c
+@@ -324,6 +324,26 @@ repaint_region(struct weston_paint_node *pnode,
+ 	else
+ 		filter = PIXMAN_FILTER_NEAREST;
+ 
++	if (output->down_scale != 1.0f) {
++		struct weston_matrix matrix;
++		pixman_region32_t clip;
++
++		weston_matrix_init(&matrix);
++		weston_matrix_scale(&matrix, output->down_scale,
++				    output->down_scale, 1);
++
++		pixman_region32_init(&clip);
++		weston_matrix_transform_region(&clip, &matrix, repaint_output);
++
++		pixman_image_set_clip_region32(target_image, &clip);
++
++		weston_matrix_init(&matrix);
++		weston_matrix_scale(&matrix, 1.0f / output->down_scale,
++				    1.0f / output->down_scale, 1);
++		weston_matrix_multiply(&matrix, &pnode->output_to_buffer_matrix);
++		weston_matrix_to_pixman_transform(&transform, &matrix);
++	}
++
+ 	if (ps->buffer_ref.buffer &&
+ 	    ps->buffer_ref.buffer->type == WESTON_BUFFER_SHM)
+ 		wl_shm_buffer_begin_access(ps->buffer_ref.buffer->shm_buffer);
+@@ -537,6 +557,15 @@ copy_to_hw_buffer(struct weston_output *output, pixman_region32_t *region)
+ 
+ 	weston_region_global_to_output(&output_region, output, &output_region);
+ 
++	if (output->down_scale != 1.0f) {
++		struct weston_matrix matrix;
++		weston_matrix_init(&matrix);
++		weston_matrix_scale(&matrix, output->down_scale,
++				    output->down_scale, 1);
++		weston_matrix_transform_region(&output_region,
++					       &matrix, &output_region);
++	}
++
+ 	pixman_image_set_clip_region32 (po->hw_buffer, &output_region);
+ 	pixman_region32_fini(&output_region);
+ 
+diff --git a/libweston/renderer-gl/gl-renderer.c b/libweston/renderer-gl/gl-renderer.c
+index a0c5e8c7..261a029c 100644
+--- a/libweston/renderer-gl/gl-renderer.c
++++ b/libweston/renderer-gl/gl-renderer.c
+@@ -897,6 +897,10 @@ get_renderbuffer_window_age(struct weston_output *output)
+ 	if (!gl_features_has(gr, FEATURE_EXPLICIT_SYNC))
+ 		return buffer_age;
+ 
++	/* HACK: Disable buffer age and partial update for down-scaling */
++	if (output->down_scale != 1.0)
++		return buffer_age;
++
+ 	if ((egl_display_has(gr, EXTENSION_EXT_BUFFER_AGE) ||
+ 	     egl_display_has(gr, EXTENSION_KHR_PARTIAL_UPDATE)) &&
+ 	    go->egl_surface != EGL_NO_SURFACE) {
+@@ -3162,6 +3166,10 @@ gl_renderer_repaint_output(struct weston_output *output,
+ 
+ 	/* Calculate the global GL matrix */
+ 	go->output_matrix = output->matrix;
++
++	weston_matrix_scale(&go->output_matrix,
++			    output->down_scale, output->down_scale, 1);
++
+ 	weston_matrix_translate(&go->output_matrix,
+ 				-(go->area.width / 2.0),
+ 				-(go->area.height / 2.0), 0);
+diff --git a/libweston/shell-utils/shell-utils.c b/libweston/shell-utils/shell-utils.c
+index 65b37384..176d8ce1 100644
+--- a/libweston/shell-utils/shell-utils.c
++++ b/libweston/shell-utils/shell-utils.c
+@@ -43,9 +43,17 @@
+ WL_EXPORT struct weston_output *
+ weston_shell_utils_get_default_output(struct weston_compositor *compositor)
+ {
++	struct weston_output *output;
++
+ 	if (wl_list_empty(&compositor->output_list))
+ 		return NULL;
+ 
++	/* HACK: Return preferred output when available */
++	wl_list_for_each(output, &compositor->output_list, link) {
++		if (weston_output_preferred(output))
++			return output;
++	}
++
+ 	return container_of(compositor->output_list.next,
+ 			    struct weston_output, link);
+ }
+@@ -57,8 +65,15 @@ WL_EXPORT struct weston_output *
+ weston_shell_utils_get_focused_output(struct weston_compositor *compositor)
+ {
+ 	struct weston_seat *seat;
+-	struct weston_output *output = NULL;
++	struct weston_output *output;
++
++	/* HACK: Return preferred output when available */
++	wl_list_for_each(output, &compositor->output_list, link) {
++		if (weston_output_preferred(output))
++			return output;
++	}
+ 
++	output = NULL;
+ 	wl_list_for_each(seat, &compositor->seat_list, link) {
+ 		struct weston_touch *touch = weston_seat_get_touch(seat);
+ 		struct weston_pointer *pointer = weston_seat_get_pointer(seat);
+-- 
+2.39.5
+

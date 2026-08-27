@@ -1,27 +1,27 @@
 #!/bin/bash
+# wifibt/bt_onoff.sh - Bluetooth on/off cycling stress test
 
-function test_bt() {
-	wifibt-init.sh
-	sleep 5
-	hciconfig hci0 up && hciconfig -a | grep UP
-	if [ $? -ne 0 ];then
-		echo "The bt test fail !!!"
-		dmesg > /userdata/rockchip-test/bt_dmesg.txt
-		exit 11
-	fi
-}
+DIR_WIFIBT="$(cd "$(dirname "$0")" && pwd)"
+source "${DIR_WIFIBT}/../common/common.sh"
 
-function main() {
-	while true; do
-		test_bt
-		sleep 1
-		cnt=$((cnt + 1))
-	echo "
-	#################################################
-	# The BT has been tuned on/off for $cnt times   #
-	#################################################
-	"
-	done
-}
+require_command wifibt-init.sh || exit 1
 
-main
+TEST_ID=$(test_begin "bluetooth" "onoff" "Bluetooth on/off cycling test")
+
+cnt=0
+set +e
+while true; do
+    wifibt-init.sh
+    sleep 5
+    hciconfig hci0 up && hciconfig -a | grep UP
+    if [[ $? -ne 0 ]]; then
+        log_error "bluetooth" "BT test failed at cycle $cnt"
+        dmesg > "$(get_log_path bluetooth)_dmesg.txt"
+        test_end "$TEST_ID" "FAIL" "Bluetooth failed at cycle $cnt"
+        exit 1
+    fi
+    sleep 1
+    cnt=$((cnt + 1))
+    log_debug "bluetooth" "BT on/off cycle $cnt"
+done
+set -e

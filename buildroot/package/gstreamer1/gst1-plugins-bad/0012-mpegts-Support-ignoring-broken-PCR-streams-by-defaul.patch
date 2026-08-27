@@ -1,7 +1,7 @@
-From 6dadff9fb2bc0b7f2a99a8f2a690e9637f74fe75 Mon Sep 17 00:00:00 2001
+From 2c7cb00ff8872b4e942117701e6ba375bb411366 Mon Sep 17 00:00:00 2001
 From: Jeffy Chen <jeffy.chen@rock-chips.com>
 Date: Tue, 28 Dec 2021 12:45:04 +0800
-Subject: [PATCH 12/43] mpegts: Support ignoring broken PCR streams by default
+Subject: [PATCH 12/41] mpegts: Support ignoring broken PCR streams by default
 
 By setting env 'GST_TSDEMUX_IGNORE_PCR'.
 
@@ -11,7 +11,7 @@ Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
  1 file changed, 4 insertions(+), 1 deletion(-)
 
 diff --git a/gst/mpegtsdemux/mpegtsbase.c b/gst/mpegtsdemux/mpegtsbase.c
-index e69fb37..8c04524 100644
+index 3a54e10..5dbba8f 100644
 --- a/gst/mpegtsdemux/mpegtsbase.c
 +++ b/gst/mpegtsdemux/mpegtsbase.c
 @@ -59,7 +59,7 @@ static GstStaticPadTemplate sink_template = GST_STATIC_PAD_TEMPLATE ("sink",
@@ -20,10 +20,10 @@ index e69fb37..8c04524 100644
  
 -#define DEFAULT_IGNORE_PCR FALSE
 +static int DEFAULT_IGNORE_PCR = FALSE;
+ #define DEFAULT_SKEW_CORRECTIONS TRUE
  
  enum
- {
-@@ -156,6 +156,9 @@ mpegts_base_class_init (MpegTSBaseClass * klass)
+@@ -158,6 +158,9 @@ mpegts_base_class_init (MpegTSBaseClass * klass)
     *
     * Since: 1.18
     */

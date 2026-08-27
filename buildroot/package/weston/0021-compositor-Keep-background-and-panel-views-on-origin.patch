@@ -1,0 +1,137 @@
+From e8f448e8e9cb9834e17b28b557233cf4a30e96b3 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Tue, 24 Mar 2026 12:14:44 +0800
+Subject: [PATCH 21/98] compositor: Keep background and panel views on original
+ output
+
+Background and panel views should not be reassigned to a new output
+during automatic output assignment.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ include/libweston/libweston.h |  6 +++++
+ libweston/compositor.c        | 42 +++++++++++++++++++++++++++++++++++
+ 2 files changed, 48 insertions(+)
+
+diff --git a/include/libweston/libweston.h b/include/libweston/libweston.h
+index 52fcebd7..c0749f91 100644
+--- a/include/libweston/libweston.h
++++ b/include/libweston/libweston.h
+@@ -1281,6 +1281,9 @@ struct weston_layer {
+ 	enum weston_layer_position position;
+ 	pixman_box32_t mask;
+ 	struct weston_layer_entry view_list;
++
++	/* If true, views should be bound to their current output */
++	bool should_bound_to_output;
+ };
+ 
+ struct weston_drm_format_array;
+@@ -2094,6 +2097,9 @@ struct weston_surface {
+ 
+ 	/** delay output repaint when surface is resizing */
+ 	bool wait_for_resizing;
++
++	/* If true, surface is bound to its current output */
++	bool bound_to_output;
+ };
+ 
+ struct weston_subsurface {
+diff --git a/libweston/compositor.c b/libweston/compositor.c
+index cf6ac689..69ccecf9 100644
+--- a/libweston/compositor.c
++++ b/libweston/compositor.c
+@@ -58,6 +58,7 @@
+ #include "timeline.h"
+ #include "weston-trace.h"
+ 
++#include <libweston/shell-utils.h>
+ #include <libweston/libweston.h>
+ #include <libweston/weston-log.h>
+ #include "linux-dmabuf.h"
+@@ -1591,6 +1592,16 @@ weston_surface_assign_output(struct weston_surface *es)
+ 	new_output = NULL;
+ 	max = 0;
+ 	mask = 0;
++
++	/* Skip automatic output assignment for bound surfaces */
++	if (es->bound_to_output) {
++		if (es->output && !es->output->destroying) {
++			new_output = es->output;
++			mask = 1u << es->output->id;
++		}
++		goto out;
++	}
++
+ 	pixman_region32_init(&region);
+ 	wl_list_for_each(view, &es->views, surface_link) {
+ 		/* Only views that are visible on some layer participate in
+@@ -1641,6 +1652,7 @@ weston_surface_assign_output(struct weston_surface *es)
+ 	}
+ 	pixman_region32_fini(&region);
+ 
++out:
+ 	es->output = new_output;
+ 	weston_surface_update_output_mask(es, mask);
+ 
+@@ -1704,6 +1716,22 @@ weston_view_assign_output(struct weston_view *ev)
+ 	new_output = NULL;
+ 	new_output_area = 0;
+ 	mask = 0;
++
++	/* Only views that are visible on some layer participate in
++	 * output_mask calculations. */
++	if (!get_view_layer(ev))
++		return;
++
++	/* Skip output reassignment for bound surfaces */
++	if (ev->surface->bound_to_output) {
++		output = ev->surface->output;
++		if (output && !output->destroying) {
++			new_output = output;
++			mask = 1u << output->id;
++		}
++		goto out;
++	}
++
+ 	pixman_region32_init(&region);
+ 	wl_list_for_each(output, &ec->output_list, link) {
+ 		if (output->destroying)
+@@ -1743,6 +1771,7 @@ weston_view_assign_output(struct weston_view *ev)
+ 	}
+ 	pixman_region32_fini(&region);
+ 
++out:
+ 	weston_view_set_output_mask(ev, mask);
+ 	weston_view_set_output(ev, new_output);
+ 
+@@ -4644,6 +4673,9 @@ weston_view_move_to_layer(struct weston_view *view,
+ 	wl_list_insert(&layer->link, &view->layer_link.link);
+ 	view->layer_link.layer = layer->layer;
+ 
++	if (layer->layer->should_bound_to_output)
++		view->surface->bound_to_output = true;
++
+ 	if (!visible)
+ 		return;
+ 
+@@ -4719,6 +4751,16 @@ weston_layer_set_position(struct weston_layer *layer,
+ {
+ 	struct weston_layer *below;
+ 
++	/* Background and panel surfaces should stay on original output */
++	switch (position) {
++	case WESTON_LAYER_POSITION_BACKGROUND:
++	case WESTON_LAYER_POSITION_UI:
++		layer->should_bound_to_output = true;
++		break;
++	default:
++		break;
++	}
++
+ 	wl_list_remove(&layer->link);
+ 
+ 	/* layer_list is ordered from top to bottom, the last layer being the
+-- 
+2.39.5
+

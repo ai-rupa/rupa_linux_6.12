@@ -165,27 +165,19 @@ static XCamReturn _handlerAfd_genIspResult(AiqAlgoHandler_t* pAlgoHandler, AiqFu
 
     RkAiqAlgoProcResAfd* afd_res = (RkAiqAlgoProcResAfd*)pAlgoHandler->mProcOutParam;
 
-    aiq_params_base_t* pBase = params->pParamsArray[RESULT_TYPE_AFD_PARAM];
-    if (!pBase) {
-        LOGW_ATMO("no afd params buf !");
-        return XCAM_RETURN_BYPASS;
-    }
-
     if (!afd_res) {
         LOGE_ATMO("no afd result");
         return XCAM_RETURN_NO_ERROR;
     }
 
-    rk_aiq_isp_afd_params_t* afd_param = (rk_aiq_isp_afd_params_t*)pBase->_data;
-    afd_param->enable = pAfdHdl->mAeProcRes.IsAutoAfd;
-    AiqAfdHandler_getScaleRatio(pAfdHdl, &afd_param->ratio);
-	cur_params->pParamsArray[RESULT_TYPE_AFD_PARAM] =
-		params->pParamsArray[RESULT_TYPE_AFD_PARAM];
+    bool afd_en = pAfdHdl->mAeProcRes.IsAutoAfd;
+    int afd_ratio = 0;
+    AiqAfdHandler_getScaleRatio(pAfdHdl, &afd_ratio);
 
-    if (pAfdHdl->mAfdSyncAly != afd_param->enable) {
-        pAfdHdl->mAfdSyncAly = afd_param->enable;
-        pBase->is_update = true;
+    if (pAfdHdl->mAfdSyncAly != afd_en || sharedCom->init) {
+        pAfdHdl->mAfdSyncAly = afd_en;
         AiqCore_setVicapScaleFlag(pAlgoHandler->mAiqCore, pAfdHdl->mAfdSyncAly);
+        pAlgoHandler->mAiqCore->mCb->rkAiqCalcSetVcpSclInfo(pAlgoHandler->mAiqCore->mCb->pCtx, pAfdHdl->mAfdSyncAly, afd_ratio);
     }
 
     EXIT_ANALYZER_FUNCTION();

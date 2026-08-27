@@ -44,7 +44,7 @@ void AgammaSetDefaultManuAttrParmasV11(AgammaHandle_t* handle) {
 XCamReturn AgammaInit(AgammaHandle_t** pGammaCtx, CamCalibDbV2Context_t* pCalib) {
     LOG1_AGAMMA("ENTER: %s \n", __func__);
     XCamReturn ret         = XCAM_RETURN_NO_ERROR;
-    AgammaHandle_t* handle = (AgammaHandle_t*)calloc(sizeof(AgammaHandle_t), 1);
+    AgammaHandle_t* handle = (AgammaHandle_t*)calloc(1, sizeof(AgammaHandle_t));
     if (NULL == handle) return XCAM_RETURN_ERROR_MEM;
 
     CalibDbV2_gamma_v11_t* calibv2_agamma_calib =

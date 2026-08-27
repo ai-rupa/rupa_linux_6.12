@@ -2,7 +2,6 @@
  * Copyright (c) 2025 by Rockchip Electronics Co., Ltd. All Rights Reserved.
  */
 
-
 #ifndef __RKNN3_FLOAT16_H_
 #define __RKNN3_FLOAT16_H_
 

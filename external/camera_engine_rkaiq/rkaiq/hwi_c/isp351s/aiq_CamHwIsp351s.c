@@ -63,7 +63,10 @@ static void CamHwIsp351s_updateEffParams(AiqCamHwBase_t* pCamHw, void* params, v
         (pCamHw->_mIspParamsCvt->mCommonCvtInfo.sw_btnrT_outFrmBase_mode == btnr_preBaseOut_mode) &&
         !(pCamHw->_mIspParamsCvt->mCommonCvtInfo.btnrCfg_pixDomain_mode == btnr_pixLog2Domain_mode);
 
-    if (!pCamHw->_airms_en || !pCamHw->mSnsDes.compr_bit) {
+    bool use_isp_wbgain = !pCamHw->_airms_en || pCamHw->airms_wbgain_mode == AIRMS_WBGAIN_APPLY_ISP;
+    bool no_sensor_compr = !pCamHw->mSnsDes.compr_bit;
+
+    if (use_isp_wbgain && no_sensor_compr) {
         pDstEff->bls_cfg      = pCamHw->_mIspParamsCvt->mLatestBlsCfg;
         pDstEff->awb_gain_cfg = pCamHw->_mIspParamsCvt->mLatestWbGainCfg;
     } else {

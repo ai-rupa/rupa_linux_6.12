@@ -601,7 +601,6 @@ execute_test_in_background() {
 
                             local model_types=("cnn" "llm" "vlm")
                             local model_type_names=("CNN" "LLM" "VLM")
-                            local overall_success=0  # Track overall success (0 = success, 1 = failure)
 
                             # Outer loop for multiple iterations
                             for ((loop_idx=1; loop_idx<=loop_count; loop_idx++)); do
@@ -661,8 +660,10 @@ execute_test_in_background() {
 
                                                 if [[ $model_exit_code -ne 0 ]]; then
                                                     echo "Error: Model $model_name failed with exit code $model_exit_code"
-                                                    overall_success=1  # Mark overall failure
-                                                    # Continue testing other models but mark overall test as failed
+                                                    echo "Terminating traversal test due to model failure"
+                                                    exit_code=1
+                                                    # Break out of all loops immediately
+                                                    break 3
                                                 else
                                                     echo "Success: Model $model_name completed successfully"
                                                 fi
@@ -675,11 +676,13 @@ execute_test_in_background() {
                             done
 
                             echo ""
-                            echo "========== Traversal Test Completed ($loop_count loops) =========="
+                            # Check if test was terminated early due to failure
+                            if [[ $exit_code -ne 0 ]]; then
+                                echo "========== Traversal Test Terminated (Model Failed) =========="
+                            else
+                                echo "========== Traversal Test Completed ($loop_count loops) =========="
+                            fi
                             echo ""
-
-                            # Set exit code based on overall success
-                            exit_code=$overall_success
                             ;;
                         *)
                             echo "Unknown test type: $test_type"
@@ -724,7 +727,8 @@ execute_test_in_background() {
                             fi
 
                             if command -v hardware_reset_test &> /dev/null; then
-                                hardware_reset_test "$device_id" "$loop_count" "hw"
+                                # Reset type will be determined automatically based on communication mode
+                                hardware_reset_test "$device_id" "$loop_count"
                                 exit_code=$?  # Capture return value
                             else
                                 echo "Reset test function not available"
@@ -1396,8 +1400,9 @@ main_menu() {
                 echo
 
                 # Execute round-robin test (foreground, not background)
+                # Reset type will be determined automatically based on each device's communication mode
                 {
-                    multi_device_round_robin_reset_test "$device_configs_str" "hw"
+                    multi_device_round_robin_reset_test "$device_configs_str"
                 } | tee "$log_file"
                 local round_robin_ret=${PIPESTATUS[0]}
 

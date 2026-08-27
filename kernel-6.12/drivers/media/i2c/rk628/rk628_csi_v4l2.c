@@ -106,6 +106,7 @@ struct rk628_csi {
 	u32 mbus_fmt_code;
 	u8 fps;
 	u8 edid_version;
+	u8 pattern_mode;
 	u32 stream_state;
 	int hdmirx_irq;
 	int plugin_irq;
@@ -392,6 +393,39 @@ static struct v4l2_dv_timings dst_timing = {
 	},
 };
 
+enum rk628_pattern_mode {
+	PATTERN_NONE = 0,
+	PATTERN_BLACK,
+	PATTERN_WHITE,
+	PATTERN_GREY,
+	PATTERN_RED,
+	PATTERN_GREEN,
+	PATTERN_BLUE,
+	PATTERN_YELLOW,
+	PATTERN_UNKNOWN,
+};
+
+struct rk628_bg_mode {
+	u16 r;
+	u16 b;
+	u16 g;
+	u16 v;
+	u16 u;
+	u16 y;
+	u16 en;
+};
+
+static const struct rk628_bg_mode bg_data[] = {
+	{ 0, 0, 0, 0, 0, 0, 0 },		/* none */
+	{ 0, 0, 0, 512, 512, 64, 1 },		/* black */
+	{ 1023, 1023, 1023, 512, 512, 944, 1 },	/* white */
+	{ 512, 512, 512, 512, 512, 507, 1 },	/* grey */
+	{ 1023, 0, 0, 960, 360, 328, 1 },	/* red */
+	{ 0, 0, 1023, 136, 216, 580, 1 },	/* green */
+	{ 0, 1023, 0, 440, 960, 164, 1 },	/* blue */
+	{ 1023, 0, 1023, 596, 30, 904, 1 },	/* yellow */
+};
+
 static void rk628_post_process_setup(struct v4l2_subdev *sd);
 static void rk628_csi_enable_interrupts(struct v4l2_subdev *sd, bool en);
 static void rk628_csi_enable_csi_interrupts(struct v4l2_subdev *sd, bool en);
@@ -426,6 +460,9 @@ static bool tx_5v_power_present(struct v4l2_subdev *sd)
 {
 	bool ret;
 	struct rk628_csi *csi = to_csi(sd);
+
+	if (csi->pattern_mode)
+		return true;
 
 	ret = rk628_hdmirx_tx_5v_power_detect(csi->plugin_det_gpio);
 	v4l2_dbg(2, debug, sd, "%s: %d\n", __func__, ret);
@@ -602,6 +639,9 @@ static void rk628_csi_delayed_work_enable_hotplug(struct work_struct *work)
 	struct v4l2_subdev *sd = &csi->sd;
 	bool plugin;
 
+	if (csi->pattern_mode)
+		return;
+
 	mutex_lock(&csi->confctl_mutex);
 	rk628_set_bg_enable(csi->rk628, false);
 	csi->avi_rcv_rdy = false;
@@ -660,6 +700,9 @@ static void rk628_delayed_work_res_change(struct work_struct *work)
 			delayed_work_res_change);
 	struct v4l2_subdev *sd = &csi->sd;
 	bool plugin;
+
+	if (csi->pattern_mode)
+		return;
 
 	mutex_lock(&csi->confctl_mutex);
 	rk628_set_bg_enable(csi->rk628, false);
@@ -1581,10 +1624,14 @@ static int rk628_csi_format_change(struct v4l2_subdev *sd)
 	int ret;
 
 	csi->rk628->is_10bit = false;
-	ret = rk628_csi_get_detected_timings(sd, &timings);
-	if (ret) {
-		v4l2_dbg(1, debug, sd, "%s: get timing fail\n", __func__);
-		return LOCK_FAIL;
+	if (!csi->pattern_mode) {
+		ret = rk628_csi_get_detected_timings(sd, &timings);
+		if (ret) {
+			v4l2_dbg(1, debug, sd, "%s: get timing fail\n", __func__);
+			return LOCK_FAIL;
+		}
+	} else {
+		timings = dst_timing;
 	}
 	if (!v4l2_match_dv_timings(&csi->timings, &timings, 0, false)) {
 		/* automatically set timing rather than set by userspace */
@@ -2118,6 +2165,18 @@ static int rk628_csi_query_dv_timings(struct v4l2_subdev *sd,
 	struct v4l2_dv_timings default_timing =
 				V4L2_DV_BT_CEA_640X480P59_94;
 
+	if (csi->pattern_mode) {
+		*timings = dst_timing;
+		if (debug)
+			v4l2_print_dv_timings(sd->name, "rk628_csi_query_dv_timings pattern mode: ",
+					timings, false);
+		if (!v4l2_valid_dv_timings(timings, &rk628_csi_timings_cap, NULL,
+					NULL)) {
+			v4l2_dbg(1, debug, sd, "%s: timings out of range\n", __func__);
+			return -ERANGE;
+		}
+		return 0;
+	}
 	if (!tx_5v_power_present(sd) || csi->nosignal) {
 		*timings = default_timing;
 		v4l2_info(sd, "%s: not detect 5v, set default timing\n", __func__);
@@ -3186,6 +3245,9 @@ static irqreturn_t plugin_detect_irq(int irq, void *dev_id)
 		.type = RK_HDMIRX_V4L2_EVENT_SIGNAL_LOST,
 	};
 
+	if (csi->pattern_mode)
+		return IRQ_HANDLED;
+
 	if (csi->rk628->tx_mode == DSI_MODE)
 		rk628_dsi_disable(sd);
 	if (csi->rk628->tx_mode == CSI_MODE) {
@@ -3310,7 +3372,6 @@ static const struct dev_pm_ops rk628_csi_pm_ops = {
 static int rk628_csi_probe_of(struct rk628_csi *csi)
 {
 	struct device *dev = csi->dev;
-	struct v4l2_fwnode_endpoint endpoint = { .bus_type = 0 };
 	struct device_node *ep;
 	int ret = -EINVAL;
 	bool hdcp1x_enable = false, i2s_enable_default = false;
@@ -3408,25 +3469,21 @@ static int rk628_csi_probe_of(struct rk628_csi *csi)
 		continues_clk = true;
 
 	ep = of_graph_get_next_endpoint(dev->of_node, NULL);
-	if (!ep) {
-		dev_err(dev, "missing endpoint node\n");
-		ret = -EINVAL;
-		return ret;
+	if (ep) {
+		csi->csi_lanes_in_use = of_property_count_u32_elems(ep, "data-lanes");
+		of_node_put(ep);
+		ep = NULL;
 	}
+	if (csi->csi_lanes_in_use <= 0 || csi->csi_lanes_in_use > 4) {
+		u32 lanes = 0;
 
-	ret = v4l2_fwnode_endpoint_alloc_parse(of_fwnode_handle(ep), &endpoint);
-	if (ret) {
-		dev_err(dev, "failed to parse endpoint\n");
-		goto put_node;
+		of_property_read_u32(dev->of_node, "data-lanes", &lanes);
+		csi->csi_lanes_in_use = lanes;
 	}
-
-	if (endpoint.bus_type != V4L2_MBUS_CSI2_DPHY ||
-	    endpoint.bus.mipi_csi2.num_data_lanes == 0) {
-		dev_err(dev, "missing CSI-2 properties in endpoint\n");
-		goto free_endpoint;
+	if (csi->csi_lanes_in_use <= 0 || csi->csi_lanes_in_use > 4) {
+		dev_info(dev, "missing data-lanes in endpoint or device node, set default\n");
+		csi->csi_lanes_in_use = 4;
 	}
-
-	csi->csi_lanes_in_use = endpoint.bus.mipi_csi2.num_data_lanes;
 	csi->enable_hdcp = hdcp1x_enable;
 	csi->hdcp.enable = hdcp1x_enable;
 	csi->i2s_enable_default = i2s_enable_default;
@@ -3442,14 +3499,7 @@ static int rk628_csi_probe_of(struct rk628_csi *csi)
 	csi->avi_rcv_rdy = false;
 	csi->user_color_range = COLOR_RANGE_AUTO;
 
-	ret = 0;
-
-free_endpoint:
-	v4l2_fwnode_endpoint_free(&endpoint);
-put_node:
-	of_node_put(ep);
-
-	return ret;
+	return 0;
 }
 
 static const struct rk628_plat_data rk628_csi_data = {
@@ -3562,16 +3612,94 @@ static ssize_t edid_store(struct device *dev,
 	return count;
 }
 
+static ssize_t pattern_show(struct device *dev,
+			struct device_attribute *attr, char *buf)
+{
+	struct rk628_csi *csi = dev_get_drvdata(dev);
+
+	if (csi->rk628->version != RK628F_VERSION)
+		return snprintf(buf, PAGE_SIZE, "Pattern mode is not supported.\n");
+	return snprintf(buf, PAGE_SIZE, "%d\n", csi->pattern_mode);
+}
+
+static int rk628_csi_pattern_mode_set(struct v4l2_subdev *sd)
+{
+	struct rk628_csi *csi = to_csi(sd);
+	struct rk628_bg_mode bg_mode;
+
+	if (csi->pattern_mode >= ARRAY_SIZE(bg_data))
+		return -EINVAL;
+
+	csi->timings = dst_timing;
+	csi->src_timings = dst_timing;
+	csi->nosignal = false;
+	csi->rk628->is_10bit = false;
+	csi->rk628->dual_mipi = false;
+	csi->rk628->color_range = HDMIRX_FULL_RANGE;
+	csi->rk628->color_format = BUS_FMT_RGB;
+	csi->rk628->color_space = HDMIRX_RGB;
+	if (csi->rk628->tx_mode == CSI_MODE)
+		csi->mbus_fmt_code = MEDIA_BUS_FMT_UYVY8_2X8;
+	else
+		csi->mbus_fmt_code = MEDIA_BUS_FMT_RGB888_1X24;
+
+	bg_mode = bg_data[csi->pattern_mode];
+	if (csi->rk628->tx_mode)
+		rk628_i2c_write(csi->rk628, GRF_BG_CTRL,
+			BG_R_OR_V(bg_mode.r) | BG_B_OR_U(bg_mode.b) |
+			BG_G_OR_Y(bg_mode.g) | BG_ENABLE(bg_mode.en));
+	else
+		rk628_i2c_write(csi->rk628, GRF_BG_CTRL,
+			BG_R_OR_V(bg_mode.v) | BG_B_OR_U(bg_mode.u) |
+			BG_G_OR_Y(bg_mode.y) | BG_ENABLE(bg_mode.en));
+
+	v4l2_ctrl_s_ctrl(csi->detect_tx_5v_ctrl, true);
+	rk628_csi_format_change(sd);
+
+	return 0;
+}
+
+static ssize_t pattern_store(struct device *dev,
+			     struct device_attribute *attr,
+			     const char *buf, size_t count)
+{
+	struct rk628_csi *csi = dev_get_drvdata(dev);
+	int mode, ret = 0;
+
+	ret = kstrtoint(buf, 0, &mode);
+	if (ret)
+		return ret;
+
+	if (mode < PATTERN_NONE || mode >= PATTERN_UNKNOWN)
+		return -EINVAL;
+	if (csi->rk628->version != RK628F_VERSION)
+		return count;
+	if (mode == csi->pattern_mode)
+		return count;
+
+	csi->pattern_mode = mode;
+	rk628_set_bg_enable(csi->rk628, false);
+	rk628_hdmirx_plugout(&csi->sd);
+	if (mode > PATTERN_NONE)
+		ret = rk628_csi_pattern_mode_set(&csi->sd);
+	else
+		schedule_delayed_work(&csi->delayed_work_enable_hotplug,
+				      msecs_to_jiffies(100));
+
+	return ret ? ret : count;
+}
 static DEVICE_ATTR_RO(audio_rate);
 static DEVICE_ATTR_RO(audio_present);
 static DEVICE_ATTR_RW(arc_enable);
 static DEVICE_ATTR_RW(edid);
+static DEVICE_ATTR_RW(pattern);
 
 static struct attribute *rk628_attrs[] = {
 	&dev_attr_audio_rate.attr,
 	&dev_attr_audio_present.attr,
 	&dev_attr_arc_enable.attr,
 	&dev_attr_edid.attr,
+	&dev_attr_pattern.attr,
 	NULL
 };
 ATTRIBUTE_GROUPS(rk628);
@@ -3695,6 +3823,7 @@ static int rk628_csi_probe(struct i2c_client *client)
 
 	v4l2_i2c_subdev_init(sd, client, &rk628_csi_ops);
 	sd->flags |= V4L2_SUBDEV_FL_HAS_DEVNODE | V4L2_SUBDEV_FL_HAS_EVENTS;
+	i2c_set_clientdata(client, sd);
 
 	/* i2c access, read chip id*/
 	err = rk628_i2c_read(csi->rk628, CSITX_CSITX_VERSION, &val);
@@ -3801,20 +3930,20 @@ static int rk628_csi_probe(struct i2c_client *client)
 	if (IS_ERR(csi->classdev)) {
 		err = PTR_ERR(csi->classdev);
 		v4l2_err(sd, "create device class failed\n");
-		goto err_hdl;
+		goto err_async;
 	}
 
 	csi->extcon = devm_extcon_dev_allocate(dev, rk628_csi_extcon_cable);
 	if (IS_ERR(csi->extcon)) {
 		err = PTR_ERR(csi->extcon);
 		v4l2_err(sd, "allocate extcon failed\n");
-		goto err_hdl;
+		goto err_async;
 	}
 
 	err = devm_extcon_dev_register(dev, csi->extcon);
 	if (err) {
 		v4l2_err(sd, "failed to register extcon: %d\n", err);
-		goto err_hdl;
+		goto err_async;
 	}
 
 	INIT_DELAYED_WORK(&csi->delayed_work_enable_hotplug,
@@ -3894,6 +4023,8 @@ err_work_queues:
 	cancel_delayed_work(&csi->delayed_work_enable_hotplug);
 	cancel_delayed_work(&csi->delayed_work_res_change);
 	rk628_hdmirx_audio_destroy(csi->audio_info);
+err_async:
+	v4l2_async_unregister_subdev(sd);
 err_hdl:
 	mutex_destroy(&csi->confctl_mutex);
 	media_entity_cleanup(&sd->entity);

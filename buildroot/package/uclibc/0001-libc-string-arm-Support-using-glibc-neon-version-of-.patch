@@ -1,4 +1,4 @@
-From 0bea89508c6be2b1a76650108d759d389e99bbf3 Mon Sep 17 00:00:00 2001
+From cfe4f3779626b38623d7ef87417d350cb55e7e1d Mon Sep 17 00:00:00 2001
 From: Jeffy Chen <jeffy.chen@rock-chips.com>
 Date: Wed, 13 Apr 2022 16:32:02 +0800
 Subject: [PATCH] libc: string: arm: Support using glibc-neon version of APIs
@@ -42,10 +42,10 @@ Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
  create mode 100644 libc/string/arm/glibc-neon/sysdeps/generic/sysdep.h
 
 diff --git a/Makerules b/Makerules
-index fd40e6c..2013ba9 100644
+index 38c2689..ce0b65d 100644
 --- a/Makerules
 +++ b/Makerules
-@@ -255,6 +255,7 @@ CFLAGS_gen.dep = -MT $@ -MD -MP -MF $(dir $@).$(notdir $@).dep
+@@ -258,6 +258,7 @@ CFLAGS_gen.dep = -MT $@ -MD -MP -MF $(dir $@).$(notdir $@).dep
  
  cmd_compile.c = $(CC) -c $< -o $@ \
      $(filter-out $(CFLAGS-OMIT-$(notdir $<)), \
@@ -3065,5 +3065,5 @@ index 0000000..39cac91
 +
 +#include "dwarf2.h"
 -- 
-2.20.1
+2.39.5
 

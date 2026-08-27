@@ -25,21 +25,25 @@ extern "C" {
 /**
  * @brief Error codes returned by RKNN3 API functions
  */
-#define RKNN3_SUCCESS 0                       /** < execute succeed. */
-#define RKNN3_ERR_FAIL -1                     /** < execute failed. */
-#define RKNN3_ERR_ARGUMENT_INVALID -2         /** < parameter is invalid. */
-#define RKNN3_ERR_MODEL_INVALID -3            /** < model is invalid. */
-#define RKNN3_ERR_CTX_INVALID -4              /** < context is invalid. */
-#define RKNN3_ERR_RUN_TASK_FAILED -5          /** < task run failed. */
-#define RKNN3_ERR_OUT_OF_MEMORY -6            /** < out of memory. */
-#define RKNN3_ERR_TIMEOUT -7                  /** < execute timeout. */
-#define RKNN3_ERR_INPUT_INVALID -8            /** < input is invalid. */
-#define RKNN3_ERR_OUTPUT_INVALID -9           /** < output is invalid. */
-#define RKNN3_ERR_DEVICE_UNAVAILABLE -10      /** < device is unavailable. */
-#define RKNN3_ERR_DEVICE_UNMATCH -11          /** < device is unmatch */
-#define RKNN3_ERR_TARGET_PLATFORM_UNMATCH -12 /** < target platform is unmatch. */
-#define RKNN3_ERR_COMMUNICATION -13           /** < communication error. */
-#define RKNN3_ERR_MEM_SYNC_FAILED -14         /** < memory sync failed. */
+#define RKNN3_SUCCESS 0                        /** < execute succeed. */
+#define RKNN3_ERR_FAIL -1                      /** < execute failed. */
+#define RKNN3_ERR_ARGUMENT_INVALID -2          /** < parameter is invalid. */
+#define RKNN3_ERR_MODEL_INVALID -3             /** < model is invalid. */
+#define RKNN3_ERR_CTX_INVALID -4               /** < context is invalid. */
+#define RKNN3_ERR_RUN_TASK_FAILED -5           /** < task run failed. */
+#define RKNN3_ERR_OUT_OF_MEMORY -6             /** < out of memory. */
+#define RKNN3_ERR_TIMEOUT -7                   /** < execute timeout. */
+#define RKNN3_ERR_INPUT_INVALID -8             /** < input is invalid. */
+#define RKNN3_ERR_OUTPUT_INVALID -9            /** < output is invalid. */
+#define RKNN3_ERR_DEVICE_UNAVAILABLE -10       /** < device is unavailable. */
+#define RKNN3_ERR_DEVICE_UNMATCH -11           /** < device is unmatch */
+#define RKNN3_ERR_TARGET_PLATFORM_UNMATCH -12  /** < target platform is unmatch. */
+#define RKNN3_ERR_COMMUNICATION -13            /** < communication error. */
+#define RKNN3_ERR_MEM_SYNC_FAILED -14          /** < memory sync failed. */
+#define RKNN3_ERR_KEY_INVALID -15              /** < decrypt key is invalid or RSA decryption failed. */
+#define RKNN3_ERR_DECRYPT_FAILED -16           /** < model decryption failed (key mismatch or data corrupted). */
+#define RKNN3_ERR_WEIGHT_LOAD_NOT_PREPARED -17 /** < streaming weight load not prepared, call rknn3_model_init first. */
+#define RKNN3_ERR_INCOMPATIBLE_VERSION -18     /** < version mismatch between librknn3_api and rknn3_transfer_proxy / server(firmware for co-processor or rknn3_server for non-co-processor), all three components must be same version. */
 
 /**
  * @brief Warning codes returned by RKNN3 API functions
@@ -53,7 +57,7 @@ extern "C" {
 #define RKNN3_MAX_STRIDE_DIMS (RKNN3_MAX_DIMS + 1) /* maximum stride dimension of tensor. */
 #define RKNN3_MAX_NAME_LEN 256                     /* maximum name length of tensor. */
 #define RKNN3_MAX_DYNAMIC_SHAPE_NUM 512            /* maximum number of dynamic shape for each input. */
-#define RKNN3_MAX_LORA_NUM 128                     /* maximum number of lora. */
+#define RKNN3_MAX_LORA_NUM 32                      /* maximum number of lora. */
 #define RKNN3_MAX_SPECIAL_BOS_ID_NUM 64            /* maximum number of special Begin-Of-Sequence (BOS) token. */
 #define RKNN3_MAX_SPECIAL_EOS_ID_NUM 64            /* maximum number of special End-Of-Sequence (EOS) token. */
 
@@ -83,9 +87,10 @@ typedef enum _rknn3_query_cmd
   RKNN3_QUERY_SDK_VERSION = 5, /** < query the sdk & driver version */
 
   RKNN3_QUERY_CORE_MEM_SIZE = 6, /** < query the weight & internal memory size of each core */
+  RKNN3_QUERY_CUSTOM_STRING = 7, /** < query the custom string */
 
-  RKNN3_QUERY_NATIVE_INPUT_ATTR  = 8, /** < query the attribute of native input tensor. */
-  RKNN3_QUERY_NATIVE_OUTPUT_ATTR = 9, /** < query the attribute of native output tensor. */
+  RKNN3_QUERY_ORIGIN_INPUT_ATTR  = 8, /** < query the attribute of origin input tensor. */
+  RKNN3_QUERY_ORIGIN_OUTPUT_ATTR = 9, /** < query the attribute of origin output tensor. */
 
   RKNN3_QUERY_DEVICE_MEM_INFO = 12, /** < query the attribute of rknn3 memory information. */
 
@@ -105,6 +110,9 @@ typedef enum _rknn3_query_cmd
 
   RKNN3_QUERY_POSTPROCESS_DYNAMIC_SHAPE_INFO = 20, /** < query the dynamic shape info of postprocess, only valid when postprocess is enabled */
 
+  RKNN3_QUERY_LORA_NUM = 21,  /** < query the number of LoRA adapters **/
+  RKNN3_QUERY_LORA_INFO = 22, /** < query the LoRA information **/
+
   RKNN3_QUERY_CMD_MAX
 } rknn3_query_cmd;
 
@@ -113,18 +121,22 @@ typedef enum _rknn3_query_cmd
  */
 typedef enum _rknn3_tensor_type
 {
-  RKNN3_TENSOR_FLOAT32 = 0, /** < data type is float32. */
-  RKNN3_TENSOR_FLOAT16,     /** < data type is float16. */
-  RKNN3_TENSOR_INT8,        /** < data type is int8. */
-  RKNN3_TENSOR_UINT8,       /** < data type is uint8. */
-  RKNN3_TENSOR_INT16,       /** < data type is int16. */
-  RKNN3_TENSOR_UINT16,      /** < data type is uint16. */
-  RKNN3_TENSOR_INT32,       /** < data type is int32. */
-  RKNN3_TENSOR_UINT32,      /** < data type is uint32. */
-  RKNN3_TENSOR_INT64,       /** < data type is int64. */
-  RKNN3_TENSOR_UINT64,      /** < data type is uint64. */
-  RKNN3_TENSOR_BOOL,        /** < data type is boolean. */
-  RKNN3_TENSOR_INT4,
+  RKNN3_TENSOR_FLOAT32 = 0,  /** < data type is float32. */
+  RKNN3_TENSOR_FLOAT16,      /** < data type is float16. */
+  RKNN3_TENSOR_INT8,         /** < data type is int8. */
+  RKNN3_TENSOR_UINT8,        /** < data type is uint8. */
+  RKNN3_TENSOR_INT16,        /** < data type is int16. */
+  RKNN3_TENSOR_UINT16,       /** < data type is uint16. */
+  RKNN3_TENSOR_INT32,        /** < data type is int32. */
+  RKNN3_TENSOR_UINT32,       /** < data type is uint32. */
+  RKNN3_TENSOR_INT64,        /** < data type is int64. */
+  RKNN3_TENSOR_UINT64,       /** < data type is uint64. */
+  RKNN3_TENSOR_BOOL,         /** < data type is boolean. */
+  RKNN3_TENSOR_INT4,         /** < data type is int4. */
+  RKNN3_TENSOR_FLOAT8E4M3FN, /** < data type is float8e4m3fn. */
+  RKNN3_TENSOR_BFLOAT16,     /** < data type is bfloat16. */
+  RKNN3_TENSOR_FLOAT8E8M0,        /** < data type is float8e8m0. */
+  RKNN3_TENSOR_FLOAT4E2M1,        /** < data type is float4e2m1 (fp4). */
 
   RKNN3_TENSOR_TYPE_MAX
 } rknn3_tensor_type;
@@ -281,6 +293,8 @@ typedef enum
   RKLLM_RUN_STOP                  = 3, /**< The LLM call is stopped by user. */
   RKLLM_RUN_MAX_NEW_TOKEN_REACHED = 4, /**< The LLM call has reached the maximum number of new tokens. */
   RKLLM_RUN_ERROR                 = 5, /**< An error occurred during the LLM call. */
+  RKLLM_RUN_PAUSE                 = 6, /**< The LLM call is paused. */
+  RKLLM_RUN_RESUME                = 7, /**< The LLM call is resumed from pause. */
 } LLMCallState;
 
 /**
@@ -557,7 +571,8 @@ typedef struct _rknn3_llm_config
   uint32_t                   kvcache_residual_depth;  /** < kvcache residual depth */
   char*                      model_type;              /** < model type */
   rknn3_llm_task_type        task_type;               /** < task type */
-  uint8_t                    reserved[128];           /** < reserved */
+  uint8_t                    rope_cache_host_storage; /** < rope cache host storage */  
+  uint8_t                    reserved[127];           /** < reserved */
 } rknn3_llm_config;
 
 /**
@@ -902,6 +917,35 @@ typedef int (*LLMTokenizerCallback)(void* userdata, const char* text, int32_t te
 typedef int (*LLMOutputCallback)(void* userdata, rknn3_tensor* output_tensors, uint32_t n_output_tensors, LLMOutputCallbackState state);
 
 /**
+ * @struct LLMInputCallbackParam
+ * @brief Parameters for LLMInputCallback.
+ */
+typedef struct
+{
+  int32_t* tokens;                     /**< Pointer to the current input token array. */
+  int32_t  num_tokens;                 /**< Number of tokens. */
+  int32_t  shape_id;                   /**< Shape ID of the current input_tensors. */
+  int32_t  pos;                        /**< Position of the current input in the whole context. */
+  int32_t  mrope_pos;                  /**< Position of MRoPE. */
+  int32_t  mrope_start;                /**< Start position of MRoPE in the whole context. */
+  int32_t  system_prompt_seqlen;       /**< Sequence length of system prompt. */
+  int32_t  valid_system_prompt_seqlen; /**< Valid sequence length of system prompt. */ 
+  int32_t  max_position_embeddings;    /**< Max position embeddings of the model. */
+  uint8_t  reserved[128];              /**< Reserved for future extension. */
+} LLMInputCallbackParam;
+
+/**
+ * @typedef LLMInputCallback
+ * @brief Callback function to provide custom input tensors (e.g., for per_layer_inputs like gemma4).
+ * @param userdata Pointer to user data for the callback.
+ * @param input_tensors Pointer to the input tensors for the callback.
+ * @param n_input_tensors Number of input tensors.
+ * @param param Additional parameters for the input callback, such as token information.
+ * @return 0 on success, non-zero on error.
+ */
+typedef int (*LLMInputCallback)(void* userdata, rknn3_tensor* input_tensors, uint32_t n_input_tensors, LLMInputCallbackParam param);
+
+/**
  * @struct RKLLMCallback
  * @brief Structure to hold callback functions for LLM operations.
  */
@@ -923,6 +967,11 @@ typedef struct
   void*             output_userdata;  /**< userdata for LLMOutputCallback */
   rknn3_tensor*     output_tensors;   /**< output tensors to be returned by the LLM */
   uint32_t          n_output_tensors; /**< number of output tensors */
+
+  LLMInputCallback input_callback;      /**< Optional: Only required when provide custom input tensors */
+  void*            input_userdata;      /**< userdata for LLMInputCallback */
+  int32_t*         input_tensors_index; /**< index of input tensors */
+  uint32_t         n_input_tensors;     /**< number of input tensors */
 } RKLLMCallback;
 
 /**
@@ -970,8 +1019,16 @@ inline static const char* rknn3_get_type_string(rknn3_tensor_type type)
     return "BOOL";
   case RKNN3_TENSOR_INT4:
     return "INT4";
+  case RKNN3_TENSOR_FLOAT8E4M3FN:
+    return "FLOAT8E4M3FN";
+  case RKNN3_TENSOR_BFLOAT16:
+    return "BFLOAT16";
+  case RKNN3_TENSOR_FLOAT8E8M0:
+    return "FLOAT8E8M0";
+  case RKNN3_TENSOR_FLOAT4E2M1:
+    return "FLOAT4E2M1";
   default:
-    return "UNKNOW";
+    return "UNKNOWN";
   }
 }
 
@@ -1052,7 +1109,11 @@ int rknn3_init(rknn3_context* context, rknn3_init_extend* init_extend);
  *
  * @param context The RKNN3 context handle
  * @param model_path Path to the RKNN3 model file
- * @param weight_path Path to the RKNN3 weight file
+ * @param weight_path Path to the RKNN3 weight file. Pass NULL or an empty
+ *                    string to enable streaming weight loading mode. In this
+ *                    mode call rknn3_model_init() with a valid config to
+ *                    perform full setup and NPU initialization, then stream
+ *                    weight data via rknn3_load_weight_chunk().
  * @return int Return status code:
  *         - 0: Success
  *         - <0: Error code
@@ -1062,28 +1123,116 @@ int rknn3_load_model_from_path(rknn3_context context, const char* model_path, co
 /**
  * @brief Load RKNN3 model from memory data.
  *
- * @param context The RKNN3 context handle.
- * @param model_data Pointer to the model data in memory.
- * @param model_size Size of the model data in bytes.
- * @param weight_data Pointer to the weight data in memory.
- * @param weight_size Size of the weight data in bytes.
+ * @param context     The RKNN3 context handle.
+ * @param model_data  Pointer to the model data in memory. Must not be NULL.
+ * @param model_size  Size of the model data in bytes. Must be > 0.
+ * @param weight_data Pointer to the weight data in memory. Pass NULL together
+ *                    with weight_size = 0 to enable streaming weight loading
+ *                    mode. In streaming mode call rknn3_model_init() with a
+ *                    valid config to perform full setup and NPU initialization,
+ *                    then upload weight data via rknn3_load_weight_chunk().
+ *                    Passing NULL with a non-zero weight_size, or a non-NULL
+ *                    pointer with weight_size = 0, is an invalid combination
+ *                    and returns RKNN3_ERR_ARGUMENT_INVALID.
+ * @param weight_size Size of the weight data in bytes. Must be 0 when
+ *                    weight_data is NULL, and non-zero when weight_data is
+ *                    non-NULL.
  *
  * @return int Return 0 if successful, otherwise return error code.
  *         Error codes:
  *         - RKNN3_ERR_FAIL: Load model failed.
  *         - RKNN3_ERR_MODEL_INVALID: Invalid model.
  *         - RKNN3_ERR_DEVICE_UNAVAILABLE: Device unavailable.
+ *         - RKNN3_ERR_ARGUMENT_INVALID: weight_data and weight_size are
+ *           inconsistent (one is NULL/zero while the other is not).
  */
 int rknn3_load_model_from_data(rknn3_context context, const void* model_data, uint64_t model_size, const void* weight_data, uint64_t weight_size);
 
 /**
+ * @brief Set the decryption key from a file path.
+ *
+ * Load an RSA-encrypted user key envelope and associate it with the context.
+ * The runtime will use RK's pre-provisioned RSA private key to decrypt the
+ * envelope and extract the AES key + IV internally.
+ *
+ * This must be called BEFORE rknn3_load_model_from_path / rknn3_load_model_from_data
+ * when loading encrypted models. If the model is not encrypted, this call is not needed.
+ *
+ * @param context   The RKNN3 context handle.
+ * @param key_path  Path to the RSA-encrypted user key envelope file.
+ * @return int Return 0 if successful, otherwise return error code.
+ *         Error codes:
+ *         - RKNN3_ERR_KEY_INVALID: Key file is invalid or RSA decryption failed.
+ *         - RKNN3_ERR_CTX_INVALID: Context is invalid.
+ */
+int rknn3_set_decrypt_key_from_path(rknn3_context context, const char* key_path);
+
+/**
+ * @brief Set the decryption key from memory data.
+ *
+ * Same as rknn3_set_decrypt_key_from_path, but reads the key envelope from memory.
+ *
+ * @param context   The RKNN3 context handle.
+ * @param key_data  Pointer to the RSA-encrypted user key envelope data.
+ * @param key_size  Size of the key envelope data in bytes.
+ * @return int Return 0 if successful, otherwise return error code.
+ *         Error codes:
+ *         - RKNN3_ERR_KEY_INVALID: Key data is invalid or RSA decryption failed.
+ *         - RKNN3_ERR_CTX_INVALID: Context is invalid.
+ */
+int rknn3_set_decrypt_key_from_data(rknn3_context context, const void* key_data, uint64_t key_size);
+
+/**
  * @brief Initialize the RKNN3 model.
  *
+ * In non-streaming mode: performs full model setup, weight sync, and NPU
+ * initialization in one blocking call. @p config must not be NULL.
+ *
+ * In streaming mode (weight_path/weight_data was NULL/0 in the load call):
+ * performs MSG_MODEL_SETUP, queries model/shape/allocation info, syncs
+ * command data to NPU, and sends MSG_MODEL_INIT to complete NPU network
+ * initialization — all in one blocking call. After this returns, upload
+ * weight data via rknn3_load_weight_chunk(). Running inference before all
+ * weights are uploaded will produce a warning.
+ *
  * @param context The RKNN3 context handle.
- * @param config Configuration parameters for model.
+ * @param config  Configuration parameters. Must not be NULL.
  * @return int Return 0 if successful, otherwise return error code.
  */
 int rknn3_model_init(rknn3_context context, rknn3_config* config);
+
+/**
+ * @brief Upload a chunk of weight data during streaming weight loading.
+ *
+ * Must be called after rknn3_model_init(). Multiple calls may be made to
+ * stream the weight in arbitrary-sized pieces. When the total uploaded bytes
+ * reach the expected weight size the streaming state is cleared and the model
+ * is considered fully ready.
+ *
+ * @p weight_offset is a byte offset from the start of the weight file.
+ * The API internally maps it to the correct NPU core and device buffer offset;
+ * the caller does not need to know per-core weight boundaries.
+ * Chunks that span an internal core boundary are split automatically.
+ *
+ * Boundary handling:
+ * - If weight_offset >= total_weight_size: returns RKNN3_ERR_ARGUMENT_INVALID
+ * - If weight_offset + size > total_weight_size: the chunk is automatically
+ *   truncated to fit within the remaining weight data. The function succeeds
+ *   but only uploads the available bytes.
+ *
+ * @param context       The RKNN3 context handle (must be in streaming mode,
+ *                      after rknn3_model_init has been called).
+ * @param weight_offset Byte offset from the start of the weight file.
+ * @param data          Pointer to the weight data chunk. Must not be NULL.
+ * @param size          Size of the chunk in bytes. Must be > 0.
+ * @return int Return 0 if successful, otherwise return error code.
+ *         - RKNN3_ERR_WEIGHT_LOAD_NOT_PREPARED: rknn3_model_init() has not
+ *           been called yet.
+ *         - RKNN3_ERR_ARGUMENT_INVALID: data is NULL, size is 0, or
+ *           weight_offset is beyond the total weight size.
+ */
+int rknn3_load_weight_chunk(rknn3_context context, uint64_t weight_offset,
+                               const void* data, uint64_t size);
 
 /**
  * @brief Duplicate an existing RKNN3 context
@@ -1282,6 +1431,61 @@ int rknn3_find_devices(rknn3_devices* pdevs);
 rknn3_session* rknn3_session_init(rknn3_context context, rknn3_llm_param* params, int n_params);
 
 /**
+ * @brief Initialize LoRA support for an RKNN3 context by loading metadata from a weight file.
+ *
+ * @param context The RKNN3 context handle
+ * @param lora_weight_path Path to the LoRA weight file
+ * @return int Return status: 0 on success, negative error code on failure
+ */
+int rknn3_lora_init(rknn3_context context, const char* lora_weight_path);
+
+/**
+ * @brief Initialize LoRA support for an RKNN3 context from an in-memory buffer.
+ *
+ * @param context The RKNN3 context handle
+ * @param weight_data    Pointer to the LoRA weight data buffer (non-owning)
+ * @param weight_size    Size of the buffer in bytes
+ * @return int Return status: 0 on success, negative error code on failure
+ */
+int rknn3_lora_init_from_data(rknn3_context context, const void* weight_data, uint64_t weight_size);
+
+/**
+ * @brief Load a LoRA adapter for an RKNN3 Context.
+ *
+ * @param context The RKNN3 context handle
+ * @param lora    Pointer to the LoRA adapter descriptor to load
+ * @return int Return status: 0 on success, negative error code on failure
+ */
+int rknn3_lora_load(rknn3_context context, rknn3_lora* lora);
+
+/**
+ * @brief Unload a LoRA adapter from an RKNN3 Context.
+ *
+ * @param context The RKNN3 context handle
+ * @param lora    Pointer to the LoRA adapter descriptor to unload
+ * @return int Return status: 0 on success, negative error code on failure
+ */
+int rknn3_lora_unload(rknn3_context context, rknn3_lora* lora);
+
+/**
+ * @brief Enable a LoRA adapter for an RKNN3 Context.
+ *
+ * @param context The RKNN3 context handle
+ * @param lora    Pointer to the LoRA adapter descriptor to enable
+ * @return int Return status: 0 on success, negative error code on failure
+ */
+int rknn3_lora_enable(rknn3_context context, rknn3_lora* lora);
+
+/**
+ * @brief Disable a LoRA adapter for an RKNN3 Context.
+ *
+ * @param context The RKNN3 context handle
+ * @param lora    Pointer to the LoRA adapter descriptor to disable
+ * @return int Return status: 0 on success, negative error code on failure
+ */
+int rknn3_lora_disable(rknn3_context context, rknn3_lora* lora);
+
+/**
  * @brief Enable LoRA for a RKNN3 session
  *
  * @param session Pointer to the RKNN3 session
@@ -1302,18 +1506,6 @@ int rknn3_session_enable_lora(rknn3_session* session, rknn3_lora* lora);
  *         - Other: Error code
  */
 int rknn3_session_disable_lora(rknn3_session* session, rknn3_lora* lora);
-
-/**
- * @brief Query LoRA (Low-Rank Adaptation) information from an RKNN3 session
- *
- * @param session Pointer to the RKNN3 session
- * @param lora Double pointer to store the array of LoRA information
- * @param n_lora Pointer to store the number of LoRA entries
- * @return int Return status:
- *         - 0: Success
- *         - Other: Error code
- */
-int rknn3_session_query_lora(rknn3_session* session, rknn3_lora** lora, int* n_lora);
 
 /**
  * @brief Set the KV-Cache policy for a RKNN3 session.
@@ -1344,12 +1536,23 @@ int rknn3_session_clear_kvcache(rknn3_session* session, rknn3_kvcache_clear_poli
  *
  * @param session Pointer to the RKNN3 session
  * @param kvcache_path Path to the KV-Cache file
- * @param size Size parameter (reserved for future use)
  * @return int Return status:
  *         - 0: Success
  *         - Other: Error code
  */
-int rknn3_session_load_kvcache(rknn3_session* session, const char* kvcache_path, int64_t size);
+int rknn3_session_load_kvcache_from_path(rknn3_session* session, const char* kvcache_path);
+
+/**
+ * @brief Load the KV-Cache from data
+ *
+ * @param session Pointer to the RKNN3 session
+ * @param kvcache_data Pointer to the KV-Cache data
+ * @param size Size of the KV-Cache data in bytes
+ * @return int Return status:
+ *         - 0: Success
+ *         - Other: Error code
+ */
+int rknn3_session_load_kvcache_from_data(rknn3_session* session, const void* kvcache_data, int64_t size);
 
 /**
  * @brief Save the KV-Cache to a specified path
@@ -1360,7 +1563,7 @@ int rknn3_session_load_kvcache(rknn3_session* session, const char* kvcache_path,
  *         - 0: Success
  *         - Other: Error code
  */
-int rknn3_session_save_kvcache(rknn3_session* session, char* kvcache_path);
+int rknn3_session_save_kvcache(rknn3_session* session, const char* kvcache_path);
 
 /**
  * @brief Query the current state of a RKNN3 session
@@ -1447,6 +1650,34 @@ int rknn3_session_run_async(rknn3_session* session, rknn3_llm_input inputs[], ui
 int rknn3_session_stop(rknn3_session* session);
 
 /**
+ * @brief Pause the RKNN3 session
+ *
+ * @param session Pointer to the RKNN3 session to be paused
+ *
+ * @return int Return status code
+ *         - 0: Success
+ *         - <0: Error
+ *
+ * This function pause the execution of the RKNN3 session
+
+ * */
+int rknn3_session_pause(rknn3_session* session);
+
+/**
+ * @brief Resume the RKNN3 session
+ *
+ * @param session Pointer to the RKNN3 session to be resumed
+ *
+ * @return int Return status code
+ *         - 0: Success
+ *         - <0: Error
+ *
+ * This function resume the execution of the RKNN3 session
+
+ * */
+int rknn3_session_resume(rknn3_session* session);
+
+/**
  * @brief Destroys an RKNN3 session and releases associated resources
  *
  * @param[in] session Pointer to the RKNN3 session to be destroyed
@@ -1483,6 +1714,23 @@ int rknn3_session_set_function_tools(rknn3_session* session, const char* tools);
 int rknn3_session_set_llm_param(rknn3_session* session, rknn3_llm_param* params, int n_params);
 
 /**
+ * @brief Set an alias for a model input name to match the session's expected input name.
+ *
+ * @param context         RKNN3 context handle obtained from rknn3_init
+ * @param src_input_name  The actual input name used in the model (e.g., "input_embedding")
+ * @param dst_input_name  The expected input name used in the session (e.g., "input_embeds")
+ * @return int
+ *         - 0: Success
+ *         - <0: Error code
+ *
+ * This API sets or updates the alias mapping between model input names and session input names.
+ * Use this function when the model's input name is different from the name expected by the session.
+ * For example, if the model uses "input_embedding" as input name but the session expects "input_embeds",
+ * call this function to map "input_embedding" to "input_embeds".
+ */
+int rknn3_set_input_name_alias(rknn3_context context, const char* src_input_name, const char* dst_input_name);
+
+/**
  * @brief Dump the layer-by-layer features of the RKNN3 model.
  *
  * @param context The RKNN3 context handle obtained from rknn3_init
@@ -1491,20 +1739,23 @@ int rknn3_session_set_llm_param(rknn3_session* session, rknn3_llm_param* params,
  * @param outputs The output tensors (optional, can be NULL)
  * @param n_outputs The number of output tensors (set to 0 to use internal output tensor allocation)
  * @param dump_dir The directory where the dumped features will be saved
+ * @param core_mask The NPU core mask to dump. Set to 0 to use the `run_core_mask`
+ *                  configured via rknn3_model_init.
+ * @param dump_selector Dump mode string. NULL, empty, "*", or "all" dumps all
+ *                      ops on selected cores.
  * @return int Return 0 if successful, otherwise return error code
  *
- * This function performs layer-by-layer execution and dumps all intermediate tensors
- * to the specified directory as .npy files.
+ * This function performs layer-by-layer execution and dumps selected intermediate
+ * tensors to the specified directory as .npy files.
  *
- * @note Active cores used during feature dumping are derived from the `run_core_mask`
- *       configured via rknn3_model_init. Ensure the desired mask is set before invoking
- *       this API.
+ * @note Only cores whose bits are set in core_mask will be executed for feature
+ *       dumping. The selected core mask should be a subset of the model run core mask.
  *
  * @note If outputs is NULL or n_outputs is 0, output tensors will be automatically
  *       allocated and managed internally. Otherwise, the provided outputs will be used.
  */
 int rknn3_dump_features(rknn3_context context, const rknn3_tensor inputs[], uint32_t n_inputs, rknn3_tensor outputs[], uint32_t n_outputs,
-                        const char* dump_dir);
+                        const char* dump_dir, uint32_t core_mask, const char* dump_selector);
 
 /**
  * @brief Print layer-by-layer operator profile information of the RKNN3 model.

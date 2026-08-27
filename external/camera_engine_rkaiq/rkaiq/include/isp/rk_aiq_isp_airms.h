@@ -20,6 +20,12 @@
 
 #define AIRMS_MODEL_FILENAME_LEN    128
 
+typedef enum airms_wbgain_apply_mode_e {
+    AIRMS_WBGAIN_APPLY_CIS = 0,
+    AIRMS_WBGAIN_APPLY_CPU = 1,
+    AIRMS_WBGAIN_APPLY_ISP = 2,
+} airms_wbgain_apply_mode_t;
+
 typedef struct airms_model_path_s {
     /* M4_GENERIC_DESC(
         M4_ALIAS(sw_aiRmsCfg_model_file),
@@ -45,6 +51,20 @@ typedef struct airms_params_static_s {
         M4_ORDER(1),
         M4_NOTES(TODO))  */
     airms_model_path_t model_path;
+    /* M4_GENERIC_DESC(
+        M4_ALIAS(sw_aiRmsCfg_wbgainApply_mode),
+        M4_TYPE(enum),
+        M4_ENUM_DEF(airms_wbgain_apply_mode_t),
+        M4_DEFAULT(AIRMS_WBGAIN_APPLY_CIS),
+        M4_HIDE_EX(0),
+        M4_RO(0),
+        M4_ORDER(2),
+        M4_NOTES(White balance gain apply mode.
+        cis: apply in CIS path.
+        cpu: apply in CPU path.
+        isp: apply in ISP path.
+        Freq of use: High))  */
+    airms_wbgain_apply_mode_t sw_aiRmsCfg_wbgainApply_mode;
 } airms_params_static_t;
 
 typedef struct airms_param_s {

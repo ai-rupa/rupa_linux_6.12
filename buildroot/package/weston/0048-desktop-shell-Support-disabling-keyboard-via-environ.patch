@@ -1,0 +1,98 @@
+From 67517447047bda4a573b31762d438b4a86745b54 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Thu, 8 Aug 2024 08:54:43 +0800
+Subject: [PATCH 48/98] desktop-shell: Support disabling keyboard via
+ environment variable
+
+Add support for disabling keyboard input by setting WESTON_NO_KEYBOARD=1
+environment variable, useful for kiosk and touch-only applications.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ desktop-shell/shell.c       | 16 +++++++++++-----
+ libweston/libinput-device.c |  7 +++++++
+ libweston/libinput-seat.c   |  8 ++++++--
+ 3 files changed, 24 insertions(+), 7 deletions(-)
+
+diff --git a/desktop-shell/shell.c b/desktop-shell/shell.c
+index 78ee84cd..97b80993 100644
+--- a/desktop-shell/shell.c
++++ b/desktop-shell/shell.c
+@@ -4690,8 +4690,11 @@ shell_destroy(struct wl_listener *listener, void *data)
+ 	wl_list_remove(&shell->sleep_listener.link);
+ 	wl_list_remove(&shell->transform_listener.link);
+ 
+-	text_backend_destroy(shell->text_backend);
+-	input_panel_destroy(shell);
++	/* Skip keyboard-related cleanup if keyboard is disabled */
++	if (shell->text_backend) {
++		text_backend_destroy(shell->text_backend);
++		input_panel_destroy(shell);
++	}
+ 
+ 	if (shell->fade.animation) {
+ 		weston_view_animation_destroy(shell->fade.animation);
+@@ -4900,10 +4903,13 @@ wet_shell_init(struct weston_compositor *ec,
+ 	weston_layer_init(&shell->minimized_layer, ec);
+ 	weston_layer_init(&shell->workspace.layer, ec);
+ 
+-	if (input_panel_setup(shell) < 0)
+-		return -1;
++	/* Skip keyboard initialization if WESTON_NO_KEYBOARD is set */
++	if (!getenv("WESTON_NO_KEYBOARD")) {
++		if (input_panel_setup(shell) < 0)
++			return -1;
+ 
+-	shell->text_backend = text_backend_init(ec);
++		shell->text_backend = text_backend_init(ec);
++	}
+ 
+ 	if (!shell_configuration(shell))
+ 		return -1;
+diff --git a/libweston/libinput-device.c b/libweston/libinput-device.c
+index dedcb49b..1500e0ef 100644
+--- a/libweston/libinput-device.c
++++ b/libweston/libinput-device.c
+@@ -1062,6 +1062,13 @@ evdev_device_create(struct libinput_device *libinput_device,
+ 
+ 	if (libinput_device_has_capability(libinput_device,
+ 					   LIBINPUT_DEVICE_CAP_KEYBOARD)) {
++		/* Skip keyboard device creation if WESTON_NO_KEYBOARD is set */
++		if (getenv("WESTON_NO_KEYBOARD")) {
++			weston_log("Keyboard device ignored (disabled)\n");
++			free(device);
++			return NULL;
++		}
++
+ 		if (weston_seat_init_keyboard(seat, NULL) < 0) {
+ 			free(device);
+ 			return NULL;
+diff --git a/libweston/libinput-seat.c b/libweston/libinput-seat.c
+index 58478026..da4ae571 100644
+--- a/libweston/libinput-seat.c
++++ b/libweston/libinput-seat.c
+@@ -112,7 +112,9 @@ device_added(struct udev_input *input, struct libinput_device *libinput_device)
+ 	device = evdev_device_create(libinput_device, seat);
+ 	if (device == NULL) {
+ 		weston_log("Failed to create a device\n");
+-		return 1;
++
++		/* Return success to avoid aborting device enumeration */
++		return 0;
+ 	}
+ 
+ 	if (input->configure_device != NULL)
+@@ -160,7 +162,9 @@ device_removed(struct udev_input *input, struct libinput_device *libinput_device
+ 	device = libinput_device_get_user_data(libinput_device);
+ 	if (!device) {
+ 		weston_log("Failed to retrieve device\n");
+-		return 1;
++
++		/* Return success for non-existent device */
++		return 0;
+ 	}
+ 
+ 	evdev_device_destroy(device);
+-- 
+2.39.5
+

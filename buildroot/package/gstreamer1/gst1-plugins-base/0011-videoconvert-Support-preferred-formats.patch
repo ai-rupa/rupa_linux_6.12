@@ -1,4 +1,4 @@
-From a92eb03f8718e24b27b962c52d9ed6b271e6f4ee Mon Sep 17 00:00:00 2001
+From d1e0141a3c46625e097619424407b52806b4abfe Mon Sep 17 00:00:00 2001
 From: Jeffy Chen <jeffy.chen@rock-chips.com>
 Date: Fri, 17 Sep 2021 13:20:24 +0800
 Subject: [PATCH 11/21] videoconvert: Support preferred formats
@@ -13,10 +13,10 @@ Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
  1 file changed, 22 insertions(+)
 
 diff --git a/gst/videoconvertscale/gstvideoconvertscale.c b/gst/videoconvertscale/gstvideoconvertscale.c
-index b078463..78c66f0 100644
+index 03a1c9e..b3a779d 100644
 --- a/gst/videoconvertscale/gstvideoconvertscale.c
 +++ b/gst/videoconvertscale/gstvideoconvertscale.c
-@@ -1093,6 +1093,28 @@ score_value (GstBaseTransform * base, const GstVideoFormatInfo * in_info,
+@@ -1233,6 +1233,28 @@ score_value (GstBaseTransform * base, const GstVideoFormatInfo * in_info,
        loss += SCORE_DEPTH_LOSS;
    }
  

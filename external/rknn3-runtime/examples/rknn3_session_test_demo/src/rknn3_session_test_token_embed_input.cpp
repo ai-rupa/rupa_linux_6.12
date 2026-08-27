@@ -159,14 +159,16 @@ int embed_callback(void *userdata, int32_t *tokens, uint64_t num_tokens, void *e
   return 0;
 }
 
-rknn3_context init_context_and_model(const char *model_path, const char *weight_path, uint32_t core_mask)
+int init_context_and_model(rknn3_context *p_ctx, const char *model_path, const char *weight_path, uint32_t core_mask, const char *device_id)
 {
   int ret = 0;
   rknn3_config config;
   rknn3_context ctx = 0;
 
-  // init context
-  ret = rknn3_init(&ctx, nullptr);
+  // init context with device_id
+  rknn3_init_extend init_extend = {0};
+  init_extend.device_id = (char*)device_id;
+  ret = rknn3_init(&ctx, &init_extend);
   if (ret < 0)
   {
     printf("rknn3_init failed! ret=%d\n", ret);
@@ -195,7 +197,8 @@ rknn3_context init_context_and_model(const char *model_path, const char *weight_
     return -1;
   }
 
-  return ctx;
+  *p_ctx = ctx;
+  return 0;
 }
 
 int get_tokenizer_and_embedding(const char *tokenizer_path, VocabInfo *vocab_info, Tokenizer **tokenizer,
@@ -306,20 +309,32 @@ int main(int argc, char **argv)
 
   printf("*******************************NEW TEST**********************************\n");
 
-  // find devices
+  // Query available devices
+  const char *device_id = nullptr;
   memset(&devs, 0, sizeof(devs));
   ret = rknn3_find_devices(&devs);
-  if (ret != RKNN3_SUCCESS || devs.n_devices == 0)
-  {
-    printf("rknn3_find_devices failed, ret = %d\n", ret);
+  if (ret != RKNN3_SUCCESS) {
+    printf("rknn3_find_devices failed! ret=%d\n", ret);
     goto exit;
   }
+  if (devs.n_devices == 0) {
+    printf("No RK182X devices found\n");
+    goto exit;
+  }
+  printf("Found %d RK182X device(s)\n", devs.n_devices);
+  for (int i = 0; i < devs.n_devices; i++) {
+    printf("  Device %d: transfer_type=%s, id=%s\n", i, devs.devices[i].type, devs.devices[i].id);
+  }
+
+  // Use the first device
+  device_id = devs.devices[0].id;
+  printf("Using device id=%s\n", device_id);
 
   // init context and model
-  ctx = init_context_and_model(model_path, weight_path, core_mask);
-  if (ctx < 0)
+  ret = init_context_and_model(&ctx, model_path, weight_path, core_mask, device_id);
+  if (ret < 0)
   {
-    printf("rknn3_session_init_model failed! ctx = %lu\n", ctx);
+    printf("rknn3_session_init_model failed! ret = %d\n", ret);
     goto exit;
   }
 

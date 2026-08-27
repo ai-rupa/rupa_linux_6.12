@@ -1,4 +1,4 @@
-From 646b28517343999dc1519ebf5e89fd71b5ed5116 Mon Sep 17 00:00:00 2001
+From d121727f9e59de6745599b02b4ccfa924ec3f3a3 Mon Sep 17 00:00:00 2001
 From: Jeffy Chen <jeffy.chen@rock-chips.com>
 Date: Mon, 1 Apr 2024 16:04:29 +0800
 Subject: [PATCH 1/4] drm: Fallback to the first possible crtc
@@ -10,10 +10,10 @@ Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
  2 files changed, 19 insertions(+), 2 deletions(-)
 
 diff --git a/backend/drm/atomic.c b/backend/drm/atomic.c
-index 037c3c23a..ad22a821c 100644
+index faa535d..f76fe0c 100644
 --- a/backend/drm/atomic.c
 +++ b/backend/drm/atomic.c
-@@ -416,6 +416,7 @@ static void atomic_connector_add(struct atomic *atom,
+@@ -498,6 +498,7 @@ static void atomic_connector_add(struct atomic *atom,
  	struct wlr_drm_crtc *crtc = conn->crtc;
  	bool active = state->active;
  
@@ -22,7 +22,7 @@ index 037c3c23a..ad22a821c 100644
  	if (modeset && active && conn->props.link_status != 0) {
  		atomic_add(atom, conn->id, conn->props.link_status,
 diff --git a/backend/drm/drm.c b/backend/drm/drm.c
-index e9e4c6db2..9ade8b922 100644
+index bd29872..4660ce9 100644
 --- a/backend/drm/drm.c
 +++ b/backend/drm/drm.c
 @@ -1,3 +1,5 @@
@@ -31,7 +31,7 @@ index e9e4c6db2..9ade8b922 100644
  #include <assert.h>
  #include <drm_fourcc.h>
  #include <drm_mode.h>
-@@ -1474,7 +1476,7 @@ static void realloc_crtcs(struct wlr_drm_backend *drm,
+@@ -1510,7 +1512,7 @@ static void realloc_crtcs(struct wlr_drm_backend *drm,
  	}
  }
  
@@ -40,7 +40,7 @@ index e9e4c6db2..9ade8b922 100644
  		struct wlr_drm_connector *wlr_conn, const drmModeConnector *drm_conn) {
  	struct wlr_drm_backend *drm = wlr_conn->backend;
  
-@@ -1498,6 +1500,20 @@ static struct wlr_drm_crtc *connector_get_current_crtc(
+@@ -1534,6 +1536,20 @@ static struct wlr_drm_crtc *connector_get_current_crtc(
  		}
  		crtc_id = enc->crtc_id;
  		drmModeFreeEncoder(enc);
@@ -61,7 +61,7 @@ index e9e4c6db2..9ade8b922 100644
  	}
  	if (crtc_id == 0) {
  		return NULL;
-@@ -1546,7 +1562,7 @@ static struct wlr_drm_connector *create_drm_connector(struct wlr_drm_backend *dr
+@@ -1582,7 +1598,7 @@ static struct wlr_drm_connector *create_drm_connector(struct wlr_drm_backend *dr
  		wlr_drm_conn_log(wlr_conn, WLR_ERROR, "No CRTC possible");
  	}
  

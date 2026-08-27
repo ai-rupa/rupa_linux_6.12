@@ -109,7 +109,7 @@ find_sub_dev_by_bridge(struct drm_device *drm_dev, struct device_node *node)
 
 	port = of_graph_get_port_by_id(np_encoder, 1);
 	if (!port) {
-		dev_err(drm_dev->dev, "can't found port point!\n");
+		dev_err(drm_dev->dev, "can't find port point!\n");
 		goto err_put_encoder;
 	}
 
@@ -117,7 +117,7 @@ find_sub_dev_by_bridge(struct drm_device *drm_dev, struct device_node *node)
 		np_connector = of_graph_get_remote_port_parent(endpoint);
 		if (!np_connector) {
 			dev_err(drm_dev->dev,
-				"can't found connector node, please init!\n");
+				"can't find connector node, please init!\n");
 			goto err_put_port;
 		}
 		if (!of_device_is_available(np_connector)) {
@@ -129,7 +129,7 @@ find_sub_dev_by_bridge(struct drm_device *drm_dev, struct device_node *node)
 		}
 	}
 	if (!np_connector) {
-		dev_err(drm_dev->dev, "can't found available connector node!\n");
+		dev_err(drm_dev->dev, "can't find available connector node!\n");
 		goto err_put_port;
 	}
 
@@ -257,6 +257,7 @@ static int init_loader_memory(struct drm_device *drm_dev)
 		return -ENOMEM;
 
 	ret = of_address_to_resource(node, 0, &res);
+	of_node_put(node);
 	if (ret)
 		return ret;
 	if (private->domain)
@@ -264,7 +265,7 @@ static int init_loader_memory(struct drm_device *drm_dev)
 	start = ALIGN_DOWN(res.start, pg_size);
 	size = resource_size(&res);
 	if (!size)
-		return -ENOMEM;
+		return 0;
 	if (!IS_ALIGNED(res.start, PAGE_SIZE) || !IS_ALIGNED(size, PAGE_SIZE))
 		DRM_ERROR("Reserved logo memory should be aligned as:0x%lx, current is:start[%pad] size[%pad]\n",
 			  PAGE_SIZE, &res.start, &size);
@@ -300,16 +301,21 @@ static int init_loader_memory(struct drm_device *drm_dev)
 		return 0;
 
 	node = of_parse_phandle(np, "memory-region", idx);
-	if (!node)
-		return -ENOMEM;
+	if (!node) {
+		ret = -ENOMEM;
+		goto err_unmap_logo;
+	}
 
 	ret = of_address_to_resource(node, 0, &res);
+	of_node_put(node);
 	if (ret)
-		return ret;
+		goto err_unmap_logo;
 	start = ALIGN_DOWN(res.start, pg_size);
 	size = resource_size(&res);
-	if (!size)
+	if (!size) {
+		dev_dbg(drm_dev->dev, "Cubic LUT not enabled, skip its memory init and continue logo display\n");
 		return 0;
+	}
 	if (!IS_ALIGNED(res.start, PAGE_SIZE) || !IS_ALIGNED(size, PAGE_SIZE))
 		DRM_ERROR("Reserved drm cubic memory should be aligned as:0x%lx, current is:start[%pad] size[%pad]\n",
 			  PAGE_SIZE, &res.start, &size);
@@ -317,8 +323,10 @@ static int init_loader_memory(struct drm_device *drm_dev)
 	private->cubic_lut_kvaddr = phys_to_virt(start);
 	if (private->domain) {
 		private->clut_reserved_node = kmalloc(sizeof(struct drm_mm_node), GFP_KERNEL);
-		if (!private->clut_reserved_node)
-			return -ENOMEM;
+		if (!private->clut_reserved_node) {
+			ret = -ENOMEM;
+			goto err_unmap_logo;
+		}
 
 		ret = rockchip_drm_reserve_vm(drm_dev, &private->mm, private->clut_reserved_node, size, start);
 		if (ret)
@@ -339,6 +347,9 @@ err_free_clut:
 	rockchip_drm_release_reserve_vm(drm_dev, private->clut_reserved_node);
 	kfree(private->clut_reserved_node);
 	private->clut_reserved_node = NULL;
+err_unmap_logo:
+	if (private->domain)
+		iommu_unmap(private->domain, logo->dma_addr, ALIGN(logo->size, pg_size));
 err_free_logo:
 	rockchip_drm_release_reserve_vm(drm_dev, &logo->logo_reserved_node);
 	kfree(logo);
@@ -831,7 +842,7 @@ static int setup_initial_state(struct drm_device *drm_dev,
 
 	num_modes = rockchip_drm_fill_connector_modes(connector, 7680, 7680, set->force_output);
 	if (!num_modes) {
-		dev_err(drm_dev->dev, "connector[%s] can't found any modes\n",
+		dev_err(drm_dev->dev, "connector[%s] can't find any modes\n",
 			connector->name);
 		ret = -EINVAL;
 		goto error_conn;
@@ -866,7 +877,7 @@ static int setup_initial_state(struct drm_device *drm_dev,
 	if (!found) {
 		ret = -EINVAL;
 		connector->status = connector_status_disconnected;
-		dev_err(drm_dev->dev, "connector[%s] can't found any match mode\n",
+		dev_err(drm_dev->dev, "connector[%s] can't find any match mode\n",
 			connector->name);
 		DRM_INFO("%s support modes:\n\n", connector->name);
 		list_for_each_entry(mode, &connector->modes, head) {
@@ -1135,6 +1146,11 @@ void rockchip_drm_show_logo(struct drm_device *drm_dev)
 		return;
 	}
 
+	if (!private->logo) {
+		dev_dbg(drm_dev->dev, "Logo display is disabled\n");
+		return;
+	}
+
 	INIT_LIST_HEAD(&mode_set_list);
 	INIT_LIST_HEAD(&mode_unset_list);
 	drm_modeset_lock_all(drm_dev);
@@ -1221,7 +1237,7 @@ void rockchip_drm_show_logo(struct drm_device *drm_dev)
 	}
 
 	if (list_empty(&mode_set_list)) {
-		dev_warn(drm_dev->dev, "can't not find any logo display\n");
+		dev_warn(drm_dev->dev, "can't find any logo display\n");
 		ret = -ENXIO;
 		goto err_free_state;
 	}

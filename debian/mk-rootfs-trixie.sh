@@ -49,6 +49,20 @@ echo -e "\033[36m Change root.....................\033[0m"
 
 ID=$(stat --format %u $TARGET_ROOTFS_DIR)
 
+# Mount pseudo-filesystems required by dpkg postinst scripts (e.g. py3compile needs /dev/pts)
+cleanup_mounts() {
+    sudo umount $TARGET_ROOTFS_DIR/dev/pts 2>/dev/null || true
+    sudo umount $TARGET_ROOTFS_DIR/dev     2>/dev/null || true
+    sudo umount $TARGET_ROOTFS_DIR/sys     2>/dev/null || true
+    sudo umount $TARGET_ROOTFS_DIR/proc    2>/dev/null || true
+}
+trap cleanup_mounts EXIT
+
+sudo mount --bind /proc   $TARGET_ROOTFS_DIR/proc
+sudo mount --bind /sys    $TARGET_ROOTFS_DIR/sys
+sudo mount --bind /dev    $TARGET_ROOTFS_DIR/dev
+sudo mount -t devpts devpts $TARGET_ROOTFS_DIR/dev/pts -o gid=5,mode=620
+
 cat << EOF | sudo chroot $TARGET_ROOTFS_DIR
 
 # Fixup owners
@@ -192,6 +206,9 @@ echo -e "\033[36m Install pipewire.................... \033[0m"
 \${APT_INSTALL} libseat-dev weston
 \${APT_INSTALL} /packages/weston/*.deb
 \${APT_INSTALL} /packages/wayland/*.deb
+
+#--------------------mutter (GL_OES_EGL_image_external NV12 compositing)-------
+\${APT_INSTALL} /packages/mutter/*.deb gnome-session
 
 #--------------------totem------------
 \${APT_INSTALL} python3-xdg

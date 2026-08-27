@@ -85,6 +85,9 @@ typedef struct CalibDb_CISNormalTimeSetV2_s {
 
     // M4_NUMBER_DESC("CISTimeLinePerReg", "f32", M4_RANGE(0,100), "1", M4_DIGIT(3), M4_HIDE(0))
     float                   CISTimeLinePerReg;
+
+    // M4_NUMBER_DESC("CISTimeOffsetUs", "f32", M4_RANGE(-65535,65535), "0", M4_DIGIT(3), M4_HIDE(0))
+    float                   CISTimeOffsetUs;
 } CalibDb_CISNormalTimeSetV2_t;
 
 typedef struct CalibDb_CISHdrTimeSetV2_s {
@@ -108,6 +111,9 @@ typedef struct CalibDb_CISHdrTimeSetV2_s {
 
     // M4_NUMBER_DESC("CISTimeLinePerReg", "f32", M4_RANGE(0,100), "1", M4_DIGIT(3), M4_HIDE(0))
     float                   CISTimeLinePerReg;
+
+    // M4_STRUCT_DESC("CISTimeOffsetUs", "normal_ui_style")
+    Cam1x3FloatMatrix_t     CISTimeOffsetUs;
 } CalibDb_CISHdrTimeSetV2_t;
 
 typedef struct CalibDb_CISHdrTimeSetV3_s {
@@ -128,6 +134,9 @@ typedef struct CalibDb_CISHdrTimeSetV3_s {
 
     // M4_NUMBER_DESC("CISTimeLinePerReg", "f32", M4_RANGE(0,100), "1", M4_DIGIT(3), M4_HIDE(0))
     float                   CISTimeLinePerReg;
+
+    // M4_STRUCT_DESC("CISTimeOffsetUs", "normal_ui_style")
+    Cam1x3FloatMatrix_t     CISTimeOffsetUs;
 } CalibDb_CISHdrTimeSetV3_t;
 
 typedef struct CalibDb_CISTimeSet_CombV2_s {
@@ -182,10 +191,10 @@ typedef struct CalibDb_CISGainSetV3_s {
     // M4_STRUCT_DESC("CISDcgMode", "normal_ui_style")
     Cam1x3IntMatrix_t         CISDcgMode;
 
-    // M4_STRUCT_DESC("CISDcgMode", "normal_ui_style")
+    // M4_STRUCT_DESC("CISDgainRegIndSetEn", "normal_ui_style")
     Cam1x3IntMatrix_t         CISDgainRegIndSetEn;
 
-    // M4_STRUCT_DESC("Gain2Reg", "normal_ui_style")
+    // M4_STRUCT_DESC("CISDGain2Reg", "normal_ui_style")
     CalibDb_AecGainRangeV2_t  CISDGain2Reg;
 
     // M4_BOOL_DESC("CISHdrGainIndSetEn", "1")

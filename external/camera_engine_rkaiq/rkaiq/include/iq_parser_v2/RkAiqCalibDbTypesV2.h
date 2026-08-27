@@ -218,78 +218,10 @@ typedef struct CamCalibMainSceneList_s {
     int sub_scene_len;
 } CamCalibMainSceneList_t;
 
-typedef struct CamCalibDbProductInfo_s {
-    /* M4_GENERIC_DESC(
-        M4_ALIAS(ChipName),
-        M4_TYPE(string),
-        M4_SIZE_EX(1,1),
-        M4_RANGE_EX(0,255),
-        M4_DEFAULT(CHIP_NAME),
-        M4_DYNAMIC(0),
-        M4_HIDE_EX(0),
-        M4_RO(0),
-        M4_ORDER(0),
-        M4_NOTES(.\n
-        Freq of use: low))  */
-    char chip_name[32];
-    /* M4_GENERIC_DESC(
-        M4_ALIAS(Author),
-        M4_TYPE(string),
-        M4_SIZE_EX(1,1),
-        M4_RANGE_EX(0,255),
-        M4_DEFAULT(RK),
-        M4_DYNAMIC(0),
-        M4_HIDE_EX(0),
-        M4_RO(0),
-        M4_ORDER(0),
-        M4_NOTES(.\n
-        Freq of use: low))  */
-    char author[32];
-    /* M4_GENERIC_DESC(
-        M4_ALIAS(Date),
-        M4_TYPE(string),
-        M4_SIZE_EX(1,1),
-        M4_RANGE_EX(0,255),
-        M4_DEFAULT(0),
-        M4_DYNAMIC(0),
-        M4_HIDE_EX(0),
-        M4_RO(0),
-        M4_ORDER(0),
-        M4_NOTES(.\n
-        Freq of use: low))  */
-    char date[32];
-    /* M4_GENERIC_DESC(
-        M4_ALIAS(IQStructMark),
-        M4_TYPE(string),
-        M4_SIZE_EX(1,1),
-        M4_RANGE_EX(0,255),
-        M4_DEFAULT(IQ_STRUCT_MARK),
-        M4_DYNAMIC(0),
-        M4_HIDE_EX(0),
-        M4_RO(0),
-        M4_ORDER(0),
-        M4_NOTES(denote the changes of iq struct, value string pattern is: modify_ver.add_ver.delete_ver .\n
-        Freq of use: low))  */
-    char iq_struct_mark[32];
-    /* M4_GENERIC_DESC(
-        M4_ALIAS(IQVer),
-        M4_TYPE(string),
-        M4_SIZE_EX(1,1),
-        M4_RANGE_EX(0,255),
-        M4_DEFAULT(0),
-        M4_DYNAMIC(0),
-        M4_HIDE_EX(0),
-        M4_RO(0),
-        M4_ORDER(0),
-        M4_NOTES(.\n
-        Freq of use: low))  */
-    char iq_ver[32];
-} CamCalibDbProductInfo_t;
-
 typedef struct CamCalibDbProj_s {
     // TODO: move sensor info module etc. to an common struct
     // M4_STRUCT_DESC("ProductInfo", "normal_ui_style")
-    CamCalibDbProductInfo_t product_info;
+    CalibDbProductInfo_t product_info;
     // M4_STRUCT_DESC("SensorInfo", "normal_ui_style")
     CalibDb_Sensor_ParaV2_t sensor_calib;
     // M4_STRUCT_DESC("MoudleInfo", "normal_ui_style")

@@ -1,4 +1,4 @@
-From 3a5f6573a3da5e6a852681cbe44d6d89b8b08e82 Mon Sep 17 00:00:00 2001
+From 05b372f9f49dfa3ec2d53b2b05c229e2eecd3afe Mon Sep 17 00:00:00 2001
 From: Jeffy Chen <jeffy.chen@rock-chips.com>
 Date: Tue, 27 Feb 2024 17:50:25 +0800
 Subject: [PATCH] avvidec: Force avoid reusing buffers
@@ -9,10 +9,10 @@ Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
  1 file changed, 4 insertions(+)
 
 diff --git a/ext/libav/gstavviddec.c b/ext/libav/gstavviddec.c
-index 2512098..48420e2 100644
+index e21f3e1..9ed0ed2 100644
 --- a/ext/libav/gstavviddec.c
 +++ b/ext/libav/gstavviddec.c
-@@ -1054,6 +1054,10 @@ gst_ffmpegviddec_get_buffer2 (AVCodecContext * context, AVFrame * picture,
+@@ -1203,6 +1203,10 @@ gst_ffmpegviddec_get_buffer2 (AVCodecContext * context, AVFrame * picture,
       */
      create_buffer_flags = AV_BUFFER_FLAG_READONLY;
    }
@@ -24,5 +24,5 @@ index 2512098..48420e2 100644
        0, dummy_free_buffer, dframe, create_buffer_flags);
  
 -- 
-2.20.1
+2.39.5
 

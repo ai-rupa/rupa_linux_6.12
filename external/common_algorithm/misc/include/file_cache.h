@@ -4,6 +4,7 @@
 #define __FILE_CACHE_H__
 
 #include <stdint.h>
+#include <sys/stat.h>
 #include "file_common.h"
 
 int file_cache_init(FILE_CACHE_ARG *cache_arg);
@@ -16,6 +17,7 @@ int file_cache_close(int fd);
 int file_cache_fstat(int fd, struct stat *filestat);
 void file_cache_set_mode(FILE_WRITE_MODE write_mode);
 int file_cache_process_exit(char *filename);
+void file_cache_get_status(FILE_CACHE_STATUS *cache_status);
 
 #if 0
 FILE *file_cache_fopen(const char *file_name, const char *mode);

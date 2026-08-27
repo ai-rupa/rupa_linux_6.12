@@ -1,0 +1,482 @@
+From 1b011fcb778ddb57ee86bcf34ddd1c3b82838b26 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Tue, 31 Mar 2026 09:09:28 +0800
+Subject: [PATCH 30/98] compositor: Support output mirroring with fit/stretch
+ modes
+
+Add output mirroring support configurable via WESTON_OUTPUT_MIRROR
+environment variable. Legacy WESTON_DRM_MIRROR is also supported.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ desktop-shell/shell.c                 |   5 +
+ frontend/main.c                       |  30 +++++-
+ include/libweston/libweston.h         |  23 ++++
+ libweston/backend-drm/state-propose.c |   3 +-
+ libweston/compositor.c                | 150 +++++++++++++++++++++++++-
+ libweston/pixman-renderer.c           |  25 +++++
+ libweston/renderer-gl/gl-renderer.c   |  24 ++++-
+ 7 files changed, 251 insertions(+), 9 deletions(-)
+
+diff --git a/desktop-shell/shell.c b/desktop-shell/shell.c
+index d57d4c44..09628b4f 100644
+--- a/desktop-shell/shell.c
++++ b/desktop-shell/shell.c
+@@ -4498,6 +4498,11 @@ handle_output_resized(struct wl_listener *listener, void *data)
+ 	struct weston_output *output = (struct weston_output *)data;
+ 	struct shell_output *sh_output = weston_output_get_shell_private(output);
+ 
++	/* Reposition views when output changes to keep them visible */
++	if (!shell->disallow_output_changed_move) {
++		shell_for_each_layer(shell, shell_output_changed_move_layer, NULL);
++	}
++
+ 	handle_output_resized_shsurfs(shell);
+ 
+ 	shell_resize_surface_to_output(shell, sh_output->background_surface, output);
+diff --git a/frontend/main.c b/frontend/main.c
+index dbdba502..a4c0a58e 100644
+--- a/frontend/main.c
++++ b/frontend/main.c
+@@ -2626,12 +2626,17 @@ wet_head_tracker_create(struct wet_compositor *compositor,
+ static void
+ weston_output_lazy_align(struct weston_output *output)
+ {
+-	struct weston_compositor *c;
++	struct weston_compositor *c = output->compositor;
+ 	struct weston_output *peer;
+ 	int next_x = 0;
+ 
++	/* Disable layout arrangement in mirror mode */
++	if (c->output_mirror) {
++		output->pos.c = weston_coord(0, 0);
++		return;
++	}
++
+ 	/* Put this output to the right of the most recently enabled output */
+-	c = output->compositor;
+ 	if (!wl_list_empty(&c->output_list)) {
+ 		peer = container_of(c->output_list.prev,
+ 				    struct weston_output, link);
+@@ -3802,7 +3807,6 @@ drm_heads_changed(struct wl_listener *listener, void *arg)
+ 	if (drm_process_layoutputs(wet) < 0)
+ 		wet->init_failed = true;
+ 
+-	/* Move the primary output to the front of the list */
+ 	if (wet->drm_primary_head) {
+ 		struct weston_output *output;
+ 		output = weston_head_get_output(wet->drm_primary_head);
+@@ -5510,6 +5514,26 @@ wet_main(int argc, char *argv[], const struct weston_testsuite_data *test_data)
+ 			wet.compositor->output_flow = WESTON_OUTPUT_FLOW_SAME_AS;
+ 	}
+ 
++	wet.compositor->output_mirror = WESTON_OUTPUT_MIRROR_NONE;
++
++	/* TODO: Drop this legacy env */
++	if (getenv("WESTON_DRM_MIRROR")) {
++		if (getenv("WESTON_DRM_KEEP_RATIO"))
++			wet.compositor->output_mirror = WESTON_OUTPUT_MIRROR_FIT;
++		else
++			wet.compositor->output_mirror =
++				WESTON_OUTPUT_MIRROR_STRETCH;
++	}
++
++	buf = getenv("WESTON_OUTPUT_MIRROR");
++	if (buf) {
++		if (!strcmp(buf, "fit"))
++			wet.compositor->output_mirror = WESTON_OUTPUT_MIRROR_FIT;
++		else if (!strcmp(buf, "stretch"))
++			wet.compositor->output_mirror =
++				WESTON_OUTPUT_MIRROR_STRETCH;
++	}
++
+ 	protocol_scope =
+ 		weston_log_ctx_add_log_scope(log_ctx, "proto",
+ 					     "Wayland protocol dump for all clients.\n",
+diff --git a/include/libweston/libweston.h b/include/libweston/libweston.h
+index b70e1bdc..c4dd8ba4 100644
+--- a/include/libweston/libweston.h
++++ b/include/libweston/libweston.h
+@@ -597,6 +597,12 @@ struct weston_output {
+ 
+ 	/* Display freeze deadline */
+ 	struct timespec freeze_until;
++
++	/* True if this output is mirroring the primary */
++	bool mirroring;
++
++	/* Needs full buffer clear */
++	bool full_clear_needed;
+ };
+ 
+ enum weston_pointer_motion_mask {
+@@ -1388,6 +1394,13 @@ enum weston_output_flow {
+ 	WESTON_OUTPUT_FLOW_SAME_AS,
+ };
+ 
++/* Mirroring modes: none, fit, stretch */
++enum weston_output_mirror {
++	WESTON_OUTPUT_MIRROR_NONE,
++	WESTON_OUTPUT_MIRROR_FIT,
++	WESTON_OUTPUT_MIRROR_STRETCH,
++};
++
+ /** Main object, container-like structure which aggregates all other objects.
+  *
+  * \ingroup compositor
+@@ -1582,6 +1595,13 @@ struct weston_compositor {
+ 	uint64_t internal_id_counter;
+ 
+ 	enum weston_output_flow output_flow;
++
++	/* Current mirror mode */
++	enum weston_output_mirror output_mirror;
++
++	/* Primary output dimensions for mirrors */
++	int32_t mirror_width;
++	int32_t mirror_height;
+ };
+ 
+ struct weston_solid_buffer_values {
+@@ -2900,6 +2920,9 @@ weston_client_new_internal_id(struct weston_compositor *compositor,
+ void
+ weston_compositor_reflow_outputs(struct weston_compositor *compositor);
+ 
++void
++weston_output_set_primary(struct weston_output *output);
++
+ #ifdef  __cplusplus
+ }
+ #endif
+diff --git a/libweston/backend-drm/state-propose.c b/libweston/backend-drm/state-propose.c
+index 9e4c1f19..80a547ec 100644
+--- a/libweston/backend-drm/state-propose.c
++++ b/libweston/backend-drm/state-propose.c
+@@ -1556,7 +1556,8 @@ drm_assign_planes(struct weston_output *output_base)
+ 		drm_debug(b, "\t[repaint] could not reuse prior state\n");
+ 
+ 	if (!state && !device->disable_client_buffer_scanout &&
+-	    !output_base->disable_planes && !output->is_virtual && b->gbm) {
++	    !output_base->disable_planes && !output->is_virtual && b->gbm &&
++	    !output_base->mirroring) {
+ 		drm_debug(b, "\t[repaint] trying planes-only build state\n");
+ 		mode = DRM_OUTPUT_PROPOSE_STATE_PLANES_ONLY;
+ 		state = drm_output_propose_state(output_base, pending_state, mode);
+diff --git a/libweston/compositor.c b/libweston/compositor.c
+index 1e240183..96deb01f 100644
+--- a/libweston/compositor.c
++++ b/libweston/compositor.c
+@@ -7413,6 +7413,9 @@ weston_compositor_reflow_outputs(struct weston_compositor *compositor)
+ 		pos.c = weston_coord(next_x, next_y);
+ 		weston_output_set_position(output, pos);
+ 
++		if (compositor->output_mirror)
++			continue;
++
+ 		if (compositor->output_flow == WESTON_OUTPUT_FLOW_HORIZONTAL)
+ 			next_x += output->width;
+ 		else if (compositor->output_flow == WESTON_OUTPUT_FLOW_VERTICAL)
+@@ -7452,6 +7455,79 @@ weston_region_global_to_output(pixman_region32_t *dst,
+ 	weston_matrix_transform_region(dst, &output->matrix, src);
+ }
+ 
++static bool
++weston_output_is_primary(struct weston_output *output)
++{
++	if (wl_list_empty(&output->compositor->output_list))
++		return true;
++
++	return output == container_of(output->compositor->output_list.next,
++				      struct weston_output, link);
++}
++
++static void
++weston_output_init_matrix(struct weston_output *output)
++{
++	struct weston_compositor *compositor = output->compositor;
++	uint32_t x, y, src_w, src_h, dst_w, dst_h;
++	float scale_x, scale_y;
++
++	if (!compositor->output_mirror ||
++	    weston_output_is_primary(output)) {
++		weston_matrix_init_transform(&output->matrix, output->transform,
++					     output->pos.c.x, output->pos.c.y,
++					     output->width, output->height,
++					     output->current_scale);
++		return;
++	}
++
++	assert(output->pos.c.x == 0);
++	assert(output->pos.c.y == 0);
++
++	weston_matrix_init_transform(&output->matrix, output->transform,
++				     output->pos.c.x, output->pos.c.y,
++				     output->width, output->height, 1);
++
++	/* Mirror output: calculate scaling based on mode (fit/stretch) */
++
++	switch (output->transform) {
++	case WL_OUTPUT_TRANSFORM_90:
++	case WL_OUTPUT_TRANSFORM_270:
++	case WL_OUTPUT_TRANSFORM_FLIPPED_90:
++	case WL_OUTPUT_TRANSFORM_FLIPPED_270:
++		src_w = output->height;
++		src_h = output->width;
++		break;
++	default:
++		src_w = output->width;
++		src_h = output->height;
++		break;
++	}
++
++	x = y = 0;
++	dst_w = output->current_mode->width;
++	dst_h = output->current_mode->height;
++
++	if (compositor->output_mirror == WESTON_OUTPUT_MIRROR_FIT) {
++		float src_ratio = (float) src_w / src_h;
++		float dst_ratio = (float) dst_w / dst_h;
++
++		if (src_ratio > dst_ratio) {
++			y = (dst_h - dst_w / src_ratio) / 2;
++			dst_h -= y * 2;
++		} else {
++			x = (dst_w - dst_h * src_ratio) / 2;
++			dst_w -= x * 2;
++		}
++	}
++
++	scale_x = (float)dst_w / src_w;
++	scale_y = (float)dst_h / src_h;
++
++	weston_matrix_scale(&output->matrix, scale_x, scale_y, 1);
++	weston_matrix_translate(&output->matrix, x, y, 0);
++}
++
+ WESTON_EXPORT_FOR_TESTS void
+ weston_output_update_matrix(struct weston_output *output)
+ {
+@@ -7459,17 +7535,47 @@ weston_output_update_matrix(struct weston_output *output)
+ 
+ 	weston_output_dirty_paint_nodes(output);
+ 
+-	weston_matrix_init_transform(&output->matrix, output->transform,
+-				     output->pos.c.x, output->pos.c.y,
+-				     output->width, output->height,
+-				     output->current_scale);
++	weston_output_init_matrix(output);
+ 
+ 	weston_matrix_invert(&output->inverse_matrix, &output->matrix);
+ }
+ 
++static void
++weston_compositor_update_mirrors(struct weston_compositor *compositor,
++				 struct weston_output *primary)
++{
++	struct weston_output *output;
++
++	if (!compositor->output_mirror)
++		return;
++
++	assert(primary);
++
++	if (compositor->mirror_width == primary->width &&
++	    compositor->mirror_height == primary->height)
++		return;
++
++	/* Primary updates global dimensions and triggers mirror updates */
++	compositor->mirror_width = primary->width;
++	compositor->mirror_height = primary->height;
++
++	weston_log("Primary output '%s' changed to %dx%d\n",
++		   primary->name, primary->width, primary->height);
++
++	/* Update all outputs when primary changes */
++	wl_list_for_each(output, &compositor->output_list, link) {
++		if (output->destroying || output->mirror_of ||
++		    output == primary)
++			continue;
++
++		weston_mode_switch_finish(output, true, false);
++	}
++}
++
+ static void
+ weston_output_transform_scale_init(struct weston_output *output, uint32_t transform, uint32_t scale)
+ {
++	struct weston_compositor *compositor = output->compositor;
+ 	int32_t old_width = output->width;
+ 	int32_t old_height = output->height;
+ 
+@@ -7482,6 +7588,29 @@ weston_output_transform_scale_init(struct weston_output *output, uint32_t transf
+ 					output->current_mode->height,
+ 					transform, scale);
+ 
++	if (compositor->output_mirror) {
++		if (weston_output_is_primary(output)) {
++			weston_compositor_update_mirrors(compositor, output);
++		} else {
++			output->mirroring = true;
++
++			/* Mirror outputs use primary's dimensions */
++			if (output->width != compositor->mirror_width ||
++			    output->height != compositor->mirror_height) {
++				output->width = compositor->mirror_width;
++				output->height = compositor->mirror_height;
++				output->full_clear_needed = true;
++
++				weston_log("Mirror output '%s' changed to %dx%d\n",
++					   output->name, output->width,
++					   output->height);
++			}
++
++			assert(output->width);
++			assert(output->height);
++		}
++	}
++
+ 	/* Notify resized signal when effective output size changes */
+ 	if (output->enabled &&
+ 	    (output->width != old_width || output->height != old_height))
+@@ -7514,6 +7643,13 @@ weston_output_set_position(struct weston_output *output,
+ 	struct wl_resource *resource;
+ 	int ver;
+ 
++	if (output->compositor->output_mirror &&
++	    (pos.c.x != 0 || pos.c.y != 0)) {
++		weston_log("Output %s reset to (0,0) for mirror mode\n",
++			   output->name);
++		pos.c.x = pos.c.y = 0;
++	}
++
+ 	output->pos.c.x = (int)output->pos.c.x;
+ 	output->pos.c.y = (int)output->pos.c.y;
+ 
+@@ -11279,5 +11415,11 @@ weston_output_set_primary(struct weston_output *output)
+ 
+ 	weston_log("Output '%s' is primary\n", output->name);
+ 
++	if (output->mirroring) {
++		output->mirroring = false;
++		weston_mode_switch_finish(output, true, false);
++		wl_signal_emit(&compositor->output_resized_signal, output);
++	}
++
+ 	weston_compositor_reflow_outputs(compositor);
+ }
+diff --git a/libweston/pixman-renderer.c b/libweston/pixman-renderer.c
+index ca948e78..cf512b3a 100644
+--- a/libweston/pixman-renderer.c
++++ b/libweston/pixman-renderer.c
+@@ -73,6 +73,9 @@ struct pixman_renderbuffer {
+ 	weston_renderbuffer_discarded_func discarded_cb;
+ 	void *user_data;
+ 	struct wl_list link;
++
++	/* Needs full buffer clear */
++	bool full_clear_needed;
+ };
+ 
+ struct pixman_renderer {
+@@ -609,6 +612,12 @@ pixman_renderer_repaint_output(struct weston_output *output,
+ 	assert(po);
+ 	assert(((struct pixman_renderbuffer *) renderbuffer)->output == output);
+ 
++	if (output->full_clear_needed) {
++		wl_list_for_each(rb, &po->renderbuffer_list, link)
++			rb->full_clear_needed = true;
++		output->full_clear_needed = false;
++	}
++
+ 	/* Accumulate damage in all renderbuffers */
+ 	wl_list_for_each(rb, &po->renderbuffer_list, link) {
+ 		pixman_region32_union(&rb->damage, &rb->damage, output_damage);
+@@ -624,6 +633,22 @@ pixman_renderer_repaint_output(struct weston_output *output,
+ 	if (!po->hw_buffer)
+  		return;
+ 
++	if (rb->full_clear_needed) {
++		pixman_color_t color = {0};
++		pixman_box32_t box = {
++			.x1 = 0,
++			.y1 = 0,
++			.x2 = pixman_image_get_width(rb->image),
++			.y2 = pixman_image_get_height(rb->image),
++		};
++
++		pixman_image_fill_boxes(PIXMAN_OP_SRC, rb->image,
++					&color, 1, &box);
++
++		rb->full_clear_needed = false;
++		pixman_region32_copy(output_damage, &output->region);
++	}
++
+ 	if (po->shadow_image) {
+ 		repaint_surfaces(output, output_damage);
+ 		pixman_renderer_do_capture_tasks(output,
+diff --git a/libweston/renderer-gl/gl-renderer.c b/libweston/renderer-gl/gl-renderer.c
+index a876e061..d1723748 100644
+--- a/libweston/renderer-gl/gl-renderer.c
++++ b/libweston/renderer-gl/gl-renderer.c
+@@ -154,6 +154,9 @@ struct gl_renderbuffer {
+ 	weston_renderbuffer_discarded_func discarded_cb;
+ 	void *user_data;
+ 	struct wl_list link;
++
++	/* Needs full buffer clear */
++	bool full_clear_needed;
+ };
+ 
+ struct gl_output_state {
+@@ -3106,6 +3109,7 @@ gl_renderer_repaint_output(struct weston_output *output,
+ 	struct weston_paint_node *pnode;
+ 	int32_t area_y;
+ 	struct gl_renderbuffer *rb;
++	bool disable_partial_update = false;
+ 
+ 	assert(go);
+ 	assert(!renderbuffer ||
+@@ -3122,6 +3126,12 @@ gl_renderer_repaint_output(struct weston_output *output,
+ 	if (use_output(output) < 0)
+ 		return;
+ 
++	if (output->full_clear_needed) {
++		wl_list_for_each(rb, &go->renderbuffer_list, link)
++			rb->full_clear_needed = true;
++		output->full_clear_needed = false;
++	}
++
+ 	rb = gl_renderer_update_renderbuffers(output, output_damage,
+ 					      renderbuffer);
+ 
+@@ -3167,6 +3177,18 @@ gl_renderer_repaint_output(struct weston_output *output,
+ 			   go->area.width, go->area.height);
+ 	}
+ 
++	if (rb->full_clear_needed) {
++		set_blend_state(gr, false);
++
++		glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
++		glClear(GL_COLOR_BUFFER_BIT);
++
++		rb->full_clear_needed = false;
++		pixman_region32_copy(output_damage, &output->region);
++
++		disable_partial_update = true;
++	}
++
+ 	/* Update dirty textures. */
+ 	if (gr->wireframe_dirty)
+ 		update_wireframe_tex(gr, &go->area);
+@@ -3193,7 +3215,7 @@ gl_renderer_repaint_output(struct weston_output *output,
+ 
+ 	if (egl_display_has(gr, EXTENSION_KHR_PARTIAL_UPDATE) &&
+ 	    go->egl_surface != EGL_NO_SURFACE &&
+-	    !gr->debug_clear) {
++	    !gr->debug_clear && !disable_partial_update) {
+ 		int n_egl_rects;
+ 		EGLint *egl_rects;
+ 
+-- 
+2.39.5
+

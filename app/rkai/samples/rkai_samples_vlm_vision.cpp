@@ -73,21 +73,24 @@ static int rkai_mjpeg_get_resolutin(const char *path, int *width, int *height)
         return ret;
 
     while (!feof(fp)) {
-        fread(mark, 1, sizeof(mark), fp);
+        if (fread(mark, 1, sizeof(mark), fp) != sizeof(mark))
+            break;
         if (mark[0] == 0xFF && mark[1] == 0xD8)
             continue;
         if (mark[0] != 0xFF)
             break;
         if (mark[1] == 0xC0 || mark[1] == 0xC2) {
             fseek(fp, 3, SEEK_CUR);
-            fread(data, 1, sizeof(data), fp);
+            if (fread(data, 1, sizeof(data), fp) != sizeof(data))
+                break;
             *height = data[0] * 256 + data[1];
             *width = data[2] * 256 + data[3];
             printf("%s: %dx%d\n", __func__, *width, *height);
             ret = 0;
             break;
         } else {
-            fread(size, 1, sizeof(size), fp);
+            if (fread(size, 1, sizeof(size), fp) != sizeof(size))
+                break;
             fseek(fp, size[0] * 256 + size[1] - 2, SEEK_CUR);
             continue;
         }
@@ -164,7 +167,7 @@ int main(int argc, char **argv) {
         cv::resize(square_img, resized_img, new_size, 0, 0, cv::INTER_LINEAR);
 
         memcpy(data,resized_img.data,sizeof(unsigned char)*input_len);
-        else
+        #else
         printf("Unspport input fomrat now.\n");
         return -1;
         #endif

@@ -40,6 +40,7 @@ typedef struct rk_aiq_rkAe_config_s {
     float        LinePeriodsPerField; //get from sensor
     float        PixelClockFreqMHZ; //get from sensor
     float        PixelPeriodsPerLine; //get from sensor
+    rk_aiq_sensor_exp_offset_t stExpOffset; //get from sensor or IQ
 
     float last_fps;
     float init_fps;
@@ -182,7 +183,8 @@ static XCamReturn AeReal2RegConv
     float SplitGain,
     unsigned int *regIntegrationTime,
     unsigned int *regGain,
-    int pDcgMode
+    int pDcgMode,
+    int frmidx
 ) {
     XCamReturn ret = XCAM_RETURN_NO_ERROR;
 
@@ -245,6 +247,23 @@ static XCamReturn AeReal2RegConv
         *regGain = (int)(20.0f * log10(ag) / dbUnit + 0.5f);
     }
 
+    float exp_offset = 0.0f;
+    if (pConfig->stExpOffset.valid == true) {
+        if (pConfig->IsHdr) {
+            exp_offset = (float)pConfig->stExpOffset.integer[frmidx] + (float)pConfig->stExpOffset.decimal[frmidx] / (float)pConfig->stExpOffset.div_coeff[frmidx];
+        } else {
+            exp_offset = (float)pConfig->stExpOffset.integer[0] + (float)pConfig->stExpOffset.decimal[0] / (float)pConfig->stExpOffset.div_coeff[0];
+        }
+
+    } else {
+        if (pConfig->IsHdr) {
+            exp_offset = pConfig->stSensorInfo.CISTimeSet.Hdr[pConfig->HdrFrmNum - 2].CISTimeOffsetUs.fCoeff[frmidx];
+        } else {
+            exp_offset = pConfig->stSensorInfo.CISTimeSet.Linear.CISTimeOffsetUs;
+        }
+    }
+    exp_offset /= 1000000.0f; //us to s
+
     //time convertion
     float timeC0 = pConfig->stSensorInfo.Time2Reg.fCoeff[0];
     float timeC1 = pConfig->stSensorInfo.Time2Reg.fCoeff[1];
@@ -256,7 +275,7 @@ static XCamReturn AeReal2RegConv
     float hts = pConfig->PixelPeriodsPerLine;
     float vts = pConfig->LinePeriodsPerField;
 
-    float IntegrationTimeLine = timeC0 * vts + timeC1 + timeC2 * ((SplitIntegrationTime * pclk * 1000000 / hts) + timeC3);
+    float IntegrationTimeLine = timeC0 * vts + timeC1 + timeC2 * (((SplitIntegrationTime - exp_offset) * pclk * 1000000 / hts) + timeC3);
     *regIntegrationTime = (int)(IntegrationTimeLine / pConfig->stSensorInfo.CISTimeSet.Linear.CISTimeLinePerReg);
     int Index = (*regIntegrationTime - (int)CISTimeRegOdevity[1]) / (int)CISTimeRegOdevity[0];
     *regIntegrationTime = (int)CISTimeRegOdevity[0] * Index + (int)CISTimeRegOdevity[1];
@@ -1014,7 +1033,7 @@ static void initCustomAeRes(rk_aiq_customeAe_results_t* customAe, rk_aiq_rkAe_co
                            customAe->hdr_exp[i].exp_real_params.analog_gain,
                            &customAe->hdr_exp[i].exp_sensor_params.coarse_integration_time,
                            &customAe->hdr_exp[i].exp_sensor_params.analog_gain_code_global,
-                           customAe->hdr_exp[i].exp_real_params.dcg_mode);
+                           customAe->hdr_exp[i].exp_real_params.dcg_mode, i);
 
             customAe->exp_i2c_params.bValid = false;
         }
@@ -1032,7 +1051,7 @@ static void initCustomAeRes(rk_aiq_customeAe_results_t* customAe, rk_aiq_rkAe_co
                        customAe->linear_exp.exp_real_params.analog_gain,
                        &customAe->linear_exp.exp_sensor_params.coarse_integration_time,
                        &customAe->linear_exp.exp_sensor_params.analog_gain_code_global,
-                       customAe->linear_exp.exp_real_params.dcg_mode);
+                       customAe->linear_exp.exp_real_params.dcg_mode, 0);
 
         customAe->exp_i2c_params.bValid = false;
     }
@@ -1084,6 +1103,7 @@ static XCamReturn AeDemoPrepare(RkAiqAlgoCom* params)
         algo_ctx->rkCfg.PixelClockFreqMHZ = AeCfgParam->aec.PixelClockFreqMHZ;
         algo_ctx->rkCfg.PixelPeriodsPerLine = AeCfgParam->aec.PixelPeriodsPerLine;
         algo_ctx->rkCfg.stNRswitch = AeCfgParam->aec.nr_switch;
+        algo_ctx->rkCfg.stExpOffset = AeCfgParam->aec.exp_offset;
 
     } else {
 
@@ -1094,6 +1114,7 @@ static XCamReturn AeDemoPrepare(RkAiqAlgoCom* params)
         algo_ctx->rkCfg.PixelClockFreqMHZ = AeCfgParam->PixelClockFreqMHZ;
         algo_ctx->rkCfg.PixelPeriodsPerLine = AeCfgParam->PixelPeriodsPerLine;
         algo_ctx->rkCfg.stNRswitch = AeCfgParam->nr_switch;
+        algo_ctx->rkCfg.stExpOffset = AeCfgParam->exp_offset;
 
     }
 
@@ -1221,7 +1242,7 @@ void _customAeRes2rkAeRes(rk_aiq_rkAe_config_t* pConfig, RkAiqAlgoProcResAe* rkA
                                customAeProcRes->hdr_exp[i].exp_real_params.analog_gain,
                                &customAeProcRes->hdr_exp[i].exp_sensor_params.coarse_integration_time,
                                &customAeProcRes->hdr_exp[i].exp_sensor_params.analog_gain_code_global,
-                               customAeProcRes->hdr_exp[i].exp_real_params.dcg_mode);
+                               customAeProcRes->hdr_exp[i].exp_real_params.dcg_mode, i);
             }
             rkAeProcRes->new_ae_exp->HdrExp[i] = customAeProcRes->hdr_exp[i];
         }
@@ -1234,7 +1255,7 @@ void _customAeRes2rkAeRes(rk_aiq_rkAe_config_t* pConfig, RkAiqAlgoProcResAe* rkA
                            customAeProcRes->linear_exp.exp_real_params.analog_gain,
                            &customAeProcRes->linear_exp.exp_sensor_params.coarse_integration_time,
                            &customAeProcRes->linear_exp.exp_sensor_params.analog_gain_code_global,
-                           customAeProcRes->linear_exp.exp_real_params.dcg_mode);
+                           customAeProcRes->linear_exp.exp_real_params.dcg_mode, 0);
 
         }
 
@@ -1323,7 +1344,7 @@ void _customGrpAeSingleResSet(rk_aiq_rkAe_config_t* pConfig, rk_aiq_singlecam_3a
                                customAeRes.hdr_exp[i].exp_real_params.analog_gain,
                                &customAeRes.hdr_exp[i].exp_sensor_params.coarse_integration_time,
                                &customAeRes.hdr_exp[i].exp_sensor_params.analog_gain_code_global,
-                               customAeRes.hdr_exp[i].exp_real_params.dcg_mode);
+                               customAeRes.hdr_exp[i].exp_real_params.dcg_mode, i);
             }
 
             rk_aiq_singlecam_3a_result->aec.exp_tbl[0].HdrExp[i] = customAeRes.hdr_exp[i];
@@ -1338,7 +1359,7 @@ void _customGrpAeSingleResSet(rk_aiq_rkAe_config_t* pConfig, rk_aiq_singlecam_3a
                            customAeRes.linear_exp.exp_real_params.analog_gain,
                            &customAeRes.linear_exp.exp_sensor_params.coarse_integration_time,
                            &customAeRes.linear_exp.exp_sensor_params.analog_gain_code_global,
-                           customAeRes.linear_exp.exp_real_params.dcg_mode);
+                           customAeRes.linear_exp.exp_real_params.dcg_mode, 0);
         }
 
         rk_aiq_singlecam_3a_result->aec.exp_tbl[0].LinearExp = customAeRes.linear_exp;

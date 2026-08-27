@@ -32,8 +32,7 @@ RawStreamProcUnit::RawStreamProcUnit (const rk_sensor_full_info_t *s_info, bool 
     _raw_proc_thread = new RawProcThread(this);
     _PollCallback = NULL;
     _rawCap = NULL;
-    if(s_info->split)
-        _is_split = true;
+    _is_split = s_info->split;
     //short frame
     if (strlen(s_info->isp_info->rawrd2_s_path)) {
         _dev[0] = new V4l2Device (s_info->isp_info->rawrd2_s_path);//rkisp_rawrd2_s
@@ -647,6 +646,31 @@ RawStreamProcUnit::set_csi_mem_word_big_align(uint32_t width, uint32_t height,
             } else {
                 LOGD_CAMHW_SUBM(ISP20HW_SUBM,"set the memory mode of isp rx to big align");
             }
+        }
+    }
+
+    return ret;
+}
+
+XCamReturn
+RawStreamProcUnit::set_csi_mem_word_align_mode(int mode)
+{
+    XCamReturn ret = XCAM_RETURN_NO_ERROR;
+
+    for (int i = 0; i < 3; i++) {
+        if (!_dev[i].ptr()) {
+            ret = XCAM_RETURN_BYPASS;
+            break;
+        }
+
+        int mem_mode = mode;
+        int ret1 = _dev[i]->io_control(RKISP_CMD_SET_CSI_MEMORY_MODE, &mem_mode);
+        if (ret1) {
+            LOGE_CAMHW_SUBM(ISP20HW_SUBM, "set CSI memory mode %d failed !", mode);
+            ret = XCAM_RETURN_ERROR_IOCTL;
+        } else {
+            LOGD_CAMHW_SUBM(ISP20HW_SUBM, "set the memory mode of isp rx(%s) to %d",
+                            XCAM_STR(_dev[i]->get_device_name()), mode);
         }
     }
 

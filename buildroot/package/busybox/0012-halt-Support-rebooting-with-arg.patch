@@ -1,7 +1,7 @@
-From 76c9f4d803cb044d2eb0021b7d7ee128451c465b Mon Sep 17 00:00:00 2001
+From 4b87e78db1c49ada03ed0bed2bb3cde3ea3c0ce8 Mon Sep 17 00:00:00 2001
 From: Jeffy Chen <jeffy.chen@rock-chips.com>
 Date: Tue, 18 Sep 2018 11:32:04 +0800
-Subject: [PATCH 12/15] halt: Support rebooting with arg
+Subject: [PATCH 12/16] halt: Support rebooting with arg
 
 Support passing reboot arg(e.g. loader, fastboot, etc.) to kernel.
 
@@ -92,5 +92,5 @@ index 7aea8cf..39bf920 100644
  		rc = reboot(magic[which]);
  	}
 -- 
-2.20.1
+2.39.5
 
