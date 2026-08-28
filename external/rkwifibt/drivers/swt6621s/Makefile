@@ -18,5 +18,6 @@ export CONFIG_SKW_BSP_BOOT=m
 export CONFIG_SKW_BSP_UCOM=m
 export CONFIG_SKW_SDIOHAL=m
 export CONFIG_SEEKWAVE_BSP_DRIVERS=m
+export CONFIG_SKW_BT=m
 
 obj-m += drivers/

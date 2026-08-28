@@ -427,8 +427,10 @@ build_wifibt()
 			$TARGET_DIR/lib/firmware/					
 		cp $RKWIFIBT_DIR/drivers/swt6621s/drivers/swt6621s_wifi/*.ko \
 			$TARGET_DIR/lib/modules/
-		cp $RKWIFIBT_DIR/drivers/swt6621s/drivers/swtbt4l/*.ko \
-			$TARGET_DIR/lib/modules/			
+		if ls $RKWIFIBT_DIR/drivers/swt6621s/drivers/swtbt4l/*.ko >/dev/null 2>&1; then
+			cp $RKWIFIBT_DIR/drivers/swt6621s/drivers/swtbt4l/*.ko \
+				$TARGET_DIR/lib/modules/
+		fi
 		cp $RKWIFIBT_DIR/drivers/swt6621s/drivers/seekwaveplatform_lite/*.ko \
 			$TARGET_DIR/lib/modules/
 	fi	
