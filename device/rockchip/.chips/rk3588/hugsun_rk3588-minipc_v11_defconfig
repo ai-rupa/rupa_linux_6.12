@@ -1,0 +1,8 @@
+RK_KERNEL_DTS_NAME="rk3588-hugsun-minipc-linux"
+RK_YOCTO_CFG="rockchip-rk3588-evb"
+RK_USE_FIT_IMG=y
+RK_WIFIBT_TTY="ttyS6"
+RK_ROOTFS_SYSTEM="debian"
+RK_ROOTFS_SYSTEM_DEBIAN=y
+RK_KERNEL_CFG="rockchip_linux_defconfig"
+RK_KERNEL_CFG_FRAGMENTS="rk3588_linux.config rockchip_linux_docker.config "

@@ -82,7 +82,7 @@ fixup_device_part()
 	FS_TYPE="${3:-ext4}"
 	MOUNT_OPTS="${4:-defaults}"
 
-	fixup_part "$DEV" "$MOUNTPOINT" "$FS_TYPE" "$MOUNT_OPTS" 2
+	fixup_part "$DEV" "$MOUNTPOINT" "$FS_TYPE" "$MOUNT_OPTS" 0
 }
 
 message "Fixing up /etc/fstab..."
