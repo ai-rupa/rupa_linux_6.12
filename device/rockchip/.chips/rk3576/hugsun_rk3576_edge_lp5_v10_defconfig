@@ -1,0 +1,4 @@
+RK_UBOOT_SPL=y
+RK_KERNEL_DTS_NAME="rk3576-hugsun-edge-v10"
+RK_PARAMETER="parameter.txt"
+RK_KERNEL_CFG_FRAGMENTS="rockchip_linux_docker.config"
