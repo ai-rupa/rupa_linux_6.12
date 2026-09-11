@@ -1,0 +1,187 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Copyright (c) 2025 Rockchip Electronics Co., Ltd.
+ *
+ * Hugsun RP08B V10 - 8 inch 1200x1920 MIPI-DSI LCD
+ *
+ * HW connection (RK3572, single dsi / mipitx_dphy):
+ *   - backlight PWM   : PWM1 CH4 M1  -> pwm1_6ch_4 + pwm1m1_ch4_pins (GPIO1_D3)
+ *   - LCD power enable: GPIO1_D2 (active high)
+ *   - LCD reset       : GPIO1_D1. NOTE: must be GPIO_ACTIVE_LOW on this 6.12
+ *                       kernel: panel-simple here drives reset 1 -> delay ->
+ *                       0 (opposite of the old kernel used on RK3588, which
+ *                       drove 0 -> delay -> 1), so ACTIVE_LOW reproduces the
+ *                       same physical low-pulse then high waveform as the
+ *                       working RK3588 config (which used ACTIVE_HIGH there).
+ *   - HDMI stays on VP0, DSI uses VP1
+ */
+
+#include <dt-bindings/display/drm_mipi_dsi.h>
+
+/ {
+
+	backlight_mipi: backlight_mipi {
+		compatible = "pwm-backlight";
+		pwms = <&pwm1_6ch_4 0 25000 0>;
+		brightness-levels = <
+			  0  20  20  21  21  22  22  23
+			 23  24  24  25  25  26  26  27
+			 27  28  28  29  29  30  30  31
+			 31  32  32  33  33  34  34  35
+			 35  36  36  37  37  38  38  39
+			 40  41  42  43  44  45  46  47
+			 48  49  50  51  52  53  54  55
+			 56  57  58  59  60  61  62  63
+			 64  65  66  67  68  69  70  71
+			 72  73  74  75  76  77  78  79
+			 80  81  82  83  84  85  86  87
+			 88  89  90  91  92  93  94  95
+			 96  97  98  99 100 101 102 103
+			104 105 106 107 108 109 110 111
+			112 113 114 115 116 117 118 119
+			120 121 122 123 124 125 126 127
+			128 129 130 131 132 133 134 135
+			136 137 138 139 140 141 142 143
+			144 145 146 147 148 149 150 151
+			152 153 154 155 156 157 158 159
+			160 161 162 163 164 165 166 167
+			168 169 170 171 172 173 174 175
+			176 177 178 179 180 181 182 183
+			184 185 186 187 188 189 190 191
+			192 193 194 195 196 197 198 199
+			200 201 202 203 204 205 206 207
+			208 209 210 211 212 213 214 215
+			216 217 218 219 220 221 222 223
+			224 225 226 227 228 229 230 231
+			232 233 234 235 236 237 238 239
+			240 241 242 243 244 245 246 247
+			248 249 250 251 252 253 254 255
+		>;
+		default-brightness-level = <100>;
+	};
+};
+
+&dsi {
+	status = "okay";
+	//rockchip,lane-rate = <1000>;
+
+	dsi_panel: panel@0 {
+		status = "okay";
+		compatible = "simple-panel-dsi";
+		reg = <0>;
+		backlight = <&backlight_mipi>;
+		/* 3V3 LCD power rail is always-on on RP08B, GPIO1_D2 is panel power
+		 * enable; keep regulator out of the panel and switch via enable-gpios.
+		 */
+		//power-supply = <&vcc3v3_mipi_lcd>;
+		enable-gpios = <&gpio1 RK_PD2 GPIO_ACTIVE_HIGH>;
+		reset-gpios =  <&gpio1 RK_PD1 GPIO_ACTIVE_LOW>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&lcd0_enable_gpio &lcd0_rst_gpio>;
+
+		reset-delay-ms = <200>;
+		enable-delay-ms = <50>;
+		init-delay-ms = <300>;
+		prepare-delay-ms = <150>;
+		unprepare-delay-ms = <50>;
+		disable-delay-ms = <100>;
+
+		dsi,flags = <(MIPI_DSI_MODE_VIDEO | MIPI_DSI_MODE_VIDEO_BURST |
+			      MIPI_DSI_MODE_LPM)>;
+		dsi,format = <MIPI_DSI_FMT_RGB888>;
+		dsi,lanes  = <4>;
+
+		panel-init-sequence = [
+			05 78 01 11
+			05 78 01 29
+		];
+
+		panel-exit-sequence = [
+			05 00 01 28
+			05 00 01 10
+		];
+
+		display-timings {
+			native-mode = <&timing0>;
+			timing0: timing0 {
+				clock-frequency = <157500000>;
+				hactive = <1200>;
+				vactive = <1920>;
+				hback-porch = <60>;
+				hfront-porch = <80>;
+				hsync-len = <4>;
+				vback-porch = <14>;
+				vfront-porch = <16>;
+				vsync-len = <4>;
+				hsync-active = <1>;
+				vsync-active = <1>;
+				de-active = <0>;
+				pixelclk-active = <0>;
+			};
+		};
+
+		ports {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			port@0 {
+				reg = <0>;
+				panel_in_dsi: endpoint {
+					remote-endpoint = <&dsi_out_panel>;
+				};
+			};
+		};
+	};
+
+	ports {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		port@1 {
+			reg = <1>;
+			dsi_out_panel: endpoint {
+				remote-endpoint = <&panel_in_dsi>;
+			};
+		};
+	};
+};
+
+&dsi_in_vp0 {
+	status = "disabled";
+};
+
+&dsi_in_vp1 {
+	status = "okay";
+};
+
+&dsi_in_vopl {
+	status = "disabled";
+};
+
+&mipitx_dphy {
+	status = "okay";
+};
+
+&route_dsi {
+	status = "okay";
+	logo,uboot = "logo.bmp";
+	logo,kernel = "logo_kernel.bmp";
+	connect = <&vp1_out_dsi>;
+};
+
+&pwm1_6ch_4 {
+	pinctrl-0 = <&pwm1m1_ch4_pins>;
+	status = "okay";
+};
+
+&pinctrl {
+	lcd0 {
+		lcd0_rst_gpio: lcd0-rst-gpio {
+			rockchip,pins = <1 RK_PD1 RK_FUNC_GPIO &pcfg_pull_none>;
+		};
+
+		lcd0_enable_gpio: lcd0-enable-gpio {
+			rockchip,pins = <1 RK_PD2 RK_FUNC_GPIO &pcfg_pull_none>;
+		};
+	};
+};
