@@ -304,8 +304,17 @@ static drmModeConnector *find_main_monitor(int fd, drmModeRes *resources,
 {
     unsigned i = 0;
     int modes;
-    /* Look for LVDS/eDP/DSI connectors. Those are the main screens. */
+    /*
+     * Prefer the external outputs (HDMI/DP) as the main screen, then fall
+     * back to the internal panels (LVDS/eDP/DSI). A connector is only
+     * selected when it is really connected and reports at least one mode,
+     * so an unplugged/no-EDID HDMI output still leaves the internal panel
+     * as the display.
+     */
     unsigned kConnectorPriority[] = {
+        DRM_MODE_CONNECTOR_HDMIA,
+        DRM_MODE_CONNECTOR_HDMIB,
+        DRM_MODE_CONNECTOR_DisplayPort,
         DRM_MODE_CONNECTOR_LVDS,
         DRM_MODE_CONNECTOR_eDP,
         DRM_MODE_CONNECTOR_DSI,
