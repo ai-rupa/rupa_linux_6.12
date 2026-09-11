@@ -1122,7 +1122,15 @@ static int skw_sdio_probe(struct sdio_func *func, const struct sdio_device_id *i
 	}
 	skw_sdio_bind_platform_driver(skw_sdio->sdio_func[FUNC_1]);
 #ifdef CONFIG_BT_SEEKWAVE
-	skw_sdio_bind_btseekwave_driver(skw_sdio->sdio_func[FUNC_1]);
+	/*
+	 * Do NOT bind BT(skwbt) here. Binding it during probe lets the BT
+	 * service send HCI/port data before the CP firmware (SV6160LITE) has
+	 * been downloaded by the sv6160lite platform first-boot. Traffic to an
+	 * un-booted CP stalls the SDIO data channel (DAT0 held busy), wedging
+	 * the whole bus with -EBUSY and killing both WiFi and BT on cold boot.
+	 * The BT bind is deferred to skw_sdio_io_init() until after the CP
+	 * first boot has completed.
+	 */
 #endif
 	skw_sdio->service_state_map = 0;
 	skw_sdio->service_index_map = 0;
@@ -2815,6 +2823,21 @@ static int __init skw_sdio_io_init(void)
 	}
 	if (skw_sdio->sdio_dev_host) {
 		seekwave_boot_init((char *)skw_sdio->chip_id);
+#ifdef CONFIG_BT_SEEKWAVE
+		/*
+		 * Bind BT(skwbt) only after the CP first-boot (firmware download
+		 * done by the sv6160lite platform driver inside seekwave_boot_init)
+		 * has finished. If we bind it before, the BT service talks to a CP
+		 * that is not running yet and wedges the SDIO bus. Skip the bind if
+		 * the CP first boot failed so the bus is not flooded again.
+		 */
+		if (skw_sdio->cp_downloaded_flag)
+			skw_sdio_bind_btseekwave_driver(
+				skw_sdio->sdio_func[FUNC_1]);
+		else
+			skw_sdio_err(
+				"CP first boot not done, skip binding BT driver\n");
+#endif
 	}
 	return ret;
 }
