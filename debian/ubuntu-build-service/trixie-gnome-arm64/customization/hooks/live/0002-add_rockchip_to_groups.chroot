@@ -14,5 +14,5 @@ for group in $DEFGROUPS; do
 done
 unset IFS
 
-echo "I: add rockchip to ($DEFGROUPS) groups"
-usermod -a -G ${DEFGROUPS} rockchip
+echo "I: add blueberry to ($DEFGROUPS) groups"
+usermod -a -G ${DEFGROUPS} blueberry

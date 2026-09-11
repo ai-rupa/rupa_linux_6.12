@@ -1,0 +1,6 @@
+RK_YOCTO_CFG="rockchip-rk3588-evb"
+RK_KERNEL_DTS_NAME="rk3588-hugsun-edge-v12-linux"
+RK_KERNEL_CFG_FRAGMENTS="rockchip_linux_docker.config"
+RK_USE_FIT_IMG=y
+RK_WIFIBT_CHIP="ALL_AP"
+RK_WIFIBT_TTY="ttyS6"

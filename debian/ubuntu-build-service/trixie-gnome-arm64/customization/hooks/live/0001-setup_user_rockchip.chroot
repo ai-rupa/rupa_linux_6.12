@@ -1,7 +1,7 @@
 #!/bin/sh
 
-echo "I: create rockchip user"
-adduser --gecos rockchip --disabled-password rockchip
+echo "I: create blueberry user"
+adduser --gecos blueberry --disabled-password blueberry
 
-echo "I: set rockchip user password"
-echo "rockchip:rockchip" | chpasswd
+echo "I: set blueberry user password"
+echo "blueberry:blueberry" | chpasswd
