@@ -1,0 +1,11 @@
+[Unit]
+Description=Apply LED settings from /etc/default/led-ctl
+After=local-fs.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/led-ctl apply
+
+[Install]
+WantedBy=multi-user.target
