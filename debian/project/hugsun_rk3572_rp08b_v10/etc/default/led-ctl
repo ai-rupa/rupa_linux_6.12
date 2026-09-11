@@ -1,0 +1,27 @@
+# LED settings applied at boot by led-ctl.service.
+#
+# COMPATIBLE  gate: this config is only applied when the running device tree
+#             lists one of these strings in /proc/device-tree/compatible.
+#             The same rootfs is shared by several boards, so keep the gate
+#             set to the board the settings were meant for.
+#             Leave it empty ("") to apply on every board.
+#
+# LEDS        one LED per line:
+#
+#                 <led-name>  <brightness>  [trigger]
+#
+#             led-name    name from /sys/class/leds
+#                         (run "led-ctl status" to list them)
+#             brightness  "max" (or "on") = full brightness, "off" = 0,
+#                         or any number from 0 to that LED's max_brightness
+#             trigger     optional kernel trigger, e.g. none / heartbeat / mmc0
+#
+# Check what this system booted on with "led-ctl board".
+#
+# rp08b (RK3572): keep the power indicator lit once the system is up.
+
+COMPATIBLE="rockchip,rk3572-hugsun-rp08b-v10"
+
+LEDS="
+pwr-led max
+"
