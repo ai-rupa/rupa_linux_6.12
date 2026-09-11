@@ -73,6 +73,12 @@ for u in \$(ls /home/); do
 	chown -h -R \$u:\$u /home/\$u
 done
 
+# Compile gsettings schema overrides shipped in overlay/usr/share/glib-2.0/schemas
+# (zz-rockchip-tv-power.gschema.override: 不自动息屏/休眠/锁屏的默认值)
+if [ -x /usr/bin/glib-compile-schemas ]; then
+	glib-compile-schemas /usr/share/glib-2.0/schemas
+fi
+
 echo "nameserver 8.8.8.8" >> /etc/resolv.conf
 echo "nameserver 127.0.0.53" >> /etc/resolv.conf
 echo "nameserver 114.114.114.114" >> /etc/resolv.conf

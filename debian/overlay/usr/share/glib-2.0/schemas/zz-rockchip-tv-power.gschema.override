@@ -1,0 +1,16 @@
+# Rockchip TV/Box mode defaults: never auto-blank / suspend / lock screen
+# Injected as gsettings schema defaults for all users (used when no user value set),
+# read at session start so no stale idle timer can blank the screen once.
+# 注释必须用 '#' (glib key-file), ';' 会导致整个文件被忽略。
+
+[org.gnome.desktop.session]
+idle-delay=0
+
+[org.gnome.settings-daemon.plugins.power]
+idle-dim=false
+sleep-inactive-ac-type='nothing'
+sleep-inactive-battery-type='nothing'
+power-button-action='nothing'
+
+[org.gnome.desktop.screensaver]
+lock-enabled=false
