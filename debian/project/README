@@ -1,0 +1,90 @@
+debian/project - board/version specific customizations
+=====================================================
+
+debian/overlay/ is copied into the rootfs of *every* board, so it must only
+hold content that is valid everywhere (sleep targets, GNOME power defaults,
+generic services, ...).  Anything that belongs to one board, one panel or one
+product version goes here instead, in its own directory:
+
+    debian/project/<project>/<same layout as the rootfs>
+
+For example, the RK3572 RP08B V10 board keeps its LED wiring and its screen
+layout there:
+
+    debian/project/hugsun_rk3572_rp08b_v10/etc/default/led-ctl
+    debian/project/hugsun_rk3572_rp08b_v10/etc/xdg/autostart/zz-hdmi-primary.desktop
+    debian/project/hugsun_rk3572_rp08b_v10/usr/bin/hdmi-primary
+
+How the right directory is selected
+-----------------------------------
+
+The directory name is resolved from the current build config, first hit wins:
+
+    1. $RK_PROJECT                     explicit (Config.in.overlay option)
+    2. $RK_DEFCONFIG minus "_defconfig"  e.g. hugsun_rk3572_rp08b_v10
+    3. $RK_KERNEL_DTS_NAME               e.g. rk3572-hugsun-rp08b-v10
+
+Because of the candidate order, a project directory normally carries the name
+of the defconfig it was made for, and several defconfigs may share one project
+directory by setting RK_PROJECT to the same value.  A build whose board has no
+directory here simply gets nothing installed (a notice is logged).
+
+When it is installed
+--------------------
+
+device/rockchip/common/post-hooks/92-project.sh, during the post-rootfs stage,
+for debian rootfs only.  It runs after the SDK overlays (90-overlay.sh), so a
+project file overrides an overlay file, and before 97-ldcache.sh / 99-owner.sh,
+so those still see the installed files (ldconfig cache, ownership).
+
+Contents are copied with the same policy as SDK overlays (permissions
+normalized, uid/gid fixed up by 99-owner.sh).  A project may ship an
+install.sh that is executed instead of the copy; it is called with
+
+    install.sh <target rootfs dir> <os name>
+
+Adding a project
+----------------
+
+    mkdir -p debian/project/<name>/
+    # copy files in, mirroring the rootfs layout
+    ./build.sh          # or ./build.sh rootfs
+
+To check what got installed, look for the hook output in the build log:
+
+    output/log/latest/post-rootfs.log   # "Installing project: <name> ..."
+
+Board specific *runtime* decisions
+----------------------------------
+
+A file installed for one board can still be harmless on another one if it
+gates itself at runtime on the device tree, the way usr/bin/led-ctl does with
+the COMPATIBLE= key of /etc/default/led-ctl (compared against
+/proc/device-tree/compatible).  Prefer the build time project directory for
+content that is clearly board specific, and keep such a runtime gate as a
+second line of defence.
+
+Screen layout is deliberately *not* shipped as ~/.config/monitors.xml: mutter
+requires connector+vendor+product+serial in every <monitorspec> and matches all
+four exactly, so a stored layout is pinned to one specific monitor (and the
+file is rejected as a whole when a field is missing).  Use a script that talks
+to org.gnome.Mutter.DisplayConfig and addresses outputs by connector name
+instead - see usr/bin/hdmi-primary.
+
+Two things measured on RK3572 RP08B that are easy to get wrong:
+
+  * gdctl must run as the session user.  As root "gdctl show" and
+    "gdctl set" exit 1 without printing anything, so a layout that
+    "silently does nothing" is usually a wrong uid, not a wrong
+    connector name.  The autostart entry takes care of this.
+
+  * the connector name mutter uses is not always the kernel one: sysfs
+    exposes card0-HDMI-A-1 while gdctl reports that output as HDMI-1.
+    usr/bin/hdmi-primary therefore reads the names back from
+    "gdctl show" (LC_ALL=C, the output is parsed) instead of hardcoding
+    either spelling.
+
+    $ gdctl show | sed -n '/Logical monitors/,$p'     # after the script
+    ├──Logical monitor #1 ... Primary: no   DSI-1  (Built-in display)
+    └──Logical monitor #2 ... Primary: yes  HDMI-1 (Lenovo Group Limited 22")
+

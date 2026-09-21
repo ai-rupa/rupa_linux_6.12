@@ -1,0 +1,109 @@
+#!/bin/sh
+# Make the HDMI output the primary monitor and the built-in panel its
+# secondary one, addressing outputs by connector name only.
+#
+# Both names are discovered at run time from "gdctl show", so nothing here is
+# pinned to a board revision or to a specific monitor:
+#
+#     * the primary is whichever HDMI output is connected,
+#     * the secondary is the built-in panel (DSI / eDP / LVDS).
+#
+# That matters because the names mutter uses are not always the kernel ones:
+# on RK3572 RP08B the kernel exposes card0-HDMI-A-1 while mutter (and gdctl)
+# call that output HDMI-1.  Reading the names back from the tool that consumes
+# them avoids hardcoding either spelling.
+#
+# monitors.xml cannot express this at all: mutter requires
+# connector+vendor+product+serial in every <monitorspec> and matches all four
+# exactly, so a stored layout is pinned to one specific TV.
+#
+# Started by /etc/xdg/autostart/zz-hdmi-primary.desktop inside the GNOME
+# session, and it has to run as the session user: gdctl fails silently
+# (exit 1, no message) when run as root.  Every failure path just logs and
+# exits 0, so this can never break the session.
+#
+# The layout is deliberately not persisted: persisting would write the current
+# monitor EDIDs into ~/.config/monitors.xml and bind the layout to this
+# particular TV again.
+
+set -u
+
+LAYOUT=logical
+PRIMARY_PATTERNS='HDMI*'
+SECONDARY_PATTERNS='DSI* eDP* LVDS*'
+
+NAME=$(basename "$0")
+
+log()
+{
+	echo "$NAME: $*" >&2
+}
+
+command -v gdctl >/dev/null 2>&1 || {
+	log "gdctl not found (Debian: apt-get install mutter-common-bin)"
+	exit 0
+}
+
+# LC_ALL=C: the output of this one is parsed below.
+monitors=$(LC_ALL=C gdctl show 2>/dev/null) || {
+	log "gdctl show failed: not inside a GNOME/Wayland session?"
+	exit 0
+}
+
+monitors=$(printf '%s\n' "$monitors" |
+	sed -n 's/.*Monitor \([^ 	]*\) (.*/\1/p')
+
+[ -n "$monitors" ] || {
+	log "gdctl reported no monitor"
+	exit 0
+}
+
+# pick "<patterns>" -- first connected output matching any of the patterns
+pick()
+{
+	for pattern in $1; do
+		for monitor in $monitors; do
+			case $monitor in
+			$pattern)
+				printf '%s' "$monitor"
+				return 0
+				;;
+			esac
+		done
+	done
+
+	return 1
+}
+
+PRIMARY=$(pick "$PRIMARY_PATTERNS") || {
+	log "no HDMI output among: $(echo $monitors)"
+	exit 0
+}
+
+SECONDARY=$(pick "$SECONDARY_PATTERNS") || {
+	log "no built-in panel among: $(echo $monitors)"
+	exit 0
+}
+
+# --mode is deliberately omitted: every monitor then keeps its own preferred
+# mode, so no resolution is pinned either.  The session may still be setting
+# itself up when this runs and no monitors.xml is shipped as a fallback, so
+# retry a few times before giving up.
+attempt=1
+while [ "$attempt" -le 3 ]; do
+	if LC_ALL=C gdctl set --layout-mode "$LAYOUT" \
+		--logical-monitor --monitor "$SECONDARY" --x 0 --y 0 \
+		--logical-monitor --primary --monitor "$PRIMARY" \
+			--right-of "$SECONDARY"
+	then
+		log "$PRIMARY is primary, $SECONDARY is secondary"
+		exit 0
+	fi
+
+	log "gdctl set failed (attempt $attempt/3)"
+	attempt=$((attempt + 1))
+	sleep 2
+done
+
+log "giving up: is this running as the session user, inside the session?"
+exit 0

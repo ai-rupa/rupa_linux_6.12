@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=HDMI primary / DSI secondary
+Comment=Board-specific layout: HDMI-1 primary, DSI-1 to its left (connector names only, no EDID)
+Exec=/usr/bin/hdmi-primary
+Terminal=false
+NoDisplay=true
+OnlyShowIn=GNOME;
+X-GNOME-Autostart-Phase=Desktop
+X-GNOME-Autostart-Delay=2

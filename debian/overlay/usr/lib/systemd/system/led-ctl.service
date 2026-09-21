@@ -1,0 +1,16 @@
+[Unit]
+Description=Apply LED settings from /etc/default/led-ctl
+After=local-fs.target
+
+# The config is board specific and comes from debian/project/<project>/, so it
+# is absent on boards that have no LED settings of their own.  Without this the
+# unit would fail with "config is missing" on every one of them.
+ConditionPathExists=/etc/default/led-ctl
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/led-ctl apply
+
+[Install]
+WantedBy=multi-user.target

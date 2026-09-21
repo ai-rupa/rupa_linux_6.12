@@ -2044,12 +2044,20 @@ int ufshcd_probe(struct udevice *ufs_dev, struct ufs_hba_ops *hba_ops)
 	} else {
 		mmio_base = dev_read_addr_ptr(ufs_dev);
 	}
+	if (!mmio_base) {
+		dev_err(ufs_dev, "Failed to get UFS controller address\n");
+		return -ENODEV;
+	}
 	hba->mmio_base = mmio_base;
 
 	/* Set descriptor lengths to specification defaults */
 	ufshcd_def_desc_sizes(hba);
 
-	ufshcd_ops_init(hba);
+	err = ufshcd_ops_init(hba);
+	if (err) {
+		dev_err(hba->dev, "UFS controller init failed: %d\n", err);
+		return err;
+	}
 
 	/* Read capabilties registers */
 	hba->capabilities = ufshcd_readl(hba, REG_CONTROLLER_CAPABILITIES);

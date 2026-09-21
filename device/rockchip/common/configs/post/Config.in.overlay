@@ -85,5 +85,18 @@ config RK_ROOTFS_PREFER_PREBUILT_TOOLS
 config RK_ROOTFS_EXTRA_OVERLAY_DIRS
 	string "extra overlay dirs"
 
+config RK_PROJECT
+	string "debian project dir (board+version customizations)"
+	help
+	  Name of a directory under debian/project/ holding the customizations
+	  that only belong to this board/version (device tree, screen layout,
+	  LED wiring, ...). Files in debian/overlay/ are installed on every
+	  board, so anything board specific must live in debian/project/.
+
+	  Leave empty to auto-detect: the defconfig name without its trailing
+	  "_defconfig" is tried first, then the device tree name
+	  (RK_KERNEL_DTS_NAME). The first existing directory wins, so several
+	  defconfigs may also share one project directory.
+
 endif # Overlay
 endmenuconfig # Overlay

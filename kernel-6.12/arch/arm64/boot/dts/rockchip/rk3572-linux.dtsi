@@ -68,6 +68,26 @@
 		ftrace-size = <0x00000>;
 		record-size = <0x14000>;
 	};
+
+	/*
+	 * The vendor storage region which is read from the boot medium by
+	 * U-Boot (eMMC: 3.5MB offset, SPI flash: "vnvm" partition) and passed
+	 * to the kernel as a reserved memory region. U-Boot updates the reg
+	 * property of this node at boot (vendor_storage_fixup()), so the
+	 * address/size here is just a placeholder.
+	 */
+	vendor_storage_rm: vendor-storage-rm@00000000 {
+		compatible = "rockchip,vendor-storage-rm";
+		reg = <0x0 0x0 0x0 0x0>;
+	};
+};
+
+/ {
+	vendor_storage: vendor-storage {
+		compatible = "rockchip,ram-vendor-storage";
+		memory-region = <&vendor_storage_rm>;
+		status = "okay";
+	};
 };
 
 &rng {

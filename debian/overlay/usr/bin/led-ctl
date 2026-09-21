@@ -1,0 +1,207 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# led-ctl - apply LED settings described in /etc/default/led-ctl
+#
+# Invoked at boot by led-ctl.service; can also be run by hand:
+#
+#   led-ctl                 apply /etc/default/led-ctl
+#   led-ctl apply           same as above
+#   led-ctl board           show the board this system booted on
+#   led-ctl status          show every LED with its brightness and trigger
+#   led-ctl set pwr-led max set one LED to its full brightness
+#   led-ctl trigger pwr-led heartbeat
+#
+
+set -eu
+
+# Paths are overridable so the tool can be exercised off-target (tests).
+CONFIG=${LED_CTL_CONFIG:-/etc/default/led-ctl}
+LEDS_CLASS=${LED_CTL_SYSFS:-/sys/class/leds}
+COMPATIBLE_FILE=${LED_CTL_COMPATIBLE:-/proc/device-tree/compatible}
+
+die() {
+	echo "led-ctl: $*" >&2
+	exit 1
+}
+
+led_dir() {
+	printf '%s/%s' "$LEDS_CLASS" "$1"
+}
+
+# Print the NUL-separated device tree "compatible" list, one entry per line.
+board_compatibles() {
+	[ -r "$COMPATIBLE_FILE" ] || return 1
+	tr '\0' '\n' < "$COMPATIBLE_FILE"
+}
+
+# Is this system running a device tree matching any entry in $COMPATIBLE?
+# An empty $COMPATIBLE means "every board", which is the default so that a
+# config which does not care about the board keeps working.
+compatible_matches() {
+	[ -n "${COMPATIBLE:-}" ] || return 0
+
+	have=$(board_compatibles) || return 1
+
+	for want in $COMPATIBLE; do
+		printf '%s\n' "$have" | grep -qxF "$want" && return 0
+	done
+
+	return 1
+}
+
+max_brightness() {
+	[ -d "$(led_dir "$1")" ] || die "no such LED: $1"
+	cat "$(led_dir "$1")/max_brightness"
+}
+
+# to_value <led> <token> -- turn on/max/off/<number> into a numeric brightness
+to_value() {
+	led=$1
+	tok=$2
+	max=$(max_brightness "$led")
+
+	case $tok in
+	max|on)
+		printf '%s' "$max"
+		;;
+	off)
+		printf '%s' 0
+		;;
+	''|*[!0-9]*)
+		die "invalid brightness '$tok' for $led"
+		;;
+	*)
+		[ "$tok" -le "$max" ] || die "brightness $tok exceeds max $max for $led"
+		printf '%s' "$tok"
+		;;
+	esac
+}
+
+set_brightness() {
+	led=$1
+	val=$(to_value "$1" "$2")
+
+	[ -w "$(led_dir "$led")/brightness" ] || die "cannot write $led/brightness"
+	printf '%s\n' "$val" > "$(led_dir "$led")/brightness" ||
+		die "failed to set $led brightness=$val"
+
+	echo "led-ctl: $led brightness=$val"
+}
+
+set_trigger() {
+	led=$1
+	trig=$2
+
+	[ -d "$(led_dir "$led")" ] || die "no such LED: $led"
+	printf '%s\n' "$trig" > "$(led_dir "$led")/trigger" ||
+		die "failed to set $led trigger=$trig"
+
+	echo "led-ctl: $led trigger=$trig"
+}
+
+apply_config() {
+	[ -r "$CONFIG" ] || die "$CONFIG is missing"
+
+	# shellcheck disable=SC1090
+	. "$CONFIG"
+	: "${LEDS:=}"
+	: "${COMPATIBLE:=}"
+
+	# LED wiring is board specific: the same rootfs is shared by boards
+	# that expose different LEDs, so only touch the ones this board has.
+	if ! compatible_matches; then
+		echo "led-ctl: not $COMPATIBLE, skipping $CONFIG" >&2
+		return 0
+	fi
+
+	[ -n "$LEDS" ] || die "no LEDS configured in $CONFIG"
+
+	printf '%s\n' "$LEDS" | while read -r led bright trig rest; do
+		[ -n "$led" ] || continue
+		case $led in
+		\#*) continue ;;
+		esac
+
+		# The same rootfs runs on boards whose DTS may not declare
+		# this LED at all (e.g. rk3572-evb only has "work"), so a
+		# missing LED is a warning rather than a boot failure.
+		if [ ! -d "$(led_dir "$led")" ]; then
+			echo "led-ctl: skipping $led: no such LED on this board" >&2
+			continue
+		fi
+
+		set_brightness "$led" "$bright"
+		if [ -n "$trig" ]; then
+			set_trigger "$led" "$trig"
+		fi
+	done
+}
+
+show_status() {
+	found=0
+	for dir in "$LEDS_CLASS"/*; do
+		[ -d "$dir" ] || continue
+		found=1
+		led=$(basename "$dir")
+		brightness=$(cat "$dir/brightness" 2>/dev/null || echo '?')
+		max=$(cat "$dir/max_brightness" 2>/dev/null || echo '?')
+		trig=$(sed -n 's/.*\[\(.*\)\].*/\1/p' "$dir/trigger" 2>/dev/null)
+		printf '%-16s brightness=%s/%s trigger=%s\n' \
+			"$led" "$brightness" "$max" "${trig:-none}"
+	done
+
+	[ "$found" = 1 ] || die "no LEDs found under $LEDS_CLASS"
+}
+
+show_board() {
+	compat=$(board_compatibles) || die "$COMPATIBLE_FILE is unreadable"
+
+	echo "compatible:"
+	printf '%s\n' "$compat" | sed 's/^/  /'
+
+	COMPATIBLE=''
+	if [ -r "$CONFIG" ]; then
+		# shellcheck disable=SC1090
+		. "$CONFIG"
+	fi
+	: "${COMPATIBLE:=}"
+
+	if compatible_matches; then
+		echo "  -> $CONFIG applies to this board"
+	else
+		echo "  -> $CONFIG does NOT apply (wants: $COMPATIBLE)"
+	fi
+}
+
+usage() {
+	awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "$0"
+	exit "${1:-0}"
+}
+
+case "${1:-apply}" in
+apply)
+	apply_config
+	;;
+set)
+	[ $# -eq 3 ] || usage 1
+	set_brightness "$2" "$3"
+	;;
+trigger)
+	[ $# -eq 3 ] || usage 1
+	set_trigger "$2" "$3"
+	;;
+status)
+	show_status
+	;;
+board)
+	show_board
+	;;
+-h|--help|help)
+	usage 0
+	;;
+*)
+	echo "led-ctl: unknown action '$1'" >&2
+	usage 1
+	;;
+esac

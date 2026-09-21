@@ -65,7 +65,12 @@ struct skw_global_config {
 	struct skw_config config;
 };
 
-static u8 skw_mac[ETH_ALEN];
+#include <linux/soc/rockchip/rk_vendor_storage.h>
+
+#define LEN_LAN_MAC					12
+
+static u8 skw_mac[12];
+static u8 lan_mac[12];
 static struct skw_global_config g_skw_config;
 
 static atomic_t skw_chip_idx = ATOMIC_INIT(0);
@@ -2327,6 +2332,7 @@ static int skw_drv_probe(struct platform_device *pdev)
 	struct wiphy *wiphy = NULL;
 	struct skw_core *skw = NULL;
 	int idx = atomic_inc_return(&skw_chip_idx);
+    int8_t  i;
 
 	skw_info("chip: %d, MAC: %pM\n", idx, skw_mac);
 
@@ -2363,6 +2369,17 @@ static int skw_drv_probe(struct platform_device *pdev)
 #ifdef CONFIG_PLATFORM_ROCKCHIP
 	if (!is_valid_ether_addr(skw_mac))
 		rockchip_wifi_mac_addr(skw_mac);
+	
+	if (!is_valid_ether_addr(skw_mac)){
+		rk_vendor_read(LAN_MAC_ID, lan_mac, LEN_LAN_MAC);
+        for (i = 0; i < 12; i+=2){
+           lan_mac[i/2] = lan_mac[6 + i/2];
+        }
+		printk("hgs_vendor LAN_MAC : %pM\n", lan_mac);
+		lan_mac[3] += 0x80;
+		memcpy(skw_mac, lan_mac, LEN_LAN_MAC); 
+		printk("hgs_vendor WIFI_MAC : %pM\n", skw_mac);
+	}
 #endif
 
 	skw_setup_mac_address(wiphy, skw_mac, chip.mac);
