@@ -2,6 +2,7 @@
 /common
 /patch
 /output
+/.vscode
 debian/binary/
 debian/rockchip-debian-trixie*.tar.gz
 debian/rockchip-trixie*.tar.gz
