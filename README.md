@@ -34,7 +34,8 @@ What is kept:
 | Packaging and signing tools | `rkbin/tools/`, `tools/linux/rk_sign_tool/`, `tools/linux/Linux_SecurityAVB/` |
 | Build helpers | `device/rockchip/common/linux-kbuild/`, `device/rockchip/common/tools/x86_64/` (qemu-static) |
 
-Commit history is preserved in full (`hugsun_linux_rkr1` has 28 commits, `master` has 2).
+Commit history is preserved in full. `master` mirrors the latest released source-only snapshot,
+and ongoing development takes place on the `rupa_opensource_rkr*` branches.
 
 ## 2. What This Repository Is Not
 

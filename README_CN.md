@@ -30,7 +30,7 @@
 | 打包与签名工具 | `rkbin/tools/`、`tools/linux/rk_sign_tool/`、`tools/linux/Linux_SecurityAVB/` |
 | 构建辅助 | `device/rockchip/common/linux-kbuild/`、`device/rockchip/common/tools/x86_64/`（qemu-static） |
 
-提交历史完整保留（`hugsun_linux_rkr1` 分支 28 个提交、`master` 分支 2 个提交）。
+提交历史完整保留。`master` 与最新发布的源码快照保持一致，后续开发在 `rupa_opensource_rkr*` 分支上进行。
 
 ## 2. 这个仓库不是什么
 
