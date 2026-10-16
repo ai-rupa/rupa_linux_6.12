@@ -1,11 +1,11 @@
-# Rupa Linux 6.12 SDK 开源精简版 — 被剔除文件清单
-# 格式: sha256 <TAB> size(字节) <TAB> 相对路径
-# 共 925 个文件，合计 7.68 GiB
+# Rupa Linux 6.12 SDK - source-only edition: manifest of removed files
+# Format: sha256 <TAB> size(bytes) <TAB> relative path
+# 925 files in total, 7.68 GiB
 #
-# 用途: download_prebuilts.sh 依据此清单校验与恢复文件（--list / --check / --restore --verify）
-# 生成方式: git filter-repo --strip-blobs-with-ids，规则为「体积 > 1 MiB 且非源码、非编译必需」
+# Used by: download_prebuilts.sh verifies and restores these files (--list / --check / --restore / --verify)
+# Generated with: git filter-repo --strip-blobs-with-ids; rule: "larger than 1 MiB and neither source nor required to build"
 #
-# 注意: 本清单中的产物多为第三方厂商预编译件，请从各自官方渠道获取，本仓库不再分发。
+# Note: most entries are third-party vendor prebuilt artifacts. Obtain them from their official sources; this repository does not redistribute them.
 90175e394246f950d6fe61c8b38505c338fbc86a8ab885e0f2af825396cc5c47	178527232	tools/linux/PinDebug/pin_debug_tool_v1.11_for_linux.tar
 4428727ffe996c87fcb871d7e21093c34c64b76f978f9de3c813322d61419470	102146376	external/rknn-toolkit2/autosparsity/examples/resnet50.onnx
 a7e18e45789e717aa55f2a43019d99570ef5bebc6a226e2cc1c9b46ccba0891a	96020120	debian/packages/arm64/chromium/chromium-ozone-wayland_132.0.6834.83_arm64.deb

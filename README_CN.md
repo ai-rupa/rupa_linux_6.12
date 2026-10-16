@@ -1,17 +1,21 @@
-# Rupa Linux 6.12 SDK（开源精简版 / Source-only Edition）
+# Rupa Linux 6.12 SDK — 开源精简版（Source-only Edition）
 
-> **English summary** — This is a *source-only* edition of the Rupa Linux 6.12 SDK for Rockchip
-> RK3572 / RK3576 platforms. All kernel, U-Boot, driver, application and build-system sources are
-> included in full, together with the prebuilt GNU cross toolchains required to compile them.
-> Third-party prebuilt binaries, Rockchip proprietary runtime libraries, official PDF documents and
-> Windows tool packages are **not** redistributed here. See `opensource-dropped-files.tsv` for the
-> exact list, and `download_prebuilts.sh` for how to fetch them from their official sources.
+> **English version: [README.md](README.md).**
+
+这是 **Rupa Linux 6.12 SDK** 的源码发布版，面向 Rockchip **RK3572 / RK3576** 平台。
+
+内核、U-Boot、驱动、上层应用与构建系统的源码全部完整保留，同时保留了编译所需的 GNU
+交叉工具链。第三方预编译二进制、厂商闭源运行库、官方 PDF 文档与 Windows 工具包
+**不在本仓库中再分发**。完整清单见
+[`opensource-dropped-files.tsv`](opensource-dropped-files.tsv)，恢复方式见
+[`download_prebuilts.sh`](download_prebuilts.sh)。
+
+> 原厂 SDK 说明文档保留在 [`device/rockchip/common/README.md`](device/rockchip/common/README.md)；
+> 仓库根目录的 `README.md` 原本是指向它的符号链接。
 
 ---
 
 ## 1. 这个仓库是什么
-
-这是 **Rupa Linux 6.12 SDK** 的源码发布版，面向 RK3572 / RK3576（Rockchip 6.12 内核）平台。
 
 仓库保留内容：
 
@@ -36,17 +40,17 @@
 | 类别 | 文件数 | 体积 | 典型内容 |
 |---|---|---|---|
 | 第三方预编译库（`external/`） | 634 | 5.91 GiB | libmali GPU 闭源库、OP-TEE/TA 预编译库、OpenCV 静态库、RKNN 工具链 wheel、NPU 示例模型 |
-| 厂商工具包（`tools/`） | 27 | 558 MB | Windows 端烧录/调试工具、PinDebug、DDR 工具 |
-| 浏览器离线包（`debian/`） | 55 | 443 MB | chromium `.deb` / `.tar.xz` |
-| 官方文档（`docs/`） | 121 | 426 MB | Rockchip 官方 PDF（TRM、Datasheet、开发指南） |
-| 设备端预编译件（`device/`） | 50 | 216 MB | 中文字体包、交叉 gdb / perf |
-| Buildroot 下载缓存 | 15 | 75 MB | font / libcamera 源码归档 |
-| 应用资源（`app/`） | 14 | 36 MB | 字体、模型、预编译 so |
-| mbedTLS 测试向量（`u-boot/`） | 8 | 17 MB | `test_suite_*.data` |
-| 其它固件（`rkbin/`） | 1 | 2 MB | 非本平台 trust 镜像 |
+| 厂商工具包（`tools/`） | 27 | 558 MiB | Windows 端烧录/调试工具、PinDebug、DDR 工具 |
+| 浏览器离线包（`debian/`） | 55 | 443 MiB | chromium `.deb` / `.tar.xz` |
+| 官方文档（`docs/`） | 121 | 426 MiB | Rockchip 官方 PDF（TRM、Datasheet、开发指南） |
+| 设备端预编译件（`device/`） | 50 | 216 MiB | 中文字体包、交叉 gdb / perf |
+| Buildroot 下载缓存 | 15 | 75 MiB | font / libcamera 源码归档 |
+| 应用资源（`app/`） | 14 | 36 MiB | 字体、模型、预编译 so |
+| mbedTLS 测试向量（`u-boot/`） | 8 | 17 MiB | `test_suite_*.data` |
+| 其它固件（`rkbin/`） | 1 | 2 MiB | 非本平台 trust 镜像 |
 
-判定规则很简单，也便于复现：**体积 > 1 MiB 且不属于「源码/文本」或「编译必需」的文件**一律剔除。
-完整清单见 `opensource-dropped-files.tsv`（含 sha256 与体积）。
+判定规则很简单，也便于复现：**体积 > 1 MiB 且不属于「源码/文本」或「编译必需」的文件**
+一律剔除。完整清单见 `opensource-dropped-files.tsv`（含 sha256 与体积）。
 
 > 保留了工具链（约 1.1 GiB）是一个有意的取舍：这样 clone 下来即可编译，不必先去官网下工具链。
 > 如果你的使用场景更在意仓库体积，可以把 `prebuilts/gcc/` 也移除，改用
